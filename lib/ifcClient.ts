@@ -12,6 +12,10 @@ import { debugLog } from "./debugLog";
 
 /** Prefer these PSet names when looking up heat-load / temperature values. */
 export const HEAT_LOAD_PSET_NAMES = [
+  "Ergebnisse der Analyse",
+  "Energieanalyse",
+  "Berechnete Raum",
+  "Berechneter Raum",
   "Pset_SpaceHeatingLoad",
   "Pset_SpaceThermalLoad",
   "Pset_SpaceThermalRequirements",
@@ -19,6 +23,10 @@ export const HEAT_LOAD_PSET_NAMES = [
 ];
 
 export const HEAT_LOAD_PROP_NAMES = [
+  "Heizlast/m²",
+  "Heizlast/m2",
+  "Heizlast_m2",
+  "Heizlast W",
   "Heizlast",
   "Heizlastdichte",
   "Spezifische Heizlast",
@@ -36,38 +44,87 @@ export const HEAT_LOAD_PROP_NAMES = [
 ];
 
 export const TEMPERATURE_PSET_NAMES = [
+  "HLS",
+  "Energieanalyse",
+  "Andere",
+  "Berechnete Raum",
+  "Berechneter Raum",
   "Pset_SpaceThermalRequirements",
   "Pset_SpaceComfort",
   "Pset_SpaceHVACDesign",
   "Pset_SpaceHeatingLoad",
 ];
 
+/**
+ * Room air temperature — prefer SimCalc / Revit names from this project's IFC.
+ * Avoid bare "Temp" first: it substring-matches *Temperatur* on many unrelated props.
+ */
 export const TEMPERATURE_PROP_NAMES = [
-  "Temperature",
+  "SC_Raum_Temperatur",
+  "CAx_Raum_Temperatur",
+  "Raum_Temperatur",
+  "RaumTemperatur",
+  "SC_Raum_StandardTemperatur",
   "Solltemperatur",
   "Raumtemperatur",
+  "Temp",
+  "Temperature",
   "DesignTemperature",
   "RoomTemperature",
   "ThermalComfortTemperature",
   "HeatingDesignTemperature",
-  "Temp",
   "T_Soll",
   "TSoll",
 ];
 
+export const ABSOLUTE_HEIZLAST_PROP_NAMES = [
+  "Heizlast W",
+  "HeizlastW",
+  "Heizlast_W",
+  "Bemessungslast Heizung",
+  "SC_Raum_Heizlast",
+  "Heizlast",
+];
+
+export const HEAT_DENSITY_PROP_NAMES = [
+  "Heizlast/m²",
+  "Heizlast/m2",
+  "Heizlast_m2",
+  "SC_Raum_spezifischeHeizlast",
+  "spezifischeHeizlast",
+  "Spezifische Heizlast",
+  "Heizlastdichte",
+  "HeatLoadPerArea",
+  "SpecificHeatLoad",
+];
+
 const WASM_PATH = "/wasm/";
 
-/** Keep the last opened model alive so element property queries work after load. */
-let openHandle: { api: WebIFC.IfcAPI; modelID: number } | null = null;
+type OpenIfcHandle = { api: WebIFC.IfcAPI; modelID: number };
+
+/** Survive Next/HMR so selection can still query properties after reload. */
+function getOpenHandle(): OpenIfcHandle | null {
+  if (typeof globalThis === "undefined") return null;
+  return (
+    (globalThis as unknown as { __ifcOpenHandle?: OpenIfcHandle | null })
+      .__ifcOpenHandle ?? null
+  );
+}
+
+function setOpenHandle(handle: OpenIfcHandle | null): void {
+  (globalThis as unknown as { __ifcOpenHandle?: OpenIfcHandle | null }).__ifcOpenHandle =
+    handle;
+}
 
 export function closeActiveIfcModel(): void {
+  const openHandle = getOpenHandle();
   if (!openHandle) return;
   try {
     openHandle.api.CloseModel(openHandle.modelID);
   } catch {
     // ignore
   }
-  openHandle = null;
+  setOpenHandle(null);
 }
 
 export type LoadProgress = {
@@ -110,7 +167,10 @@ function readNumber(value: unknown): number | null {
   if (value == null) return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
-    const n = parseFloat(value.replace(",", "."));
+    // "20°C", "20,0 W/m²", "200 W"
+    const m = value.replace(/\u00a0/g, " ").match(/-?\d+(?:[.,]\d+)?/);
+    if (!m) return null;
+    const n = parseFloat(m[0].replace(",", "."));
     return Number.isFinite(n) ? n : null;
   }
   if (typeof value === "object" && value !== null && "value" in value) {
@@ -119,11 +179,15 @@ function readNumber(value: unknown): number | null {
   return null;
 }
 
+/** Match IFC property names; treat Raum_Temperatur ≈ Raumtemperatur. */
 function propNameMatches(name: string, candidates: string[]): boolean {
   const n = name.trim().toLowerCase();
-  return candidates.some(
-    (c) => n === c.toLowerCase() || n.includes(c.toLowerCase()),
-  );
+  const nCompact = n.replace(/[_\s/-]+/g, "").replace(/²/g, "2");
+  return candidates.some((c) => {
+    const cl = c.toLowerCase();
+    const cCompact = cl.replace(/[_\s/-]+/g, "").replace(/²/g, "2");
+    return n === cl || n.includes(cl) || nCompact === cCompact || nCompact.includes(cCompact);
+  });
 }
 
 function vectorToArray(vec: WebIFC.Vector<number>): number[] {
@@ -318,6 +382,15 @@ function boxesOverlapHeavily(a: THREE.Box3, b: THREE.Box3): boolean {
   return interVol / Math.min(aVol, bVol) > 0.55;
 }
 
+function ifcColorToHex(c: { x: number; y: number; z: number }): number {
+  const r = Math.round(Math.min(1, Math.max(0, c.x)) * 255);
+  const g = Math.round(Math.min(1, Math.max(0, c.y)) * 255);
+  const b = Math.round(Math.min(1, Math.max(0, c.z)) * 255);
+  // Near-black IFC defaults → soft structural gray so elements stay readable
+  if (r + g + b < 12) return 0xb8bec8;
+  return (r << 16) | (g << 8) | b;
+}
+
 function ingestFlatMesh(
   api: WebIFC.IfcAPI,
   modelID: number,
@@ -328,16 +401,17 @@ function ingestFlatMesh(
     geom: THREE.BufferGeometry;
     expressId: number;
     floorId: string;
+    colorHex: number;
   }[],
   containment: Map<number, number>,
   storeyGuidByExpress: Map<number, string>,
   floors: Floor[],
 ): void {
   const expressID = mesh.expressID;
-  const geom = mergePlacedGeometries(api, modelID, mesh);
-  if (!geom) return;
 
   if (spaceIdSet.has(expressID)) {
+    const geom = mergePlacedGeometries(api, modelID, mesh);
+    if (!geom) return;
     const prev = spaceGeoms.get(expressID);
     if (prev) prev.dispose();
     spaceGeoms.set(expressID, geom);
@@ -349,7 +423,21 @@ function ingestFlatMesh(
     (storeyExpress != null
       ? storeyGuidByExpress.get(storeyExpress)
       : undefined) ?? floors[0].id;
-  shellGeoms.push({ geom, expressId: expressID, floorId });
+
+  // Keep IFC material colors: one shell piece per placed geometry
+  const geos = mesh.geometries;
+  const count = geos.size();
+  for (let i = 0; i < count; i++) {
+    const placed = geos.get(i);
+    const geom = placedGeometryToBuffer(api, modelID, placed);
+    if (!geom) continue;
+    shellGeoms.push({
+      geom,
+      expressId: expressID,
+      floorId,
+      colorHex: ifcColorToHex(placed.color),
+    });
+  }
 }
 
 function flattenProps(psets: unknown[]): { pset: string; name: string; value: unknown }[] {
@@ -358,8 +446,10 @@ function flattenProps(psets: unknown[]): { pset: string; name: string; value: un
     const ps = pset as {
       Name?: { value?: string };
       HasProperties?: unknown[];
+      Quantities?: unknown[];
     };
     const psetName = readString(ps.Name);
+
     for (const prop of ps.HasProperties ?? []) {
       const p = prop as {
         Name?: { value?: string };
@@ -379,24 +469,77 @@ function flattenProps(psets: unknown[]): { pset: string; name: string; value: un
         p.NominalValue ?? p.LengthValue ?? p.AreaValue ?? p.VolumeValue ?? null;
       if (name) out.push({ pset: psetName, name, value });
     }
+
+    // Element quantities (Revit sometimes puts loads here)
+    for (const q of ps.Quantities ?? []) {
+      const qq = q as {
+        Name?: { value?: string };
+        LengthValue?: unknown;
+        AreaValue?: unknown;
+        VolumeValue?: unknown;
+        CountValue?: unknown;
+        WeightValue?: unknown;
+        TimeValue?: unknown;
+      };
+      const name = readString(qq.Name);
+      const value =
+        qq.LengthValue ??
+        qq.AreaValue ??
+        qq.VolumeValue ??
+        qq.CountValue ??
+        qq.WeightValue ??
+        qq.TimeValue ??
+        null;
+      if (name) out.push({ pset: psetName, name, value });
+    }
   }
   return out;
+}
+
+/** Compact key for exact export-name matching (Heizlast W → heizlastw). */
+function compactPropKey(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/²/g, "2")
+    .replace(/[_\s/-]+/g, "");
+}
+
+/**
+ * Exact match against export names (order matters).
+ * Used for: "Heizlast/m²", "Heizlast W", "Temp"
+ */
+function extractExactNamedNumeric(
+  flat: { pset: string; name: string; value: unknown }[],
+  exactNames: string[],
+): number | null {
+  const keys = exactNames.map((n) => compactPropKey(n));
+  for (const key of keys) {
+    for (const item of flat) {
+      if (compactPropKey(item.name) !== key) continue;
+      const num = readNumber(item.value);
+      if (num != null) return num;
+    }
+  }
+  return null;
 }
 
 function fuzzyHeatLoadDensity(name: string): boolean {
   const n = name.toLowerCase();
   return (
+    n.includes("heizlast/m") ||
+    n.includes("heizlast_m") ||
     n.includes("spezifischeheizlast") ||
     n.includes("heizlastdichte") ||
     n.includes("heatloadperarea") ||
     n.includes("specificheatload") ||
-    (n.includes("heizlast") && (n.includes("spezif") || n.includes("dichte") || n.includes("/m")))
+    (n.includes("heizlast") &&
+      (n.includes("spezif") || n.includes("dichte") || n.includes("/m")))
   );
 }
 
 function fuzzyHeatLoad(name: string): boolean {
   const n = name.toLowerCase();
-  // Density-style names first (used with HEAT_LOAD_PROP_NAMES)
   if (fuzzyHeatLoadDensity(name)) return true;
   return (
     n.includes("heatload") ||
@@ -409,10 +552,13 @@ function fuzzyHeatLoad(name: string): boolean {
   );
 }
 
-/** Absolute Heizlast (W) — exact/near-exact "Heizlast", not spezifische / W/m². */
+/** Absolute Heizlast (W) — not density (W/m²). */
 function extractAbsoluteHeizlast(
   flat: { pset: string; name: string; value: unknown }[],
 ): number | null {
+  const fromNamed = extractExactNamedNumeric(flat, ABSOLUTE_HEIZLAST_PROP_NAMES);
+  if (fromNamed != null) return fromNamed;
+
   const preferExact: number[] = [];
   const preferFuzzy: number[] = [];
   for (const item of flat) {
@@ -421,34 +567,65 @@ function extractAbsoluteHeizlast(
       n.includes("spezifisch") ||
       n.includes("dichte") ||
       n.includes("perarea") ||
-      n.includes("/m")
+      n.includes("/m") ||
+      n.includes("m²") ||
+      n.includes("m2") ||
+      n.includes("werte") // e.g. Heizlastwerte = enum string
     ) {
       continue;
     }
     const num = readNumber(item.value);
     if (num == null) continue;
-    if (n === "heizlast" || n === "sc_raum_heizlast" || n.endsWith(".heizlast")) {
+    if (
+      n === "heizlast" ||
+      n === "heizlastw" ||
+      n === "sc_raum_heizlast" ||
+      n === "bemessungslastheizung" ||
+      n.endsWith(".heizlast")
+    ) {
       preferExact.push(num);
     } else if (
       (n.includes("heizlast") || n === "heatingload" || n === "heatload") &&
       !n.includes("spezif")
     ) {
       preferFuzzy.push(num);
+    } else if (n.includes("bemessungslast") && n.includes("heizung")) {
+      preferExact.push(num);
     }
   }
   return preferExact[0] ?? preferFuzzy[0] ?? null;
 }
 
 function fuzzyTemperature(name: string): boolean {
-  const n = name.toLowerCase();
+  const n = name.toLowerCase().trim().replace(/\s+/g, "");
+  // Prefer explicit room setpoint names — skip frost/ventilation/aux temps
+  if (
+    n.includes("frost") ||
+    n.includes("abluft") ||
+    n.includes("zuluft") ||
+    n.includes("überstrom") ||
+    n.includes("ueberstrom") ||
+    n.includes("nutzung_temperatur") ||
+    n.includes("stütz") ||
+    n.includes("stuetz") ||
+    n.includes("temperaturabfall") ||
+    n.includes("temperaturfrei")
+  ) {
+    return false;
+  }
+  if (
+    n === "temp" ||
+    n === "sc_raum_temperatur" ||
+    n === "cax_raum_temperatur" ||
+    n === "sc_raum_standardtemperatur"
+  ) {
+    return true;
+  }
   return (
     n.includes("solltemperatur") ||
-    n.includes("raumtemperatur") ||
-    n.includes("temperature") ||
-    n.includes("temp.") ||
-    n.startsWith("temp") ||
-    n.includes("°c") ||
-    n.includes("celsius")
+    n.endsWith("raum_temperatur") ||
+    n.endsWith("raumtemperatur") ||
+    (n.includes("raum") && n.includes("temperatur") && !n.includes("zone"))
   );
 }
 
@@ -500,39 +677,41 @@ async function extractSpaceProps(
       propDump.push(`${item.pset}.${item.name}=${readString(item.value)}`);
     }
 
-    // W/m² for coloring — prefer spezifische / density names
+    // This IFC (SimCalc / Revit):
+    //   SC_Raum_spezifischeHeizlast → W/m²
+    //   Bemessungslast Heizung      → W
+    //   SC_Raum_Temperatur / CAx_Raum_Temperatur → °C
     heatLoad =
+      extractExactNamedNumeric(flat, HEAT_DENSITY_PROP_NAMES) ??
       extractNumericProp(
         psets,
-        HEAT_LOAD_PSET_NAMES,
         [
-          "SC_Raum_spezifischeHeizlast",
-          "spezifischeHeizlast",
-          "Spezifische Heizlast",
-          "Heizlastdichte",
-          "HeatLoadPerArea",
-          "SpecificHeatLoad",
-          ...HEAT_LOAD_PROP_NAMES,
+          "Ergebnisse der Analyse",
+          ...HEAT_LOAD_PSET_NAMES,
         ],
+        HEAT_DENSITY_PROP_NAMES,
         fuzzyHeatLoadDensity,
-      ) ??
-      extractNumericProp(
-        psets,
-        HEAT_LOAD_PSET_NAMES,
-        HEAT_LOAD_PROP_NAMES,
-        fuzzyHeatLoad,
       ) ??
       0;
 
-    heizlast = extractAbsoluteHeizlast(flat);
+    heizlast =
+      extractExactNamedNumeric(flat, ABSOLUTE_HEIZLAST_PROP_NAMES) ??
+      extractAbsoluteHeizlast(flat);
 
     temperature =
+      extractExactNamedNumeric(flat, [
+        "SC_Raum_Temperatur",
+        "CAx_Raum_Temperatur",
+        "SC_Raum_StandardTemperatur",
+        "Temp",
+      ]) ??
       extractNumericProp(
         psets,
         TEMPERATURE_PSET_NAMES,
         TEMPERATURE_PROP_NAMES,
         fuzzyTemperature,
-      ) ?? 20;
+      ) ??
+      20;
 
     for (const item of flat) {
       const name = item.name.toLowerCase();
@@ -588,7 +767,7 @@ async function resolveIfcBytes(
 
 /**
  * Load an IFC from a public path, File, or ArrayBuffer and extract floors,
- * colored room spaces, and a neutral building shell group.
+ * colored room spaces, and a building shell group that keeps IFC material colors.
  */
 export async function loadIfcModel(
   source: IfcSource,
@@ -625,7 +804,7 @@ export async function loadIfcModel(
     if (modelID < 0) {
       throw new Error("web-ifc failed to open the IFC model");
     }
-    openHandle = { api, modelID };
+    setOpenHandle({ api, modelID });
     debugLog("ifcClient", `OpenModel ok — modelID=${modelID}`, "ok");
 
     try {
@@ -677,6 +856,7 @@ export async function loadIfcModel(
         geom: THREE.BufferGeometry;
         expressId: number;
         floorId: string;
+        colorHex: number;
       }[] = [];
 
       report({ phase: "geometry", progress: 0, message: "Extracting geometry…" });
@@ -1003,8 +1183,8 @@ export async function loadIfcModel(
           );
           debugLog(
             "ifcClient",
-            `parsed heatLoad=${props.heatLoad} temperature=${props.temperature}`,
-            props.heatLoad === 0 ? "warn" : "ok",
+            `parsed heatLoad=${props.heatLoad} heizlast=${props.heizlast} temperature=${props.temperature}`,
+            props.heatLoad === 0 || props.heizlast == null ? "warn" : "ok",
           );
         }
 
@@ -1050,19 +1230,23 @@ export async function loadIfcModel(
       const shellGroup = new THREE.Group();
       shellGroup.name = "building-shell";
 
-      const shellMaterial = new THREE.MeshStandardMaterial({
-        color: 0xc8cdd3,
-        roughness: 0.7,
-        metalness: 0.05,
-        side: THREE.DoubleSide,
-      });
-
       for (const piece of shellGeoms) {
-        const meshObj = new THREE.Mesh(piece.geom, shellMaterial.clone());
+        const mat = new THREE.MeshStandardMaterial({
+          color: piece.colorHex,
+          roughness: 0.75,
+          metalness: 0.05,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+        });
+        mat.userData.baseColorHex = `#${piece.colorHex.toString(16).padStart(6, "0")}`;
+        const meshObj = new THREE.Mesh(piece.geom, mat);
         meshObj.castShadow = true;
         meshObj.receiveShadow = true;
         meshObj.userData.floorId = piece.floorId;
         meshObj.userData.expressId = piece.expressId;
+        meshObj.userData.colorHex = mat.userData.baseColorHex;
         shellGroup.add(meshObj);
       }
 
@@ -1097,6 +1281,7 @@ export async function getElementDetails(
   floorId: string | null = null,
   roomId: string | null = null,
 ): Promise<import("./types").SelectedElement | null> {
+  const openHandle = getOpenHandle();
   if (!openHandle) {
     debugLog("ifcClient", "getElementDetails: no open model", "warn");
     return null;

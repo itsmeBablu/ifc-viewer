@@ -380,9 +380,16 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           Lighting
         </p>
         <SliderRow
-          label="Transparency"
-          value={lighting.transparency}
-          onChange={(transparency) => setLighting({ transparency })}
+          label="Spaces opacity"
+          value={lighting.spaceTransparency}
+          onChange={(spaceTransparency) => setLighting({ spaceTransparency })}
+        />
+        <SliderRow
+          label="Elements opacity"
+          value={lighting.elementTransparency}
+          onChange={(elementTransparency) =>
+            setLighting({ elementTransparency })
+          }
         />
         <SliderRow
           label="Color"

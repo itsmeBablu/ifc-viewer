@@ -23,6 +23,16 @@ function formatTime(ts: number): string {
   } as Intl.DateTimeFormatOptions);
 }
 
+function isKeyProp(name: string): boolean {
+  const n = name.toLowerCase().replace(/\s+/g, "");
+  return (
+    n.includes("heizlast") ||
+    n === "temp" ||
+    n.includes("temperatur") ||
+    n.includes("heatload")
+  );
+}
+
 /**
  * Floating debug inspector — copy the dump and paste it back into chat.
  */
@@ -44,6 +54,12 @@ export default function DebugPanel() {
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const colorMode = useAppStore((s) => s.colorMode);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const selectedElement = useAppStore((s) => s.selectedElement);
+
+  const selectedRoom = useMemo(() => {
+    if (!selectedElement?.roomId) return null;
+    return rooms.find((r) => r.id === selectedElement.roomId) ?? null;
+  }, [rooms, selectedElement]);
 
   const snapshot = useMemo(() => {
     const lines = [
@@ -64,14 +80,38 @@ export default function DebugPanel() {
       `loadMessage: ${loadMessage || "(empty)"}`,
       `loadError: ${loadError ?? "(none)"}`,
       "",
-      "-- Log (newest last) --",
+    ];
+
+    if (selectedElement) {
+      lines.push("-- Selected element --");
+      lines.push(`name: ${selectedElement.name}`);
+      lines.push(`type: ${selectedElement.typeName}`);
+      lines.push(`expressId: ${selectedElement.expressId}`);
+      lines.push(`globalId: ${selectedElement.globalId}`);
+      lines.push(`kind: ${selectedElement.kind}`);
+      lines.push(`roomId: ${selectedElement.roomId ?? "null"}`);
+      if (selectedRoom) {
+        lines.push(
+          `extracted: heatLoad=${selectedRoom.heatLoad} heizlast=${selectedRoom.heizlast} temperature=${selectedRoom.temperature}`,
+        );
+      }
+      lines.push("properties:");
+      for (const p of selectedElement.properties) {
+        const mark = isKeyProp(p.name) ? " ★" : "";
+        lines.push(`  ${p.pset ?? "?"}.${p.name}=${p.value}${mark}`);
+      }
+      lines.push("");
+    }
+
+    lines.push("-- Log (newest last) --");
+    lines.push(
       ...entries.map(
         (e) =>
           `${formatTime(e.ts)} [${e.level}] [${e.scope}] ${e.message}` +
           (e.detail ? `\n  ${e.detail.replace(/\n/g, "\n  ")}` : ""),
       ),
       "=== end ===",
-    ];
+    );
     return lines.join("\n");
   }, [
     activeModelId,
@@ -85,6 +125,8 @@ export default function DebugPanel() {
     loadProgress,
     loadMessage,
     loadError,
+    selectedElement,
+    selectedRoom,
     entries,
   ]);
 
@@ -112,7 +154,7 @@ export default function DebugPanel() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] w-[min(420px,calc(100vw-2rem))]">
+    <div className="fixed bottom-4 right-4 z-[60] w-[min(440px,calc(100vw-2rem))]">
       <GlassPanel variant="panel" zIndex={60} wrapperClassName="overflow-hidden">
         <div className="flex items-center justify-between gap-2 border-b border-zinc-300/40 px-3 py-2">
           <p className="text-xs font-semibold tracking-wide text-zinc-800">
@@ -182,7 +224,53 @@ export default function DebugPanel() {
           </div>
         )}
 
-        <ul className="max-h-56 space-y-1 overflow-y-auto px-3 py-2 font-mono text-[10px] leading-relaxed">
+        {selectedElement ? (
+          <div className="thin-scroll max-h-48 overflow-y-auto border-b border-zinc-300/40 px-3 py-2">
+            <p className="mb-1 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+              Selected · {selectedElement.typeName} · #{selectedElement.expressId}
+            </p>
+            <p className="mb-1 truncate text-[11px] font-medium text-zinc-800">
+              {selectedElement.name}
+            </p>
+            {selectedRoom && (
+              <p className="mb-1.5 font-mono text-[10px] text-emerald-800">
+                extracted: Heizlast/m²={selectedRoom.heatLoad} · Heizlast W=
+                {selectedRoom.heizlast ?? "—"} · Temp={selectedRoom.temperature}
+              </p>
+            )}
+            <ul className="space-y-0.5 font-mono text-[10px] leading-snug">
+              {selectedElement.properties.length === 0 ? (
+                <li className="text-zinc-400">No properties</li>
+              ) : (
+                selectedElement.properties.map((p, i) => {
+                  const key = isKeyProp(p.name);
+                  return (
+                    <li
+                      key={`${p.pset}-${p.name}-${i}`}
+                      className={
+                        key
+                          ? "rounded bg-amber-100/70 px-1 text-amber-950"
+                          : "text-zinc-600"
+                      }
+                    >
+                      <span className="text-zinc-400">{p.pset ?? "?"}.</span>
+                      <span className={key ? "font-semibold" : ""}>
+                        {p.name}
+                      </span>
+                      ={p.value}
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        ) : (
+          <div className="border-b border-zinc-300/40 px-3 py-2 text-[10px] text-zinc-400">
+            Click a space/element to dump its IFC attributes here.
+          </div>
+        )}
+
+        <ul className="thin-scroll max-h-40 space-y-1 overflow-y-auto px-3 py-2 font-mono text-[10px] leading-relaxed">
           {entries.length === 0 ? (
             <li className="text-zinc-400">No log entries yet.</li>
           ) : (

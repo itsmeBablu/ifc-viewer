@@ -162,18 +162,35 @@ function attachColorOutline(mesh: THREE.Mesh, hex: string) {
   mesh.add(outline);
 }
 
+function applySurfaceOpacity(
+  mat: THREE.MeshStandardMaterial,
+  opacity: number,
+  /** When translucent, whether to write depth (rooms usually yes, shell usually no). */
+  depthWriteWhenTranslucent = false,
+) {
+  const opaque = opacity >= 0.995;
+  mat.opacity = opaque ? 1 : Math.max(0, opacity);
+  mat.transparent = !opaque;
+  mat.depthWrite = opaque || depthWriteWhenTranslucent;
+}
+
 function applyRenderMode(
   mode: RenderMode,
   shell: THREE.Group | null,
   overlays: THREE.Group | null,
   showRoomOverlays: boolean,
-  lighting?: { transparency: number; color: number },
+  lighting?: {
+    spaceTransparency: number;
+    elementTransparency: number;
+    color: number;
+  },
 ) {
   const wire = mode === "wireframe";
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
-  const baseOpacity = lighting?.transparency ?? 0.7;
+  const spaceOpacity = lighting?.spaceTransparency ?? 0.7;
+  const elementOpacity = lighting?.elementTransparency ?? 0.28;
   const colorAmt = lighting?.color ?? 1;
 
   if (overlays) {
@@ -190,8 +207,6 @@ function applyRenderMode(
       mat.wireframe = wire;
       mat.envMapIntensity = 0;
       mat.metalness = 0;
-      mat.transparent = true;
-      mat.depthWrite = true;
       mat.depthTest = true;
       mat.flatShading = true;
       mat.side = THREE.FrontSide;
@@ -201,22 +216,21 @@ function applyRenderMode(
         mat.emissive?.setHex(0x000000);
         mat.emissiveIntensity = 0;
         mat.roughness = 1;
-        mat.opacity = 1;
-        mat.transparent = false;
+        applySurfaceOpacity(mat, 1, true);
       } else if (light) {
         const c = new THREE.Color(baseHex).lerp(new THREE.Color(0xd0d4dc), 1 - colorAmt);
         mat.color.copy(c);
         mat.roughness = 1;
         mat.emissive.copy(c);
         mat.emissiveIntensity = 0.35 * colorAmt;
-        mat.opacity = Math.min(0.95, baseOpacity + 0.1);
+        applySurfaceOpacity(mat, spaceOpacity, true);
       } else {
         const c = new THREE.Color(baseHex).lerp(new THREE.Color(0xb8bec8), 1 - colorAmt);
         mat.color.copy(c);
         mat.roughness = 1;
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
-        mat.opacity = baseOpacity;
+        applySurfaceOpacity(mat, spaceOpacity, true);
       }
       mat.needsUpdate = true;
     });
@@ -227,43 +241,43 @@ function applyRenderMode(
     shell.traverse((obj) => {
       if (!isShellMesh(obj)) return;
       const mat = obj.material as THREE.MeshStandardMaterial;
+      const baseHex =
+        (mat.userData.baseColorHex as string | undefined) ??
+        (obj.userData.colorHex as string | undefined) ??
+        `#${mat.color.getHexString()}`;
       mat.wireframe = wire;
-      if (light) {
-        mat.color.setHex(0xd8dce3);
-        mat.roughness = 1;
-        mat.metalness = 0;
-        mat.envMapIntensity = 0;
-        mat.opacity = 0.55;
-        mat.transparent = true;
-        mat.depthWrite = false;
-        mat.side = THREE.FrontSide;
-      } else if (textureOnly) {
-        mat.color.setHex(0xc5cad3);
+      if (textureOnly) {
+        mat.color.set(baseHex);
         mat.roughness = 0.75;
         mat.metalness = 0.05;
         mat.envMapIntensity = 0.35;
-        mat.opacity = 1;
-        mat.transparent = false;
-        mat.depthWrite = true;
+        applySurfaceOpacity(mat, 1, true);
+        mat.side = THREE.FrontSide;
+      } else if (light) {
+        const c = new THREE.Color(baseHex).lerp(
+          new THREE.Color(0xd0d4dc),
+          1 - colorAmt,
+        );
+        mat.color.copy(c);
+        mat.roughness = 1;
+        mat.metalness = 0;
+        mat.envMapIntensity = 0;
+        applySurfaceOpacity(mat, elementOpacity, false);
         mat.side = THREE.FrontSide;
       } else if (mode === "realistic") {
-        mat.color.setHex(0xb8bec8);
+        mat.color.set(baseHex);
         mat.roughness = 0.65;
         mat.metalness = 0.08;
         mat.envMapIntensity = 0.85;
-        mat.opacity = 0.35;
-        mat.transparent = true;
-        mat.depthWrite = false;
+        applySurfaceOpacity(mat, elementOpacity, false);
         mat.side = THREE.FrontSide;
       } else {
-        // fullColor — quiet shell, no depth-write so rooms don't flicker while orbiting
-        mat.color.setHex(0xb8bec8);
-        mat.roughness = 0.85;
-        mat.metalness = 0.02;
-        mat.envMapIntensity = 0.15;
-        mat.opacity = 0.22;
-        mat.transparent = true;
-        mat.depthWrite = false;
+        // fullColor / wireframe — keep IFC material color; opacity from Elements slider
+        mat.color.set(baseHex);
+        mat.roughness = 0.8;
+        mat.metalness = 0.04;
+        mat.envMapIntensity = 0.2;
+        applySurfaceOpacity(mat, elementOpacity, false);
         mat.side = THREE.FrontSide;
       }
       mat.needsUpdate = true;
@@ -582,16 +596,24 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const clone = shellGroup.clone(true);
       clone.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
-          obj.material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(0xb8bec8),
-            roughness: 0.85,
-            metalness: 0.02,
+          const src = obj.material as THREE.MeshStandardMaterial;
+          const baseHex =
+            (src.userData.baseColorHex as string | undefined) ??
+            (obj.userData.colorHex as string | undefined) ??
+            `#${src.color.getHexString()}`;
+          const mat = new THREE.MeshStandardMaterial({
+            color: baseHex,
+            roughness: 0.75,
+            metalness: 0.05,
             envMapIntensity: 0.25,
             transparent: true,
             opacity: 0.35,
             depthWrite: false,
             side: THREE.FrontSide,
           });
+          mat.userData.baseColorHex = baseHex;
+          obj.userData.colorHex = baseHex;
+          obj.material = mat;
           obj.castShadow = false;
           obj.receiveShadow = true;
         }
@@ -1060,7 +1082,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   // Outline for selected room (3D or list) — no camera zoom
   useEffect(() => {
-    const baseOpacity = useAppStore.getState().lighting.transparency;
+    const baseOpacity = useAppStore.getState().lighting.spaceTransparency;
     const selectedExpress = selectedElement?.expressId ?? null;
     const lightMode = useAppStore.getState().renderMode === "light";
     const presentation = useAppStore.getState().isPresentationView;
@@ -1080,11 +1102,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const passes =
         !filter || !room || roomPassesFilter(room, filter);
       // Non-matches stay visible but heavily faded (filter within floor scope)
-      mat.opacity = !passes
+      const nextOpacity = !passes
         ? 0.1
         : isSel
-          ? Math.min(0.95, baseOpacity + 0.15)
+          ? Math.min(1, baseOpacity + 0.15)
           : baseOpacity;
+      applySurfaceOpacity(mat, nextOpacity, true);
       if (!lightMode) {
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
@@ -1131,7 +1154,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   }, [
     selectedRoomId,
     selectedElement,
-    lighting.transparency,
+    lighting.spaceTransparency,
     isPresentationView,
     activeColorPalette,
     activeFilter,
@@ -1241,11 +1264,39 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           if (details) {
             setSelectedElement(details);
             setLeftPanelOpen(true);
+            const room =
+              roomId != null
+                ? useAppStore.getState().rooms.find((r) => r.id === roomId)
+                : undefined;
+            const keyProps = details.properties.filter((p) => {
+              const n = p.name.toLowerCase().replace(/\s+/g, "");
+              return (
+                n.includes("heizlast") ||
+                n === "temp" ||
+                n.includes("temperatur") ||
+                n.includes("heatload")
+              );
+            });
             debugLog(
               "Viewer3D",
               `selected ${details.typeName}: ${details.name}`,
               "ok",
-              { expressId, props: details.properties.length },
+              {
+                expressId,
+                globalId: details.globalId,
+                roomId: details.roomId,
+                extracted: room
+                  ? {
+                      heatLoad: room.heatLoad,
+                      heizlast: room.heizlast,
+                      temperature: room.temperature,
+                    }
+                  : null,
+                keyProps,
+                allProperties: details.properties.map(
+                  (p) => `${p.pset ?? "?"}.${p.name}=${p.value}`,
+                ),
+              },
             );
           }
         })();

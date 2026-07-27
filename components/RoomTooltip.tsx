@@ -36,49 +36,57 @@ function RoomInfoBody({
     temperatureRange,
   );
   const absHeizlast = room.heizlast;
+  const name = room.name?.trim() || "—";
+  const number = room.number?.trim() || "—";
+  const watts =
+    absHeizlast != null && Number.isFinite(absHeizlast)
+      ? `${Math.round(absHeizlast)}W`
+      : "—";
+  const density = Number.isFinite(room.heatLoad)
+    ? `${room.heatLoad.toFixed(1).replace(".", ",")} W/m²`
+    : "—";
+  const temp = Number.isFinite(room.temperature)
+    ? `${Math.round(room.temperature)}°C`
+    : "—";
 
   return (
-    <div className="p-3">
-      <p className="truncate text-sm font-semibold tracking-wide text-zinc-900">
-        {room.name}
+    <div className="px-3.5 py-3">
+      <p className="text-[11px] font-semibold tracking-wide text-zinc-800">
+        Norm-Heizlast
       </p>
-      {room.number ? (
-        <p className="text-xs font-medium text-zinc-500">Nr. {room.number}</p>
-      ) : null}
+      <div className="my-2 h-px bg-zinc-300/70" />
 
-      <p className="mt-2 mb-1.5 text-[11px] font-semibold tracking-wide text-zinc-800 uppercase">
-        Heizlast
+      <p className="truncate text-sm font-semibold text-zinc-900">
+        {name}
+        <span className="font-medium text-zinc-500"> | {number}</span>
       </p>
 
-      <div className="space-y-1.5">
-        {absHeizlast != null && (
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="font-medium text-zinc-500">Heizlast</span>
-            <span className="font-medium text-zinc-800 tabular-nums">
-              {absHeizlast.toFixed(0)} W
-            </span>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="font-medium text-zinc-500">W/m²</span>
-          <span className="flex items-center gap-1.5 font-medium text-zinc-800">
+      <div className="mt-2 space-y-1.5 text-xs">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="shrink-0 font-medium text-zinc-500">Heizlast</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-zinc-800">
             <span
-              className="inline-block h-2.5 w-2.5 rounded-xl"
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: heatColor }}
-            />
-            <span className="tabular-nums">{room.heatLoad.toFixed(1)} W/m²</span>
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="font-medium text-zinc-500">Temperatur</span>
-          <span className="flex items-center gap-1.5 font-medium text-zinc-800">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-xl"
-              style={{ backgroundColor: tempColor }}
+              aria-hidden
             />
             <span className="tabular-nums">
-              {room.temperature.toFixed(1)} °C
+              {watts}
+              {density !== "—" ? (
+                <span className="font-normal text-zinc-600"> mit {density}</span>
+              ) : null}
             </span>
+          </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="shrink-0 font-medium text-zinc-500">Temperatur</span>
+          <span className="flex items-center gap-1.5 font-medium text-zinc-800">
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: tempColor }}
+              aria-hidden
+            />
+            <span className="tabular-nums">{temp}</span>
           </span>
         </div>
       </div>
@@ -127,7 +135,7 @@ export default function RoomTooltip({
     left,
     top,
     zIndex: 60,
-    width: 224,
+    width: 248,
     pointerEvents: roomProp ? "auto" : "none",
     ...(opaque
       ? {

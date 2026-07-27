@@ -119,7 +119,10 @@ type AppState = {
   temperatureRange: number[];
   renderMode: RenderMode;
   lighting: {
-    transparency: number;
+    /** Opacity of IfcSpace / room color overlays (0–1). */
+    spaceTransparency: number;
+    /** Opacity of all other building elements / shell (0–1). */
+    elementTransparency: number;
     color: number;
     shadow: number;
     indirectLight: number;
@@ -167,7 +170,8 @@ type AppState = {
   setRenderMode: (mode: RenderMode) => void;
   setLighting: (
     partial: Partial<{
-      transparency: number;
+      spaceTransparency: number;
+      elementTransparency: number;
       color: number;
       shadow: number;
       indirectLight: number;
@@ -280,7 +284,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   renderMode: "fullColor",
   lighting: {
-    transparency: 0.7,
+    spaceTransparency: 0.7,
+    elementTransparency: 0.28,
     color: 1,
     shadow: 0.55,
     indirectLight: 0.45,
@@ -355,7 +360,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLighting: (partial) =>
     set((s) => ({
       lighting: {
-        transparency: clamp01(partial.transparency ?? s.lighting.transparency),
+        spaceTransparency: clamp01(
+          partial.spaceTransparency ?? s.lighting.spaceTransparency,
+        ),
+        elementTransparency: clamp01(
+          partial.elementTransparency ?? s.lighting.elementTransparency,
+        ),
         color: clamp01(partial.color ?? s.lighting.color),
         shadow: clamp01(partial.shadow ?? s.lighting.shadow),
         indirectLight: clamp01(
