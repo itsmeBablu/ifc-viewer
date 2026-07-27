@@ -492,7 +492,7 @@ export default function FloorsPanel({ viewerRef }: Props) {
                   zIndex={121}
                   wrapperClassName="overflow-hidden rounded-[1.25rem]"
                 >
-                  <div className="relative overflow-hidden rounded-[1.25rem] bg-gradient-to-b from-white/55 via-white/25 to-amber-50/30 p-4 backdrop-blur-xl">
+                  <div className="relative overflow-hidden rounded-[1.25rem] bg-gradient-to-b from-white/55 via-white/25 to-amber-50/30 p-4 backdrop-blur-md">
                     <span
                       className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/70 to-transparent"
                       aria-hidden

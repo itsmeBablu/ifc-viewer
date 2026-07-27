@@ -325,7 +325,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const btnPresentationOn = `${btnBase} ${blueGloss}`;
 
   const glassPopover =
-    "fixed z-[80] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/40 bg-white/70 shadow-lg backdrop-blur-xl";
+    "fixed z-[80] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/40 bg-white/70 shadow-lg backdrop-blur-md";
 
   // Presentation uses fullscreen on the viewer root — menus must portal inside it
   const portalRoot =
