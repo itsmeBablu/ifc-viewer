@@ -6,6 +6,7 @@ import GlassPanel from "./GlassPanel";
 
 type Props = {
   onSelectRegistryModel: (modelId: string) => void;
+  placeholder?: string;
 };
 
 const NONE = "__none__";
@@ -15,7 +16,10 @@ const NONE = "__none__";
  * Uses a stable "__none__" value so the browser cannot fall through to
  * the first model option (which caused the building-a.ifc 404).
  */
-export default function ModelSelector({ onSelectRegistryModel }: Props) {
+export default function ModelSelector({
+  onSelectRegistryModel,
+  placeholder = "Registry…",
+}: Props) {
   const models = getModels();
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
@@ -50,7 +54,7 @@ export default function ModelSelector({ onSelectRegistryModel }: Props) {
           onSelectRegistryModel(v);
         }}
       >
-        <option value={NONE}>Registry…</option>
+        <option value={NONE}>{placeholder}</option>
         {isLocal && (
           <option value="__local__">{activeModelLabel ?? "Local IFC"}</option>
         )}

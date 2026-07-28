@@ -41,7 +41,7 @@ function serializeDetail(detail: unknown): string | undefined {
 }
 
 export const useDebugStore = create<DebugState>((set, get) => ({
-  open: false,
+  open: true,
   entries: [],
   setOpen: (open) => set({ open }),
   toggle: () => set({ open: !get().open }),

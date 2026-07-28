@@ -141,6 +141,8 @@ type AppState = {
   presentationLayoutMode: import("@/lib/presentationLayout").PresentationLayoutMode;
   /** When true, only show presentationFloorId in 3D. */
   presentationIsolate: boolean;
+  /** Show Heizlast + Temperature together (stacked on floor, side-by-side in presentation). */
+  compareBothModes: boolean;
   /** Room filter for search/filter bar — null means no filter. */
   activeFilter: {
     minHeat?: number;
@@ -159,6 +161,7 @@ type AppState = {
   sidebarOpen: boolean;
   headerExpanded: boolean;
   isHeaderCollapsed: boolean;
+  uiLanguage: import("@/lib/i18n").UiLanguage;
 
   setActiveModelId: (id: string | null, label?: string | null) => void;
   setFloors: (floors: Floor[]) => void;
@@ -190,6 +193,7 @@ type AppState = {
     mode: import("@/lib/presentationLayout").PresentationLayoutMode,
   ) => void;
   setPresentationIsolate: (isolate: boolean) => void;
+  setCompareBothModes: (on: boolean) => void;
   setActiveFilter: (
     filter: {
       minHeat?: number;
@@ -209,6 +213,7 @@ type AppState = {
   setHeaderExpanded: (expanded: boolean) => void;
   setHeaderCollapsed: (collapsed: boolean) => void;
   toggleHeaderCollapsed: () => void;
+  setUiLanguage: (lang: import("@/lib/i18n").UiLanguage) => void;
   addSavedView: (
     name: string,
     position: [number, number, number],
@@ -306,6 +311,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   presentationRoomsOpen: false,
   presentationLayoutMode: "auto",
   presentationIsolate: false,
+  compareBothModes: false,
   activeFilter: null,
   sliceProgress: 0.5,
   isLoadingModel: false,
@@ -318,6 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: false,
   headerExpanded: true,
   isHeaderCollapsed: false,
+  uiLanguage: "de",
 
   setActiveModelId: (id, label) => {
     set({
@@ -451,6 +458,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setPresentationLayoutMode: (mode) => set({ presentationLayoutMode: mode }),
   setPresentationIsolate: (isolate) => set({ presentationIsolate: isolate }),
+  setCompareBothModes: (on) => set({ compareBothModes: on }),
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),
   setLoadError: (error) => set({ loadError: error }),
@@ -478,6 +486,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setHeaderCollapsed: (collapsed) => set({ isHeaderCollapsed: collapsed }),
   toggleHeaderCollapsed: () =>
     set({ isHeaderCollapsed: !get().isHeaderCollapsed }),
+  setUiLanguage: (lang) => set({ uiLanguage: lang }),
 
   addSavedView: (name, position, target, opts) => {
     const { activeModelId, selectedFloor, savedViews, presentationFloorId, isPresentationView, presentationIsolate } =
@@ -521,6 +530,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       presentationFloorId: null,
       presentationRoomsOpen: false,
       presentationIsolate: false,
+      compareBothModes: false,
       activeFilter: null,
     }),
 }));

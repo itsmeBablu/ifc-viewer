@@ -305,13 +305,16 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const controlsRef = useRef<OrbitControls | null>(null);
   const shellCloneRef = useRef<THREE.Group | null>(null);
   const overlaysRef = useRef<THREE.Group | null>(null);
+  const compareRootRef = useRef<THREE.Group | null>(null);
   const helpersRef = useRef<THREE.Group | null>(null);
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
   const clipRef = useRef<ClipSliceController | null>(null);
   const roomMeshById = useRef<Map<string, THREE.Mesh>>(new Map());
+  const roomMeshTwinById = useRef<Map<string, THREE.Mesh>>(new Map());
   const materialCacheRef = useRef(createOverlayMaterialCache());
+  const twinMaterialCacheRef = useRef(createOverlayMaterialCache());
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
   const presentationCamRef = useRef<{
@@ -334,6 +337,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+  const compareBothModes = useAppStore((s) => s.compareBothModes);
   const sliceProgress = useAppStore((s) => s.sliceProgress);
   const floors = useAppStore((s) => s.floors);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
@@ -366,6 +370,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     if (overlays) consider(overlays);
     if (shell) consider(shell);
+    if (compareRootRef.current) consider(compareRootRef.current);
 
     if (!has) return;
     const { position, target } = frameBoundingBox(box, camera);
@@ -506,6 +511,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     overlays.name = "room-overlays";
     scene.add(overlays);
 
+    const compareRoot = new THREE.Group();
+    compareRoot.name = "compare-twin";
+    compareRoot.visible = false;
+    scene.add(compareRoot);
+
     const helpers = new THREE.Group();
     helpers.name = "empty-helpers";
     const grid = new THREE.GridHelper(50, 50, 0xa8adb8, 0xc8cdd6);
@@ -523,6 +533,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     rendererRef.current = renderer;
     controlsRef.current = controls;
     overlaysRef.current = overlays;
+    compareRootRef.current = compareRoot;
     helpersRef.current = helpers;
 
     const resize = () => {
@@ -572,6 +583,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       rendererRef.current = null;
       controlsRef.current = null;
       overlaysRef.current = null;
+      compareRootRef.current = null;
       helpersRef.current = null;
       sunRef.current = null;
       ambientRef.current = null;
@@ -695,8 +707,169 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellGroup, rooms, roomsFromStore]);
 
-  // Rebuild overlay materials when colorMode changes (new instances via cache)
+  // Heizlast + Temperature compare: twin copy (temp colors) offset from primary (heizlast)
   useEffect(() => {
+    const scene = sceneRef.current;
+    const root = compareRootRef.current;
+    const overlays = overlaysRef.current;
+    if (!scene || !root) return;
+
+    const clearTwin = () => {
+      while (root.children.length) {
+        const child = root.children[0];
+        root.remove(child);
+        child.traverse((o) => {
+          if (o instanceof THREE.Mesh) {
+            const mat = o.material;
+            if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+            else mat?.dispose();
+          }
+        });
+      }
+      roomMeshTwinById.current.clear();
+      twinMaterialCacheRef.current.clear();
+      root.visible = false;
+      root.position.set(0, 0, 0);
+    };
+
+    if (!compareBothModes) {
+      clearTwin();
+      // Restore primary colors to active colorMode
+      const sourceRooms = rooms.length ? rooms : roomsFromStore;
+      const byId = new Map(sourceRooms.map((r) => [r.id, r]));
+      materialCacheRef.current.clear();
+      materialCacheRef.current = createOverlayMaterialCache();
+      for (const [id, mesh] of roomMeshById.current) {
+        const room = byId.get(id);
+        if (!room) continue;
+        const hex = roomColorHex(
+          room,
+          colorMode,
+          activeColorPalette,
+          heizlastRange,
+          temperatureRange,
+        );
+        mesh.material = materialCacheRef.current.get(hex);
+        mesh.userData.colorHex = hex;
+      }
+      applyRenderMode(
+        renderMode,
+        shellCloneRef.current,
+        overlays,
+        true,
+        lighting,
+      );
+      return;
+    }
+
+    clearTwin();
+    twinMaterialCacheRef.current = createOverlayMaterialCache();
+    const sourceRooms = rooms.length ? rooms : roomsFromStore;
+    const byId = new Map(sourceRooms.map((r) => [r.id, r]));
+
+    // Primary overlays → Heizlast
+    materialCacheRef.current.clear();
+    materialCacheRef.current = createOverlayMaterialCache();
+    for (const [id, mesh] of roomMeshById.current) {
+      const room = byId.get(id);
+      if (!room) continue;
+      const hex = roomColorHex(
+        room,
+        "heizlast",
+        activeColorPalette,
+        heizlastRange,
+        temperatureRange,
+      );
+      mesh.material = materialCacheRef.current.get(hex);
+      mesh.userData.colorHex = hex;
+    }
+    applyRenderMode(
+      renderMode,
+      shellCloneRef.current,
+      overlays,
+      true,
+      lighting,
+    );
+
+    // Twin overlays → Temperature (same geometry)
+    const twinOverlays = new THREE.Group();
+    twinOverlays.name = "compare-overlays-temp";
+    for (const room of sourceRooms) {
+      if (!room.geometry || room.geometry.attributes.position == null) continue;
+      const hex = roomColorHex(
+        room,
+        "temperature",
+        activeColorPalette,
+        heizlastRange,
+        temperatureRange,
+      );
+      const material = twinMaterialCacheRef.current.get(hex);
+      const mesh = new THREE.Mesh(room.geometry, material);
+      mesh.userData.roomId = room.id;
+      mesh.userData.floorId = room.floorId;
+      mesh.userData.expressId = room.expressId;
+      mesh.userData.kind = "room";
+      mesh.userData.colorHex = hex;
+      mesh.userData.compareTwin = true;
+      mesh.renderOrder = 2;
+      twinOverlays.add(mesh);
+      roomMeshTwinById.current.set(room.id, mesh);
+    }
+    applyRenderMode(renderMode, null, twinOverlays, true, lighting);
+    root.add(twinOverlays);
+
+    // Twin shell (so each "object" reads as a full floor/building)
+    if (shellCloneRef.current) {
+      const shellTwin = shellCloneRef.current.clone(true);
+      shellTwin.name = "compare-shell-temp";
+      shellTwin.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          const src = obj.material as THREE.MeshStandardMaterial;
+          const mat = src.clone();
+          obj.material = mat;
+          obj.userData.compareTwin = true;
+        }
+      });
+      root.add(shellTwin);
+      applyRenderMode(renderMode, shellTwin, null, true, lighting);
+    }
+
+    root.visible = true;
+
+    // Place twin: stacked below (floor view) or beside (presentation)
+    const measure = new THREE.Box3();
+    if (overlays) measure.expandByObject(overlays);
+    if (shellCloneRef.current) measure.expandByObject(shellCloneRef.current);
+    const size = measure.isEmpty()
+      ? new THREE.Vector3(10, 4, 10)
+      : measure.getSize(new THREE.Vector3());
+    if (isPresentationView) {
+      // Side by side: Heizlast left (primary), Temperature right (twin)
+      root.position.set(Math.max(size.x, 1) * 1.4, 0, 0);
+    } else {
+      // Heizlast on top (primary), Temperature below
+      root.position.set(0, -(Math.max(size.y, 1) * 1.55), 0);
+    }
+
+    requestAnimationFrame(() => fitToVisible());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    compareBothModes,
+    isPresentationView,
+    shellGroup,
+    rooms,
+    roomsFromStore,
+    activeColorPalette,
+    heizlastRange,
+    temperatureRange,
+    renderMode,
+    lighting,
+    colorMode,
+  ]);
+
+  // Rebuild overlay materials when colorMode changes (skipped logic when compare owns colors)
+  useEffect(() => {
+    if (compareBothModes) return;
     const sourceRooms = rooms.length ? rooms : roomsFromStore;
     const byId = new Map(sourceRooms.map((r) => [r.id, r]));
     materialCacheRef.current.clear();
@@ -729,7 +902,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     );
     clipRef.current?.rebindMaterials();
     clipRef.current?.rebuildCaps();
-  }, [colorMode, activeColorPalette, heizlastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting]);
+  }, [colorMode, activeColorPalette, heizlastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {
@@ -780,11 +953,37 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     scene.background = new THREE.Color(sceneBackground);
   }, [sceneBackground]);
 
-  // Single slice path (basic view only) — skipped in Presentation View
+  // Single slice path (basic view only) — skipped in Presentation / compare
   useEffect(() => {
     const clip = clipRef.current;
 
-    if (isPresentationView) {
+    if (isPresentationView || compareBothModes) {
+      if (compareBothModes && clip) {
+        clip.clear();
+        clip.setEnabled(false);
+        clip.setCapsEnabled(false);
+      }
+      // Still apply floor visibility for compare in basic view
+      if (compareBothModes && !isPresentationView) {
+        const applyFloorVisibility = (obj: THREE.Object3D) => {
+          const floorId = obj.userData.floorId as string | undefined;
+          if (!floorId) {
+            obj.visible = true;
+            return;
+          }
+          obj.visible = selectedFloor == null || floorId === selectedFloor;
+        };
+        shellCloneRef.current?.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+        });
+        overlaysRef.current?.children.forEach((child) =>
+          applyFloorVisibility(child),
+        );
+        compareRootRef.current?.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+        });
+        requestAnimationFrame(() => fitToVisible());
+      }
       return;
     }
 
@@ -801,6 +1000,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
     });
     overlaysRef.current?.children.forEach((child) => applyFloorVisibility(child));
+    compareRootRef.current?.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+    });
 
     if (!clip) return;
 
@@ -863,11 +1065,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     rooms,
     roomsFromStore,
     isPresentationView,
+    compareBothModes,
   ]);
 
   // Instant plane/cap height while dragging — basic view only
   useEffect(() => {
-    if (isPresentationView) return;
+    if (isPresentationView || compareBothModes) return;
     const clip = clipRef.current;
     if (!clip || !selectedFloor) return;
     const bounds = floorWorldYBounds(selectedFloor, [
@@ -877,7 +1080,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!bounds) return;
     const span = Math.max(0.05, bounds.yMax - bounds.yMin);
     clip.setHeight(bounds.yMin + sliceProgress * span);
-  }, [selectedFloor, sliceProgress, floors, shellGroup, rooms, isPresentationView]);
+  }, [selectedFloor, sliceProgress, floors, shellGroup, rooms, isPresentationView, compareBothModes]);
 
   // Presentation View: explode floors + vertical half-cut + iso camera
   useEffect(() => {
@@ -901,6 +1104,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       };
       shellCloneRef.current?.traverse(add);
       overlaysRef.current?.traverse(add);
+      compareRootRef.current?.traverse(add);
       return map;
     };
 
@@ -1023,6 +1227,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       };
       shellCloneRef.current?.traverse(setVis);
       overlaysRef.current?.children.forEach(setVis);
+      compareRootRef.current?.traverse(setVis);
     };
 
     const flyIso = (allMeshes: THREE.Mesh[]) => {
@@ -1170,6 +1375,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     presentationLayoutMode,
     presentationIsolate,
     presentationFloorId,
+    compareBothModes,
     floors,
     shellGroup,
     rooms,

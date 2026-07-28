@@ -49,8 +49,8 @@ export function pdfLegendFromStore(): PdfLegendContext {
 }
 
 /**
- * Capture every floor (Heizlast + Temperature) and presentation stack
- * (Heizlast + Temperature) for the all-pages A4 report.
+ * Capture every floor as dual Heizlast/Temperature (stacked) and
+ * presentation as dual side-by-side for the all-pages A4 report.
  */
 export async function captureAllPagesAssets(
   viewer: Viewer3DHandle,
@@ -70,6 +70,7 @@ export async function captureAllPagesAssets(
     isPresentationView: store.isPresentationView,
     presentationLayoutMode: store.presentationLayoutMode,
     presentationIsolate: store.presentationIsolate,
+    compareBothModes: store.compareBothModes,
     pose: viewer.getCameraPose(),
   };
 
@@ -80,33 +81,27 @@ export async function captureAllPagesAssets(
     setPresentationView,
     setPresentationLayoutMode,
     setPresentationIsolate,
+    setCompareBothModes,
   } = useAppStore.getState();
 
   const floors = floorsWithRooms(store.floors, store.rooms);
   const floorSections: FloorPdfSection[] = [];
 
   try {
-    // Ensure basic (non-presentation) view for floor captures
     if (store.isPresentationView) {
       setPresentationView(false);
       await waitMs(700);
     }
     setPresentationIsolate(false);
     setSliceProgress(1);
+    setCompareBothModes(true);
+    await waitMs(400);
 
     for (const floor of floors) {
-      report(`Floor ${floor.name} — Heizlast…`);
+      report(`Floor ${floor.name} — dual view…`);
       setSelectedFloor(floor.id);
-      setColorMode("heizlast");
-      await settle(viewer, 350);
-      const heizlastImage =
-        viewer.captureViewport({ scale }) ?? null;
-
-      report(`Floor ${floor.name} — Temperature…`);
-      setColorMode("temperature");
-      await settle(viewer, 300);
-      const temperatureImage =
-        viewer.captureViewport({ scale }) ?? null;
+      await settle(viewer, 400);
+      const dualImage = viewer.captureViewport({ scale }) ?? null;
 
       floorSections.push({
         floorName: floor.name,
@@ -117,46 +112,37 @@ export async function captureAllPagesAssets(
               a.number.localeCompare(b.number) ||
               a.name.localeCompare(b.name),
           ),
-        heizlastImage,
-        temperatureImage,
+        dualImage,
       });
     }
 
-    // Presentation stack — all floors
-    report("Presentation — Heizlast…");
+    report("Presentation — dual side-by-side…");
     setSelectedFloor(null);
     setPresentationLayoutMode("stack");
     setPresentationIsolate(false);
-    setColorMode("heizlast");
+    setCompareBothModes(true);
     setPresentationView(true);
-    await waitMs(1100);
+    await waitMs(1200);
     await waitFrames(3);
-    const presentationHeizlast =
-      viewer.captureViewport({ scale }) ?? null;
-
-    report("Presentation — Temperature…");
-    setColorMode("temperature");
-    await settle(viewer, 400);
-    const presentationTemperature =
+    viewer.fitVisible();
+    await waitFrames(2);
+    const presentationDual =
       viewer.captureViewport({ scale }) ?? null;
 
     return {
       floors: floorSections,
-      presentation: {
-        heizlastImage: presentationHeizlast,
-        temperatureImage: presentationTemperature,
-      },
+      presentation: { dualImage: presentationDual },
     };
   } finally {
-    // Restore UI state
     const s = useAppStore.getState();
+    setCompareBothModes(restore.compareBothModes);
     if (s.isPresentationView !== restore.isPresentationView) {
       setPresentationView(restore.isPresentationView);
       await waitMs(restore.isPresentationView ? 900 : 650);
     }
     setPresentationLayoutMode(restore.presentationLayoutMode);
     setPresentationIsolate(restore.presentationIsolate);
-    setColorMode(restore.colorMode);
+    setColorMode(restore.colorMode as ColorMode);
     setSelectedFloor(restore.selectedFloor);
     setSliceProgress(restore.sliceProgress);
     await waitMs(200);
@@ -169,7 +155,7 @@ export async function captureAllPagesAssets(
 }
 
 /**
- * Capture presentation stack only (Heizlast + Temperature) at high scale.
+ * Capture presentation stack dual view (Heizlast | Temperature) at high scale.
  */
 export async function capturePresentationAssets(
   viewer: Viewer3DHandle,
@@ -185,6 +171,7 @@ export async function capturePresentationAssets(
     isPresentationView: store.isPresentationView,
     presentationLayoutMode: store.presentationLayoutMode,
     presentationIsolate: store.presentationIsolate,
+    compareBothModes: store.compareBothModes,
     pose: viewer.getCameraPose(),
   };
 
@@ -194,32 +181,29 @@ export async function capturePresentationAssets(
     setPresentationView,
     setPresentationLayoutMode,
     setPresentationIsolate,
+    setCompareBothModes,
   } = useAppStore.getState();
 
   try {
     setSelectedFloor(null);
     setPresentationLayoutMode("stack");
     setPresentationIsolate(false);
-    setColorMode("heizlast");
+    setCompareBothModes(true);
     if (!store.isPresentationView) {
       setPresentationView(true);
-      await waitMs(1100);
+      await waitMs(1200);
     } else {
-      // Refresh layout to stack
       setPresentationLayoutMode("stack");
-      await waitMs(500);
+      await waitMs(600);
     }
     await waitFrames(3);
-    report("Presentation — Heizlast…");
-    const heizlastImage = viewer.captureViewport({ scale }) ?? null;
-
-    report("Presentation — Temperature…");
-    setColorMode("temperature");
-    await settle(viewer, 400);
-    const temperatureImage = viewer.captureViewport({ scale }) ?? null;
-
-    return { heizlastImage, temperatureImage };
+    viewer.fitVisible();
+    await settle(viewer, 350);
+    report("Presentation — dual capture…");
+    const dualImage = viewer.captureViewport({ scale }) ?? null;
+    return { dualImage };
   } finally {
+    setCompareBothModes(restore.compareBothModes);
     const s = useAppStore.getState();
     if (s.isPresentationView !== restore.isPresentationView) {
       setPresentationView(restore.isPresentationView);

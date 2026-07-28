@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Group } from "three";
-import type { LoadedModel, Room } from "@/lib/types";
+import Image from "next/image";
+import type { LoadedModel } from "@/lib/types";
 import {
   disposeLoadedModel,
   loadIfcModel,
@@ -29,6 +30,7 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import { heizlastGradientCss, pickHeizlastRangeFromLoads } from "@/lib/colorMapping";
+import { t } from "@/lib/i18n";
 
 type LoadSource =
   | { kind: "registry"; modelId: string }
@@ -59,6 +61,8 @@ export default function ViewerApp() {
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationRoomsOpen = useAppStore((s) => s.presentationRoomsOpen);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const setUiLanguage = useAppStore((s) => s.setUiLanguage);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
@@ -70,6 +74,11 @@ export default function ViewerApp() {
   const clearModelData = useAppStore((s) => s.clearModelData);
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const [headerOptionOpen, setHeaderOptionOpen] = useState(false);
+  const [headerOption, setHeaderOption] = useState<"heizlast" | "luftung" | "kuhllast" | "editor">(
+    "heizlast",
+  );
+  const [langOpen, setLangOpen] = useState(false);
 
   useEffect(() => {
     debugLog("ViewerApp", "mount", "info");
@@ -89,6 +98,17 @@ export default function ViewerApp() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (!target.closest("[data-lang-selector]")) setLangOpen(false);
+      if (!target.closest("[data-header-option]")) setHeaderOptionOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
   // Collapse header when clicking outside it; expand only via collapsed bar click
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -97,6 +117,8 @@ export default function ViewerApp() {
       if (target.closest("[data-app-header]")) return;
       if (!useAppStore.getState().isHeaderCollapsed) {
         setHeaderCollapsed(true);
+        setHeaderOptionOpen(false);
+        setLangOpen(false);
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
@@ -288,8 +310,16 @@ export default function ViewerApp() {
 
   const progressLabel =
     loadProgress < 0
-      ? loadMessage || "Working…"
-      : `${loadMessage || "Loading"} (${Math.round(Math.max(0, loadProgress) * 100)}%)`;
+      ? loadMessage || t(uiLanguage, "working")
+      : `${loadMessage || t(uiLanguage, "loading")} (${Math.round(Math.max(0, loadProgress) * 100)}%)`;
+  const headerTitle =
+    headerOption === "heizlast"
+      ? t(uiLanguage, "appTitle")
+      : headerOption === "luftung"
+        ? t(uiLanguage, "optionsLuft")
+        : headerOption === "kuhllast"
+          ? t(uiLanguage, "optionsCool")
+          : t(uiLanguage, "optionsEditor");
 
   return (
     <ModelSceneContext.Provider value={sceneValue}>
@@ -301,6 +331,21 @@ export default function ViewerApp() {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
+        <div className="pointer-events-none fixed top-1 left-4 z-[45]">
+          <GlassPanel variant="panel" zIndex={45} wrapperClassName="p-2">
+            <div className="px-4 py-2">
+              <Image
+                src="/ibv_logo.svg"
+                alt="IBV logo"
+                width={36}
+                height={36}
+                className="h-[30px] w-auto object-contain"
+                priority
+              />
+            </div>
+          </GlassPanel>
+        </div>
+
         <div className="fixed inset-0 z-0">
           <Viewer3D
             ref={viewerRef}
@@ -318,28 +363,98 @@ export default function ViewerApp() {
             >
               <div className="px-6 py-8 text-center">
                 <p className="text-base font-semibold tracking-wide text-zinc-900">
-                  Drop IFC to load
+                  {t(uiLanguage, "dropIfc")}
                 </p>
                 <p className="mt-1.5 text-xs text-zinc-500">
-                  Release to open the model in the viewer
+                  {t(uiLanguage, "dropIfcHint")}
                 </p>
               </div>
             </GlassPanel>
           </div>
         )}
 
-        {/* Header: fit content when empty; wider after model load */}
+        {/* Header: bottom-right; menus drop-up outside glass so they are not clipped */}
         <div
           data-app-header
-          className={`pointer-events-none fixed top-3 left-1/2 z-40 -translate-x-1/2 transition-all duration-300 ease-out ${
+          className={`pointer-events-none fixed right-4 bottom-4 z-40 transition-all duration-300 ease-out ${
             isHeaderCollapsed
               ? "w-[min(25%,280px)]"
               : hasModel
-                ? "w-[50%] min-w-[260px] max-w-[720px]"
-                : "w-max max-w-[min(92vw,720px)]"
+                ? "w-[min(54vw,720px)] min-w-[260px]"
+                : "w-max max-w-[min(92vw,520px)]"
           }`}
         >
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto relative">
+            {headerOptionOpen && !isHeaderCollapsed && (
+              <div
+                data-header-option
+                className="absolute bottom-[calc(100%+0.5rem)] left-0 z-[60] w-48 rounded-xl border border-white/50 bg-white/90 p-1 text-xs text-zinc-700 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur-xl"
+              >
+                {(
+                  [
+                    ["heizlast", t(uiLanguage, "appTitle")],
+                    ["luftung", t(uiLanguage, "optionsLuft")],
+                    ["kuhllast", t(uiLanguage, "optionsCool")],
+                    ["editor", t(uiLanguage, "optionsEditor")],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setHeaderOption(id);
+                      setHeaderOptionOpen(false);
+                    }}
+                    className={`block w-full rounded-lg px-2.5 py-2 text-left hover:bg-zinc-100 ${
+                      headerOption === id ? "bg-zinc-100 font-semibold" : ""
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {langOpen && !isHeaderCollapsed && (
+              <div
+                data-lang-selector
+                className="absolute bottom-[calc(100%+0.5rem)] right-0 z-[60]"
+              >
+                <GlassPanel variant="control" zIndex={60}>
+                  <div className="flex items-center gap-1.5 px-2 py-1.5">
+                    {(["en", "de", "es"] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUiLanguage(lang);
+                          setLangOpen(false);
+                        }}
+                        className={`h-9 w-9 overflow-hidden rounded-full border transition ${
+                          uiLanguage === lang
+                            ? "border-zinc-800 ring-2 ring-zinc-800/35 scale-105"
+                            : "border-white/50 opacity-85 hover:opacity-100 hover:border-zinc-400"
+                        }`}
+                        aria-label={lang.toUpperCase()}
+                        title={lang.toUpperCase()}
+                      >
+                        <Image
+                          src={`/${lang}.svg`}
+                          alt={lang}
+                          width={36}
+                          height={36}
+                          className="h-full w-full object-cover"
+                          priority={lang === uiLanguage}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </GlassPanel>
+              </div>
+            )}
+
             <GlassPanel variant="panel" zIndex={40}>
               <header
                 className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${
@@ -350,31 +465,46 @@ export default function ViewerApp() {
                 onClick={() => {
                   if (isHeaderCollapsed) setHeaderCollapsed(false);
                 }}
-                title={isHeaderCollapsed ? "Expand header" : undefined}
+                title={
+                  isHeaderCollapsed ? t(uiLanguage, "expandHeader") : undefined
+                }
               >
                 <div
                   className={`min-w-0 ${
                     isHeaderCollapsed ? "text-center" : "flex-1 text-left"
                   }`}
                 >
-                  <h1
-                    className={`font-semibold tracking-wide whitespace-nowrap transition-all duration-300 ${
-                      isHeaderCollapsed
-                        ? "text-[11px] sm:text-xs"
-                        : hasModel
-                          ? "text-sm sm:text-[15px]"
-                          : "text-[15px] sm:text-base"
-                    }`}
-                    style={{
-                      backgroundImage: heizlastGradientCss("to right"),
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                      backgroundSize: "100% 100%",
-                    }}
-                  >
-                    Heizlast Präsentation
-                  </h1>
+                  <div data-header-option>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isHeaderCollapsed) {
+                          setHeaderCollapsed(false);
+                          setHeaderOptionOpen(true);
+                          return;
+                        }
+                        setHeaderOptionOpen((v) => !v);
+                        setLangOpen(false);
+                      }}
+                      className={`font-semibold tracking-wide whitespace-nowrap transition-all duration-300 ${
+                        isHeaderCollapsed
+                          ? "text-[11px] sm:text-xs"
+                          : hasModel
+                            ? "text-sm sm:text-[15px]"
+                            : "text-[15px] sm:text-base"
+                      }`}
+                      style={{
+                        backgroundImage: heizlastGradientCss("to right"),
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
+                        backgroundSize: "100% 100%",
+                      }}
+                    >
+                      {headerTitle}
+                    </button>
+                  </div>
                   {activeModelLabel && (
                     <p
                       className={`truncate text-[10px] font-medium text-zinc-500 ${
@@ -387,20 +517,51 @@ export default function ViewerApp() {
                 </div>
 
                 <div
-                  className={`flex shrink-0 items-center gap-1.5 overflow-hidden transition-all duration-300 ease-out ${
+                  className={`flex shrink-0 items-center gap-1.5 overflow-visible transition-all duration-300 ease-out ${
                     isHeaderCollapsed
                       ? "max-w-0 scale-95 opacity-0 pointer-events-none w-0"
-                      : "max-w-[420px] scale-100 opacity-100"
+                      : "max-w-[480px] scale-100 opacity-100"
                   }`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <LoadIfcButton
                     onFile={handleFile}
                     disabled={isLoadingModel}
+                    iconOnly
+                    label={t(uiLanguage, "loadIfc")}
                   />
                   <ModelSelector
                     onSelectRegistryModel={handleRegistrySelect}
+                    placeholder={t(uiLanguage, "registry")}
                   />
+                  <div data-lang-selector className="shrink-0">
+                    <GlassPanel
+                      variant="control"
+                      zIndex={2}
+                      wrapperClassName="rounded-full"
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLangOpen((v) => !v);
+                          setHeaderOptionOpen(false);
+                        }}
+                        className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
+                        aria-label={t(uiLanguage, "language")}
+                        aria-expanded={langOpen}
+                      >
+                        <Image
+                          src={`/${uiLanguage}.svg`}
+                          alt={uiLanguage}
+                          width={40}
+                          height={40}
+                          className="h-full w-full object-cover"
+                          priority
+                        />
+                      </button>
+                    </GlassPanel>
+                  </div>
                 </div>
               </header>
             </GlassPanel>
@@ -418,7 +579,7 @@ export default function ViewerApp() {
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-7 w-7 animate-spin rounded-2xl border-2 border-zinc-300/60 border-t-zinc-700" />
                   <p className="text-sm font-semibold tracking-wide text-zinc-800">
-                    Loading model
+                    {t(uiLanguage, "loadingModel")}
                   </p>
                 </div>
                 <p className="mb-3 text-xs font-medium text-zinc-500">
@@ -448,13 +609,13 @@ export default function ViewerApp() {
             >
               <div className="p-6 text-center">
                 <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
-                  No model loaded
+                  {t(uiLanguage, "noModel")}
                 </p>
                 <p className="mb-4 text-xs font-medium leading-relaxed text-zinc-500">
-                  Choose an IFC file from your computer to begin.
+                  {t(uiLanguage, "chooseIfc")}
                 </p>
                 <div className="flex justify-center">
-                  <LoadIfcButton onFile={handleFile} />
+                  <LoadIfcButton onFile={handleFile} label={t(uiLanguage, "loadIfc")} />
                 </div>
               </div>
             </GlassPanel>
@@ -473,19 +634,19 @@ export default function ViewerApp() {
                   <IconAlert />
                 </div>
                 <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
-                  Could not load model
+                  {t(uiLanguage, "couldNotLoad")}
                 </p>
                 <p className="mb-4 text-xs font-medium leading-relaxed break-words text-zinc-500">
                   {loadError}
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <GlassButton variant="primary" onClick={handleRetry}>
-                    Retry
+                    {t(uiLanguage, "retry")}
                   </GlassButton>
                   <LoadIfcButton
                     onFile={handleFile}
                     variant="default"
-                    label="Load other IFC"
+                    label={t(uiLanguage, "loadOtherIfc")}
                   />
                 </div>
               </div>
@@ -529,7 +690,7 @@ export default function ViewerApp() {
               <button
                 type="button"
                 onClick={() => setLeftPanelOpen(false)}
-                aria-label="Hide floors panel"
+                aria-label={t(uiLanguage, "hideFloors")}
                 className="absolute inset-y-0 right-0 z-10 flex w-5 items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
@@ -557,7 +718,7 @@ export default function ViewerApp() {
           <button
             type="button"
             onClick={() => setLeftPanelOpen(true)}
-            aria-label="Show floors panel"
+            aria-label={t(uiLanguage, "showFloors")}
             className="fixed inset-y-[20%] left-0 z-40 flex w-5 items-center justify-center transition-all duration-350 ease-out"
           >
             <div className="flex h-full w-full items-center justify-center rounded-r-xl bg-zinc-400/35 text-zinc-600 backdrop-blur-sm hover:bg-zinc-400/50">
@@ -607,7 +768,7 @@ export default function ViewerApp() {
               <button
                 type="button"
                 onClick={() => setRightPanelOpen(false)}
-                aria-label="Hide legend"
+                aria-label={t(uiLanguage, "hideLegend")}
                 className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center rounded-l-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
@@ -645,7 +806,7 @@ export default function ViewerApp() {
           <button
             type="button"
             onClick={() => setRightPanelOpen(true)}
-            aria-label="Show legend"
+            aria-label={t(uiLanguage, "showLegend")}
             className="fixed inset-y-[20%] right-0 z-40 flex w-5 items-center justify-center transition-all duration-350 ease-out"
           >
             <div className="flex h-full w-full items-center justify-center rounded-l-xl bg-zinc-400/35 text-zinc-600 backdrop-blur-sm hover:bg-zinc-400/50">
@@ -676,7 +837,7 @@ export default function ViewerApp() {
                   setLeftPanelOpen(true);
                   setRightPanelOpen(true);
                 }}
-                aria-label="Show panels"
+                aria-label={t(uiLanguage, "showPanels")}
                 className="fixed right-4 bottom-5 z-40 h-14 w-14"
               >
                 <GlassPanel
@@ -711,7 +872,7 @@ export default function ViewerApp() {
             >
               <button
                 type="button"
-                aria-label="Close panels"
+                aria-label={t(uiLanguage, "closePanels")}
                 className="absolute inset-0 bg-zinc-900/30"
                 onClick={() => {
                   setLeftPanelOpen(false);
@@ -732,7 +893,7 @@ export default function ViewerApp() {
                   wrapperClassName="flex h-full min-h-0 flex-col overflow-hidden"
                 >
                   <div className="flex items-center justify-between border-b border-zinc-300/40 px-4 py-3">
-                    <p className={heading.panel}>Details</p>
+                    <p className={heading.panel}>{t(uiLanguage, "details")}</p>
                     <GlassButton
                       className="!px-3"
                       onClick={() => {
@@ -740,7 +901,7 @@ export default function ViewerApp() {
                         setRightPanelOpen(false);
                       }}
                     >
-                      Close
+                      {t(uiLanguage, "close")}
                     </GlassButton>
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">

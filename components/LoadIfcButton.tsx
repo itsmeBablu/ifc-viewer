@@ -11,6 +11,7 @@ type Props = {
   label?: string;
   variant?: "default" | "primary";
   className?: string;
+  iconOnly?: boolean;
 };
 
 export default function LoadIfcButton({
@@ -19,6 +20,7 @@ export default function LoadIfcButton({
   label = "Load IFC",
   variant = "primary",
   className = "",
+  iconOnly = false,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const primary = variant === "primary";
@@ -41,14 +43,15 @@ export default function LoadIfcButton({
           type="button"
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
-          className={`${motion.base} ${radius.control} inline-flex min-w-[168px] items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
+          className={`${motion.base} ${iconOnly ? "rounded-full h-10 w-10 p-0" : radius.control} inline-flex ${iconOnly ? "" : "min-w-[168px] px-6 py-2.5 text-sm"} items-center justify-center gap-2 font-medium active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
             primary
               ? "bg-gradient-to-b from-zinc-800/90 to-zinc-950/90 text-white"
               : "bg-white/20 text-zinc-800 hover:bg-white/35"
           } ${className}`}
+          aria-label={label}
         >
           <IconUpload />
-          {label}
+          {!iconOnly && label}
         </button>
       </GlassPanel>
     </>

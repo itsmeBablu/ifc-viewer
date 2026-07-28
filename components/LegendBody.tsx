@@ -10,6 +10,7 @@ import {
   type ColorPaletteId,
 } from "@/lib/colorMapping";
 import { heading } from "@/lib/designTokens";
+import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import LegendRangeInput from "./LegendRangeInput";
 
@@ -18,6 +19,27 @@ type Props = {
   paddedTop?: boolean;
   className?: string;
 };
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 transition-transform duration-200 ${
+        open ? "rotate-180" : "rotate-0"
+      }`}
+      aria-hidden
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 
 /**
  * Shared legend body: mode toggle, scale, editable range, palette picker.
@@ -28,12 +50,15 @@ export default function LegendBody({
 }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
+  const compareBothModes = useAppStore((s) => s.compareBothModes);
+  const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rangeOpen, setRangeOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -87,31 +112,38 @@ export default function LegendBody({
     };
   }, [rangeOpen]);
 
-  const Chevron = ({ open }: { open: boolean }) => (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 transition-transform duration-200 ${
-        open ? "rotate-180" : "rotate-0"
-      }`}
-      aria-hidden
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-
   return (
     <div className={`text-zinc-800 ${className}`} ref={pickerRef}>
       <section
         className={`space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`}
       >
-        <p className={heading.panel}>Legend</p>
+        <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-300/50 bg-white/40 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-zinc-800">
+              {t(uiLanguage, "heizlastPlusTemp")}
+            </p>
+            <p className="text-[10px] text-zinc-500">
+              {t(uiLanguage, "bothModesOneView")}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={compareBothModes}
+            onClick={() => setCompareBothModes(!compareBothModes)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+              compareBothModes ? "bg-sky-600" : "bg-zinc-300/80"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                compareBothModes ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        {!compareBothModes && (
         <div
           ref={modeBarRef}
           className="flex rounded-xl border border-zinc-300/50 bg-white/40 p-0.5"
@@ -128,14 +160,14 @@ export default function LegendBody({
               onClick={() => setColorMode("heizlast")}
               className="min-w-0 flex-1 whitespace-nowrap px-2 py-1.5 text-left text-xs font-medium"
             >
-              Heizlast W/m²
+              {t(uiLanguage, "heizlastWm2")}
             </button>
             <button
               type="button"
               aria-label={
                 rangeOpen && colorMode === "heizlast"
-                  ? "Hide Heizlast range"
-                  : "Edit Heizlast range"
+                  ? t(uiLanguage, "hideHeizlastRange")
+                  : t(uiLanguage, "editHeizlastRange")
               }
               aria-expanded={rangeOpen && colorMode === "heizlast"}
               onClick={() => toggleRange("heizlast")}
@@ -156,14 +188,14 @@ export default function LegendBody({
               onClick={() => setColorMode("temperature")}
               className="min-w-0 flex-1 px-2 py-1.5 text-left text-xs font-medium"
             >
-              Temperatur
+              {t(uiLanguage, "temperature")}
             </button>
             <button
               type="button"
               aria-label={
                 rangeOpen && colorMode === "temperature"
-                  ? "Hide temperature range"
-                  : "Edit temperature range"
+                  ? t(uiLanguage, "hideTempRange")
+                  : t(uiLanguage, "editTempRange")
               }
               aria-expanded={rangeOpen && colorMode === "temperature"}
               onClick={() => toggleRange("temperature")}
@@ -173,12 +205,18 @@ export default function LegendBody({
             </button>
           </div>
         </div>
+        )}
 
-        {colorMode === "heizlast" ? (
+        {(compareBothModes || colorMode === "heizlast") && (
           <div className="space-y-2">
+            {compareBothModes && (
+              <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+                {t(uiLanguage, "heizlastTopLeft")}
+              </p>
+            )}
             <button
               type="button"
-              title="Change color palette"
+              title={t(uiLanguage, "changePalette")}
               onClick={() => setPaletteOpen((v) => !v)}
               className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
@@ -205,7 +243,7 @@ export default function LegendBody({
                 </span>
               ))}
             </div>
-            {rangeOpen && (
+            {!compareBothModes && rangeOpen && colorMode === "heizlast" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
                   values={heizlastRange}
@@ -216,11 +254,18 @@ export default function LegendBody({
               </div>
             )}
           </div>
-        ) : (
+        )}
+
+        {(compareBothModes || colorMode === "temperature") && (
           <div className="space-y-2">
+            {compareBothModes && (
+              <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+                {t(uiLanguage, "tempBottomRight")}
+              </p>
+            )}
             <button
               type="button"
-              title="Change color palette"
+              title={t(uiLanguage, "changePalette")}
               onClick={() => setPaletteOpen((v) => !v)}
               className="flex w-full flex-nowrap items-center justify-between gap-1 rounded-xl p-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
@@ -244,7 +289,7 @@ export default function LegendBody({
                 </div>
               ))}
             </button>
-            {rangeOpen && (
+            {!compareBothModes && rangeOpen && colorMode === "temperature" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
                   values={temperatureRange}
@@ -259,7 +304,7 @@ export default function LegendBody({
         {paletteOpen && (
           <div className="space-y-1.5 rounded-xl border border-white/50 bg-white/90 p-2 shadow-md backdrop-blur-md">
             <p className="px-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
-              Palette
+              {t(uiLanguage, "palette")}
             </p>
             {COLOR_PALETTE_IDS.map((id) => {
               const pal = COLOR_PALETTES[id];

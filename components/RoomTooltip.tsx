@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
 import type { Room } from "@/lib/types";
+import { t, type UiLanguage } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
 
@@ -23,11 +24,13 @@ function RoomInfoBody({
   palette,
   heizlastRange,
   temperatureRange,
+  uiLanguage,
 }: {
   room: Room;
   palette: string;
   heizlastRange: number[];
   temperatureRange: number[];
+  uiLanguage: UiLanguage;
 }) {
   const heatColor = heizlastToColor(room.heatLoad, palette, heizlastRange);
   const tempColor = temperatureToColor(
@@ -52,7 +55,7 @@ function RoomInfoBody({
   return (
     <div className="px-3.5 py-3">
       <p className="text-[11px] font-semibold tracking-wide text-zinc-800">
-        Norm-Heizlast
+        {t(uiLanguage, "normHeizlast")}
       </p>
       <div className="my-2 h-px bg-zinc-300/70" />
 
@@ -63,7 +66,9 @@ function RoomInfoBody({
 
       <div className="mt-2 space-y-1.5 text-xs">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="shrink-0 font-medium text-zinc-500">Heizlast</span>
+          <span className="shrink-0 font-medium text-zinc-500">
+            {t(uiLanguage, "heizlast")}
+          </span>
           <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-zinc-800">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -73,13 +78,18 @@ function RoomInfoBody({
             <span className="tabular-nums">
               {watts}
               {density !== "—" ? (
-                <span className="font-normal text-zinc-600"> mit {density}</span>
+                <span className="font-normal text-zinc-600">
+                  {" "}
+                  {t(uiLanguage, "withDensity")} {density}
+                </span>
               ) : null}
             </span>
           </span>
         </div>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="shrink-0 font-medium text-zinc-500">Temperatur</span>
+          <span className="shrink-0 font-medium text-zinc-500">
+            {t(uiLanguage, "temperature")}
+          </span>
           <span className="flex items-center gap-1.5 font-medium text-zinc-800">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -105,6 +115,7 @@ export default function RoomTooltip({
   const palette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
 
   const room = roomProp ?? hoveredRoom;
   if (!room) return null;
@@ -157,6 +168,7 @@ export default function RoomTooltip({
             palette={palette}
             heizlastRange={heizlastRange}
             temperatureRange={temperatureRange}
+            uiLanguage={uiLanguage}
           />
         </div>
       </GlassPanel>

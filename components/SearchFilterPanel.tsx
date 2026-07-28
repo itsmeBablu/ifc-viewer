@@ -7,6 +7,7 @@ import {
 } from "@/lib/colorMapping";
 import { getElementDetails } from "@/lib/ifcClient";
 import { roomPassesFilter } from "@/lib/roomFilter";
+import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { Room } from "@/lib/types";
 import type { Viewer3DHandle } from "./Viewer3D";
@@ -43,6 +44,7 @@ export default function SearchFilterPanel({
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const setActiveFilter = useAppStore((s) => s.setActiveFilter);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
 
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
@@ -182,7 +184,7 @@ export default function SearchFilterPanel({
               : "text-zinc-500"
           }`}
         >
-          Search
+          {t(uiLanguage, "search")}
         </button>
         <button
           type="button"
@@ -193,7 +195,7 @@ export default function SearchFilterPanel({
               : "text-zinc-500"
           }`}
         >
-          Filter
+          {t(uiLanguage, "filter")}
         </button>
       </div>
 
@@ -207,14 +209,14 @@ export default function SearchFilterPanel({
             onKeyDown={(e) => {
               if (e.key === "Escape") onClose();
             }}
-            placeholder="Search room name or number…"
+            placeholder={t(uiLanguage, "searchPlaceholder")}
             className="w-full rounded-xl border border-zinc-300/60 bg-white/60 px-3 py-2 text-sm outline-none focus:border-zinc-400"
           />
           {query.trim() && (
             <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded-xl border border-zinc-300/40 bg-white/70 p-1.5">
               {searchResults.length === 0 ? (
                 <li className="px-2 py-2 text-xs text-zinc-400">
-                  No rooms match
+                  {t(uiLanguage, "noRoomsMatch")}
                 </li>
               ) : (
                 searchResults.map((room) => (
@@ -247,13 +249,15 @@ export default function SearchFilterPanel({
         <div className="space-y-3">
           <div>
             <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-zinc-600">
-              <span>Heizlast (W/m²)</span>
+              <span>{t(uiLanguage, "heizlastFilter")}</span>
               <span className="tabular-nums text-zinc-500">
                 {minHeat} – {maxHeat}
               </span>
             </div>
             <label className="mb-1.5 block">
-              <span className="mb-0.5 block text-[10px] text-zinc-400">Min</span>
+              <span className="mb-0.5 block text-[10px] text-zinc-400">
+                {t(uiLanguage, "min")}
+              </span>
               <Slider
                 min={heatBounds.min}
                 max={heatBounds.max}
@@ -263,7 +267,9 @@ export default function SearchFilterPanel({
               />
             </label>
             <label className="block">
-              <span className="mb-0.5 block text-[10px] text-zinc-400">Max</span>
+              <span className="mb-0.5 block text-[10px] text-zinc-400">
+                {t(uiLanguage, "max")}
+              </span>
               <Slider
                 min={heatBounds.min}
                 max={heatBounds.max}
@@ -276,7 +282,7 @@ export default function SearchFilterPanel({
 
           <div>
             <p className="mb-1.5 text-[11px] font-medium text-zinc-600">
-              Temperature
+              {t(uiLanguage, "temperature")}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {tempChips.map((s) => {
@@ -314,15 +320,16 @@ export default function SearchFilterPanel({
               <span className="font-semibold tabular-nums text-zinc-800">
                 {matchCount.match}
               </span>{" "}
-              of <span className="tabular-nums">{matchCount.total}</span> rooms
-              match
+              {t(uiLanguage, "ofRoomsMatch")}{" "}
+              <span className="tabular-nums">{matchCount.total}</span>{" "}
+              {t(uiLanguage, "roomsMatch")}
             </p>
             <button
               type="button"
               onClick={resetFilter}
               className="rounded-xl bg-zinc-800/90 px-2.5 py-1.5 text-[11px] font-medium text-white"
             >
-              Reset Filter
+              {t(uiLanguage, "resetFilter")}
             </button>
           </div>
         </div>
