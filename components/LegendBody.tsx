@@ -51,7 +51,6 @@ export default function LegendBody({
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
-  const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
@@ -113,36 +112,11 @@ export default function LegendBody({
   }, [rangeOpen]);
 
   return (
-    <div className={`text-zinc-800 ${className}`} ref={pickerRef}>
+    <div className={`min-w-0 overflow-hidden text-zinc-800 ${className}`} ref={pickerRef}>
       <section
         className={`space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`}
       >
         <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-300/50 bg-white/40 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-zinc-800">
-              {t(uiLanguage, "heizlastPlusTemp")}
-            </p>
-            <p className="text-[10px] text-zinc-500">
-              {t(uiLanguage, "bothModesOneView")}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={compareBothModes}
-            onClick={() => setCompareBothModes(!compareBothModes)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
-              compareBothModes ? "bg-sky-600" : "bg-zinc-300/80"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                compareBothModes ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
         {!compareBothModes && (
         <div
           ref={modeBarRef}
@@ -158,7 +132,7 @@ export default function LegendBody({
             <button
               type="button"
               onClick={() => setColorMode("heizlast")}
-              className="min-w-0 flex-1 whitespace-nowrap px-2 py-1.5 text-left text-xs font-medium"
+              className="min-w-0 flex-1 whitespace-nowrap px-1.5 py-1.5 text-left text-[11px] font-medium"
             >
               {t(uiLanguage, "heizlastWm2")}
             </button>
@@ -186,7 +160,7 @@ export default function LegendBody({
             <button
               type="button"
               onClick={() => setColorMode("temperature")}
-              className="min-w-0 flex-1 px-2 py-1.5 text-left text-xs font-medium"
+              className="min-w-0 flex-1 whitespace-nowrap px-1.5 py-1.5 text-left text-[11px] font-medium"
             >
               {t(uiLanguage, "temperature")}
             </button>
@@ -210,7 +184,7 @@ export default function LegendBody({
         {(compareBothModes || colorMode === "heizlast") && (
           <div className="space-y-2">
             {compareBothModes && (
-              <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+              <p className="text-[10px] font-medium tracking-wide text-zinc-500">
                 {t(uiLanguage, "heizlastTopLeft")}
               </p>
             )}
@@ -259,7 +233,7 @@ export default function LegendBody({
         {(compareBothModes || colorMode === "temperature") && (
           <div className="space-y-2">
             {compareBothModes && (
-              <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+              <p className="text-[10px] font-medium tracking-wide text-zinc-500">
                 {t(uiLanguage, "tempBottomRight")}
               </p>
             )}

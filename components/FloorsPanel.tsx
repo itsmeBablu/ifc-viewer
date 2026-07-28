@@ -94,8 +94,6 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
-  const compareBothModes = useAppStore((s) => s.compareBothModes);
-  const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const colorMode = useAppStore((s) => s.colorMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
@@ -387,31 +385,6 @@ export default function FloorsPanel({ viewerRef }: Props) {
 
       <section className="space-y-2.5 px-4 py-3">
         <p className={heading.panel}>{t(uiLanguage, "floorsAndRooms")}</p>
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-300/50 bg-white/40 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-zinc-800">
-              {t(uiLanguage, "heizlastPlusTemp")}
-            </p>
-            <p className="text-[10px] text-zinc-500">
-              {t(uiLanguage, "sameFloorStacked")}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={compareBothModes}
-            onClick={() => setCompareBothModes(!compareBothModes)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
-              compareBothModes ? "bg-sky-600" : "bg-zinc-300/80"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                compareBothModes ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
         <select
           value={selectedFloor ?? ""}
           disabled={floorsWithRooms.length === 0}

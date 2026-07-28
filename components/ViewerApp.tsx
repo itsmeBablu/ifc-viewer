@@ -29,6 +29,7 @@ import PresentationSidePanel from "./PresentationSidePanel";
 import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
+import ViewerContextMenu from "./ViewerContextMenu";
 import { heizlastGradientCss, pickHeizlastRangeFromLoads } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 
@@ -670,16 +671,21 @@ export default function ViewerApp() {
           );
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
+        <ViewerContextMenu
+          viewerRef={viewerRef}
+          rootRef={rootRef}
+          onLoadIfc={handleFile}
+          loadDisabled={isLoadingModel}
+        />
 
         {/* LEFT — Floors & Rooms (hidden during Presentation View) */}
-        {isDesktop && (
+        {isDesktop && !isPresentationView && (
           <aside
-            className={`fixed top-16 bottom-4 left-4 z-[35] flex w-[min(360px,calc(100vw-2rem))] flex-col ${motion.sidebar} ${
-              leftPanelOpen && !isPresentationView
-                ? "pointer-events-auto translate-x-0 opacity-100"
-                : "pointer-events-none -translate-x-[calc(100%+1.5rem)] opacity-0"
+            className={`fixed top-16 bottom-4 z-[35] flex w-[min(360px,calc(100vw-2rem))] flex-col ${motion.sidebar} ${
+              leftPanelOpen
+                ? "left-4 pointer-events-auto translate-x-0"
+                : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
             }`}
-            aria-hidden={!leftPanelOpen || isPresentationView}
           >
             <GlassPanel
               variant="panel"
@@ -689,8 +695,12 @@ export default function ViewerApp() {
             >
               <button
                 type="button"
-                onClick={() => setLeftPanelOpen(false)}
-                aria-label={t(uiLanguage, "hideFloors")}
+                onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+                aria-label={
+                  leftPanelOpen
+                    ? t(uiLanguage, "hideFloors")
+                    : t(uiLanguage, "showFloors")
+                }
                 className="absolute inset-y-0 right-0 z-10 flex w-5 items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
@@ -703,55 +713,36 @@ export default function ViewerApp() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden
+                  className={`transition-transform duration-300 ease-out ${
+                    leftPanelOpen ? "" : "rotate-180"
+                  }`}
                 >
                   <path d="m15 6-6 6 6 6" />
                 </svg>
               </button>
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth pr-5">
+              <div
+                className={`flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth pr-5 transition-opacity duration-300 ease-out ${
+                  leftPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                }`}
+              >
                 <FloorsPanel viewerRef={viewerRef} />
               </div>
             </GlassPanel>
           </aside>
         )}
 
-        {isDesktop && !leftPanelOpen && !isPresentationView && (
-          <button
-            type="button"
-            onClick={() => setLeftPanelOpen(true)}
-            aria-label={t(uiLanguage, "showFloors")}
-            className="fixed inset-y-[20%] left-0 z-40 flex w-5 items-center justify-center transition-all duration-350 ease-out"
-          >
-            <div className="flex h-full w-full items-center justify-center rounded-r-xl bg-zinc-400/35 text-zinc-600 backdrop-blur-sm hover:bg-zinc-400/50">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </div>
-          </button>
-        )}
-
         {/* RIGHT — Legend (basic) / combined Legend+Rooms (presentation) */}
         {isDesktop && (
           <aside
-            className={`fixed top-36 right-4 z-[35] flex w-[min(280px,calc(100vw-2rem))] flex-col overflow-hidden ${
+            className={`fixed top-36 z-[35] flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden ${
               isPresentationView && presentationRoomsOpen
                 ? "bottom-20 pb-1"
                 : ""
             } ${motion.sidebar} ${
               rightPanelOpen
-                ? "pointer-events-auto translate-x-0 opacity-100"
-                : "pointer-events-none translate-x-[calc(100%+1.5rem)] opacity-0"
+                ? "right-4 pointer-events-auto translate-x-0"
+                : "right-0 pointer-events-auto translate-x-[calc(100%-1.25rem)]"
             }`}
-            aria-hidden={!rightPanelOpen}
           >
             <GlassPanel
               variant="panel"
@@ -767,8 +758,12 @@ export default function ViewerApp() {
             >
               <button
                 type="button"
-                onClick={() => setRightPanelOpen(false)}
-                aria-label={t(uiLanguage, "hideLegend")}
+                onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                aria-label={
+                  rightPanelOpen
+                    ? t(uiLanguage, "hideLegend")
+                    : t(uiLanguage, "showLegend")
+                }
                 className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center rounded-l-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
@@ -781,12 +776,17 @@ export default function ViewerApp() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden
+                  className={`transition-transform duration-300 ease-out ${
+                    rightPanelOpen ? "" : "rotate-180"
+                  }`}
                 >
                   <path d="m9 6 6 6-6 6" />
                 </svg>
               </button>
               <div
-                className={`pl-5 ${
+                className={`pl-5 transition-opacity duration-300 ease-out ${
+                  rightPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                } ${
                   isPresentationView && presentationRoomsOpen
                     ? "flex h-full min-h-0 flex-1 flex-col"
                     : ""
@@ -800,31 +800,6 @@ export default function ViewerApp() {
               </div>
             </GlassPanel>
           </aside>
-        )}
-
-        {isDesktop && !rightPanelOpen && (
-          <button
-            type="button"
-            onClick={() => setRightPanelOpen(true)}
-            aria-label={t(uiLanguage, "showLegend")}
-            className="fixed inset-y-[20%] right-0 z-40 flex w-5 items-center justify-center transition-all duration-350 ease-out"
-          >
-            <div className="flex h-full w-full items-center justify-center rounded-l-xl bg-zinc-400/35 text-zinc-600 backdrop-blur-sm hover:bg-zinc-400/50">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="m15 6-6 6 6 6" />
-              </svg>
-            </div>
-          </button>
         )}
 
         {/* Mobile bottom sheet — floors + legend stacked */}

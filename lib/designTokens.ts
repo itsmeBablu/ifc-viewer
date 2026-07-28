@@ -16,7 +16,7 @@ export const radius = {
 
 export const motion = {
   base: "transition-all duration-300 ease-out",
-  sidebar: "transition-transform duration-[350ms] ease-out",
+  sidebar: "transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
 } as const;
 
 /**
