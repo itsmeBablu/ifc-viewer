@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { debugLog } from "./debugLog";
 import type { Floor } from "./types";
+import { useAppStore } from "@/store/useAppStore";
 
 export type ClipOrientation = "horizontal" | "verticalZ";
+
+type CapMaterial = THREE.MeshStandardMaterial;
 
 /**
  * Floor slice: clipping plane + stencil solid caps.
@@ -19,7 +22,7 @@ export class ClipSliceController {
     mesh: THREE.Mesh;
     stencil: THREE.Group;
     cap: THREE.Mesh;
-    capMat: THREE.MeshBasicMaterial;
+    capMat: CapMaterial;
   }[] = [];
   private enabled = false;
   private capsEnabled = false;
@@ -225,11 +228,14 @@ export class ClipSliceController {
         );
       }
 
-      const capMat = new THREE.MeshBasicMaterial({
+      const capMat = new THREE.MeshStandardMaterial({
         side: THREE.DoubleSide,
         clippingPlanes: [],
         depthWrite: true,
         depthTest: true,
+        roughness: 1,
+        metalness: 0,
+        envMapIntensity: 0,
         stencilWrite: true,
         stencilRef: 0,
         stencilFunc: THREE.NotEqualStencilFunc,
@@ -295,33 +301,58 @@ export class ClipSliceController {
 
   private syncCapFromMesh(e: {
     mesh: THREE.Mesh;
-    capMat: THREE.MeshBasicMaterial;
+    capMat: CapMaterial;
   }) {
     this.applySourceAppearance(e.capMat, e.mesh);
   }
 
-  private applySourceAppearance(
-    capMat: THREE.MeshBasicMaterial,
-    mesh: THREE.Mesh,
-  ) {
-    const hex =
-      (mesh.userData.colorHex as string | undefined) ??
-      (mesh.userData.baseColorHex as string | undefined);
+  private applySourceAppearance(capMat: CapMaterial, mesh: THREE.Mesh) {
     const src = this.readSourceMaterial(mesh);
+    const lighting = useAppStore.getState().lighting;
+    const isRoom = Boolean(mesh.userData.roomId);
 
-    if (hex) capMat.color.set(hex);
-    else if (src?.color) capMat.color.copy(src.color);
-    else capMat.color.setHex(0xb8bec8);
+    // Prefer live mesh color (already includes render-mode tint)
+    if (src?.color) capMat.color.copy(src.color);
+    else {
+      const hex =
+        (mesh.userData.colorHex as string | number | undefined) ??
+        (mesh.userData.baseColorHex as string | number | undefined);
+      if (typeof hex === "number") capMat.color.setHex(hex);
+      else if (typeof hex === "string" && hex) capMat.color.set(hex);
+      else capMat.color.setHex(0xb8bec8);
+    }
 
-    capMat.transparent = false;
-    capMat.opacity = 1;
-    capMat.depthWrite = true;
+    // Same sliders as spaces / elements — always follow lighting
+    const opacity = isRoom
+      ? lighting.spaceTransparency
+      : lighting.elementTransparency;
+
+    const opaque = opacity >= 0.995;
+    capMat.opacity = opaque ? 1 : Math.max(0, Math.min(1, opacity));
+    capMat.transparent = !opaque;
+    // Rooms write depth when translucent; shell does not — match that
+    capMat.depthWrite = opaque || isRoom;
+    capMat.roughness = 1;
+    capMat.metalness = 0;
+    capMat.envMapIntensity = 0;
+    if (src && "emissive" in src && src.emissive && "emissive" in capMat) {
+      capMat.emissive.copy(src.emissive);
+      capMat.emissiveIntensity =
+        typeof src.emissiveIntensity === "number" ? src.emissiveIntensity : 0;
+    } else {
+      capMat.emissive.setHex(0x000000);
+      capMat.emissiveIntensity = 0;
+    }
     capMat.needsUpdate = true;
   }
 
-  private readSourceMaterial(
-    mesh: THREE.Mesh,
-  ): (THREE.Material & { color?: THREE.Color }) | null {
+  private readSourceMaterial(mesh: THREE.Mesh): (THREE.Material & {
+    color?: THREE.Color;
+    opacity?: number;
+    transparent?: boolean;
+    emissive?: THREE.Color;
+    emissiveIntensity?: number;
+  }) | null {
     const m = mesh.material;
     return ((Array.isArray(m) ? m[0] : m) as THREE.Material) ?? null;
   }

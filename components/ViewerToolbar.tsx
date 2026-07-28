@@ -158,6 +158,30 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const setPresentationView = useAppStore((s) => s.setPresentationView);
   const activeFilter = useAppStore((s) => s.activeFilter);
+  const activeModelLabel = useAppStore((s) => s.activeModelLabel);
+  const colorMode = useAppStore((s) => s.colorMode);
+  const floors = useAppStore((s) => s.floors);
+  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
+
+  const defaultSaveViewName = () => {
+    if (isPresentationView) {
+      const raw =
+        activeModelLabel?.trim() ||
+        activeModelId?.trim() ||
+        "model";
+      const base = raw.replace(/\.ifc$/i, "").trim() || "model";
+      if (presentationIsolate) {
+        return `${base}_isolated view`;
+      }
+      const modeTag =
+        colorMode === "temperature" ? "Temperature" : "heizlast";
+      return `${base}_${modeTag}`;
+    }
+    const floorId = selectedFloor;
+    if (!floorId) return "";
+    return floors.find((f) => f.id === floorId)?.name ?? "";
+  };
 
   const [panel, setPanel] = useState<Panel>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -166,6 +190,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const [savePos, setSavePos] = useState({ bottom: 0, left: 0 });
   const [searchPos, setSearchPos] = useState({ bottom: 0, left: 0 });
   const [viewName, setViewName] = useState("");
+  const [pageFormat, setPageFormat] = useState<
+    import("@/lib/presentationLayout").PageFormat
+  >("a4");
 
   const shadeBtnRef = useRef<HTMLButtonElement>(null);
   const lightBtnRef = useRef<HTMLButtonElement>(null);
@@ -308,7 +335,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     const name = viewName.trim();
     if (!name || !viewerRef.current) return;
     const pose = viewerRef.current.getCameraPose();
-    addSavedView(name, pose.position, pose.target);
+    addSavedView(name, pose.position, pose.target, { pageFormat });
     setViewName("");
     setPanel(null);
   };
@@ -469,6 +496,25 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           placeholder="View name"
           className="mb-2 w-full rounded-xl border border-zinc-300/60 bg-white/70 px-2.5 py-1.5 text-xs outline-none focus:border-zinc-400"
         />
+        <p className="mb-1 px-0.5 text-[10px] font-medium text-zinc-500">
+          PDF page size
+        </p>
+        <div className="mb-2 grid grid-cols-5 gap-0.5">
+          {(["a4", "a3", "a2", "a1", "a0"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setPageFormat(f)}
+              className={`rounded-lg py-1 text-[10px] font-semibold uppercase ${
+                pageFormat === f
+                  ? "bg-zinc-800 text-white"
+                  : "bg-white/60 text-zinc-600 hover:bg-white/90"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           disabled={!viewName.trim() || !activeModelId}
@@ -591,8 +637,11 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                 aria-label="Save view"
                 aria-expanded={panel === "save"}
                 onClick={() => {
-                  setViewName("");
-                  setPanel((p) => (p === "save" ? null : "save"));
+                  setPanel((p) => {
+                    if (p === "save") return null;
+                    setViewName(defaultSaveViewName());
+                    return "save";
+                  });
                 }}
               >
                 <LiaStreetViewSolid className="h-5 w-5" />

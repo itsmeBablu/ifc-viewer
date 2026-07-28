@@ -5,7 +5,12 @@ import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import { getModelById } from "@/lib/modelRegistry";
-import { exportHeizlastPdf } from "@/lib/pdfExport";
+import {
+  captureAllPagesAssets,
+  capturePresentationAssets,
+  pdfLegendFromStore,
+} from "@/lib/pdfCapture";
+import { exportAllPagesPdf, exportPresentationPdf } from "@/lib/pdfExport";
 import { heading } from "@/lib/designTokens";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
@@ -13,6 +18,7 @@ import GlassPanel from "./GlassPanel";
 import Slider from "./ui/Slider";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { Floor, Room } from "@/lib/types";
+import type { PageFormat } from "@/lib/presentationLayout";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
@@ -97,7 +103,8 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
-  const [pdfSelected, setPdfSelected] = useState<string[]>([]);
+  const [pdfProgress, setPdfProgress] = useState("");
+  const [pdfPageFormat, setPdfPageFormat] = useState<PageFormat>("a3");
 
   const sortedFloors = useMemo(
     () => [...floors].sort((a, b) => a.elevation - b.elevation),
@@ -187,14 +194,8 @@ export default function FloorsPanel({ viewerRef }: Props) {
     void viewerRef.current.flyToPose(view.position, view.target, 850);
   };
 
-  const CURRENT_VIEW_ID = "__current__";
-
   const openPdfPopup = () => {
-    // Default: current view + all saved views selected
-    setPdfSelected([
-      CURRENT_VIEW_ID,
-      ...savedViews.map((v) => v.id),
-    ]);
+    setPdfProgress("");
     setPdfOpen(true);
   };
 
@@ -207,70 +208,56 @@ export default function FloorsPanel({ viewerRef }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [pdfOpen, pdfExporting]);
 
-  const togglePdfSelect = (id: string) => {
-    setPdfSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+  const modelNameForPdf = () => {
+    const st = useAppStore.getState();
+    return (
+      st.activeModelLabel ?? st.activeModelId ?? "model"
+    ).replace(/\.ifc$/i, "");
   };
 
-  const exportPdf = async () => {
-    if (pdfExporting || pdfSelected.length === 0 || !viewerRef.current) return;
+  const exportAllPages = async () => {
+    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
     setPdfExporting(true);
+    setPdfProgress("Starting…");
     try {
-      const viewer = viewerRef.current;
-      const st = useAppStore.getState();
-      const list =
-        st.selectedFloor == null
-          ? st.rooms
-          : st.rooms.filter((r) => r.floorId === st.selectedFloor);
-
-      const restorePose = viewer.getCameraPose();
-      const restoreFloor = st.selectedFloor;
-
-      const views: { title: string; viewportDataUrl: string | null }[] = [];
-
-      // Capture current first if selected (before flying away)
-      if (pdfSelected.includes(CURRENT_VIEW_ID)) {
-        views.push({
-          title: "Current view",
-          viewportDataUrl: viewer.captureViewport?.() ?? null,
-        });
-      }
-
-      for (const id of pdfSelected) {
-        if (id === CURRENT_VIEW_ID) continue;
-        const view = goToSavedView(id);
-        if (!view) continue;
-        if (view.floorId !== undefined) setSelectedFloor(view.floorId);
-        await viewer.flyToPose(view.position, view.target, 700);
-        // Let a frame paint after the camera settles
-        await new Promise<void>((r) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r())),
-        );
-        views.push({
-          title: view.name,
-          viewportDataUrl: viewer.captureViewport?.() ?? null,
-        });
-      }
-
-      // Restore camera so the UI doesn't jump away from where the user was
-      if (restoreFloor !== useAppStore.getState().selectedFloor) {
-        setSelectedFloor(restoreFloor);
-      }
-      await viewer.flyToPose(restorePose.position, restorePose.target, 500);
-
-      exportHeizlastPdf({
-        views,
-        modelName: st.activeModelLabel ?? st.activeModelId ?? "model",
-        rooms: list,
-        colorMode: st.colorMode,
-        palette: st.activeColorPalette,
-        heizlastRange: st.heizlastRange,
-        temperatureRange: st.temperatureRange,
+      const assets = await captureAllPagesAssets(viewerRef.current, {
+        scale: 2.5,
+        onProgress: setPdfProgress,
+      });
+      setPdfProgress("Building PDF…");
+      exportAllPagesPdf({
+        modelName: modelNameForPdf(),
+        floors: assets.floors,
+        presentation: assets.presentation,
+        legend: pdfLegendFromStore(),
       });
       setPdfOpen(false);
     } finally {
       setPdfExporting(false);
+      setPdfProgress("");
+    }
+  };
+
+  const exportPresentationOnly = async () => {
+    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
+    setPdfExporting(true);
+    setPdfProgress("Starting…");
+    try {
+      const presentation = await capturePresentationAssets(viewerRef.current, {
+        scale: 3,
+        onProgress: setPdfProgress,
+      });
+      setPdfProgress("Building PDF…");
+      exportPresentationPdf({
+        modelName: modelNameForPdf(),
+        presentation,
+        legend: pdfLegendFromStore(),
+        pageFormat: pdfPageFormat,
+      });
+      setPdfOpen(false);
+    } finally {
+      setPdfExporting(false);
+      setPdfProgress("");
     }
   };
 
@@ -447,6 +434,9 @@ export default function FloorsPanel({ viewerRef }: Props) {
                   onClick={() => handleGoView(v.id)}
                 >
                   {v.name}
+                  <span className="ml-1.5 text-[9px] font-semibold uppercase text-zinc-400">
+                    {v.pageFormat ?? "a4"}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -479,7 +469,7 @@ export default function FloorsPanel({ viewerRef }: Props) {
               }}
             />
             <div
-              className="relative z-[121] w-full max-w-sm"
+              className="relative z-[121] w-full max-w-md"
               role="dialog"
               aria-modal="true"
               aria-label="Download PDF"
@@ -497,115 +487,111 @@ export default function FloorsPanel({ viewerRef }: Props) {
                       className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/70 to-transparent"
                       aria-hidden
                     />
-                    <div className="relative">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        Download PDF
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-zinc-500">
-                        Select views to include in the report
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={pdfExporting}
-                      onClick={() => setPdfOpen(false)}
-                      className="rounded-lg px-2 py-1 text-sm text-zinc-400 hover:bg-white/50 hover:text-zinc-700"
-                      aria-label="Close"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                    <div className="relative space-y-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-900">
+                            Download PDF
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-zinc-500">
+                            Floors + presentation views
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={pdfExporting}
+                          onClick={() => setPdfOpen(false)}
+                          className="rounded-lg px-2 py-1 text-sm text-zinc-400 hover:bg-white/50 hover:text-zinc-700"
+                          aria-label="Close"
+                        >
+                          ✕
+                        </button>
+                      </div>
 
-                  <ul className="thin-scroll mb-3 max-h-[min(280px,45vh)] space-y-0.5 overflow-y-auto rounded-xl border border-white/50 bg-white/45 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md">
-                    <li>
-                      <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-white/70">
-                        <input
-                          type="checkbox"
-                          checked={pdfSelected.includes(CURRENT_VIEW_ID)}
-                          onChange={() => togglePdfSelect(CURRENT_VIEW_ID)}
-                          className="accent-amber-500"
-                        />
-                        <span className="font-medium text-zinc-800">
-                          Current view
-                        </span>
-                      </label>
-                    </li>
-                    {savedViews.length === 0 ? (
-                      <li className="px-2.5 py-2 text-xs text-zinc-400">
-                        No saved views yet
-                      </li>
-                    ) : (
-                      savedViews.map((v) => (
-                        <li key={v.id}>
-                          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-white/70">
-                            <input
-                              type="checkbox"
-                              checked={pdfSelected.includes(v.id)}
-                              onChange={() => togglePdfSelect(v.id)}
-                              className="accent-amber-500"
-                            />
-                            <span className="min-w-0 truncate text-zinc-700">
-                              {v.name}
-                            </span>
-                          </label>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-
-                  <div className="mb-3 flex gap-2 px-0.5">
-                    <button
-                      type="button"
-                      className="text-[11px] font-medium text-zinc-500 hover:text-zinc-800"
-                      onClick={() =>
-                        setPdfSelected([
-                          CURRENT_VIEW_ID,
-                          ...savedViews.map((v) => v.id),
-                        ])
-                      }
-                    >
-                      Select all
-                    </button>
-                    <span className="text-zinc-300">·</span>
-                    <button
-                      type="button"
-                      className="text-[11px] font-medium text-zinc-500 hover:text-zinc-800"
-                      onClick={() => setPdfSelected([])}
-                    >
-                      Clear
-                    </button>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={pdfExporting || pdfSelected.length === 0}
-                      onClick={() => void exportPdf()}
-                      className={`${yellowGlossBtn} h-10 flex-1 justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
-                    >
-                      {pdfExporting ? (
-                        <>
-                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-800/30 border-t-amber-900" />
-                          Exporting…
-                        </>
-                      ) : (
-                        <>
-                          <PiFilePdfThin className="h-5 w-5" />
-                          Download
-                        </>
+                      {pdfExporting && (
+                        <p className="rounded-xl bg-white/50 px-3 py-2 text-[11px] font-medium text-zinc-700">
+                          {pdfProgress || "Exporting…"}
+                        </p>
                       )}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pdfExporting}
-                      onClick={() => setPdfOpen(false)}
-                      className="h-10 rounded-xl border border-white/50 bg-white/40 px-3 text-sm font-medium text-zinc-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-md hover:bg-white/60"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+
+                      <div className="rounded-xl border border-white/50 bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                        <p className="text-xs font-semibold text-zinc-800">
+                          All pages (A4)
+                        </p>
+                        <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                          Each floor: Heizlast + Temperature (full image,
+                          legend top-right) and room table. Then presentation
+                          stack (both modes). File:{" "}
+                          <span className="font-medium text-zinc-700">
+                            {modelLabel.replace(/\.ifc$/i, "")}_allpages.pdf
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          disabled={pdfExporting || rooms.length === 0}
+                          onClick={() => void exportAllPages()}
+                          className={`${yellowGlossBtn} mt-2.5 h-10 w-full justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
+                        >
+                          {pdfExporting ? (
+                            <>
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-800/30 border-t-amber-900" />
+                              Exporting…
+                            </>
+                          ) : (
+                            <>
+                              <PiFilePdfThin className="h-5 w-5" />
+                              Download all pages
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="rounded-xl border border-white/50 bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                        <p className="text-xs font-semibold text-zinc-800">
+                          Presentation views
+                        </p>
+                        <p className="mt-1 text-[10px] leading-snug text-zinc-500">
+                          Stack layout, all floors — one Heizlast page and one
+                          Temperature page. High quality. Choose paper size:
+                        </p>
+                        <div className="mt-2 grid grid-cols-5 gap-1">
+                          {(["a4", "a3", "a2", "a1", "a0"] as const).map(
+                            (f) => (
+                              <button
+                                key={f}
+                                type="button"
+                                disabled={pdfExporting}
+                                onClick={() => setPdfPageFormat(f)}
+                                className={`rounded-lg py-1.5 text-[11px] font-semibold uppercase ${
+                                  pdfPageFormat === f
+                                    ? "bg-zinc-800 text-white"
+                                    : "bg-white/60 text-zinc-600 hover:bg-white/90"
+                                }`}
+                              >
+                                {f}
+                              </button>
+                            ),
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={pdfExporting || rooms.length === 0}
+                          onClick={() => void exportPresentationOnly()}
+                          className={`${yellowGlossBtn} mt-2.5 h-10 w-full justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
+                        >
+                          <PiFilePdfThin className="h-5 w-5" />
+                          Download presentation ({pdfPageFormat.toUpperCase()})
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={pdfExporting}
+                        onClick={() => setPdfOpen(false)}
+                        className="h-9 w-full rounded-xl border border-white/50 bg-white/40 text-sm font-medium text-zinc-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-md hover:bg-white/60"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 </GlassPanel>

@@ -133,10 +133,14 @@ type AppState = {
   isPresentationView: boolean;
   /** selectedFloor restored when leaving presentation. */
   presentationPrevFloor: string | null;
-  /** Floor focused in the presentation rooms list (does not isolate 3D). */
+  /** Floor focused in the presentation rooms list. */
   presentationFloorId: string | null;
   /** When true, show floor picker + room list in presentation panel. */
   presentationRoomsOpen: boolean;
+  /** Stack (≤4 auto) vs side-by-side grid (≥5 auto). */
+  presentationLayoutMode: import("@/lib/presentationLayout").PresentationLayoutMode;
+  /** When true, only show presentationFloorId in 3D. */
+  presentationIsolate: boolean;
   /** Room filter for search/filter bar — null means no filter. */
   activeFilter: {
     minHeat?: number;
@@ -182,6 +186,10 @@ type AppState = {
   setPresentationView: (active: boolean) => void;
   setPresentationFloorId: (floorId: string | null) => void;
   setPresentationRoomsOpen: (open: boolean) => void;
+  setPresentationLayoutMode: (
+    mode: import("@/lib/presentationLayout").PresentationLayoutMode,
+  ) => void;
+  setPresentationIsolate: (isolate: boolean) => void;
   setActiveFilter: (
     filter: {
       minHeat?: number;
@@ -205,6 +213,7 @@ type AppState = {
     name: string,
     position: [number, number, number],
     target: [number, number, number],
+    opts?: { pageFormat?: import("@/lib/presentationLayout").PageFormat },
   ) => void;
   goToSavedView: (id: string) => SavedView | undefined;
   removeSavedView: (id: string) => void;
@@ -295,6 +304,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   presentationPrevFloor: null,
   presentationFloorId: null,
   presentationRoomsOpen: false,
+  presentationLayoutMode: "auto",
+  presentationIsolate: false,
   activeFilter: null,
   sliceProgress: 0.5,
   isLoadingModel: false,
@@ -402,6 +413,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedFloor: null,
         presentationFloorId: defaultFloor,
         presentationRoomsOpen: false,
+        presentationIsolate: false,
         selectedRoomId: null,
         selectedElement: null,
         rightPanelOpen: true,
@@ -414,6 +426,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         presentationPrevFloor: null,
         presentationFloorId: null,
         presentationRoomsOpen: false,
+        presentationIsolate: false,
         selectedRoomId: null,
         selectedElement: null,
       });
@@ -436,6 +449,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ presentationRoomsOpen: true });
     }
   },
+  setPresentationLayoutMode: (mode) => set({ presentationLayoutMode: mode }),
+  setPresentationIsolate: (isolate) => set({ presentationIsolate: isolate }),
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),
   setLoadError: (error) => set({ loadError: error }),
@@ -464,15 +479,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleHeaderCollapsed: () =>
     set({ isHeaderCollapsed: !get().isHeaderCollapsed }),
 
-  addSavedView: (name, position, target) => {
-    const { activeModelId, selectedFloor, savedViews } = get();
+  addSavedView: (name, position, target, opts) => {
+    const { activeModelId, selectedFloor, savedViews, presentationFloorId, isPresentationView, presentationIsolate } =
+      get();
     if (!activeModelId) return;
     const view: SavedView = {
       id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       position,
       target,
-      floorId: selectedFloor,
+      floorId: isPresentationView && presentationIsolate
+        ? presentationFloorId
+        : selectedFloor,
+      pageFormat: opts?.pageFormat ?? "a4",
     };
     const next = [...savedViews, view];
     persistSavedViews(activeModelId, next);
@@ -501,6 +520,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       presentationPrevFloor: null,
       presentationFloorId: null,
       presentationRoomsOpen: false,
+      presentationIsolate: false,
       activeFilter: null,
     }),
 }));

@@ -6,22 +6,25 @@ import {
   temperatureLegendStops,
   type ColorPaletteId,
 } from "@/lib/colorMapping";
+import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Room } from "@/lib/types";
 
-export type PdfViewPage = {
-  title: string;
-  viewportDataUrl: string | null;
-};
-
-export type PdfExportInput = {
-  /** One or more 3D snapshots (current and/or saved views). */
-  views: PdfViewPage[];
-  modelName: string;
-  rooms: Room[];
-  colorMode: ColorMode;
+export type PdfLegendContext = {
   palette: ColorPaletteId;
   heizlastRange: number[];
   temperatureRange: number[];
+};
+
+export type FloorPdfSection = {
+  floorName: string;
+  rooms: Room[];
+  heizlastImage: string | null;
+  temperatureImage: string | null;
+};
+
+export type PresentationPdfImages = {
+  heizlastImage: string | null;
+  temperatureImage: string | null;
 };
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -33,7 +36,7 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function sanitizeFilePart(s: string): string {
+export function sanitizeFilePart(s: string): string {
   return (
     s
       .trim()
@@ -44,63 +47,15 @@ function sanitizeFilePart(s: string): string {
   );
 }
 
-function drawLegend(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  width: number,
-  input: PdfExportInput,
-): number {
-  const isHeat = input.colorMode === "heizlast";
-  doc.setFontSize(10);
-  doc.setTextColor(40);
-  doc.text(
-    isHeat ? "Legend — Heizlast (W/m²)" : "Legend — Temperature (°C)",
-    x,
-    y,
-  );
-  let cy = y + 4;
-
-  if (isHeat) {
-    const stops = resolveStopsForRange(
-      heizlastStopsFor(input.palette),
-      input.heizlastRange,
-    );
-    const barH = 8;
-    const segW = width / Math.max(1, stops.length);
-    for (let i = 0; i < stops.length; i++) {
-      const [r, g, b] = hexToRgb(stops[i].color);
-      doc.setFillColor(r, g, b);
-      doc.rect(
-        x + i * segW,
-        cy,
-        segW + (i < stops.length - 1 ? 0.15 : 0),
-        barH,
-        "F",
-      );
-    }
-
-    doc.setFontSize(7);
-    doc.setTextColor(80);
-    for (let i = 0; i < stops.length; i++) {
-      const tx = x + (i + 0.5) * segW;
-      doc.text(String(stops[i].value), tx, cy + barH + 4, { align: "center" });
-    }
-    return cy + barH + 10;
-  }
-
-  const chips = temperatureLegendStops(input.palette, input.temperatureRange);
-  const chipW = Math.min(22, width / Math.max(1, chips.length) - 2);
-  chips.forEach((s, i) => {
-    const cx = x + i * (chipW + 2);
-    const [r, g, b] = hexToRgb(s.color);
-    doc.setFillColor(r, g, b);
-    doc.roundedRect(cx, cy, chipW, 8, 1, 1, "F");
-    doc.setFontSize(7);
-    doc.setTextColor(40);
-    doc.text(`${s.value}°`, cx + chipW / 2, cy + 12, { align: "center" });
-  });
-  return cy + 18;
+function pageSizeMm(format: PageFormat): [number, number] {
+  const map: Record<PageFormat, [number, number]> = {
+    a0: [1189, 841],
+    a1: [841, 594],
+    a2: [594, 420],
+    a3: [420, 297],
+    a4: [297, 210],
+  };
+  return map[format] ?? map.a4;
 }
 
 function addViewportImage(
@@ -113,87 +68,411 @@ function addViewportImage(
 ) {
   if (dataUrl) {
     try {
-      doc.addImage(dataUrl, "PNG", x, y, w, h, undefined, "FAST");
+      doc.addImage(dataUrl, "PNG", x, y, w, h, undefined, "MEDIUM");
       return;
     } catch {
       // fall through
     }
   }
+  doc.setFillColor(245, 246, 248);
+  doc.rect(x, y, w, h, "F");
   doc.setFontSize(10);
   doc.setTextColor(150);
-  doc.text("3D viewport could not be captured", x, y + 20);
+  doc.text("3D viewport could not be captured", x + 4, y + 14);
 }
 
-/** Build and download a Heizlast report PDF (multi-view capable). */
-export function exportHeizlastPdf(input: PdfExportInput): void {
-  const views =
-    input.views.length > 0
-      ? input.views
-      : [{ title: "Current view", viewportDataUrl: null }];
+/** Compact legend in the top-right of an image area. */
+function drawLegendTopRight(
+  doc: jsPDF,
+  imgX: number,
+  imgY: number,
+  imgW: number,
+  mode: ColorMode,
+  legend: PdfLegendContext,
+) {
+  const boxW = Math.min(78, imgW * 0.32);
+  const pad = 3;
+  const x = imgX + imgW - boxW - 4;
+  const y = imgY + 4;
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = 12;
-  const contentW = pageW - margin * 2;
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x, y, boxW, mode === "heizlast" ? 22 : 24, 1.5, 1.5, "F");
+  doc.setDrawColor(220);
+  doc.roundedRect(x, y, boxW, mode === "heizlast" ? 22 : 24, 1.5, 1.5, "S");
 
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10);
-  const title = input.modelName || "IFC Model";
+  doc.setFontSize(7);
+  doc.setTextColor(40);
+  doc.text(
+    mode === "heizlast" ? "Heizlast W/m²" : "Temperature °C",
+    x + pad,
+    y + 4.5,
+  );
 
-  const first = views[0];
-  doc.setFontSize(14);
-  doc.setTextColor(20);
-  doc.text(title, margin, margin + 2);
-  doc.setFontSize(9);
-  doc.setTextColor(100);
-  doc.text(`Heizlast report · ${dateStr}`, margin, margin + 8);
-  if (first.title) {
-    doc.setFontSize(10);
-    doc.setTextColor(50);
-    doc.text(first.title, margin, margin + 14);
+  if (mode === "heizlast") {
+    const stops = resolveStopsForRange(
+      heizlastStopsFor(legend.palette),
+      legend.heizlastRange,
+    );
+    const barY = y + 7;
+    const barH = 5;
+    const barW = boxW - pad * 2;
+    const segW = barW / Math.max(1, stops.length);
+    for (let i = 0; i < stops.length; i++) {
+      const [r, g, b] = hexToRgb(stops[i].color);
+      doc.setFillColor(r, g, b);
+      doc.rect(x + pad + i * segW, barY, segW + 0.1, barH, "F");
+    }
+    doc.setFontSize(5.5);
+    doc.setTextColor(70);
+    doc.text(String(stops[0]?.value ?? ""), x + pad, barY + barH + 3.5);
+    doc.text(String(stops[stops.length - 1]?.value ?? ""), x + boxW - pad, barY + barH + 3.5, {
+      align: "right",
+    });
+  } else {
+    const chips = temperatureLegendStops(
+      legend.palette,
+      legend.temperatureRange,
+    );
+    const chipY = y + 7;
+    const chipH = 5;
+    const gap = 1.2;
+    const chipW =
+      (boxW - pad * 2 - gap * Math.max(0, chips.length - 1)) /
+      Math.max(1, chips.length);
+    chips.forEach((s, i) => {
+      const cx = x + pad + i * (chipW + gap);
+      const [r, g, b] = hexToRgb(s.color);
+      doc.setFillColor(r, g, b);
+      doc.roundedRect(cx, chipY, chipW, chipH, 0.6, 0.6, "F");
+      doc.setFontSize(5);
+      doc.setTextColor(40);
+      doc.text(`${s.value}°`, cx + chipW / 2, chipY + chipH + 3.2, {
+        align: "center",
+      });
+    });
   }
+}
 
-  let y = margin + 18;
-  const viewH = pageH * 0.5;
-  const viewW = contentW * 0.72;
-
-  addViewportImage(doc, first.viewportDataUrl, margin, y, viewW, viewH);
-  drawLegend(doc, margin + viewW + 6, y + 4, contentW - viewW - 6, input);
-
-  const tableStartY = y + viewH + 8;
-  const body = input.rooms.map((r) => [
+function drawRoomTable(
+  doc: jsPDF,
+  rooms: Room[],
+  startY: number,
+  margin: number,
+) {
+  const body = rooms.map((r) => [
     r.name || "—",
     r.number || "—",
     Number.isFinite(r.heatLoad) ? r.heatLoad.toFixed(1) : "—",
-    Number.isFinite(r.temperature) ? String(r.temperature) : "—",
+    r.heizlast != null && Number.isFinite(r.heizlast)
+      ? String(Math.round(r.heizlast))
+      : "—",
+    Number.isFinite(r.temperature) ? String(Math.round(r.temperature)) : "—",
   ]);
 
   autoTable(doc, {
-    startY: tableStartY,
-    head: [["Name", "Number", "Heizlast (W/m²)", "Temperature (°C)"]],
-    body,
+    startY,
+    head: [
+      [
+        "Name",
+        "Number",
+        "Heizlast (W/m²)",
+        "Heizlast (W)",
+        "Temperature (°C)",
+      ],
+    ],
+    body: body.length
+      ? body
+      : [["—", "—", "—", "—", "—"]],
     margin: { left: margin, right: margin },
-    styles: { fontSize: 8, cellPadding: 1.5 },
+    styles: { fontSize: 7.5, cellPadding: 1.2 },
     headStyles: { fillColor: [40, 40, 48], textColor: 255 },
     alternateRowStyles: { fillColor: [245, 246, 248] },
   });
+}
 
-  // Extra pages for additional selected views
-  for (let i = 1; i < views.length; i++) {
-    const v = views[i];
-    doc.addPage();
-    doc.setFontSize(14);
+function drawFloorModePage(
+  doc: jsPDF,
+  opts: {
+    isFirst: boolean;
+    modelName: string;
+    floorName: string;
+    mode: ColorMode;
+    image: string | null;
+    rooms: Room[];
+    legend: PdfLegendContext;
+    dateStr: string;
+  },
+) {
+  if (!opts.isFirst) doc.addPage([297, 210], "landscape");
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 10;
+  const contentW = pageW - margin * 2;
+  const modeLabel = opts.mode === "heizlast" ? "Heizlast" : "Temperature";
+
+  doc.setFontSize(12);
+  doc.setTextColor(20);
+  doc.text(opts.modelName, margin, margin + 2);
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+  doc.text(`${opts.floorName} — ${modeLabel}`, margin, margin + 9);
+  doc.setFontSize(8);
+  doc.setTextColor(120);
+  doc.text(`A4 · ${opts.dateStr}`, pageW - margin, margin + 2, {
+    align: "right",
+  });
+
+  const headerH = 14;
+  const tableReserve = Math.min(72, pageH * 0.34);
+  const imgY = margin + headerH;
+  const imgH = pageH - imgY - margin - tableReserve;
+  const imgW = contentW;
+
+  addViewportImage(doc, opts.image, margin, imgY, imgW, imgH);
+  drawLegendTopRight(doc, margin, imgY, imgW, opts.mode, opts.legend);
+
+  doc.setFontSize(9);
+  doc.setTextColor(40);
+  doc.text(`Rooms — ${opts.floorName}`, margin, imgY + imgH + 6);
+  drawRoomTable(doc, opts.rooms, imgY + imgH + 8, margin);
+}
+
+function drawPresentationPage(
+  doc: jsPDF,
+  opts: {
+    isFirst: boolean;
+    modelName: string;
+    mode: ColorMode;
+    image: string | null;
+    legend: PdfLegendContext;
+    dateStr: string;
+    format: PageFormat;
+  },
+) {
+  const [w, h] = pageSizeMm(opts.format);
+  if (!opts.isFirst) doc.addPage([w, h], "landscape");
+  else {
+    // ensure first page matches when creating doc externally
+  }
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 10;
+  const contentW = pageW - margin * 2;
+  const modeLabel = opts.mode === "heizlast" ? "Heizlast" : "Temperature";
+
+  doc.setFontSize(12);
+  doc.setTextColor(20);
+  doc.text(opts.modelName, margin, margin + 2);
+  doc.setFontSize(10);
+  doc.setTextColor(50);
+  doc.text(`Presentation (stack) — ${modeLabel}`, margin, margin + 9);
+  doc.setFontSize(8);
+  doc.setTextColor(120);
+  doc.text(
+    `${opts.format.toUpperCase()} · ${opts.dateStr}`,
+    pageW - margin,
+    margin + 2,
+    { align: "right" },
+  );
+
+  const headerH = 14;
+  const imgY = margin + headerH;
+  const imgH = pageH - imgY - margin;
+  const imgW = contentW;
+  addViewportImage(doc, opts.image, margin, imgY, imgW, imgH);
+  drawLegendTopRight(doc, margin, imgY, imgW, opts.mode, opts.legend);
+}
+
+/**
+ * Full building report (A4): each floor × Heizlast + Temperature (+ rooms),
+ * then presentation stack Heizlast + Temperature. File: {name}_allpages.pdf
+ */
+export function exportAllPagesPdf(input: {
+  modelName: string;
+  floors: FloorPdfSection[];
+  presentation: PresentationPdfImages;
+  legend: PdfLegendContext;
+}): void {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const title = input.modelName || "IFC Model";
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
+
+  let first = true;
+  for (const floor of input.floors) {
+    drawFloorModePage(doc, {
+      isFirst: first,
+      modelName: title,
+      floorName: floor.floorName,
+      mode: "heizlast",
+      image: floor.heizlastImage,
+      rooms: floor.rooms,
+      legend: input.legend,
+      dateStr,
+    });
+    first = false;
+
+    drawFloorModePage(doc, {
+      isFirst: false,
+      modelName: title,
+      floorName: floor.floorName,
+      mode: "temperature",
+      image: floor.temperatureImage,
+      rooms: floor.rooms,
+      legend: input.legend,
+      dateStr,
+    });
+  }
+
+  drawPresentationPage(doc, {
+    isFirst: first,
+    modelName: title,
+    mode: "heizlast",
+    image: input.presentation.heizlastImage,
+    legend: input.legend,
+    dateStr,
+    format: "a4",
+  });
+  first = false;
+  drawPresentationPage(doc, {
+    isFirst: false,
+    modelName: title,
+    mode: "temperature",
+    image: input.presentation.temperatureImage,
+    legend: input.legend,
+    dateStr,
+    format: "a4",
+  });
+
+  const base = sanitizeFilePart(title.replace(/\.ifc$/i, ""));
+  doc.save(`${base}_allpages.pdf`);
+}
+
+/**
+ * Presentation-only PDF (stack, all floors): Heizlast + Temperature pages
+ * at the chosen paper size, high-quality images.
+ */
+export function exportPresentationPdf(input: {
+  modelName: string;
+  presentation: PresentationPdfImages;
+  legend: PdfLegendContext;
+  pageFormat: PageFormat;
+}): void {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const title = input.modelName || "IFC Model";
+  const format = input.pageFormat ?? "a3";
+  const [w, h] = pageSizeMm(format);
+
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: [w, h],
+  });
+
+  drawPresentationPage(doc, {
+    isFirst: true,
+    modelName: title,
+    mode: "heizlast",
+    image: input.presentation.heizlastImage,
+    legend: input.legend,
+    dateStr,
+    format,
+  });
+  drawPresentationPage(doc, {
+    isFirst: false,
+    modelName: title,
+    mode: "temperature",
+    image: input.presentation.temperatureImage,
+    legend: input.legend,
+    dateStr,
+    format,
+  });
+
+  const base = sanitizeFilePart(title.replace(/\.ifc$/i, ""));
+  doc.save(`${base}_presentation_${format}.pdf`);
+}
+
+/** @deprecated — kept for any callers of the old multi-view export. */
+export type PdfViewPage = {
+  title: string;
+  viewportDataUrl: string | null;
+  pageFormat?: PageFormat;
+};
+
+export type PdfExportInput = {
+  views: PdfViewPage[];
+  modelName: string;
+  rooms: Room[];
+  colorMode: ColorMode;
+  palette: ColorPaletteId;
+  heizlastRange: number[];
+  temperatureRange: number[];
+  pageFormat?: PageFormat;
+  cleanViews?: boolean;
+};
+
+export function exportHeizlastPdf(input: PdfExportInput): void {
+  // Bridge: treat as presentation-style clean pages + optional first table
+  const format = input.pageFormat ?? "a4";
+  const legend: PdfLegendContext = {
+    palette: input.palette,
+    heizlastRange: input.heizlastRange,
+    temperatureRange: input.temperatureRange,
+  };
+  const [w, h] = pageSizeMm(format);
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: [w, h],
+  });
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const title = input.modelName || "IFC Model";
+  const views =
+    input.views.length > 0
+      ? input.views
+      : [{ title: "Current view", viewportDataUrl: null as string | null }];
+
+  views.forEach((v, i) => {
+    const pageFormat = v.pageFormat ?? format;
+    if (i > 0) {
+      const [pw, ph] = pageSizeMm(pageFormat);
+      doc.addPage([pw, ph], "landscape");
+    }
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 10;
+    doc.setFontSize(12);
     doc.setTextColor(20);
     doc.text(title, margin, margin + 2);
     doc.setFontSize(10);
     doc.setTextColor(50);
-    doc.text(v.title, margin, margin + 10);
-    const imgH = pageH - margin * 2 - 14;
-    const imgW = contentW;
-    addViewportImage(doc, v.viewportDataUrl, margin, margin + 14, imgW, imgH);
-  }
+    doc.text(v.title || "View", margin, margin + 9);
+    const imgY = margin + 14;
+    const imgH = pageH - imgY - margin;
+    addViewportImage(
+      doc,
+      v.viewportDataUrl,
+      margin,
+      imgY,
+      pageW - margin * 2,
+      imgH,
+    );
+    drawLegendTopRight(
+      doc,
+      margin,
+      imgY,
+      pageW - margin * 2,
+      input.colorMode,
+      legend,
+    );
+  });
 
-  const file = `${sanitizeFilePart(title)}-heizlast-report-${dateStr}.pdf`;
-  doc.save(file);
+  doc.save(
+    `${sanitizeFilePart(title)}-heizlast-report-${dateStr}.pdf`,
+  );
 }

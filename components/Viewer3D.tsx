@@ -16,10 +16,17 @@ import { debugLog } from "@/lib/debugLog";
 import { ViewCube } from "@/lib/viewCube";
 import {
   ClipSliceController,
-  EXPLODE_GAP_FACTOR,
-  EXPLODE_LEFT_FACTOR,
   floorWorldYBounds,
 } from "@/lib/clipSlice";
+import {
+  floorGridSlots,
+  PRESENTATION_GAP_X,
+  PRESENTATION_GAP_Y,
+  PRESENTATION_GAP_Y_STACK,
+  PRESENTATION_GAP_Y_STACK_FEW,
+  resolvePresentationLayout,
+  sortFloorsByElevation,
+} from "@/lib/presentationLayout";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import type { RenderMode, Room } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
@@ -38,8 +45,8 @@ export type Viewer3DHandle = {
   fitVisible: () => void;
   /** Search-only: fly camera to frame a room mesh (does zoom). */
   flyToRoom: (roomId: string) => Promise<void>;
-  /** Force a render then return canvas PNG data URL. */
-  captureViewport: () => string | null;
+  /** Capture PNG; scale>1 renders at higher resolution for PDF. */
+  captureViewport: (opts?: { scale?: number }) => string | null;
 };
 
 type Props = {
@@ -324,6 +331,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const sceneBackground = useAppStore((s) => s.sceneBackground);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
+  const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
+  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
+  const presentationFloorId = useAppStore((s) => s.presentationFloorId);
   const sliceProgress = useAppStore((s) => s.sliceProgress);
   const floors = useAppStore((s) => s.floors);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
@@ -398,16 +408,32 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const { position, target } = frameBoundingBox(box, camera, 1.55);
       await flyTo(camera, controls, position, target, 900);
     },
-    captureViewport: () => {
+    captureViewport: (opts) => {
       const renderer = rendererRef.current;
       const scene = sceneRef.current;
       const camera = cameraRef.current;
       if (!renderer || !scene || !camera) return null;
-      renderer.render(scene, camera);
+      const scale = Math.max(1, Math.min(4, opts?.scale ?? 1));
+      const el = renderer.domElement;
+      const prevW = el.width;
+      const prevH = el.height;
+      const cssW = el.clientWidth || prevW;
+      const cssH = el.clientHeight || prevH;
       try {
-        return renderer.domElement.toDataURL("image/png");
+        if (scale > 1) {
+          renderer.setPixelRatio(1);
+          renderer.setSize(cssW * scale, cssH * scale, false);
+        }
+        renderer.render(scene, camera);
+        return el.toDataURL("image/png");
       } catch {
         return null;
+      } finally {
+        if (scale > 1) {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          renderer.setSize(cssW, cssH, false);
+          renderer.render(scene, camera);
+        }
       }
     },
   }));
@@ -715,6 +741,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       lighting,
     );
     clipRef.current?.rebindMaterials();
+    // Rebuild so Schnitthöhe caps pick up new space/element opacity
+    clipRef.current?.rebuildCaps();
 
     const sun = sunRef.current;
     const ambient = ambientRef.current;
@@ -877,42 +905,92 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const applyExplode = (t: number) => {
-      const sorted = [...floors].sort((a, b) => a.elevation - b.elevation);
       const byFloor = collectFloorMeshes();
+      const sorted = sortFloorsByElevation(floors).filter(
+        (f) => (byFloor.get(f.id)?.length ?? 0) > 0,
+      );
+      const layout = resolvePresentationLayout(
+        sorted.length,
+        useAppStore.getState().presentationLayoutMode,
+      );
+      const isolate = useAppStore.getState().presentationIsolate;
+      const isolateId = useAppStore.getState().presentationFloorId;
 
-      // Measure floor heights + plan width in world units (strip offsets first)
-      let heightSum = 0;
-      let heightCount = 0;
-      const planBox = new THREE.Box3();
-      let anyMesh = false;
+      // Strip offsets, measure each floor bbox / center
+      type FloorMeas = {
+        id: string;
+        center: THREE.Vector3;
+        size: THREE.Vector3;
+      };
+      const measured: FloorMeas[] = [];
+      let maxW = 0.01;
+      let maxH = 0.01;
+
       for (const f of sorted) {
-        const box = new THREE.Box3();
-        for (const mesh of byFloor.get(f.id) ?? []) {
+        const meshes = byFloor.get(f.id) ?? [];
+        for (const mesh of meshes) {
           const offY = (mesh.userData.presentationOffsetY as number) ?? 0;
           const offX = (mesh.userData.presentationOffsetX as number) ?? 0;
           if (offY) mesh.position.y -= offY;
           if (offX) mesh.position.x -= offX;
-          box.expandByObject(mesh);
-          planBox.expandByObject(mesh);
-          anyMesh = true;
+        }
+        const box = new THREE.Box3();
+        for (const mesh of meshes) box.expandByObject(mesh);
+        for (const mesh of meshes) {
+          const offY = (mesh.userData.presentationOffsetY as number) ?? 0;
+          const offX = (mesh.userData.presentationOffsetX as number) ?? 0;
           if (offY) mesh.position.y += offY;
           if (offX) mesh.position.x += offX;
         }
-        if (!box.isEmpty()) {
-          heightSum += Math.max(0.01, box.max.y - box.min.y);
-          heightCount += 1;
+        if (box.isEmpty()) {
+          measured.push({
+            id: f.id,
+            center: new THREE.Vector3(),
+            size: new THREE.Vector3(1, 1, 1),
+          });
+          continue;
         }
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        maxW = Math.max(maxW, size.x, size.z);
+        maxH = Math.max(maxH, size.y);
+        measured.push({ id: f.id, center, size });
       }
-      const avgH = heightCount ? heightSum / heightCount : 3;
-      const gap = avgH * EXPLODE_GAP_FACTOR;
-      const widthX = anyMesh && !planBox.isEmpty()
-        ? Math.max(planBox.max.x - planBox.min.x, 0.01)
-        : avgH * 4;
-      const leftShift = -widthX * EXPLODE_LEFT_FACTOR;
+
+      const gapY =
+        sorted.length < 4
+          ? PRESENTATION_GAP_Y_STACK_FEW
+          : layout === "stack" || sorted.length < 5
+            ? PRESENTATION_GAP_Y_STACK
+            : PRESENTATION_GAP_Y;
+      const slotW = maxW * (1 + PRESENTATION_GAP_X);
+      const slotH = maxH * (1 + gapY);
+      const slots = layout === "grid" ? floorGridSlots(sorted.length) : null;
+      const origin = measured[0]?.center.clone() ?? new THREE.Vector3();
 
       for (let i = 0; i < sorted.length; i++) {
-        const targetY = i * gap * t;
-        const targetX = leftShift * t;
+        const m = measured[i];
+        let targetX = 0;
+        let targetY = 0;
+
+        if (isolate && isolateId) {
+          // Keep floors in place relative to origin when isolating
+          targetX = 0;
+          targetY = 0;
+        } else if (layout === "stack") {
+          // Equal vertical pitch between floor centers
+          const desiredY = origin.y + i * slotH;
+          targetY = (desiredY - m.center.y) * t;
+          targetX = 0;
+        } else {
+          const slot = slots![i];
+          const rowPad = ((slot.maxCols - slot.colsInRow) * slotW) / 2;
+          const desiredX = origin.x + slot.col * slotW + rowPad;
+          const desiredY = origin.y + slot.row * slotH;
+          targetX = (desiredX - m.center.x) * t;
+          targetY = (desiredY - m.center.y) * t;
+        }
+
         const meshes = byFloor.get(sorted[i].id) ?? [];
         for (const mesh of meshes) {
           const prevY = (mesh.userData.presentationOffsetY as number) ?? 0;
@@ -923,13 +1001,28 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           mesh.userData.presentationOffsetX = targetX;
         }
       }
-      return gap;
+      return slotH;
     };
 
     const collectAllMeshes = () => {
       const all: THREE.Mesh[] = [];
       collectFloorMeshes().forEach((arr) => all.push(...arr));
       return all;
+    };
+
+    const applyIsolateVisibility = () => {
+      const isolate = useAppStore.getState().presentationIsolate;
+      const isolateId = useAppStore.getState().presentationFloorId;
+      const setVis = (obj: THREE.Object3D) => {
+        if (!(obj instanceof THREE.Mesh) || !obj.userData.floorId) return;
+        if (!isolate || !isolateId) {
+          obj.visible = true;
+        } else {
+          obj.visible = obj.userData.floorId === isolateId;
+        }
+      };
+      shellCloneRef.current?.traverse(setVis);
+      overlaysRef.current?.children.forEach(setVis);
     };
 
     const flyIso = (allMeshes: THREE.Mesh[]) => {
@@ -939,7 +1032,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
       if (box.isEmpty()) return;
       const center = box.getCenter(new THREE.Vector3());
-      // Same corner azimuth, slightly lower pitch
       const elev = (34 * Math.PI) / 180;
       const dir = new THREE.Vector3(
         Math.cos(elev),
@@ -947,7 +1039,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         Math.cos(elev),
       ).normalize();
 
-      // Fit full exploded stack to the viewport
       const sphere = new THREE.Sphere();
       box.getBoundingSphere(sphere);
       const vFov = (camera.fov * Math.PI) / 180;
@@ -971,25 +1062,20 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         };
       }
 
-      // Full floors — no clip/cut so rooms keep normal size
       clip.setOrientation("horizontal");
       clip.clear();
       clip.setEnabled(false);
       clip.setCapsEnabled(false);
 
-      const showAll = (obj: THREE.Object3D) => {
-        if (obj instanceof THREE.Mesh && obj.userData.floorId) {
-          obj.visible = true;
-        }
-      };
-      shellCloneRef.current?.traverse(showAll);
-      overlaysRef.current?.children.forEach(showAll);
+      applyIsolateVisibility();
 
       if (!entering) {
         const gap = applyExplode(1);
+        applyIsolateVisibility();
+        flyIso(collectAllMeshes());
         debugLog(
           "Viewer3D",
-          `presentation refresh n=${collectAllMeshes().length} gap=${gap.toFixed(2)}`,
+          `presentation refresh n=${collectAllMeshes().length} gap=${gap.toFixed(2)} layout=${presentationLayoutMode}`,
           "ok",
         );
         return;
@@ -1002,6 +1088,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         const e = Math.min(1, (now - start) / duration);
         const ease = e < 0.5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
         lastGap = applyExplode(ease);
+        applyIsolateVisibility();
         if (e < 1) {
           explodeAnimRef.current = requestAnimationFrame(tick);
         } else {
@@ -1009,7 +1096,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           flyIso(allMeshes);
           debugLog(
             "Viewer3D",
-            `presentation n=${allMeshes.length} gap=${lastGap.toFixed(2)}`,
+            `presentation n=${allMeshes.length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
             "ok",
           );
         }
@@ -1078,7 +1165,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     return () => cancelAnimationFrame(explodeAnimRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPresentationView, floors, shellGroup, rooms]);
+  }, [
+    isPresentationView,
+    presentationLayoutMode,
+    presentationIsolate,
+    presentationFloorId,
+    floors,
+    shellGroup,
+    rooms,
+  ]);
 
   // Outline for selected room (3D or list) — no camera zoom
   useEffect(() => {
