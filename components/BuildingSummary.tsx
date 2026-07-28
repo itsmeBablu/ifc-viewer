@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { getModelById } from "@/lib/modelRegistry";
+import { t } from "@/lib/i18n";
 import { GlassInset, PanelTitle, heading } from "./ui";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function BuildingSummary({ embedded = false }: Props) {
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const floors = useAppStore((s) => s.floors);
@@ -19,7 +21,7 @@ export default function BuildingSummary({ embedded = false }: Props) {
     activeModelLabel ??
     (activeModelId
       ? (getModelById(activeModelId)?.label ?? activeModelId)
-      : "No model");
+      : t(uiLanguage, "noModel"));
 
   const perFloor = useMemo(() => {
     return [...floors]
@@ -34,19 +36,19 @@ export default function BuildingSummary({ embedded = false }: Props) {
   const body = (
     <div className="space-y-3">
       <div>
-        <p className={heading.muted}>Active model</p>
+        <p className={heading.muted}>{t(uiLanguage, "activeModel")}</p>
         <p className="truncate text-sm font-medium text-zinc-900">{modelLabel}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <GlassInset className="px-3 py-2.5">
-          <p className={heading.muted}>Floors</p>
+          <p className={heading.muted}>{t(uiLanguage, "floors")}</p>
           <p className="text-lg font-semibold tabular-nums text-zinc-900">
             {floors.length}
           </p>
         </GlassInset>
         <GlassInset className="px-3 py-2.5">
-          <p className={heading.muted}>Rooms</p>
+          <p className={heading.muted}>{t(uiLanguage, "rooms")}</p>
           <p className="text-lg font-semibold tabular-nums text-zinc-900">
             {rooms.length}
           </p>
@@ -73,7 +75,7 @@ export default function BuildingSummary({ embedded = false }: Props) {
 
   return (
     <section className="p-4">
-      <PanelTitle>Building summary</PanelTitle>
+      <PanelTitle>{t(uiLanguage, "buildingSummary")}</PanelTitle>
       {body}
     </section>
   );

@@ -236,7 +236,7 @@ export default function PresentationSidePanel() {
         {presentationRoomsOpen && (
           <div className="flex min-h-0 flex-1 flex-col space-y-2.5">
             <p className={`${heading.muted} shrink-0`}>
-              {t(uiLanguage, "floor")}
+              {t(uiLanguage, "floorLevel")}
             </p>
             <select
               value={presentationFloorId ?? ""}

@@ -46,7 +46,7 @@ export default function ModelSelector({
       <select
         disabled={isLoadingModel}
         value={selectValue}
-        aria-label="Optional registry model"
+        aria-label={placeholder ?? "Optional registry model"}
         className="w-full bg-transparent px-3 py-2.5 text-sm text-zinc-800 outline-none"
         onChange={(e) => {
           const v = e.target.value;

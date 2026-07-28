@@ -13,7 +13,7 @@ import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
 import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
-import { ViewCube } from "@/lib/viewCube";
+import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
 import {
   ClipSliceController,
   floorWorldYBounds,
@@ -588,7 +588,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       sunRef.current = null;
       ambientRef.current = null;
     };
-  }, []);
+    // Remount when view-cube layout changes (HMR keeps the old instance otherwise).
+  }, [VIEW_CUBE_LAYOUT.revision]);
 
   // Build shell + room overlays
   useEffect(() => {

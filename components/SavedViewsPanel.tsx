@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type RefObject } from "react";
+import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { Viewer3DHandle } from "./Viewer3D";
 import {
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) {
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const savedViews = useAppStore((s) => s.savedViews);
   const addSavedView = useAppStore((s) => s.addSavedView);
   const goToSavedView = useAppStore((s) => s.goToSavedView);
@@ -53,7 +55,7 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
           className="w-full border-dashed"
           onClick={() => setDraftOpen(true)}
         >
-          + Save Current View
+          + {t(uiLanguage, "saveCurrentView")}
         </GlassButton>
       ) : (
         <GlassInset className="space-y-2 p-3">
@@ -68,7 +70,7 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
                 setName("");
               }
             }}
-            placeholder="e.g. Lobby overview"
+            placeholder={t(uiLanguage, "viewNameExample")}
           />
           <div className="flex gap-2">
             <GlassButton
@@ -77,7 +79,7 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
               disabled={!name.trim()}
               onClick={handleSave}
             >
-              Save
+              {t(uiLanguage, "save")}
             </GlassButton>
             <GlassButton
               onClick={() => {
@@ -85,14 +87,16 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
                 setName("");
               }}
             >
-              Cancel
+              {t(uiLanguage, "cancel")}
             </GlassButton>
           </div>
         </GlassInset>
       )}
 
       {savedViews.length === 0 ? (
-        <p className="text-xs text-zinc-400">No saved views yet.</p>
+        <p className="text-xs text-zinc-400">
+          {t(uiLanguage, "noSavedViewsYet")}
+        </p>
       ) : (
         <ul className="max-h-40 space-y-1 overflow-y-auto">
           {savedViews.map((v) => (
@@ -111,7 +115,7 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
                 type="button"
                 onClick={() => removeSavedView(v.id)}
                 className="mr-1 rounded-2xl px-2 py-1 text-xs text-zinc-400 opacity-0 transition-all duration-300 ease-out group-hover:opacity-100 hover:bg-white/60 hover:text-zinc-700"
-                aria-label={`Delete ${v.name}`}
+                aria-label={`${t(uiLanguage, "clear")} ${v.name}`}
               >
                 ✕
               </button>
@@ -126,7 +130,7 @@ export default function SavedViewsPanel({ viewerRef, embedded = false }: Props) 
 
   return (
     <section className="p-4">
-      <PanelTitle>Saved views</PanelTitle>
+      <PanelTitle>{t(uiLanguage, "savedViews")}</PanelTitle>
       {body}
     </section>
   );

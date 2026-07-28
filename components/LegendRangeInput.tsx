@@ -7,6 +7,8 @@ import {
   MIN_LEGEND_STOPS,
   parseLegendRange,
 } from "@/lib/colorMapping";
+import { t } from "@/lib/i18n";
+import { useAppStore } from "@/store/useAppStore";
 
 export type RangePreset = {
   id: string;
@@ -34,6 +36,7 @@ export default function LegendRangeInput({
   unitHint,
   presets = [],
 }: Props) {
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [draft, setDraft] = useState(() => formatLegendRange(values));
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +51,9 @@ export default function LegendRangeInput({
   const commit = () => {
     const parsed = parseLegendRange(draft);
     if (!parsed) {
-      setError(`Enter ${MIN_LEGEND_STOPS}–${MAX_LEGEND_STOPS} numbers`);
+      setError(
+        `${t(uiLanguage, "min")} ${MIN_LEGEND_STOPS}–${MAX_LEGEND_STOPS}`,
+      );
       setDraft(formatLegendRange(values));
       return;
     }
@@ -78,7 +83,7 @@ export default function LegendRangeInput({
               if (e.target.value !== "custom") applyPreset(e.target.value);
             }}
             className="w-full rounded-xl border border-zinc-300/60 bg-white/55 px-2.5 py-1.5 text-[11px] text-zinc-800 outline-none focus:border-zinc-400"
-            aria-label="Legend range preset"
+            aria-label={t(uiLanguage, "legendRangePreset")}
           >
             <option value="custom" disabled={Boolean(matchedPreset)}>
               Custom range
@@ -112,7 +117,7 @@ export default function LegendRangeInput({
           spellCheck={false}
           className="w-full rounded-xl border border-zinc-300/60 bg-white/55 px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-zinc-800 outline-none focus:border-zinc-400"
           placeholder="0, 10, 20, 30, 40, 50"
-          aria-label={`Legend range in ${unitHint}`}
+          aria-label={`${t(uiLanguage, "legendRangePreset")} (${unitHint})`}
         />
       </label>
       {error ? (

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
+import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import {
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export default function FloorRoomsPanel({ embedded = false }: Props) {
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
   const rooms = useAppStore((s) => s.rooms);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -45,7 +47,6 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
       .sort((a, b) => a.number.localeCompare(b.number) || a.name.localeCompare(b.name));
   }, [rooms, selectedFloor]);
 
-  // Drop selection if the current floor has no rooms (hidden from options)
   useEffect(() => {
     if (
       selectedFloor &&
@@ -68,14 +69,15 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
       return;
     }
     try {
-      const url = renderFloorSnapshot(
-        shellGroup,
-        selectedFloorObj,
-        sortedFloors,
-        activeModelId,
-        rooms,
+      setSnapshotUrl(
+        renderFloorSnapshot(
+          shellGroup,
+          selectedFloorObj,
+          sortedFloors,
+          activeModelId,
+          rooms,
+        ),
       );
-      setSnapshotUrl(url);
     } catch {
       setSnapshotUrl(null);
     }
@@ -84,7 +86,9 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
   const body = (
     <div className="space-y-3">
       <div>
-        <label className={`mb-1.5 block ${heading.muted}`}>Floor</label>
+        <label className={`mb-1.5 block ${heading.muted}`}>
+          {t(uiLanguage, "floorLevel")}
+        </label>
         <GlassSelect
           value={selectedFloor ?? ""}
           onChange={(e) =>
@@ -92,7 +96,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
           }
           disabled={floorsWithRooms.length === 0}
         >
-          <option value="">All floors — pick one for plan</option>
+          <option value="">{t(uiLanguage, "allFloorsPick")}</option>
           {floorsWithRooms.map((f) => {
             const count = rooms.filter((r) => r.floorId === f.id).length;
             return (
@@ -111,22 +115,24 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={snapshotUrl}
-                alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
+                alt={selectedFloorObj?.name ?? ""}
                 className="aspect-square w-full rounded-2xl object-contain bg-[#f2f4f7]"
               />
             ) : (
               <div className="flex aspect-square items-center justify-center rounded-2xl bg-white/30 text-xs text-zinc-400">
-                No floor plan for this level
+                {t(uiLanguage, "noFloorPlan")}
               </div>
             )}
           </GlassInset>
 
           <div>
             <p className={`mb-1.5 ${heading.muted}`}>
-              Rooms ({floorRooms.length})
+              {t(uiLanguage, "rooms")} ({floorRooms.length})
             </p>
             {floorRooms.length === 0 ? (
-              <p className="text-xs text-zinc-400">No rooms on this floor.</p>
+              <p className="text-xs text-zinc-400">
+                {t(uiLanguage, "noRoomsOnFloor")}
+              </p>
             ) : (
               <ul className="max-h-44 space-y-1 overflow-y-auto pr-0.5">
                 {floorRooms.map((room) => {
@@ -159,7 +165,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
         </>
       ) : (
         <GlassInset className="px-3 py-6 text-center text-xs text-zinc-400">
-          Select a floor to see its plan and rooms
+          {t(uiLanguage, "selectFloorHint")}
         </GlassInset>
       )}
     </div>
@@ -169,7 +175,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
 
   return (
     <section className="p-4">
-      <PanelTitle>Floors & rooms</PanelTitle>
+      <PanelTitle>{t(uiLanguage, "floorsAndRooms")}</PanelTitle>
       {body}
     </section>
   );

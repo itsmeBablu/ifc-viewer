@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Group } from "three";
-import Image from "next/image";
 import type { LoadedModel } from "@/lib/types";
 import {
   disposeLoadedModel,
@@ -21,8 +20,9 @@ import { heading, motion } from "@/lib/designTokens";
 import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
 import RoomTooltip from "./RoomTooltip";
-import ModelSelector from "./ModelSelector";
 import LoadIfcButton from "./LoadIfcButton";
+import AppHeader from "./AppHeader";
+import HeaderActions from "./HeaderActions";
 import FloorsPanel from "./FloorsPanel";
 import LegendPanel from "./LegendPanel";
 import PresentationSidePanel from "./PresentationSidePanel";
@@ -30,7 +30,7 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
-import { heizlastGradientCss, pickHeizlastRangeFromLoads } from "@/lib/colorMapping";
+import { pickHeizlastRangeFromLoads } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 
 type LoadSource =
@@ -55,15 +55,12 @@ export default function ViewerApp() {
   const loadMessage = useAppStore((s) => s.loadMessage);
   const leftPanelOpen = useAppStore((s) => s.leftPanelOpen);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
-  const isHeaderCollapsed = useAppStore((s) => s.isHeaderCollapsed);
-  const setHeaderCollapsed = useAppStore((s) => s.setHeaderCollapsed);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationRoomsOpen = useAppStore((s) => s.presentationRoomsOpen);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
-  const setUiLanguage = useAppStore((s) => s.setUiLanguage);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
@@ -75,11 +72,6 @@ export default function ViewerApp() {
   const clearModelData = useAppStore((s) => s.clearModelData);
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
-  const [headerOptionOpen, setHeaderOptionOpen] = useState(false);
-  const [headerOption, setHeaderOption] = useState<"heizlast" | "luftung" | "kuhllast" | "editor">(
-    "heizlast",
-  );
-  const [langOpen, setLangOpen] = useState(false);
 
   useEffect(() => {
     debugLog("ViewerApp", "mount", "info");
@@ -99,33 +91,6 @@ export default function ViewerApp() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (!target.closest("[data-lang-selector]")) setLangOpen(false);
-      if (!target.closest("[data-header-option]")) setHeaderOptionOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
-  // Collapse header when clicking outside it; expand only via collapsed bar click
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest("[data-app-header]")) return;
-      if (!useAppStore.getState().isHeaderCollapsed) {
-        setHeaderCollapsed(true);
-        setHeaderOptionOpen(false);
-        setLangOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [setHeaderCollapsed]);
-
   const runLoad = useCallback(
     async (source: LoadSource) => {
       loadSourceRef.current = source;
@@ -143,7 +108,7 @@ export default function ViewerApp() {
 
       setIsLoadingModel(true);
       setLoadError(null);
-      setLoadProgress(0, "Starting…");
+      setLoadProgress(0, t(useAppStore.getState().uiLanguage, "starting"));
       clearModelData();
       setShellGroup(null);
 
@@ -187,7 +152,7 @@ export default function ViewerApp() {
         );
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Failed to load IFC model";
+          err instanceof Error ? err.message : t(useAppStore.getState().uiLanguage, "failedLoad");
         debugLog("ViewerApp", `load failed: ${message}`, "error", err);
         setLoadError(message);
         clearModelData();
@@ -208,13 +173,6 @@ export default function ViewerApp() {
     ],
   );
 
-  const handleRegistrySelect = useCallback(
-    (modelId: string) => {
-      debugLog("ViewerApp", `registry select: ${modelId}`, "info");
-      void runLoad({ kind: "registry", modelId });
-    },
-    [runLoad],
-  );
 
   const handleFile = useCallback(
     (file: File) => {
@@ -313,14 +271,6 @@ export default function ViewerApp() {
     loadProgress < 0
       ? loadMessage || t(uiLanguage, "working")
       : `${loadMessage || t(uiLanguage, "loading")} (${Math.round(Math.max(0, loadProgress) * 100)}%)`;
-  const headerTitle =
-    headerOption === "heizlast"
-      ? t(uiLanguage, "appTitle")
-      : headerOption === "luftung"
-        ? t(uiLanguage, "optionsLuft")
-        : headerOption === "kuhllast"
-          ? t(uiLanguage, "optionsCool")
-          : t(uiLanguage, "optionsEditor");
 
   return (
     <ModelSceneContext.Provider value={sceneValue}>
@@ -332,20 +282,12 @@ export default function ViewerApp() {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        <div className="pointer-events-none fixed top-1 left-4 z-[45]">
-          <GlassPanel variant="panel" zIndex={45} wrapperClassName="p-2">
-            <div className="px-4 py-2">
-              <Image
-                src="/ibv_logo.svg"
-                alt="IBV logo"
-                width={36}
-                height={36}
-                className="h-[30px] w-auto object-contain"
-                priority
-              />
-            </div>
-          </GlassPanel>
-        </div>
+        <AppHeader />
+        <HeaderActions
+          onFile={handleFile}
+          hasModel={hasModel}
+          isLoadingModel={isLoadingModel}
+        />
 
         <div className="fixed inset-0 z-0">
           <Viewer3D
@@ -373,201 +315,6 @@ export default function ViewerApp() {
             </GlassPanel>
           </div>
         )}
-
-        {/* Header: bottom-right; menus drop-up outside glass so they are not clipped */}
-        <div
-          data-app-header
-          className={`pointer-events-none fixed right-4 bottom-4 z-40 transition-all duration-300 ease-out ${
-            isHeaderCollapsed
-              ? "w-[min(25%,280px)]"
-              : hasModel
-                ? "w-[min(54vw,720px)] min-w-[260px]"
-                : "w-max max-w-[min(92vw,520px)]"
-          }`}
-        >
-          <div className="pointer-events-auto relative">
-            {headerOptionOpen && !isHeaderCollapsed && (
-              <div
-                data-header-option
-                className="absolute bottom-[calc(100%+0.5rem)] left-0 z-[60] w-48 rounded-xl border border-white/50 bg-white/90 p-1 text-xs text-zinc-700 shadow-[0_12px_32px_rgba(15,23,42,0.18)] backdrop-blur-xl"
-              >
-                {(
-                  [
-                    ["heizlast", t(uiLanguage, "appTitle")],
-                    ["luftung", t(uiLanguage, "optionsLuft")],
-                    ["kuhllast", t(uiLanguage, "optionsCool")],
-                    ["editor", t(uiLanguage, "optionsEditor")],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setHeaderOption(id);
-                      setHeaderOptionOpen(false);
-                    }}
-                    className={`block w-full rounded-lg px-2.5 py-2 text-left hover:bg-zinc-100 ${
-                      headerOption === id ? "bg-zinc-100 font-semibold" : ""
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {langOpen && !isHeaderCollapsed && (
-              <div
-                data-lang-selector
-                className="absolute bottom-[calc(100%+0.5rem)] right-0 z-[60]"
-              >
-                <GlassPanel variant="control" zIndex={60}>
-                  <div className="flex items-center gap-1.5 px-2 py-1.5">
-                    {(["en", "de", "es"] as const).map((lang) => (
-                      <button
-                        key={lang}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUiLanguage(lang);
-                          setLangOpen(false);
-                        }}
-                        className={`h-9 w-9 overflow-hidden rounded-full border transition ${
-                          uiLanguage === lang
-                            ? "border-zinc-800 ring-2 ring-zinc-800/35 scale-105"
-                            : "border-white/50 opacity-85 hover:opacity-100 hover:border-zinc-400"
-                        }`}
-                        aria-label={lang.toUpperCase()}
-                        title={lang.toUpperCase()}
-                      >
-                        <Image
-                          src={`/${lang}.svg`}
-                          alt={lang}
-                          width={36}
-                          height={36}
-                          className="h-full w-full object-cover"
-                          priority={lang === uiLanguage}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </GlassPanel>
-              </div>
-            )}
-
-            <GlassPanel variant="panel" zIndex={40}>
-              <header
-                className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${
-                  isHeaderCollapsed
-                    ? "justify-center cursor-pointer"
-                    : "justify-between"
-                }`}
-                onClick={() => {
-                  if (isHeaderCollapsed) setHeaderCollapsed(false);
-                }}
-                title={
-                  isHeaderCollapsed ? t(uiLanguage, "expandHeader") : undefined
-                }
-              >
-                <div
-                  className={`min-w-0 ${
-                    isHeaderCollapsed ? "text-center" : "flex-1 text-left"
-                  }`}
-                >
-                  <div data-header-option>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isHeaderCollapsed) {
-                          setHeaderCollapsed(false);
-                          setHeaderOptionOpen(true);
-                          return;
-                        }
-                        setHeaderOptionOpen((v) => !v);
-                        setLangOpen(false);
-                      }}
-                      className={`font-semibold tracking-wide whitespace-nowrap transition-all duration-300 ${
-                        isHeaderCollapsed
-                          ? "text-[11px] sm:text-xs"
-                          : hasModel
-                            ? "text-sm sm:text-[15px]"
-                            : "text-[15px] sm:text-base"
-                      }`}
-                      style={{
-                        backgroundImage: heizlastGradientCss("to right"),
-                        WebkitBackgroundClip: "text",
-                        backgroundClip: "text",
-                        color: "transparent",
-                        backgroundSize: "100% 100%",
-                      }}
-                    >
-                      {headerTitle}
-                    </button>
-                  </div>
-                  {activeModelLabel && (
-                    <p
-                      className={`truncate text-[10px] font-medium text-zinc-500 ${
-                        isHeaderCollapsed ? "text-center" : ""
-                      }`}
-                    >
-                      {activeModelLabel}
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  className={`flex shrink-0 items-center gap-1.5 overflow-visible transition-all duration-300 ease-out ${
-                    isHeaderCollapsed
-                      ? "max-w-0 scale-95 opacity-0 pointer-events-none w-0"
-                      : "max-w-[480px] scale-100 opacity-100"
-                  }`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <LoadIfcButton
-                    onFile={handleFile}
-                    disabled={isLoadingModel}
-                    iconOnly
-                    label={t(uiLanguage, "loadIfc")}
-                  />
-                  <ModelSelector
-                    onSelectRegistryModel={handleRegistrySelect}
-                    placeholder={t(uiLanguage, "registry")}
-                  />
-                  <div data-lang-selector className="shrink-0">
-                    <GlassPanel
-                      variant="control"
-                      zIndex={2}
-                      wrapperClassName="rounded-full"
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLangOpen((v) => !v);
-                          setHeaderOptionOpen(false);
-                        }}
-                        className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full"
-                        aria-label={t(uiLanguage, "language")}
-                        aria-expanded={langOpen}
-                      >
-                        <Image
-                          src={`/${uiLanguage}.svg`}
-                          alt={uiLanguage}
-                          width={40}
-                          height={40}
-                          className="h-full w-full object-cover"
-                          priority
-                        />
-                      </button>
-                    </GlassPanel>
-                  </div>
-                </div>
-              </header>
-            </GlassPanel>
-          </div>
-        </div>
 
         {isLoadingModel && (
           <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-6">
@@ -681,7 +428,7 @@ export default function ViewerApp() {
         {/* LEFT — Floors & Rooms (hidden during Presentation View) */}
         {isDesktop && !isPresentationView && (
           <aside
-            className={`fixed top-16 bottom-4 z-[35] flex w-[min(360px,calc(100vw-2rem))] flex-col ${motion.sidebar} ${
+            className={`fixed top-28 bottom-4 z-[35] flex w-[min(360px,calc(100vw-2rem))] flex-col ${motion.sidebar} ${
               leftPanelOpen
                 ? "left-4 pointer-events-auto translate-x-0"
                 : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
@@ -734,7 +481,7 @@ export default function ViewerApp() {
         {/* RIGHT — Legend (basic) / combined Legend+Rooms (presentation) */}
         {isDesktop && (
           <aside
-            className={`fixed top-36 z-[35] flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden ${
+            className={`fixed top-56 z-[35] flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden ${
               isPresentationView && presentationRoomsOpen
                 ? "bottom-20 pb-1"
                 : ""
