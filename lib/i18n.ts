@@ -52,6 +52,8 @@ const dict = {
     noFloorPlan: "Kein Grundriss für diese Ebene",
     noRoomsOnFloor: "Keine Räume auf dieser Ebene.",
     selectFloorHint: "Ebene wählen, um Plan und Räume zu sehen",
+    view3d: "3D-Ansicht",
+    roomsInSelectedFloor: "Räume in ausgewählter Ebene",
     savedViews: "Gespeicherte Ansichten",
     savedViewsHint:
       "Mit dem Straßenansicht-Button in der unteren Leiste eine Kameraposition speichern.",
@@ -228,6 +230,8 @@ const dict = {
     noFloorPlan: "No floor plan for this level",
     noRoomsOnFloor: "No rooms on this floor.",
     selectFloorHint: "Select a floor to see its plan and rooms",
+    view3d: "3D View",
+    roomsInSelectedFloor: "Rooms in selected floor",
     savedViews: "Saved views",
     savedViewsHint:
       "Use the street-view button in the bottom toolbar to save a camera pose.",
@@ -402,6 +406,8 @@ const dict = {
     noFloorPlan: "Sin plano para este nivel",
     noRoomsOnFloor: "No hay habitaciones en esta planta.",
     selectFloorHint: "Selecciona una planta para ver plano y habitaciones",
+    view3d: "Vista 3D",
+    roomsInSelectedFloor: "Habitaciones en planta seleccionada",
     savedViews: "Vistas guardadas",
     savedViewsHint:
       "Usa el botón de vista de calle en la barra inferior para guardar una pose.",

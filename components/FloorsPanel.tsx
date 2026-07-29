@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
+import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import { getModelById } from "@/lib/modelRegistry";
 import {
@@ -16,7 +17,6 @@ import { useAppStore } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import { useModelScene } from "./ModelSceneContext";
 import GlassPanel from "./GlassPanel";
-import Slider from "./ui/Slider";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { Floor, Room } from "@/lib/types";
 import type { PageFormat } from "@/lib/presentationLayout";
@@ -29,64 +29,6 @@ function Divider() {
   return <div className="mx-3 border-t border-zinc-300/50" />;
 }
 
-function FloorSliceSlider({
-  floors,
-  selectedFloor,
-}: {
-  floors: Floor[];
-  selectedFloor: string;
-}) {
-  const uiLanguage = useAppStore((s) => s.uiLanguage);
-  const sliceProgress = useAppStore((s) => s.sliceProgress);
-  const setSliceProgress = useAppStore((s) => s.setSliceProgress);
-
-  const { yMin, yMax, heightLabel } = useMemo(() => {
-    const sorted = [...floors].sort((a, b) => a.elevation - b.elevation);
-    const idx = sorted.findIndex((f) => f.id === selectedFloor);
-    const floor = sorted[idx];
-    const next = sorted[idx + 1];
-    const yMin = floor?.elevation ?? 0;
-    const yMax = next?.elevation ?? yMin + 3;
-    const y = yMin + sliceProgress * Math.max(0.05, yMax - yMin);
-    const toM = (v: number) => (Math.abs(v) > 100 ? v / 1000 : v);
-    return {
-      yMin: toM(yMin),
-      yMax: toM(yMax),
-      heightLabel: `${toM(y).toFixed(2)} m`,
-    };
-  }, [floors, selectedFloor, sliceProgress]);
-
-  return (
-    <div className="rounded-xl border border-zinc-300/50 bg-white/45 px-3 py-2.5 backdrop-blur-sm">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold tracking-wide text-zinc-600">
-          {t(uiLanguage, "sliceHeight")}
-        </p>
-        <p className="tabular-nums text-[11px] font-medium text-zinc-800">
-          {heightLabel}
-        </p>
-      </div>
-      <Slider
-        min={0}
-        max={100}
-        step={1}
-        value={Math.round(sliceProgress * 100)}
-        onChange={(v) => setSliceProgress(v / 100)}
-        aria-label={t(uiLanguage, "sliceHeight")}
-      />
-      <div className="mt-1 flex justify-between text-[10px] text-zinc-400">
-        <span>
-          {t(uiLanguage, "floor")} {yMin.toFixed(1)} m
-        </span>
-        <span>{t(uiLanguage, "middle")}</span>
-        <span>
-          {t(uiLanguage, "ceiling")} {yMax.toFixed(1)} m
-        </span>
-      </div>
-    </div>
-  );
-}
-
 /** Left panel: building summary, floors, rooms, slice, saved views. */
 export default function FloorsPanel({ viewerRef }: Props) {
   const floors = useAppStore((s) => s.floors);
@@ -94,6 +36,8 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
+  const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const colorMode = useAppStore((s) => s.colorMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
@@ -101,16 +45,37 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
+  const activeModelFileSizeBytes = useAppStore(
+    (s) => s.activeModelFileSizeBytes,
+  );
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
 
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
+  const setPresentationFloorId = useAppStore((s) => s.setPresentationFloorId);
+  const setPresentationIsolate = useAppStore((s) => s.setPresentationIsolate);
   const goToSavedView = useAppStore((s) => s.goToSavedView);
   const removeSavedView = useAppStore((s) => s.removeSavedView);
 
   const { shellGroup, rooms: sceneRooms } = useModelScene();
+  const totalComponents = rooms.length + (shellGroup?.children?.length ?? 0);
+
+  const formatBytes = (bytes: number | null) => {
+    if (!Number.isFinite(bytes ?? NaN)) return "—";
+    const v = bytes as number;
+    if (v <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"] as const;
+    let idx = 0;
+    let n = v;
+    while (n >= 1024 && idx < units.length - 1) {
+      n /= 1024;
+      idx += 1;
+    }
+    const digits = idx === 0 ? 0 : 1;
+    return `${n.toFixed(digits)} ${units[idx]}`;
+  };
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
@@ -118,25 +83,28 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const [pdfPageFormat, setPdfPageFormat] = useState<PageFormat>("a3");
   const [pdfSavedSelection, setPdfSavedSelection] = useState<string[]>([]);
 
+  const [floorsExpanded, setFloorsExpanded] = useState(true);
+  const [roomsExpanded, setRoomsExpanded] = useState(true);
+  const [selectionExpanded, setSelectionExpanded] = useState(true);
+
+  useEffect(() => {
+    setRoomsExpanded(Boolean(selectedFloor));
+  }, [selectedFloor]);
+
+  useEffect(() => {
+    if (selectedElement) setSelectionExpanded(true);
+  }, [selectedElement]);
+
   const sortedFloors = useMemo(
     () => [...floors].sort((a, b) => a.elevation - b.elevation),
     [floors],
   );
 
-  const floorsWithRooms = useMemo(
-    () =>
-      sortedFloors.filter((f) => rooms.some((r) => r.floorId === f.id)),
-    [sortedFloors, rooms],
-  );
-
   useEffect(() => {
-    if (
-      selectedFloor &&
-      !floorsWithRooms.some((f) => f.id === selectedFloor)
-    ) {
+    if (selectedFloor && !sortedFloors.some((f) => f.id === selectedFloor)) {
       setSelectedFloor(null);
     }
-  }, [selectedFloor, floorsWithRooms, setSelectedFloor]);
+  }, [selectedFloor, sortedFloors, setSelectedFloor]);
 
   const floorRooms = useMemo(() => {
     if (!selectedFloor) return [];
@@ -175,6 +143,8 @@ export default function FloorsPanel({ viewerRef }: Props) {
           sortedFloors,
           activeModelId,
           roomSource,
+          640,
+          selectedRoomId,
         ),
       );
     } catch {
@@ -186,6 +156,7 @@ export default function FloorsPanel({ viewerRef }: Props) {
     sortedFloors,
     activeModelId,
     rooms,
+    selectedRoomId,
     sceneRooms,
   ]);
 
@@ -288,6 +259,9 @@ export default function FloorsPanel({ viewerRef }: Props) {
 
     setPdfExporting(true);
     setPdfProgress(t(uiLanguage, "capturingSaved"));
+    const restorePresentationIsolate = presentationIsolate;
+    const restorePresentationFloorId = presentationFloorId;
+    const restoreSelectedFloor = selectedFloor;
     try {
       const pages: {
         title: string;
@@ -299,7 +273,15 @@ export default function FloorsPanel({ viewerRef }: Props) {
         setPdfProgress(
           `${t(uiLanguage, "capturingSaved")} (${i + 1}/${selected.length}: ${view.name})`,
         );
-        if (view.floorId !== undefined) setSelectedFloor(view.floorId);
+        // When exporting in presentation mode, also restore the presentation isolate state.
+        if (isPresentationView) {
+          const fid = view.floorId;
+          setPresentationIsolate(fid != null);
+          setPresentationFloorId(fid);
+          setSelectedFloor(null);
+        } else {
+          setSelectedFloor(view.floorId);
+        }
         await viewerRef.current.flyToPose(view.position, view.target, 700);
         // Wait one frame for camera + overlays to settle.
         await new Promise((resolve) =>
@@ -327,6 +309,10 @@ export default function FloorsPanel({ viewerRef }: Props) {
     } finally {
       setPdfExporting(false);
       setPdfProgress("");
+      // Restore UI state after capture.
+      setPresentationIsolate(restorePresentationIsolate);
+      setPresentationFloorId(restorePresentationFloorId);
+      setSelectedFloor(restoreSelectedFloor);
     }
   };
 
@@ -335,48 +321,26 @@ export default function FloorsPanel({ viewerRef }: Props) {
 
   return (
     <div className="thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto text-zinc-800">
-      {selectedElement && (
-        <>
-          <section className="space-y-2 px-4 py-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className={heading.muted}>{t(uiLanguage, "selection")}</p>
-                <p className="truncate text-sm font-semibold">
-                  {selectedElement.name}
-                </p>
-                <p className="text-[10px] text-zinc-500">
-                  {selectedElement.typeName}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 text-[11px] font-medium text-zinc-500 hover:text-zinc-800"
-                onClick={() => {
-                  setSelectedElement(null);
-                  setSelectedRoomId(null);
-                }}
-              >
-                {t(uiLanguage, "clear")}
-              </button>
-            </div>
-          </section>
-          <Divider />
-        </>
-      )}
-
       <section className="space-y-2 px-4 py-3">
-        <p className={heading.muted}>{t(uiLanguage, "model")}</p>
-        <p className="truncate text-sm font-semibold tracking-wide">
-          {modelLabel}
-        </p>
-        <div className="flex gap-4 text-xs">
-          <span>
-            <span className="font-semibold tabular-nums">{floors.length}</span>{" "}
-            {t(uiLanguage, "floors")}
+        {/* Header row: label + yellow glass IFC name badge */}
+        <div className="flex items-center justify-between gap-2">
+          <p className={heading.muted}>{t(uiLanguage, "model")}</p>
+          <span className="max-w-[58%] truncate rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md">
+            {modelLabel}
           </span>
-          <span>
-            <span className="font-semibold tabular-nums">{rooms.length}</span>{" "}
-            {t(uiLanguage, "rooms")}
+        </div>
+
+        {/* Single-line stats (truncate if too long) */}
+        <div className="mt-1 whitespace-nowrap overflow-hidden text-ellipsis text-[11px] text-zinc-600">
+          <span className="font-semibold tabular-nums">{floors.length}</span>{" "}
+          {t(uiLanguage, "floors")} |{" "}
+          <span className="font-semibold tabular-nums">{rooms.length}</span>{" "}
+          {t(uiLanguage, "rooms")} |{" "}
+          <span className="font-semibold tabular-nums">{totalComponents}</span>{" "}
+          Komponenten |{" "}
+          <span className="text-zinc-500">Dateigröße:</span>{" "}
+          <span className="font-semibold">
+            {formatBytes(activeModelFileSizeBytes)}
           </span>
         </div>
       </section>
@@ -384,94 +348,280 @@ export default function FloorsPanel({ viewerRef }: Props) {
       <Divider />
 
       <section className="space-y-2.5 px-4 py-3">
-        <p className={heading.panel}>{t(uiLanguage, "floorsAndRooms")}</p>
-        <select
-          value={selectedFloor ?? ""}
-          disabled={floorsWithRooms.length === 0}
-          onChange={(e) =>
-            setSelectedFloor(e.target.value === "" ? null : e.target.value)
-          }
-          className="w-full rounded-xl border border-zinc-300/60 bg-white/50 px-3 py-2 text-sm outline-none focus:border-zinc-400"
-        >
-          <option value="">{t(uiLanguage, "allFloorsPick")}</option>
-          {floorsWithRooms.map((f) => {
-            const count = rooms.filter((r) => r.floorId === f.id).length;
-            return (
-              <option key={f.id} value={f.id}>
-                {f.name} ({count})
-              </option>
-            );
-          })}
-        </select>
-
-        {selectedFloor ? (
-          <>
-            {!isPresentationView && (
-              <FloorSliceSlider
-                floors={sortedFloors}
-                selectedFloor={selectedFloor}
-              />
+        <div className="flex items-center justify-between gap-2">
+          <p className={heading.panel}>{t(uiLanguage, "floorsAndRooms")}</p>
+          <button
+            type="button"
+            onClick={() => setFloorsExpanded((v) => !v)}
+            aria-label={floorsExpanded ? t(uiLanguage, "hideFloors") : t(uiLanguage, "showFloors")}
+            className="flex items-center justify-center rounded-xl border border-zinc-300/60 bg-white/40 px-2 py-1 text-zinc-600 transition-colors duration-200 hover:bg-white/60"
+          >
+            {floorsExpanded ? (
+              <IoChevronDownSharp className="h-4 w-4" />
+            ) : (
+              <IoChevronUp className="h-4 w-4" />
             )}
+          </button>
+        </div>
 
-            <div className="overflow-hidden rounded-xl border border-zinc-300/50 bg-[#f2f4f7]">
-              {snapshotUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={snapshotUrl}
-                  alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
-                  className="aspect-square w-full object-contain"
-                />
-              ) : (
-                <div className="flex aspect-square items-center justify-center text-xs text-zinc-400">
-                  {t(uiLanguage, "noFloorPlan")}
-                </div>
-              )}
+        <div
+          className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+            floorsExpanded ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0"
+          }`}
+        >
+          <div className="space-y-2 pt-1">
+            {/* 3D View (all elements, no isolation) */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedElement(null);
+                setSelectedRoomId(null);
+                setSelectedFloor(null);
+                setRoomsExpanded(false);
+              }}
+              className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition-colors ${
+                selectedFloor == null
+                  ? "border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-zinc-900"
+                  : "border-zinc-300/60 bg-white/30 text-zinc-700 hover:bg-white/45"
+              }`}
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate">{t(uiLanguage, "view3d")}</span>
+                <span className="tabular-nums text-[10px] text-zinc-400">
+                  {floors.length}
+                </span>
+              </span>
+            </button>
+
+            {/* Floors list */}
+            <div className="divide-y divide-zinc-200/60 rounded-xl border border-zinc-300/50 bg-white/30">
+              {sortedFloors.map((f) => {
+                const active = f.id === selectedFloor;
+                const count = rooms.filter((r) => r.floorId === f.id).length;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedElement(null);
+                      setSelectedFloor(f.id);
+                      setRoomsExpanded(true);
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs transition-colors ${
+                      active
+                        ? "bg-zinc-900/10 font-semibold text-zinc-900"
+                        : "text-zinc-700 hover:bg-zinc-900/5"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate">{f.name}</span>
+                    <span className="tabular-nums text-[10px] text-zinc-400">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <p className={heading.muted}>
-              {t(uiLanguage, "rooms")} ({floorRooms.length})
-            </p>
-            {floorRooms.length === 0 ? (
-              <p className="text-xs text-zinc-400">
-                {t(uiLanguage, "noRoomsOnFloor")}
-              </p>
+            {/* Rooms tab + 2D layout */}
+            {selectedFloor ? (
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setRoomsExpanded((v) => !v)}
+                  aria-label={roomsExpanded ? "Hide rooms" : "Show rooms"}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-zinc-300/60 bg-white/35 px-3 py-2 text-left"
+                >
+                  <span className="text-xs font-semibold text-zinc-700">
+                    {t(uiLanguage, "roomsInSelectedFloor")}
+                  </span>
+                  {roomsExpanded ? (
+                    <IoChevronDownSharp className="h-4 w-4 text-zinc-600" />
+                  ) : (
+                    <IoChevronUp className="h-4 w-4 text-zinc-600" />
+                  )}
+                </button>
+
+                <div
+                  className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+                    roomsExpanded
+                      ? "max-h-[560px] opacity-100"
+                      : "max-h-0 opacity-0"
+                  }`}
+                >
+                  <div className="overflow-hidden rounded-xl border border-zinc-300/50 bg-[#f2f4f7]">
+                    {snapshotUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={snapshotUrl}
+                        alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
+                        className="aspect-square w-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex aspect-square items-center justify-center text-xs text-zinc-400">
+                        {t(uiLanguage, "noFloorPlan")}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className={heading.muted}>
+                    {t(uiLanguage, "rooms")} ({floorRooms.length})
+                  </p>
+
+                  {floorRooms.length === 0 ? (
+                    <p className="text-xs text-zinc-400">
+                      {t(uiLanguage, "noRoomsOnFloor")}
+                    </p>
+                  ) : (
+                    <ul className="thin-scroll max-h-52 space-y-0.5 overflow-y-auto pb-1 pr-0.5">
+                      {floorRooms.map((room) => {
+                        const active = room.id === selectedRoomId;
+                        return (
+                          <li key={room.id}>
+                            <button
+                              type="button"
+                              onClick={() => selectRoomFromList(room)}
+                              className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
+                                active
+                                  ? "bg-zinc-900/10 font-semibold text-zinc-900"
+                                  : "text-zinc-600 hover:bg-zinc-900/5"
+                              }`}
+                            >
+                              <span className="min-w-0 truncate">
+                                {room.number ? `${room.number} · ` : ""}
+                                {room.name}
+                              </span>
+                              <span className="tabular-nums text-zinc-400">
+                                {room.heatLoad.toFixed(0)}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
             ) : (
-              <ul className="thin-scroll max-h-48 space-y-0.5 overflow-y-auto pr-0.5">
-                {floorRooms.map((room) => {
-                  const active = room.id === selectedRoomId;
-                  return (
-                    <li key={room.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectRoomFromList(room)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
-                          active
-                            ? "bg-zinc-900/10 font-semibold text-zinc-900"
-                            : "text-zinc-600 hover:bg-zinc-900/5"
-                        }`}
-                      >
-                        <span className="min-w-0 truncate">
-                          {room.number ? `${room.number} · ` : ""}
-                          {room.name}
-                        </span>
-                        <span className="tabular-nums text-zinc-400">
-                          {room.heatLoad.toFixed(0)}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <p className="px-1 text-xs text-zinc-400">
+                {t(uiLanguage, "selectFloorHint")}
+              </p>
             )}
-          </>
-        ) : (
-          <p className="text-xs text-zinc-400">
-            {t(uiLanguage, "selectFloorHint")}
-          </p>
-        )}
+          </div>
+        </div>
       </section>
 
       <Divider />
+
+      {selectedElement && (
+        <section className="space-y-2 px-4 py-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className={heading.muted}>{t(uiLanguage, "selection")}</p>
+              <p className="truncate text-sm font-semibold">
+                {selectedElement.name}
+              </p>
+              <p className="text-[10px] text-zinc-500">
+                {selectedElement.typeName}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-medium text-zinc-500">
+                  Attributes
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={selectionExpanded}
+                  onClick={() => setSelectionExpanded((v) => !v)}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${
+                    selectionExpanded ? "bg-sky-600" : "bg-zinc-300/80"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                      selectionExpanded ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {selectionExpanded && (
+            <>
+              <div className="rounded-xl border border-zinc-300/40 bg-white/30 p-2">
+                <p className="mb-1 text-[10px] font-semibold tracking-wide text-zinc-600">
+                  Attributes
+                </p>
+                <div className="thin-scroll max-h-32 overflow-y-auto pr-1">
+                  <ul className="space-y-0.5">
+                    <li className="text-[10px] leading-tight text-zinc-700">
+                      <span className="font-semibold text-zinc-600">Kind</span>
+                      :{" "}
+                      <span className="break-words text-zinc-800">
+                        {selectedElement.kind}
+                      </span>
+                    </li>
+
+                    <li className="text-[10px] leading-tight text-zinc-700">
+                      <span className="font-semibold text-zinc-600">Floor</span>
+                      :{" "}
+                      <span className="break-words text-zinc-800">
+                        {selectedElement.floorId ?? "—"}
+                      </span>
+                    </li>
+
+                    <li className="text-[10px] leading-tight text-zinc-700">
+                      <span className="font-semibold text-zinc-600">
+                        Express ID
+                      </span>
+                      :{" "}
+                      <span className="break-words text-zinc-800">
+                        {selectedElement.expressId}
+                      </span>
+                    </li>
+
+                    <li className="text-[10px] leading-tight text-zinc-700">
+                      <span className="font-semibold text-zinc-600">Room ID</span>
+                      :{" "}
+                      <span className="break-words text-zinc-800">
+                        {selectedElement.roomId ?? "—"}
+                      </span>
+                    </li>
+
+                    <li className="text-[10px] leading-tight text-zinc-700">
+                      <span className="font-semibold text-zinc-600">
+                        Global ID
+                      </span>
+                      :{" "}
+                      <span className="break-words text-zinc-800">
+                        {selectedElement.globalId ?? "—"}
+                      </span>
+                    </li>
+
+                    {(selectedElement.properties ?? []).map((p, idx) => (
+                      <li
+                        key={`${p.name}-${p.value}-${p.pset ?? "none"}-${idx}`}
+                        className="text-[10px] leading-tight text-zinc-700"
+                      >
+                        <span className="font-semibold text-zinc-600">
+                          {p.pset ? `${p.pset} · ` : ""}
+                          {p.name}
+                        </span>
+                        :{" "}
+                        <span className="break-words text-zinc-800">
+                          {p.value}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="space-y-2 px-4 py-3">
         <div className="flex items-center justify-between gap-2">

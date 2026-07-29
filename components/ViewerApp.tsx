@@ -122,7 +122,11 @@ export default function ViewerApp() {
           ? (getModelById(source.modelId)?.label ?? source.modelId)
           : source.name;
       const id = source.kind === "registry" ? source.modelId : source.id;
-      setActiveModelId(id, label);
+      setActiveModelId(
+        id,
+        label,
+        source.kind === "file" ? source.file.size : null,
+      );
 
       try {
         let ifcSource: IfcSource;

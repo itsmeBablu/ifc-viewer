@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { Floor, Room } from "./types";
+import { heizlastToColor } from "./colorMapping";
+import { useAppStore } from "@/store/useAppStore";
 
 type CacheKey = string;
 
@@ -38,8 +40,25 @@ export function renderFloorSnapshot(
   modelKey: string,
   rooms: Room[] = [],
   size = 640,
+  selectedRoomId: string | null = null,
 ): string | null {
-  const cacheKey = `${modelKey}::${floor.id}::${size}::v2`;
+  const { activeColorPalette, heizlastRange } = useAppStore.getState();
+
+  const selectedRoom = selectedRoomId
+    ? rooms.find((r) => r.id === selectedRoomId) ?? null
+    : null;
+
+  // Match 2D highlight to the same Heizlast palette used by 3D rendering.
+  // If heat data is missing, `heizlastToColor()` returns a safe fallback color.
+  const selectedHeatColor = selectedRoom
+    ? heizlastToColor(selectedRoom.heatLoad, activeColorPalette, heizlastRange)
+    : heizlastToColor(Number.NaN, activeColorPalette, heizlastRange);
+
+  const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
+    selectedRoomId ?? "none"
+  }::palette=${activeColorPalette ?? "default"}::range=${heizlastRange
+    .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
+    .join(",")}::selColor=${selectedHeatColor}::v4`;
   const cached = snapshotCache.get(cacheKey);
   if (cached) return cached;
 
@@ -58,6 +77,13 @@ export function renderFloorSnapshot(
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.55,
+    depthWrite: false,
+  });
+  const roomMatSelected = new THREE.MeshBasicMaterial({
+    color: selectedHeatColor,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
     depthWrite: false,
   });
 
@@ -94,7 +120,11 @@ export function renderFloorSnapshot(
   for (const room of rooms) {
     if (room.floorId !== floor.id) continue;
     if (!room.geometry || room.geometry.attributes.position == null) continue;
-    addMesh(room.geometry, null, roomMat);
+    addMesh(
+      room.geometry,
+      null,
+      room.id === selectedRoomId ? roomMatSelected : roomMat,
+    );
   }
 
   // 3) Elevation-band fallback if nothing tagged
@@ -124,6 +154,7 @@ export function renderFloorSnapshot(
   if (!hasGeom) {
     wallMat.dispose();
     roomMat.dispose();
+    roomMatSelected.dispose();
     return null;
   }
 
@@ -134,6 +165,7 @@ export function renderFloorSnapshot(
   const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), midY);
   wallMat.clippingPlanes = [clipPlane];
   roomMat.clippingPlanes = [clipPlane];
+  roomMatSelected.clippingPlanes = [clipPlane];
 
   scene.add(planGroup);
 
@@ -157,6 +189,7 @@ export function renderFloorSnapshot(
 
   wallMat.dispose();
   roomMat.dispose();
+  roomMatSelected.dispose();
   // Dispose only cloned scene meshes' refs — geometries are shared, don't dispose
   while (planGroup.children.length) {
     planGroup.remove(planGroup.children[0]);

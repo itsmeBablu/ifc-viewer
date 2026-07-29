@@ -105,6 +105,7 @@ export function getPersistedSidebarOpen(): boolean {
 type AppState = {
   activeModelId: string | null;
   activeModelLabel: string | null;
+  activeModelFileSizeBytes: number | null;
   floors: Floor[];
   rooms: Room[];
   selectedFloor: string | null;
@@ -163,7 +164,11 @@ type AppState = {
   isHeaderCollapsed: boolean;
   uiLanguage: import("@/lib/i18n").UiLanguage;
 
-  setActiveModelId: (id: string | null, label?: string | null) => void;
+  setActiveModelId: (
+    id: string | null,
+    label?: string | null,
+    fileSizeBytes?: number | null,
+  ) => void;
   setFloors: (floors: Floor[]) => void;
   setRooms: (rooms: Room[]) => void;
   setSelectedFloor: (floorId: string | null) => void;
@@ -286,6 +291,7 @@ function initialBackground(): string {
 export const useAppStore = create<AppState>((set, get) => ({
   activeModelId: null,
   activeModelLabel: null,
+  activeModelFileSizeBytes: null,
   floors: [],
   rooms: [],
   selectedFloor: null,
@@ -326,10 +332,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   isHeaderCollapsed: false,
   uiLanguage: "de",
 
-  setActiveModelId: (id, label) => {
+  setActiveModelId: (id, label, fileSizeBytes) => {
     set({
       activeModelId: id,
       activeModelLabel: label ?? null,
+      activeModelFileSizeBytes: fileSizeBytes ?? null,
       selectedFloor: null,
       selectedRoomId: null,
       hoveredRoom: null,
@@ -520,6 +527,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       floors: [],
       rooms: [],
+      activeModelFileSizeBytes: null,
       selectedFloor: null,
       selectedRoomId: null,
       hoveredRoom: null,

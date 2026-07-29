@@ -15,6 +15,7 @@ import { BG_PRESET_LABEL_KEYS, t, type UiTextKey } from "@/lib/i18n";
 import GlassPanel from "./GlassPanel";
 import SearchFilterPanel from "./SearchFilterPanel";
 import Slider from "./ui/Slider";
+import SliceHeightSlider from "./SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { RefObject } from "react";
 
@@ -519,6 +520,13 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               {f}
             </button>
           ))}
+        </div>
+        <div className="mb-2">
+          <SliceHeightSlider
+            floors={floors}
+            selectedFloor={selectedFloor}
+            disabled={isPresentationView || selectedFloor == null}
+          />
         </div>
         <button
           type="button"

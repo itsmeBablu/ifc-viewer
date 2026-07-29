@@ -43,6 +43,8 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const setHoveredRoom = useAppStore((s) => s.setHoveredRoom);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const roomsFromStore = useAppStore((s) => s.rooms);
+  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const heizlastRange = useAppStore((s) => s.heizlastRange);
 
   const fitOrtho = () => {
     const camera = cameraRef.current;
@@ -254,9 +256,25 @@ export default function Plan2D({ onPointerMove, className }: Props) {
         !activeFilter || !room || roomPassesFilter(room, activeFilter);
       const isSel = id === selectedRoomId;
       mat.opacity = !passes ? 0.12 : isSel ? 0.85 : 0.6;
-      mat.emissive.setHex(isSel && passes ? 0x333333 : 0x000000);
+      if (isSel && passes && room) {
+        const sel = heizlastToColor(
+          room.heatLoad,
+          activeColorPalette,
+          heizlastRange,
+        );
+        mat.emissive.set(new THREE.Color(sel));
+      } else {
+        mat.emissive.setHex(0x000000);
+      }
     }
-  }, [selectedRoomId, activeFilter, rooms, roomsFromStore]);
+  }, [
+    selectedRoomId,
+    activeFilter,
+    rooms,
+    roomsFromStore,
+    activeColorPalette,
+    heizlastRange,
+  ]);
 
   useEffect(() => {
     const canvas = rendererRef.current?.domElement;

@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
 import GlassPanel from "./GlassPanel";
+import SliceHeightSlider from "./SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
 
 type Props = {
@@ -334,6 +335,13 @@ export default function ViewerContextMenu({
                       {f}
                     </button>
                   ))}
+                </div>
+                <div className="pt-1.5">
+                  <SliceHeightSlider
+                    floors={floors}
+                    selectedFloor={selectedFloor}
+                    disabled={isPresentationView || selectedFloor == null}
+                  />
                 </div>
                 <button
                   type="button"
