@@ -347,8 +347,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
   const blueGloss =
     "border border-sky-200/70 bg-gradient-to-br from-sky-200/95 via-sky-300/85 to-sky-400/75 text-sky-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(56,189,248,0.35)] backdrop-blur-md";
+  // Compact bar; fixed-width rounded rectangle highlight (no width stretch on hover)
   const btnBase =
-    "flex h-8 w-8 items-center justify-center rounded-full p-1.5 transition-all duration-200 active:scale-95 sm:h-10 sm:w-10 sm:p-2";
+    "flex h-7 w-10 items-center justify-center rounded-xl transition-[background,border,box-shadow,color,transform] duration-200 ease-out active:scale-95 sm:h-8 sm:w-11";
   const btnIdle = `${btnBase} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
   const btnActive = `${btnBase} ${yellowGloss}`;
   const btnPresentationIdle = `${btnBase} ${yellowGloss}`;
@@ -568,7 +569,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           zIndex={40}
           wrapperClassName="pointer-events-auto mx-auto max-w-full"
         >
-          <div className="flex w-full max-w-full items-center gap-0 px-1.5 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2">
+          <div className="flex w-full max-w-full items-center gap-0 px-1 py-1 sm:gap-1 sm:px-2 sm:py-1">
             <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "fitModel")}
@@ -580,7 +581,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                   aria-label={t(uiLanguage, "fitModel")}
                   onClick={() => viewerRef.current?.fitVisible()}
                 >
-                  <MdZoomInMap className="h-5 w-5" />
+                  <MdZoomInMap className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>
@@ -602,7 +603,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                     setPanel((p) => (p === "search" ? null : "search"))
                   }
                 >
-                  <IoSearchOutline className="h-5 w-5" />
+                  <IoSearchOutline className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>
@@ -622,7 +623,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                     setPanel((p) => (p === "shade" ? null : "shade"))
                   }
                 >
-                  <VscSymbolColor className="h-5 w-5" />
+                  <VscSymbolColor className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>
@@ -642,7 +643,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                     setPanel((p) => (p === "light" ? null : "light"))
                   }
                 >
-                  <CiLight className="h-5 w-5" />
+                  <CiLight className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>
@@ -666,7 +667,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                     });
                   }}
                 >
-                  <LiaStreetViewSolid className="h-5 w-5" />
+                  <LiaStreetViewSolid className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>
@@ -703,7 +704,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="hidden sm:block mx-0.5 h-6 w-px bg-zinc-300/60" aria-hidden />
+            <div className="hidden sm:block mx-0.5 h-4 w-px bg-zinc-300/60" aria-hidden />
 
             <div className="flex-1 min-w-0">
               <ToolTipWrap
@@ -733,7 +734,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                   aria-pressed={isPresentationView}
                   onClick={() => void togglePresentation()}
                 >
-                  <LuPresentation className="h-5 w-5" />
+                  <LuPresentation className="h-[18px] w-[18px]" />
                 </button>
               </ToolTipWrap>
             </div>

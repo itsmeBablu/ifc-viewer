@@ -430,7 +430,7 @@ export default function ViewerApp() {
         {/* LEFT — Floors & Rooms (hidden during Presentation View) */}
         {isDesktop && !isPresentationView && (
           <aside
-            className={`fixed top-20 bottom-3 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col md:top-24 md:bottom-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] ${motion.sidebar} ${
+            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] ${motion.sidebar} ${
               leftPanelOpen
                 ? "left-2 pointer-events-auto translate-x-0 md:left-4"
                 : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
@@ -487,7 +487,7 @@ export default function ViewerApp() {
         {/* RIGHT — Legend (basic) / combined Legend+Rooms (presentation) */}
         {isDesktop && (
           <aside
-            className={`fixed top-44 z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden md:top-52 md:w-[min(22rem,calc(100vw-2rem))] lg:top-56 lg:w-[min(24rem,calc(100vw-2rem))] ${
+            className={`fixed top-32 z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden md:top-36 md:w-[min(22rem,calc(100vw-2rem))] lg:top-40 lg:w-[min(24rem,calc(100vw-2rem))] ${
               isPresentationView && presentationRoomsOpen
                 ? "bottom-20 pb-1"
                 : ""
