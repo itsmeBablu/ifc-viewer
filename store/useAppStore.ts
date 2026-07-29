@@ -496,17 +496,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   setUiLanguage: (lang) => set({ uiLanguage: lang }),
 
   addSavedView: (name, position, target, opts) => {
-    const { activeModelId, selectedFloor, savedViews, presentationFloorId, isPresentationView, presentationIsolate } =
-      get();
+    const {
+      activeModelId,
+      selectedFloor,
+      savedViews,
+      presentationFloorId,
+      isPresentationView,
+      presentationIsolate,
+    } = get();
     if (!activeModelId) return;
     const view: SavedView = {
       id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       position,
       target,
-      floorId: isPresentationView && presentationIsolate
-        ? presentationFloorId
+      floorId: isPresentationView
+        ? presentationIsolate
+          ? presentationFloorId
+          : null
         : selectedFloor,
+      inPresentation: isPresentationView,
+      presentationIsolate: isPresentationView ? presentationIsolate : false,
       pageFormat: opts?.pageFormat ?? "a4",
     };
     const next = [...savedViews, view];

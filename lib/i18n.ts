@@ -105,8 +105,6 @@ const dict = {
     saveView: "Ansicht speichern",
     saveViewHint:
       "Diesen Kamerawinkel speichern, um später zurückzukehren",
-    saveViewPdfHint:
-      "Aktuelle Präsentationsansicht sofort als PDF herunterladen",
     fullscreen: "Vollbild",
     exitFullscreen: "Vollbild beenden",
     fullscreenHint: "3D-Ansicht auf dem ganzen Bildschirm",
@@ -284,8 +282,6 @@ const dict = {
     saveView: "Save view",
     saveViewHint:
       "Save this camera angle so you can come back to it later",
-    saveViewPdfHint:
-      "Download the current presentation view as PDF right away",
     fullscreen: "Fullscreen",
     exitFullscreen: "Exit fullscreen",
     fullscreenHint: "Fill the whole screen with the 3D view",
@@ -461,8 +457,6 @@ const dict = {
     lightingHint: "Ajusta brillo, sombras y el fondo 3D",
     saveView: "Guardar vista",
     saveViewHint: "Guarda este ángulo de cámara para volver después",
-    saveViewPdfHint:
-      "Descarga al instante la vista de presentación actual como PDF",
     fullscreen: "Pantalla completa",
     exitFullscreen: "Salir de pantalla completa",
     fullscreenHint: "Llena toda la pantalla con la vista 3D",

@@ -427,14 +427,17 @@ export default function ViewerApp() {
           loadDisabled={isLoadingModel}
         />
 
-        {/* LEFT — Floors & Rooms (hidden during Presentation View) */}
-        {isDesktop && !isPresentationView && (
+        {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing) */}
+        {isDesktop && (
           <aside
             className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] ${motion.sidebar} ${
-              leftPanelOpen
-                ? "left-2 pointer-events-auto translate-x-0 md:left-4"
-                : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
+              isPresentationView
+                ? "hidden"
+                : leftPanelOpen
+                  ? "left-2 pointer-events-auto translate-x-0 md:left-4"
+                  : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
             }`}
+            aria-hidden={isPresentationView}
           >
             <GlassPanel
               variant="panel"
@@ -633,17 +636,15 @@ export default function ViewerApp() {
                     </GlassButton>
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-                    {!isPresentationView && (
-                      <>
-                        <FloorsPanel
-                          viewerRef={viewerRef}
-                          onFile={handleFile}
-                          isLoadingModel={isLoadingModel}
-                        />
-                        <div className="mx-3 border-t border-zinc-300/50" />
-                        <LegendPanel />
-                      </>
-                    )}
+                    <div className={isPresentationView ? "hidden" : undefined}>
+                      <FloorsPanel
+                        viewerRef={viewerRef}
+                        onFile={handleFile}
+                        isLoadingModel={isLoadingModel}
+                      />
+                      <div className="mx-3 border-t border-zinc-300/50" />
+                      <LegendPanel />
+                    </div>
                     {isPresentationView && <PresentationSidePanel />}
                   </div>
                 </GlassPanel>

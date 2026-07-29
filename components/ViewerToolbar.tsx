@@ -12,11 +12,6 @@ import { IoSearchOutline } from "react-icons/io5";
 import type { RenderMode } from "@/lib/types";
 import { SCENE_BACKGROUND_PRESETS, useAppStore } from "@/store/useAppStore";
 import { BG_PRESET_LABEL_KEYS, t, type UiTextKey } from "@/lib/i18n";
-import {
-  capturePresentationAssets,
-  pdfLegendFromStore,
-} from "@/lib/pdfCapture";
-import { exportPresentationPdf } from "@/lib/pdfExport";
 import GlassPanel from "./GlassPanel";
 import SearchFilterPanel from "./SearchFilterPanel";
 import Slider from "./ui/Slider";
@@ -171,7 +166,6 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const floors = useAppStore((s) => s.floors);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
-  const rooms = useAppStore((s) => s.rooms);
 
   const defaultSaveViewName = () => {
     if (isPresentationView) {
@@ -194,7 +188,6 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
   const [panel, setPanel] = useState<Panel>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [pdfExporting, setPdfExporting] = useState(false);
   const [shadePos, setShadePos] = useState({ bottom: 0, left: 0 });
   const [lightPos, setLightPos] = useState({ bottom: 0, left: 0 });
   const [savePos, setSavePos] = useState({ bottom: 0, left: 0 });
@@ -348,29 +341,6 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     addSavedView(name, pose.position, pose.target, { pageFormat });
     setViewName("");
     setPanel(null);
-  };
-
-  const downloadPresentationPdfNow = async () => {
-    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
-    setPdfExporting(true);
-    setPanel(null);
-    try {
-      const presentation = await capturePresentationAssets(viewerRef.current, {
-        scale: 3,
-      });
-      const modelName =
-        activeModelLabel?.replace(/\.ifc$/i, "").trim() ||
-        activeModelId ||
-        "IFC Model";
-      exportPresentationPdf({
-        modelName,
-        presentation,
-        legend: pdfLegendFromStore(),
-        pageFormat,
-      });
-    } finally {
-      setPdfExporting(false);
-    }
   };
 
   const yellowGloss =
@@ -680,35 +650,16 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
             <div className="flex-1 min-w-0">
               <ToolTipWrap
-                label={
-                  isPresentationView
-                    ? t(uiLanguage, "downloadPresentation")
-                    : t(uiLanguage, "saveView")
-                }
-                hint={
-                  isPresentationView
-                    ? t(uiLanguage, "saveViewPdfHint")
-                    : t(uiLanguage, "saveViewHint")
-                }
+                label={t(uiLanguage, "saveView")}
+                hint={t(uiLanguage, "saveViewHint")}
               >
                 <button
                   ref={saveBtnRef}
                   type="button"
-                  className={
-                    panel === "save" || pdfExporting ? btnActive : btnIdle
-                  }
-                  aria-label={
-                    isPresentationView
-                      ? t(uiLanguage, "downloadPresentation")
-                      : t(uiLanguage, "saveView")
-                  }
+                  className={panel === "save" ? btnActive : btnIdle}
+                  aria-label={t(uiLanguage, "saveView")}
                   aria-expanded={panel === "save"}
-                  disabled={pdfExporting || (isPresentationView && rooms.length === 0)}
                   onClick={() => {
-                    if (isPresentationView) {
-                      void downloadPresentationPdfNow();
-                      return;
-                    }
                     setPanel((p) => {
                       if (p === "save") return null;
                       setViewName(defaultSaveViewName());

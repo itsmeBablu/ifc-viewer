@@ -69,6 +69,7 @@ export default function FloorsPanel({
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const setPresentationFloorId = useAppStore((s) => s.setPresentationFloorId);
   const setPresentationIsolate = useAppStore((s) => s.setPresentationIsolate);
+  const setPresentationView = useAppStore((s) => s.setPresentationView);
   const goToSavedView = useAppStore((s) => s.goToSavedView);
   const removeSavedView = useAppStore((s) => s.removeSavedView);
 
@@ -95,6 +96,8 @@ export default function FloorsPanel({
   const [pdfProgress, setPdfProgress] = useState("");
   const [pdfPageFormat, setPdfPageFormat] = useState<PageFormat>("a3");
   const [pdfSavedSelection, setPdfSavedSelection] = useState<string[]>([]);
+  /** Lock portal host while open — must not track fullscreenElement live (export exits FS). */
+  const pdfPortalHostRef = useRef<HTMLElement | null>(null);
 
   const [floorsExpanded, setFloorsExpanded] = useState(true);
   const [roomsExpanded, setRoomsExpanded] = useState(true);
@@ -234,26 +237,103 @@ export default function FloorsPanel({
     );
   };
 
+  const waitMs = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const waitFrames = (n = 2) =>
+    new Promise<void>((resolve) => {
+      const step = (left: number) => {
+        if (left <= 0) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(() => step(left - 1));
+      };
+      step(n);
+    });
+
+  /** Restore camera layout for a saved view, then capture. */
+  const applySavedViewForCapture = async (view: {
+    position: [number, number, number];
+    target: [number, number, number];
+    floorId: string | null;
+    inPresentation?: boolean;
+    presentationIsolate?: boolean;
+  }) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const wantPresentation = Boolean(view.inPresentation);
+    const store = useAppStore.getState();
+
+    if (wantPresentation) {
+      if (!store.isPresentationView) {
+        setPresentationView(true);
+        await waitMs(1600);
+      }
+      const nextIsolate = Boolean(view.presentationIsolate && view.floorId);
+      const layoutChanged =
+        nextIsolate !== useAppStore.getState().presentationIsolate ||
+        view.floorId !== useAppStore.getState().presentationFloorId;
+      setPresentationIsolate(nextIsolate);
+      setPresentationFloorId(view.floorId);
+      setSelectedFloor(null);
+      await waitMs(layoutChanged ? 1100 : 200);
+      // Presentation effect calls flyIso — snap back to the saved framing.
+      await viewer.flyToPose(view.position, view.target, 1);
+    } else {
+      if (store.isPresentationView) {
+        setPresentationView(false);
+        await waitMs(900);
+      }
+      setPresentationIsolate(false);
+      setSelectedFloor(view.floorId);
+      await waitMs(200);
+      await viewer.flyToPose(view.position, view.target, 700);
+    }
+
+    await waitFrames(3);
+    await waitMs(120);
+    // Re-apply pose once more in case a late fit/flyIso finished after the first snap.
+    await viewer.flyToPose(view.position, view.target, 1);
+    await waitFrames(2);
+  };
+
   const handleGoView = (id: string) => {
     const view = goToSavedView(id);
     if (!view || !viewerRef.current) return;
-    if (view.floorId !== undefined) setSelectedFloor(view.floorId);
-    void viewerRef.current.flyToPose(view.position, view.target, 850);
+    void (async () => {
+      await applySavedViewForCapture(view);
+    })();
   };
 
   const openPdfPopup = () => {
     setPdfProgress("");
     setPdfSavedSelection(savedViews.map((v) => v.id));
+    pdfPortalHostRef.current =
+      (document.fullscreenElement as HTMLElement | null) ?? document.body;
     setPdfOpen(true);
+  };
+
+  const closePdfPopup = () => {
+    if (pdfExporting) return;
+    setPdfOpen(false);
+    pdfPortalHostRef.current = null;
+  };
+
+  const dismissPdfPopup = () => {
+    setPdfOpen(false);
+    pdfPortalHostRef.current = null;
   };
 
   useEffect(() => {
     if (!pdfOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pdfExporting) setPdfOpen(false);
+      if (e.key === "Escape") closePdfPopup();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfOpen, pdfExporting]);
 
   const modelNameForPdf = () => {
@@ -279,7 +359,7 @@ export default function FloorsPanel({
         presentation: assets.presentation,
         legend: pdfLegendFromStore(),
       });
-      setPdfOpen(false);
+      dismissPdfPopup();
     } finally {
       setPdfExporting(false);
       setPdfProgress("");
@@ -302,7 +382,7 @@ export default function FloorsPanel({
         legend: pdfLegendFromStore(),
         pageFormat: pdfPageFormat,
       });
-      setPdfOpen(false);
+      dismissPdfPopup();
     } finally {
       setPdfExporting(false);
       setPdfProgress("");
@@ -323,50 +403,25 @@ export default function FloorsPanel({
 
     setPdfExporting(true);
     setPdfProgress(t(uiLanguage, "capturingSaved"));
-    const restorePresentationIsolate = presentationIsolate;
-    const restorePresentationFloorId = presentationFloorId;
-    const restoreSelectedFloor = selectedFloor;
+    const restore = {
+      isPresentationView: useAppStore.getState().isPresentationView,
+      presentationIsolate,
+      presentationFloorId,
+      selectedFloor,
+      pose: viewerRef.current.getCameraPose(),
+    };
     try {
       const pages: {
         title: string;
         viewportDataUrl: string | null;
         pageFormat?: PageFormat;
       }[] = [];
-      let prevIsolate = presentationIsolate;
-      let prevFloorId = presentationFloorId;
       for (let i = 0; i < selected.length; i += 1) {
         const view = selected[i];
         setPdfProgress(
           `${t(uiLanguage, "capturingSaved")} (${i + 1}/${selected.length}: ${view.name})`,
         );
-        // When exporting in presentation mode, also restore the presentation isolate state.
-        // Changing isolate/floor triggers presentation flyIso — wait, then re-apply saved pose.
-        if (isPresentationView) {
-          const fid = view.floorId;
-          const nextIsolate = fid != null;
-          const layoutChanged =
-            nextIsolate !== prevIsolate || fid !== prevFloorId;
-          setPresentationIsolate(nextIsolate);
-          setPresentationFloorId(fid);
-          setSelectedFloor(null);
-          prevIsolate = nextIsolate;
-          prevFloorId = fid;
-          if (layoutChanged) {
-            await new Promise((r) => setTimeout(r, 1100));
-          } else {
-            await new Promise((r) => setTimeout(r, 120));
-          }
-          await viewerRef.current.flyToPose(view.position, view.target, 1);
-        } else {
-          setSelectedFloor(view.floorId);
-          await viewerRef.current.flyToPose(view.position, view.target, 700);
-        }
-        await new Promise((resolve) =>
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => resolve(undefined)),
-          ),
-        );
-        await new Promise((r) => setTimeout(r, 100));
+        await applySavedViewForCapture(view);
         const viewportDataUrl =
           viewerRef.current.captureViewport({ scale: 2.2 }) ?? null;
         pages.push({
@@ -385,14 +440,24 @@ export default function FloorsPanel({
         heizlastRange,
         temperatureRange,
       });
-      setPdfOpen(false);
+      dismissPdfPopup();
     } finally {
       setPdfExporting(false);
       setPdfProgress("");
-      // Restore UI state after capture.
-      setPresentationIsolate(restorePresentationIsolate);
-      setPresentationFloorId(restorePresentationFloorId);
-      setSelectedFloor(restoreSelectedFloor);
+      const s = useAppStore.getState();
+      if (s.isPresentationView !== restore.isPresentationView) {
+        setPresentationView(restore.isPresentationView);
+        await waitMs(restore.isPresentationView ? 1200 : 700);
+      }
+      setPresentationIsolate(restore.presentationIsolate);
+      setPresentationFloorId(restore.presentationFloorId);
+      setSelectedFloor(restore.selectedFloor);
+      await waitMs(200);
+      await viewerRef.current?.flyToPose(
+        restore.pose.position,
+        restore.pose.target,
+        1,
+      );
     }
   };
 
@@ -892,6 +957,7 @@ export default function FloorsPanel({
 
       {pdfOpen &&
         typeof document !== "undefined" &&
+        pdfPortalHostRef.current &&
         createPortal(
           <div
             className="fixed inset-0 z-[120] flex items-center justify-center p-4"
@@ -902,9 +968,7 @@ export default function FloorsPanel({
               aria-label={t(uiLanguage, "closePdf")}
               className="absolute inset-0 bg-zinc-900/35 backdrop-blur-[2px]"
               disabled={pdfExporting}
-              onClick={() => {
-                if (!pdfExporting) setPdfOpen(false);
-              }}
+              onClick={closePdfPopup}
             />
             <div
               className="relative z-[121] w-full max-w-md"
@@ -938,7 +1002,7 @@ export default function FloorsPanel({
                         <button
                           type="button"
                           disabled={pdfExporting}
-                          onClick={() => setPdfOpen(false)}
+                          onClick={closePdfPopup}
                           className="rounded-lg px-2 py-1 text-sm text-zinc-400 hover:bg-white/50 hover:text-zinc-700"
                           aria-label={t(uiLanguage, "close")}
                         >
@@ -946,11 +1010,14 @@ export default function FloorsPanel({
                         </button>
                       </div>
 
-                      {pdfExporting && (
-                        <p className="rounded-xl bg-white/50 px-3 py-2 text-[11px] font-medium text-zinc-700">
-                          {pdfProgress || t(uiLanguage, "exporting")}
-                        </p>
-                      )}
+                      <p
+                        className={`rounded-xl bg-white/50 px-3 py-2 text-[11px] font-medium text-zinc-700 ${
+                          pdfExporting ? "" : "invisible"
+                        }`}
+                        aria-live="polite"
+                      >
+                        {pdfProgress || t(uiLanguage, "exporting")}
+                      </p>
 
                       <div className="rounded-xl border border-white/50 bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
                         <p className="text-xs font-semibold text-zinc-800">
@@ -966,19 +1033,20 @@ export default function FloorsPanel({
                           type="button"
                           disabled={pdfExporting || rooms.length === 0}
                           onClick={() => void exportAllPages()}
-                          className={`${yellowGlossBtn} mt-2.5 h-10 w-full justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
+                          className={`${yellowGlossBtn} mt-2.5 h-10 w-full justify-center gap-2 rounded-xl px-3 text-sm disabled:opacity-40`}
                         >
-                          {pdfExporting ? (
-                            <>
+                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                            {pdfExporting ? (
                               <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-800/30 border-t-amber-900" />
-                              {t(uiLanguage, "exporting")}
-                            </>
-                          ) : (
-                            <>
+                            ) : (
                               <PiFilePdfThin className="h-5 w-5" />
-                              {t(uiLanguage, "downloadAllPages")}
-                            </>
-                          )}
+                            )}
+                          </span>
+                          <span>
+                            {pdfExporting
+                              ? t(uiLanguage, "exporting")
+                              : t(uiLanguage, "downloadAllPages")}
+                          </span>
                         </button>
                       </div>
 
@@ -1070,7 +1138,7 @@ export default function FloorsPanel({
                       <button
                         type="button"
                         disabled={pdfExporting}
-                        onClick={() => setPdfOpen(false)}
+                        onClick={closePdfPopup}
                         className="h-9 w-full rounded-xl border border-white/50 bg-white/40 text-sm font-medium text-zinc-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-md hover:bg-white/60"
                       >
                         {t(uiLanguage, "cancel")}
@@ -1081,7 +1149,7 @@ export default function FloorsPanel({
               </div>
             </div>
           </div>,
-          (document.fullscreenElement as HTMLElement | null) ?? document.body,
+          pdfPortalHostRef.current,
         )}
     </div>
   );

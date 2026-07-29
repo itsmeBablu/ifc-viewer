@@ -33,6 +33,10 @@ export type SavedView = {
   position: [number, number, number];
   target: [number, number, number];
   floorId: string | null;
+  /** Saved while presentation (exploded) layout was active. */
+  inPresentation?: boolean;
+  /** Isolated single floor in presentation when saved. */
+  presentationIsolate?: boolean;
   /** Paper size for PDF export of this view. */
   pageFormat?: import("./presentationLayout").PageFormat;
 };
