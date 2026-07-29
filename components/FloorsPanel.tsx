@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
@@ -23,6 +30,8 @@ import type { PageFormat } from "@/lib/presentationLayout";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
+  onFile: (file: File) => void;
+  isLoadingModel?: boolean;
 };
 
 function Divider() {
@@ -30,7 +39,11 @@ function Divider() {
 }
 
 /** Left panel: building summary, floors, rooms, slice, saved views. */
-export default function FloorsPanel({ viewerRef }: Props) {
+export default function FloorsPanel({
+  viewerRef,
+  onFile,
+  isLoadingModel = false,
+}: Props) {
   const floors = useAppStore((s) => s.floors);
   const rooms = useAppStore((s) => s.rooms);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -86,10 +99,63 @@ export default function FloorsPanel({ viewerRef }: Props) {
   const [floorsExpanded, setFloorsExpanded] = useState(true);
   const [roomsExpanded, setRoomsExpanded] = useState(true);
   const [selectionExpanded, setSelectionExpanded] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelTipOpen, setModelTipOpen] = useState(false);
+  const [modelTipSuppressed, setModelTipSuppressed] = useState(false);
+  const [modelTipPos, setModelTipPos] = useState({ top: 0, left: 0 });
+  const modelBadgeRef = useRef<HTMLButtonElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const modelFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRoomsExpanded(Boolean(selectedFloor));
   }, [selectedFloor]);
+
+  const updateModelTipPos = () => {
+    const el = modelBadgeRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setModelTipPos({ top: r.bottom + 10, left: r.left + r.width / 2 });
+  };
+
+  useLayoutEffect(() => {
+    if (!modelTipOpen) return;
+    updateModelTipPos();
+    window.addEventListener("resize", updateModelTipPos);
+    window.addEventListener("scroll", updateModelTipPos, true);
+    return () => {
+      window.removeEventListener("resize", updateModelTipPos);
+      window.removeEventListener("scroll", updateModelTipPos, true);
+    };
+  }, [modelTipOpen]);
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        modelMenuRef.current?.contains(target) ||
+        modelBadgeRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setModelMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [modelMenuOpen]);
+
+  const modelDetailHint = useMemo(() => {
+    const floorsLine = `${floors.length} ${t(uiLanguage, "floors")} · ${rooms.length} ${t(uiLanguage, "rooms")}`;
+    const sizeLine = `${totalComponents} · ${formatBytes(activeModelFileSizeBytes)}`;
+    return `${floorsLine}\n${sizeLine}`;
+  }, [
+    floors.length,
+    rooms.length,
+    totalComponents,
+    activeModelFileSizeBytes,
+    uiLanguage,
+  ]);
 
   const sortedFloors = useMemo(
     () => [...floors].sort((a, b) => a.elevation - b.elevation),
@@ -321,18 +387,97 @@ export default function FloorsPanel({ viewerRef }: Props) {
         {/* Header row: label + yellow glass IFC name badge */}
         <div className="flex items-center justify-between gap-2">
           <p className={heading.muted}>{t(uiLanguage, "model")}</p>
-          <span className="max-w-[58%] truncate rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md">
-            <span
-              title={[
-                modelLabel,
-                `${floors.length} ${t(uiLanguage, "floors")} · ${rooms.length} ${t(uiLanguage, "rooms")}`,
-                `${totalComponents} Komponenten`,
-                `Dateigröße: ${formatBytes(activeModelFileSizeBytes)}`,
-              ].join("\n")}
+          <div className="relative max-w-[58%]">
+            <input
+              ref={modelFileInputRef}
+              type="file"
+              accept=".ifc,application/x-step,application/octet-stream,.IFC"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) onFile(file);
+              }}
+            />
+            <button
+              ref={modelBadgeRef}
+              type="button"
+              disabled={isLoadingModel}
+              onMouseEnter={() => {
+                if (modelTipSuppressed || modelMenuOpen) return;
+                updateModelTipPos();
+                setModelTipOpen(true);
+              }}
+              onMouseLeave={() => {
+                setModelTipOpen(false);
+                setModelTipSuppressed(false);
+              }}
+              onClick={() => {
+                setModelTipOpen(false);
+                setModelTipSuppressed(true);
+                setModelMenuOpen((v) => !v);
+              }}
+              className="max-w-full truncate rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-[0.98] disabled:opacity-45"
+              aria-expanded={modelMenuOpen}
+              aria-label={modelLabel}
             >
               {modelLabel}
-            </span>
-          </span>
+            </button>
+
+            {modelTipOpen &&
+              !modelMenuOpen &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div
+                  role="tooltip"
+                  className="pointer-events-none fixed z-[200] w-max max-w-[240px] -translate-x-1/2"
+                  style={{ top: modelTipPos.top, left: modelTipPos.left }}
+                >
+                  <GlassPanel variant="control" zIndex={200}>
+                    <div className="px-3.5 py-2.5 text-center">
+                      <p className="text-[12px] font-semibold tracking-wide text-zinc-900">
+                        {modelLabel}
+                      </p>
+                      <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-zinc-600">
+                        {modelDetailHint}
+                      </p>
+                    </div>
+                  </GlassPanel>
+                </div>,
+                (document.fullscreenElement as HTMLElement | null) ??
+                  document.body,
+              )}
+
+            {modelMenuOpen && (
+              <div
+                ref={modelMenuRef}
+                className="absolute top-[calc(100%+0.4rem)] right-0 z-[60] w-max min-w-[10.5rem]"
+              >
+                <GlassPanel variant="control" zIndex={60}>
+                  <div className="flex flex-col gap-1 p-1.5">
+                    <button
+                      type="button"
+                      disabled={isLoadingModel}
+                      onClick={() => {
+                        setModelMenuOpen(false);
+                        modelFileInputRef.current?.click();
+                      }}
+                      className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 px-2.5 py-1.5 text-left text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:brightness-105 disabled:opacity-45"
+                    >
+                      {t(uiLanguage, "loadOtherIfc")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelMenuOpen(false)}
+                      className="rounded-xl border border-transparent px-2.5 py-1.5 text-left text-[11px] text-zinc-700 transition hover:border-white/55 hover:bg-white/40"
+                    >
+                      {t(uiLanguage, "cancel")}
+                    </button>
+                  </div>
+                </GlassPanel>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Single-line stats — values stay, labels truncate */}

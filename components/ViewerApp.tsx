@@ -474,7 +474,11 @@ export default function ViewerApp() {
                   leftPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
                 }`}
               >
-                <FloorsPanel viewerRef={viewerRef} />
+                <FloorsPanel
+                  viewerRef={viewerRef}
+                  onFile={handleFile}
+                  isLoadingModel={isLoadingModel}
+                />
               </div>
             </GlassPanel>
           </aside>
@@ -631,7 +635,11 @@ export default function ViewerApp() {
                   <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
                     {!isPresentationView && (
                       <>
-                        <FloorsPanel viewerRef={viewerRef} />
+                        <FloorsPanel
+                          viewerRef={viewerRef}
+                          onFile={handleFile}
+                          isLoadingModel={isLoadingModel}
+                        />
                         <div className="mx-3 border-t border-zinc-300/50" />
                         <LegendPanel />
                       </>

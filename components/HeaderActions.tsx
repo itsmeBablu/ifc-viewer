@@ -176,12 +176,12 @@ export default function HeaderActions({
   const yellowGloss =
     "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
   const roundBtn =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-bold transition-all duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-bold transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const roundIdle = `${roundBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const roundActive = `${roundBtn} ${yellowGloss}`;
 
   const sideBtn =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const sideIdle = `${sideBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const sideActive = `${sideBtn} ${yellowGloss}`;
 
@@ -189,7 +189,11 @@ export default function HeaderActions({
     <div
       ref={rootRef}
       data-app-header-actions
-      className="pointer-events-auto fixed top-2 left-2 z-[45] sm:top-3 sm:left-3 md:left-4"
+      className={`pointer-events-auto fixed top-2 left-2 z-[45] sm:top-3 md:left-4 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        expanded
+          ? "w-[min(300px,calc(100vw-1.5rem))] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))]"
+          : "w-max"
+      }`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         if (!modeOpen && !langOpen) setHovered(false);
@@ -207,7 +211,7 @@ export default function HeaderActions({
         }}
       />
 
-      <div className="relative w-max">
+      <div className="relative w-full">
         {modeOpen && (
           <div className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]">
             <GlassPanel variant="control" zIndex={50}>
@@ -286,16 +290,14 @@ export default function HeaderActions({
           </div>
         )}
 
-        {/* One glass: logo + actions + side arrow (flex, never overlays logo) */}
-        <GlassPanel variant="panel" zIndex={45} wrapperClassName="overflow-hidden">
-          <div className="flex items-stretch">
-            <div
-              className={`flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                expanded
-                  ? "gap-0.5 py-0 pl-3 pr-1.5 sm:pl-3.5"
-                  : "gap-0 py-0.5 pl-3 pr-1.5 sm:pl-3.5"
-              }`}
-            >
+        {/* One glass: logo + actions + side arrow — expanded width matches Modell panel */}
+        <GlassPanel
+          variant="panel"
+          zIndex={45}
+          wrapperClassName="w-full overflow-hidden"
+        >
+          <div className="flex h-10 w-full items-stretch sm:h-11">
+            <div className="flex h-full min-w-0 flex-1 items-center py-1 pl-3 pr-1.5 sm:pl-3.5">
               <Image
                 src="/ibv_logo.svg"
                 alt="IBV logo"
@@ -306,67 +308,73 @@ export default function HeaderActions({
               />
 
               <div
-                className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                className={`flex h-full min-w-0 items-center overflow-hidden transition-[flex-grow,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   expanded
-                    ? "ml-1 max-w-[11rem] gap-0.5 opacity-100"
-                    : "ml-0 max-w-0 gap-0 opacity-0 pointer-events-none"
+                    ? "ml-2 flex-1 opacity-100"
+                    : "ml-0 w-0 flex-none opacity-0 pointer-events-none"
                 }`}
               >
-                <HeaderTip
-                  label={t(uiLanguage, "heating")}
-                  hint={t(uiLanguage, "viewHint")}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModeOpen((v) => !v);
-                      setLangOpen(false);
-                      setHovered(true);
-                    }}
-                    aria-expanded={modeOpen || expanded}
-                    aria-label={t(uiLanguage, "heating")}
-                    className={modeOpen ? roundActive : roundIdle}
+                <div className="flex h-full flex-1 items-center justify-center">
+                  <HeaderTip
+                    label={t(uiLanguage, "heating")}
+                    hint={t(uiLanguage, "viewHint")}
                   >
-                    <span className="leading-none">{MODE_LETTER[mode]}</span>
-                  </button>
-                </HeaderTip>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModeOpen((v) => !v);
+                        setLangOpen(false);
+                        setHovered(true);
+                      }}
+                      aria-expanded={modeOpen || expanded}
+                      aria-label={t(uiLanguage, "heating")}
+                      className={modeOpen ? roundActive : roundIdle}
+                    >
+                      <span className="leading-none">{MODE_LETTER[mode]}</span>
+                    </button>
+                  </HeaderTip>
+                </div>
 
-                <HeaderTip
-                  label={t(uiLanguage, "data")}
-                  hint={t(uiLanguage, "dataHint")}
-                >
-                  <button
-                    type="button"
-                    disabled={isLoadingModel}
-                    onClick={() => {
-                      setModeOpen(false);
-                      setLangOpen(false);
-                      fileInputRef.current?.click();
-                    }}
-                    aria-label={t(uiLanguage, "loadIfc")}
-                    className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
+                <div className="flex h-full flex-1 items-center justify-center">
+                  <HeaderTip
+                    label={t(uiLanguage, "data")}
+                    hint={t(uiLanguage, "dataHint")}
                   >
-                    <UploadIcon />
-                  </button>
-                </HeaderTip>
+                    <button
+                      type="button"
+                      disabled={isLoadingModel}
+                      onClick={() => {
+                        setModeOpen(false);
+                        setLangOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      aria-label={t(uiLanguage, "loadIfc")}
+                      className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
+                    >
+                      <UploadIcon />
+                    </button>
+                  </HeaderTip>
+                </div>
 
-                <HeaderTip
-                  label={t(uiLanguage, "profile")}
-                  hint={t(uiLanguage, "profileHint")}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLangOpen((v) => !v);
-                      setModeOpen(false);
-                    }}
-                    aria-expanded={langOpen}
-                    aria-label={t(uiLanguage, "profile")}
-                    className={langOpen ? sideActive : sideIdle}
+                <div className="flex h-full flex-1 items-center justify-center">
+                  <HeaderTip
+                    label={t(uiLanguage, "profile")}
+                    hint={t(uiLanguage, "profileHint")}
                   >
-                    <MdOutlineAccountCircle className="h-5 w-5 sm:h-[1.35rem] sm:w-[1.35rem]" />
-                  </button>
-                </HeaderTip>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLangOpen((v) => !v);
+                        setModeOpen(false);
+                      }}
+                      aria-expanded={langOpen}
+                      aria-label={t(uiLanguage, "profile")}
+                      className={langOpen ? sideActive : sideIdle}
+                    >
+                      <MdOutlineAccountCircle className="h-5 w-5 sm:h-[1.35rem] sm:w-[1.35rem]" />
+                    </button>
+                  </HeaderTip>
+                </div>
               </div>
             </div>
 
