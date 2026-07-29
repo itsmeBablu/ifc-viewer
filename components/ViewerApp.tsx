@@ -21,7 +21,6 @@ import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
 import RoomTooltip from "./RoomTooltip";
 import LoadIfcButton from "./LoadIfcButton";
-import AppHeader from "./AppHeader";
 import HeaderActions from "./HeaderActions";
 import FloorsPanel from "./FloorsPanel";
 import LegendPanel from "./LegendPanel";
@@ -286,7 +285,6 @@ export default function ViewerApp() {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        <AppHeader />
         <HeaderActions
           onFile={handleFile}
           hasModel={hasModel}

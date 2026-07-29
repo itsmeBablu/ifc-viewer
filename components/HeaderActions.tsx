@@ -32,8 +32,8 @@ const MODE_LETTER: Record<HeaderMode, string> = {
 function UploadIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -133,7 +133,7 @@ function HeaderTip({
 }
 
 /**
- * Compact round Heating control — expands on hover to Data + Profile.
+ * Logo header — glass expands to reveal Heating / Data / Profile inside.
  */
 export default function HeaderActions({
   onFile,
@@ -147,10 +147,11 @@ export default function HeaderActions({
   const [modeOpen, setModeOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const expanded = hovered || modeOpen || langOpen;
+  const expanded = pinned || hovered || modeOpen || langOpen;
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -158,6 +159,7 @@ export default function HeaderActions({
         setModeOpen(false);
         setLangOpen(false);
         setHovered(false);
+        setPinned(false);
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -174,12 +176,12 @@ export default function HeaderActions({
   const yellowGloss =
     "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
   const roundBtn =
-    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all duration-300 ease-out active:scale-95";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-bold transition-all duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const roundIdle = `${roundBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const roundActive = `${roundBtn} ${yellowGloss}`;
 
   const sideBtn =
-    "flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-full transition-all duration-300 ease-out active:scale-95";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const sideIdle = `${sideBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const sideActive = `${sideBtn} ${yellowGloss}`;
 
@@ -187,7 +189,7 @@ export default function HeaderActions({
     <div
       ref={rootRef}
       data-app-header-actions
-      className="pointer-events-none fixed top-2 z-[45] right-[7.25rem] sm:top-3 sm:right-32 md:right-[8.5rem]"
+      className="pointer-events-auto fixed top-2 left-2 z-[45] sm:top-3 sm:left-3 md:left-4"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         if (!modeOpen && !langOpen) setHovered(false);
@@ -205,11 +207,11 @@ export default function HeaderActions({
         }}
       />
 
-      <div className="pointer-events-auto relative w-max">
+      <div className="relative w-max">
         {modeOpen && (
           <div className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]">
             <GlassPanel variant="control" zIndex={50}>
-              <div className="w-48 p-1 text-xs text-zinc-700 sm:w-52">
+              <div className="w-max min-w-[12rem] p-1 text-xs text-zinc-700">
                 {modeOptions.map((opt) => (
                   <button
                     key={opt.id}
@@ -218,13 +220,13 @@ export default function HeaderActions({
                       setMode(opt.id);
                       setModeOpen(false);
                     }}
-                    className={`block w-full rounded-xl px-2.5 py-1.5 text-left transition-all duration-200 ${
+                    className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left transition-all duration-200 ${
                       mode === opt.id
                         ? "border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] backdrop-blur-md"
                         : "border border-transparent hover:border-white/55 hover:bg-white/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] hover:backdrop-blur-md"
                     }`}
                   >
-                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800/90 text-[10px] font-bold text-white">
+                    <span className="mr-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-800/90 text-[10px] font-bold text-white">
                       {MODE_LETTER[opt.id]}
                     </span>
                     {opt.label}
@@ -284,77 +286,116 @@ export default function HeaderActions({
           </div>
         )}
 
-        <GlassPanel variant="panel" zIndex={45}>
-          <div
-            className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              expanded
-                ? "gap-0.5 px-1 py-0.5"
-                : "justify-center gap-0 px-0.5 py-0.5"
-            }`}
-          >
-            <HeaderTip
-              label={t(uiLanguage, "heating")}
-              hint={t(uiLanguage, "viewHint")}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setModeOpen((v) => !v);
-                  setLangOpen(false);
-                  setHovered(true);
-                }}
-                aria-expanded={modeOpen || expanded}
-                aria-label={t(uiLanguage, "heating")}
-                className={modeOpen ? roundActive : roundIdle}
-              >
-                {MODE_LETTER[mode]}
-              </button>
-            </HeaderTip>
-
+        {/* One glass: logo + actions + side arrow (flex, never overlays logo) */}
+        <GlassPanel variant="panel" zIndex={45} wrapperClassName="overflow-hidden">
+          <div className="flex items-stretch">
             <div
-              className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              className={`flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 expanded
-                  ? "ml-0.5 max-w-[5.5rem] gap-0.5 opacity-100"
-                  : "ml-0 max-w-0 gap-0 opacity-0 pointer-events-none"
+                  ? "gap-0.5 py-0 pl-3 pr-1.5 sm:pl-3.5"
+                  : "gap-0 py-0.5 pl-3 pr-1.5 sm:pl-3.5"
               }`}
             >
-              <HeaderTip
-                label={t(uiLanguage, "data")}
-                hint={t(uiLanguage, "dataHint")}
-              >
-                <button
-                  type="button"
-                  disabled={isLoadingModel}
-                  onClick={() => {
-                    setModeOpen(false);
-                    setLangOpen(false);
-                    fileInputRef.current?.click();
-                  }}
-                  aria-label={t(uiLanguage, "loadIfc")}
-                  className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
-                >
-                  <UploadIcon />
-                </button>
-              </HeaderTip>
+              <Image
+                src="/ibv_logo.svg"
+                alt="IBV logo"
+                width={32}
+                height={32}
+                className="h-6 w-auto shrink-0 object-contain sm:h-7"
+                priority
+              />
 
-              <HeaderTip
-                label={t(uiLanguage, "profile")}
-                hint={t(uiLanguage, "profileHint")}
+              <div
+                className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  expanded
+                    ? "ml-1 max-w-[11rem] gap-0.5 opacity-100"
+                    : "ml-0 max-w-0 gap-0 opacity-0 pointer-events-none"
+                }`}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLangOpen((v) => !v);
-                    setModeOpen(false);
-                  }}
-                  aria-expanded={langOpen}
-                  aria-label={t(uiLanguage, "profile")}
-                  className={langOpen ? sideActive : sideIdle}
+                <HeaderTip
+                  label={t(uiLanguage, "heating")}
+                  hint={t(uiLanguage, "viewHint")}
                 >
-                  <MdOutlineAccountCircle className="h-4 w-4" />
-                </button>
-              </HeaderTip>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModeOpen((v) => !v);
+                      setLangOpen(false);
+                      setHovered(true);
+                    }}
+                    aria-expanded={modeOpen || expanded}
+                    aria-label={t(uiLanguage, "heating")}
+                    className={modeOpen ? roundActive : roundIdle}
+                  >
+                    <span className="leading-none">{MODE_LETTER[mode]}</span>
+                  </button>
+                </HeaderTip>
+
+                <HeaderTip
+                  label={t(uiLanguage, "data")}
+                  hint={t(uiLanguage, "dataHint")}
+                >
+                  <button
+                    type="button"
+                    disabled={isLoadingModel}
+                    onClick={() => {
+                      setModeOpen(false);
+                      setLangOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                    aria-label={t(uiLanguage, "loadIfc")}
+                    className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
+                  >
+                    <UploadIcon />
+                  </button>
+                </HeaderTip>
+
+                <HeaderTip
+                  label={t(uiLanguage, "profile")}
+                  hint={t(uiLanguage, "profileHint")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLangOpen((v) => !v);
+                      setModeOpen(false);
+                    }}
+                    aria-expanded={langOpen}
+                    aria-label={t(uiLanguage, "profile")}
+                    className={langOpen ? sideActive : sideIdle}
+                  >
+                    <MdOutlineAccountCircle className="h-5 w-5 sm:h-[1.35rem] sm:w-[1.35rem]" />
+                  </button>
+                </HeaderTip>
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPinned((v) => !v);
+                setHovered(true);
+              }}
+              aria-label={expanded ? "Hide header actions" : "Show header actions"}
+              className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+                className={`transition-transform duration-300 ease-out ${
+                  expanded ? "" : "rotate-180"
+                }`}
+              >
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
           </div>
         </GlassPanel>
       </div>
