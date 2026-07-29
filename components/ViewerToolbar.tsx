@@ -568,159 +568,175 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           zIndex={40}
           wrapperClassName="pointer-events-auto mx-auto max-w-full"
         >
-          <div className="flex max-w-full items-center gap-1 overflow-x-auto px-1.5 py-1.5 scrollbar-none sm:gap-1.5 sm:overflow-visible sm:px-2.5 sm:py-2">
-            <ToolTipWrap
-              label={t(uiLanguage, "fitModel")}
-              hint={t(uiLanguage, "fitModelHint")}
-            >
-              <button
-                type="button"
-                className={btnIdle}
-                aria-label={t(uiLanguage, "fitModel")}
-                onClick={() => viewerRef.current?.fitVisible()}
+          <div className="flex w-full max-w-full items-center gap-0 px-1.5 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2">
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={t(uiLanguage, "fitModel")}
+                hint={t(uiLanguage, "fitModelHint")}
               >
-                <MdZoomInMap className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  type="button"
+                  className={btnIdle}
+                  aria-label={t(uiLanguage, "fitModel")}
+                  onClick={() => viewerRef.current?.fitVisible()}
+                >
+                  <MdZoomInMap className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
 
-            <ToolTipWrap
-              label={t(uiLanguage, "searchFilter")}
-              hint={t(uiLanguage, "searchFilterHint")}
-            >
-              <button
-                ref={searchBtnRef}
-                type="button"
-                className={
-                  panel === "search" || activeFilter ? btnActive : btnIdle
-                }
-                aria-label={t(uiLanguage, "searchFilter")}
-                aria-expanded={panel === "search"}
-                onClick={() =>
-                  setPanel((p) => (p === "search" ? null : "search"))
-                }
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={t(uiLanguage, "searchFilter")}
+                hint={t(uiLanguage, "searchFilterHint")}
               >
-                <IoSearchOutline className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  ref={searchBtnRef}
+                  type="button"
+                  className={
+                    panel === "search" || activeFilter ? btnActive : btnIdle
+                  }
+                  aria-label={t(uiLanguage, "searchFilter")}
+                  aria-expanded={panel === "search"}
+                  onClick={() =>
+                    setPanel((p) => (p === "search" ? null : "search"))
+                  }
+                >
+                  <IoSearchOutline className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
 
-            <ToolTipWrap
-              label={t(uiLanguage, "shading")}
-              hint={t(uiLanguage, "shadingHint")}
-            >
-              <button
-                ref={shadeBtnRef}
-                type="button"
-                className={panel === "shade" ? btnActive : btnIdle}
-                aria-label={t(uiLanguage, "shading")}
-                aria-expanded={panel === "shade"}
-                onClick={() =>
-                  setPanel((p) => (p === "shade" ? null : "shade"))
-                }
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={t(uiLanguage, "shading")}
+                hint={t(uiLanguage, "shadingHint")}
               >
-                <VscSymbolColor className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  ref={shadeBtnRef}
+                  type="button"
+                  className={panel === "shade" ? btnActive : btnIdle}
+                  aria-label={t(uiLanguage, "shading")}
+                  aria-expanded={panel === "shade"}
+                  onClick={() =>
+                    setPanel((p) => (p === "shade" ? null : "shade"))
+                  }
+                >
+                  <VscSymbolColor className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
 
-            <ToolTipWrap
-              label={t(uiLanguage, "lighting")}
-              hint={t(uiLanguage, "lightingHint")}
-            >
-              <button
-                ref={lightBtnRef}
-                type="button"
-                className={panel === "light" ? btnActive : btnIdle}
-                aria-label={t(uiLanguage, "lighting")}
-                aria-expanded={panel === "light"}
-                onClick={() =>
-                  setPanel((p) => (p === "light" ? null : "light"))
-                }
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={t(uiLanguage, "lighting")}
+                hint={t(uiLanguage, "lightingHint")}
               >
-                <CiLight className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  ref={lightBtnRef}
+                  type="button"
+                  className={panel === "light" ? btnActive : btnIdle}
+                  aria-label={t(uiLanguage, "lighting")}
+                  aria-expanded={panel === "light"}
+                  onClick={() =>
+                    setPanel((p) => (p === "light" ? null : "light"))
+                  }
+                >
+                  <CiLight className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
 
-            <ToolTipWrap
-              label={t(uiLanguage, "saveView")}
-              hint={t(uiLanguage, "saveViewHint")}
-            >
-              <button
-                ref={saveBtnRef}
-                type="button"
-                className={panel === "save" ? btnActive : btnIdle}
-                aria-label={t(uiLanguage, "saveView")}
-                aria-expanded={panel === "save"}
-                onClick={() => {
-                  setPanel((p) => {
-                    if (p === "save") return null;
-                    setViewName(defaultSaveViewName());
-                    return "save";
-                  });
-                }}
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={t(uiLanguage, "saveView")}
+                hint={t(uiLanguage, "saveViewHint")}
               >
-                <LiaStreetViewSolid className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  ref={saveBtnRef}
+                  type="button"
+                  className={panel === "save" ? btnActive : btnIdle}
+                  aria-label={t(uiLanguage, "saveView")}
+                  aria-expanded={panel === "save"}
+                  onClick={() => {
+                    setPanel((p) => {
+                      if (p === "save") return null;
+                      setViewName(defaultSaveViewName());
+                      return "save";
+                    });
+                  }}
+                >
+                  <LiaStreetViewSolid className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
 
-            <ToolTipWrap
-              label={
-                isFullscreen
-                  ? t(uiLanguage, "exitFullscreen")
-                  : t(uiLanguage, "fullscreen")
-              }
-              hint={
-                isFullscreen
-                  ? t(uiLanguage, "exitFullscreenHint")
-                  : t(uiLanguage, "fullscreenHint")
-              }
-            >
-              <button
-                type="button"
-                className={isFullscreen ? btnActive : btnIdle}
-                aria-label={
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={
                   isFullscreen
                     ? t(uiLanguage, "exitFullscreen")
                     : t(uiLanguage, "fullscreen")
                 }
-                onClick={() => void toggleFullscreen()}
-              >
-                {isFullscreen ? (
-                  <BsFullscreenExit className="h-[18px] w-[18px]" />
-                ) : (
-                  <BsFullscreen className="h-[18px] w-[18px]" />
-                )}
-              </button>
-            </ToolTipWrap>
-
-            <div className="mx-0.5 h-6 w-px bg-zinc-300/60" aria-hidden />
-
-            <ToolTipWrap
-              label={
-                isPresentationView
-                  ? t(uiLanguage, "backToNormal")
-                  : t(uiLanguage, "presentationView")
-              }
-              hint={
-                isPresentationView
-                  ? t(uiLanguage, "backToNormalHint")
-                  : t(uiLanguage, "presentationHint")
-              }
-            >
-              <button
-                type="button"
-                className={
-                  isPresentationView ? btnPresentationOn : btnPresentationIdle
+                hint={
+                  isFullscreen
+                    ? t(uiLanguage, "exitFullscreenHint")
+                    : t(uiLanguage, "fullscreenHint")
                 }
-                aria-label={
+              >
+                <button
+                  type="button"
+                  className={isFullscreen ? btnActive : btnIdle}
+                  aria-label={
+                    isFullscreen
+                      ? t(uiLanguage, "exitFullscreen")
+                      : t(uiLanguage, "fullscreen")
+                  }
+                  onClick={() => void toggleFullscreen()}
+                >
+                  {isFullscreen ? (
+                    <BsFullscreenExit className="h-[18px] w-[18px]" />
+                  ) : (
+                    <BsFullscreen className="h-[18px] w-[18px]" />
+                  )}
+                </button>
+              </ToolTipWrap>
+            </div>
+
+            <div className="hidden sm:block mx-0.5 h-6 w-px bg-zinc-300/60" aria-hidden />
+
+            <div className="flex-1 min-w-0">
+              <ToolTipWrap
+                label={
                   isPresentationView
                     ? t(uiLanguage, "backToNormal")
                     : t(uiLanguage, "presentationView")
                 }
-                aria-pressed={isPresentationView}
-                onClick={() => void togglePresentation()}
+                hint={
+                  isPresentationView
+                    ? t(uiLanguage, "backToNormalHint")
+                    : t(uiLanguage, "presentationHint")
+                }
               >
-                <LuPresentation className="h-5 w-5" />
-              </button>
-            </ToolTipWrap>
+                <button
+                  type="button"
+                  className={
+                    isPresentationView
+                      ? btnPresentationOn
+                      : btnPresentationIdle
+                  }
+                  aria-label={
+                    isPresentationView
+                      ? t(uiLanguage, "backToNormal")
+                      : t(uiLanguage, "presentationView")
+                  }
+                  aria-pressed={isPresentationView}
+                  onClick={() => void togglePresentation()}
+                >
+                  <LuPresentation className="h-5 w-5" />
+                </button>
+              </ToolTipWrap>
+            </div>
           </div>
         </GlassPanel>
       </div>
