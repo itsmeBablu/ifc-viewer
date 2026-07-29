@@ -116,7 +116,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
               <img
                 src={snapshotUrl}
                 alt={selectedFloorObj?.name ?? ""}
-                className="aspect-square w-full rounded-2xl object-contain bg-[#f2f4f7]"
+                className="block h-auto w-full rounded-2xl object-contain bg-[#f2f4f7]"
               />
             ) : (
               <div className="flex aspect-square items-center justify-center rounded-2xl bg-white/30 text-xs text-zinc-400">

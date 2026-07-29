@@ -299,10 +299,10 @@ export default function SidebarPanel({ viewerRef }: Props) {
                 <img
                   src={snapshotUrl}
                   alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
-                  className="aspect-square w-full object-contain"
+                  className="block h-auto w-full object-contain"
                 />
               ) : (
-                <div className="flex aspect-square items-center justify-center text-xs text-zinc-400">
+                <div className="flex min-h-[7rem] w-full items-center justify-center text-xs text-zinc-400">
                   No shell geometry for this floor
                 </div>
               )}

@@ -123,6 +123,31 @@ function isShellMesh(obj: THREE.Object3D): obj is THREE.Mesh {
   );
 }
 
+/** Walk object + parents for room / element pick ids. */
+function pickIdsFromObject(obj: THREE.Object3D): {
+  roomId?: string;
+  expressId?: number;
+  floorId?: string | null;
+} {
+  let roomId = obj.userData.roomId as string | undefined;
+  let expressId = obj.userData.expressId as number | undefined;
+  let floorId = (obj.userData.floorId as string | undefined) ?? undefined;
+  let node: THREE.Object3D | null = obj.parent;
+  while (node) {
+    if (roomId == null && node.userData.roomId != null) {
+      roomId = node.userData.roomId as string;
+    }
+    if (expressId == null && node.userData.expressId != null) {
+      expressId = node.userData.expressId as number;
+    }
+    if (floorId == null && node.userData.floorId != null) {
+      floorId = node.userData.floorId as string;
+    }
+    node = node.parent;
+  }
+  return { roomId, expressId, floorId: floorId ?? null };
+}
+
 function clearSelectionOutlines(root: THREE.Object3D | null | undefined) {
   if (!root) return;
   const toRemove: THREE.Object3D[] = [];
@@ -1018,6 +1043,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
 
     const floorMeshes: THREE.Mesh[] = [];
+    // Shell first, rooms last → room Schnitthöhe caps get higher renderOrder and draw on top.
     shellCloneRef.current?.traverse((o) => {
       if (isShellMesh(o) && o.userData.floorId === selectedFloor) {
         floorMeshes.push(o);
@@ -1478,80 +1504,79 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       pointerNdc.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.current.setFromCamera(pointerNdc.current, camera);
 
+      const clip = clipRef.current;
+      const caps = clip?.getCapsGroup();
+      const capsOn = Boolean(caps?.visible);
+
+      // When Schnitthöhe caps are on, prefer footprint pick at the cut plane —
+      // matches the colored room fill the user is clicking.
+      if (capsOn && clip) {
+        const roomMeshes: THREE.Mesh[] = [];
+        overlaysRef.current?.traverse((o) => {
+          if (isOverlayRoomMesh(o) && o.visible) roomMeshes.push(o);
+        });
+        const roomMesh = clip.pickRoomMeshAtCut(raycaster.current, roomMeshes);
+        if (roomMesh) {
+          return {
+            object: roomMesh,
+            distance: 0,
+            point: new THREE.Vector3(),
+            face: null,
+            faceIndex: 0,
+            uv: undefined,
+          } as THREE.Intersection;
+        }
+      }
+
       const targets: THREE.Object3D[] = [];
+      if (capsOn && caps) targets.push(caps);
       if (overlaysRef.current) targets.push(...overlaysRef.current.children);
-      if (shellCloneRef.current) targets.push(shellCloneRef.current);
+      // Skip shell while floor caps are active — shell hits clear room selection.
+      if (!capsOn && shellCloneRef.current) targets.push(shellCloneRef.current);
 
       const hits = raycaster.current.intersectObjects(targets, true);
-      const hit = hits.find(
+      const usable = hits.filter(
         (h) =>
           !h.object.userData.isClipStencil &&
-          !h.object.userData.isSelectionOutline &&
-          !h.object.userData.isClipCap,
+          !h.object.userData.isSelectionOutline,
       );
-      return hit ?? null;
-    };
+      if (!usable.length) return null;
 
-    const onMove = (e: PointerEvent) => {
-      onPointerMove?.(e.clientX, e.clientY);
-      const cube = viewCubeRef.current;
-      if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
-        cube.updateHover(e.clientX, e.clientY, canvas);
-        canvas.style.cursor = "pointer";
-        setHoveredRoom(null);
-        return;
-      }
-      cube?.clearHover();
-      const hit = pickHit(e.clientX, e.clientY);
-      if (!hit) {
-        setHoveredRoom(null);
-        canvas.style.cursor = "default";
-        return;
-      }
-      const roomId = hit.object.userData.roomId as string | undefined;
-      if (roomId) {
-        const room =
-          rooms.find((r) => r.id === roomId) ??
-          roomsFromStore.find((r) => r.id === roomId) ??
-          null;
-        setHoveredRoom(room);
-      } else {
-        setHoveredRoom(null);
-      }
-      canvas.style.cursor = "pointer";
-    };
-
-    const onLeave = () => {
-      viewCubeRef.current?.clearHover();
-      setHoveredRoom(null);
-      canvas.style.cursor = "default";
-    };
-
-    const onClick = (e: PointerEvent) => {
-      const cube = viewCubeRef.current;
-      const camera = cameraRef.current;
-      const controls = controlsRef.current;
-      if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
-        const zone = cube.pick(e.clientX, e.clientY, canvas);
-        if (zone) {
-          e.preventDefault();
-          e.stopPropagation();
-          void cube.snapMainCamera(zone, camera, controls, 600);
+      const resolveIds = (obj: THREE.Object3D) => {
+        let ids = pickIdsFromObject(obj);
+        if (ids.roomId == null && obj.userData.isClipCap) {
+          const src = clipRef.current?.getSourceMeshForCap(obj);
+          if (src) ids = pickIdsFromObject(src);
         }
-        return;
-      }
+        return ids;
+      };
 
-      const hit = pickHit(e.clientX, e.clientY);
+      const closest = usable[0].distance;
+      const near = usable.filter((h) => h.distance <= closest + 0.25);
+      const roomHit =
+        near.find((h) => resolveIds(h.object).roomId != null) ??
+        usable.find((h) => resolveIds(h.object).roomId != null) ??
+        null;
+      const chosen = roomHit ?? usable[0];
+
+      const ids = resolveIds(chosen.object);
+      if (ids.roomId != null) chosen.object.userData.roomId = ids.roomId;
+      if (ids.expressId != null) chosen.object.userData.expressId = ids.expressId;
+      if (ids.floorId != null) chosen.object.userData.floorId = ids.floorId;
+
+      return chosen;
+    };
+
+    const applyPickSelection = (hit: THREE.Intersection | null) => {
       if (!hit) {
         setSelectedRoomId(null);
         setSelectedElement(null);
         return;
       }
-
-      const obj = hit.object;
-      const roomId = obj.userData.roomId as string | undefined;
-      const expressId = obj.userData.expressId as number | undefined;
-      const floorId = (obj.userData.floorId as string | undefined) ?? null;
+      const ids = pickIdsFromObject(hit.object);
+      const roomId = ids.roomId;
+      const expressId = ids.expressId;
+      const floorId = ids.floorId ?? null;
 
       if (roomId) setSelectedRoomId(roomId);
       else setSelectedRoomId(null);
@@ -1603,6 +1628,58 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           }
         })();
       }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      onPointerMove?.(e.clientX, e.clientY);
+      const cube = viewCubeRef.current;
+      if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
+        cube.updateHover(e.clientX, e.clientY, canvas);
+        canvas.style.cursor = "pointer";
+        setHoveredRoom(null);
+        return;
+      }
+      cube?.clearHover();
+      const hit = pickHit(e.clientX, e.clientY);
+      if (!hit) {
+        setHoveredRoom(null);
+        canvas.style.cursor = "default";
+        return;
+      }
+      const roomId = pickIdsFromObject(hit.object).roomId;
+      if (roomId) {
+        const room =
+          rooms.find((r) => r.id === roomId) ??
+          roomsFromStore.find((r) => r.id === roomId) ??
+          null;
+        setHoveredRoom(room);
+      } else {
+        setHoveredRoom(null);
+      }
+      canvas.style.cursor = "pointer";
+    };
+
+    const onLeave = () => {
+      viewCubeRef.current?.clearHover();
+      setHoveredRoom(null);
+      canvas.style.cursor = "default";
+    };
+
+    const onClick = (e: PointerEvent) => {
+      const cube = viewCubeRef.current;
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
+        const zone = cube.pick(e.clientX, e.clientY, canvas);
+        if (zone) {
+          e.preventDefault();
+          e.stopPropagation();
+          void cube.snapMainCamera(zone, camera, controls, 600);
+        }
+        return;
+      }
+
+      applyPickSelection(pickHit(e.clientX, e.clientY));
       // Intentionally no flyTo — camera stays put
     };
 

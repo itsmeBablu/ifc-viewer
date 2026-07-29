@@ -5,7 +5,8 @@ import { useAppStore } from "@/store/useAppStore";
 
 export type ClipOrientation = "horizontal" | "verticalZ";
 
-type CapMaterial = THREE.MeshStandardMaterial;
+/** Unlit cap fill — matches room/legend colors (no light shading mismatch). */
+type CapMaterial = THREE.MeshBasicMaterial;
 
 /**
  * Floor slice: clipping plane + stencil solid caps.
@@ -32,6 +33,9 @@ export class ClipSliceController {
   private _box = new THREE.Box3();
   private _size = new THREE.Vector3();
   private _center = new THREE.Vector3();
+  private _pickPt = new THREE.Vector3();
+  private _pickPlane = new THREE.Plane();
+  private _pickBox = new THREE.Box3();
 
   attach(scene: THREE.Scene) {
     this.scene = scene;
@@ -99,6 +103,60 @@ export class ClipSliceController {
 
   getHeight() {
     return this.cutValue;
+  }
+
+  /** Visible cut-face meshes — include in raycasting for room/element pick. */
+  getCapsGroup() {
+    return this.capsGroup;
+  }
+
+  /** Source mesh that produced a Schnitthöhe / section cap (for picking). */
+  getSourceMeshForCap(cap: THREE.Object3D): THREE.Mesh | null {
+    const entry = this.entries.find((e) => e.cap === cap);
+    return entry?.mesh ?? null;
+  }
+
+  /**
+   * Pick the smallest room whose footprint contains the ray∩cut-plane point.
+   * Reliable when coplanar shell/room geometry confuses mesh raycasts.
+   */
+  pickRoomMeshAtCut(
+    raycaster: THREE.Raycaster,
+    roomMeshes: THREE.Mesh[],
+  ): THREE.Mesh | null {
+    if (!this.enabled || !this.capsEnabled || this.orientation !== "horizontal") {
+      return null;
+    }
+    this._pickPlane.set(new THREE.Vector3(0, 1, 0), -this.cutValue);
+    if (!raycaster.ray.intersectPlane(this._pickPlane, this._pickPt)) {
+      return null;
+    }
+    let best: THREE.Mesh | null = null;
+    let bestArea = Infinity;
+    for (const mesh of roomMeshes) {
+      if (!mesh.visible) continue;
+      this._pickBox.setFromObject(mesh);
+      if (this._pickBox.isEmpty()) continue;
+      const { min, max } = this._pickBox;
+      if (
+        this._pickPt.x < min.x ||
+        this._pickPt.x > max.x ||
+        this._pickPt.z < min.z ||
+        this._pickPt.z > max.z
+      ) {
+        continue;
+      }
+      // Room must actually span the cut height
+      if (this._pickPt.y < min.y - 0.05 || this._pickPt.y > max.y + 0.05) {
+        continue;
+      }
+      const area = Math.max(1e-6, (max.x - min.x) * (max.z - min.z));
+      if (area < bestArea) {
+        bestArea = area;
+        best = mesh;
+      }
+    }
+    return best;
   }
 
   rebindMaterials() {
@@ -205,6 +263,13 @@ export class ClipSliceController {
     for (const mesh of this.tracked) {
       if (!mesh.geometry) continue;
 
+      const isRoom =
+        mesh.userData.kind === "room" || Boolean(mesh.userData.roomId);
+
+      // Horizontal Schnitthöhe: only room fills — shell caps were covering rooms
+      // with wrong (element) colors. Shell still clips via material planes.
+      if (this.orientation === "horizontal" && !isRoom) continue;
+
       mesh.updateWorldMatrix(true, false);
       this._box.setFromObject(mesh);
       if (this._box.isEmpty()) continue;
@@ -228,14 +293,12 @@ export class ClipSliceController {
         );
       }
 
-      const capMat = new THREE.MeshStandardMaterial({
+      const capMat = new THREE.MeshBasicMaterial({
         side: THREE.DoubleSide,
         clippingPlanes: [],
         depthWrite: true,
         depthTest: true,
-        roughness: 1,
-        metalness: 0,
-        envMapIntensity: 0,
+        toneMapped: false,
         stencilWrite: true,
         stencilRef: 0,
         stencilFunc: THREE.NotEqualStencilFunc,
@@ -253,8 +316,24 @@ export class ClipSliceController {
         cap.rotation.set(0, 0, 0);
         cap.position.set(this._center.x, this._center.y, this.cutValue);
       }
-      cap.renderOrder = baseOrder + 1.5;
+      // Rooms above shell when both exist (vertical presentation cut)
+      cap.renderOrder = baseOrder + 1.5 + (isRoom ? 1000 : 0);
       cap.userData.isClipCap = true;
+      if (mesh.userData.roomId != null) {
+        cap.userData.roomId = mesh.userData.roomId;
+      }
+      if (mesh.userData.expressId != null) {
+        cap.userData.expressId = mesh.userData.expressId;
+      }
+      if (mesh.userData.floorId != null) {
+        cap.userData.floorId = mesh.userData.floorId;
+      }
+      if (mesh.userData.kind != null) {
+        cap.userData.kind = mesh.userData.kind;
+      }
+      if (mesh.userData.colorHex != null) {
+        cap.userData.colorHex = mesh.userData.colorHex;
+      }
       this.capsGroup.add(cap);
 
       this.entries.push({ mesh, stencil, cap, capMat });
@@ -301,48 +380,48 @@ export class ClipSliceController {
 
   private syncCapFromMesh(e: {
     mesh: THREE.Mesh;
+    cap: THREE.Mesh;
     capMat: CapMaterial;
   }) {
     this.applySourceAppearance(e.capMat, e.mesh);
+    if (e.mesh.userData.colorHex != null) {
+      e.cap.userData.colorHex = e.mesh.userData.colorHex;
+    }
+    if (e.mesh.userData.roomId != null) {
+      e.cap.userData.roomId = e.mesh.userData.roomId;
+    }
   }
 
   private applySourceAppearance(capMat: CapMaterial, mesh: THREE.Mesh) {
     const src = this.readSourceMaterial(mesh);
     const lighting = useAppStore.getState().lighting;
-    const isRoom = Boolean(mesh.userData.roomId);
+    const isRoom =
+      mesh.userData.kind === "room" || Boolean(mesh.userData.roomId);
 
-    // Prefer live mesh color (already includes render-mode tint)
-    if (src?.color) capMat.color.copy(src.color);
-    else {
-      const hex =
+    // Prefer the live room color (already includes render-mode / lighting tint).
+    // Fall back to stored heizlast/temp hex so caps stay in sync with overlays.
+    if (src?.color) {
+      capMat.color.copy(src.color);
+    } else {
+      const hexRaw =
         (mesh.userData.colorHex as string | number | undefined) ??
+        (src && "userData" in src
+          ? (src.userData.baseColorHex as string | number | undefined)
+          : undefined) ??
         (mesh.userData.baseColorHex as string | number | undefined);
-      if (typeof hex === "number") capMat.color.setHex(hex);
-      else if (typeof hex === "string" && hex) capMat.color.set(hex);
+      if (typeof hexRaw === "number") capMat.color.setHex(hexRaw);
+      else if (typeof hexRaw === "string" && hexRaw) capMat.color.set(hexRaw);
       else capMat.color.setHex(0xb8bec8);
     }
 
-    // Same sliders as spaces / elements — always follow lighting
     const opacity = isRoom
       ? lighting.spaceTransparency
       : lighting.elementTransparency;
-
     const opaque = opacity >= 0.995;
     capMat.opacity = opaque ? 1 : Math.max(0, Math.min(1, opacity));
     capMat.transparent = !opaque;
-    // Rooms write depth when translucent; shell does not — match that
     capMat.depthWrite = opaque || isRoom;
-    capMat.roughness = 1;
-    capMat.metalness = 0;
-    capMat.envMapIntensity = 0;
-    if (src && "emissive" in src && src.emissive && "emissive" in capMat) {
-      capMat.emissive.copy(src.emissive);
-      capMat.emissiveIntensity =
-        typeof src.emissiveIntensity === "number" ? src.emissiveIntensity : 0;
-    } else {
-      capMat.emissive.setHex(0x000000);
-      capMat.emissiveIntensity = 0;
-    }
+    capMat.toneMapped = false;
     capMat.needsUpdate = true;
   }
 
@@ -350,8 +429,7 @@ export class ClipSliceController {
     color?: THREE.Color;
     opacity?: number;
     transparent?: boolean;
-    emissive?: THREE.Color;
-    emissiveIntensity?: number;
+    userData?: Record<string, unknown>;
   }) | null {
     const m = mesh.material;
     return ((Array.isArray(m) ? m[0] : m) as THREE.Material) ?? null;

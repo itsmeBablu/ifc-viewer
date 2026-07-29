@@ -99,11 +99,13 @@ export default function FloorsPanel({
   const [floorsExpanded, setFloorsExpanded] = useState(true);
   const [roomsExpanded, setRoomsExpanded] = useState(true);
   const [selectionExpanded, setSelectionExpanded] = useState(false);
+  const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelTipOpen, setModelTipOpen] = useState(false);
   const [modelTipSuppressed, setModelTipSuppressed] = useState(false);
   const [modelTipPos, setModelTipPos] = useState({ top: 0, left: 0 });
-  const modelBadgeRef = useRef<HTMLButtonElement>(null);
+  const modelBadgeRef = useRef<HTMLDivElement>(null);
+  const modelNameBtnRef = useRef<HTMLButtonElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const modelFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,7 +114,7 @@ export default function FloorsPanel({
   }, [selectedFloor]);
 
   const updateModelTipPos = () => {
-    const el = modelBadgeRef.current;
+    const el = modelNameBtnRef.current ?? modelBadgeRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     setModelTipPos({ top: r.bottom + 10, left: r.left + r.width / 2 });
@@ -383,11 +385,11 @@ export default function FloorsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-zinc-800">
-      <section className="space-y-2 px-4 py-3">
+      <section className="px-4 py-2">
         {/* Header row: label + yellow glass IFC name badge */}
         <div className="flex items-center justify-between gap-2">
           <p className={heading.muted}>{t(uiLanguage, "model")}</p>
-          <div className="relative max-w-[58%]">
+          <div className="relative max-w-[70%]">
             <input
               ref={modelFileInputRef}
               type="file"
@@ -399,30 +401,50 @@ export default function FloorsPanel({
                 if (file) onFile(file);
               }}
             />
-            <button
+            <div
               ref={modelBadgeRef}
-              type="button"
-              disabled={isLoadingModel}
-              onMouseEnter={() => {
-                if (modelTipSuppressed || modelMenuOpen) return;
-                updateModelTipPos();
-                setModelTipOpen(true);
-              }}
-              onMouseLeave={() => {
-                setModelTipOpen(false);
-                setModelTipSuppressed(false);
-              }}
-              onClick={() => {
-                setModelTipOpen(false);
-                setModelTipSuppressed(true);
-                setModelMenuOpen((v) => !v);
-              }}
-              className="max-w-full truncate rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-[0.98] disabled:opacity-45"
-              aria-expanded={modelMenuOpen}
-              aria-label={modelLabel}
+              className="flex max-w-full items-center gap-0.5 rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 py-0.5 pl-2.5 pr-1 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md"
             >
-              {modelLabel}
-            </button>
+              <button
+                ref={modelNameBtnRef}
+                type="button"
+                disabled={isLoadingModel}
+                onMouseEnter={() => {
+                  if (modelTipSuppressed || modelMenuOpen) return;
+                  updateModelTipPos();
+                  setModelTipOpen(true);
+                }}
+                onMouseLeave={() => {
+                  setModelTipOpen(false);
+                  setModelTipSuppressed(false);
+                }}
+                onClick={() => {
+                  setModelTipOpen(false);
+                  setModelTipSuppressed(true);
+                  setModelMenuOpen((v) => !v);
+                }}
+                className="min-w-0 truncate text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-45"
+                aria-expanded={modelMenuOpen}
+                aria-label={modelLabel}
+              >
+                {modelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModelDetailsOpen((v) => !v)}
+                aria-label={
+                  modelDetailsOpen ? "Hide model details" : "Show model details"
+                }
+                aria-expanded={modelDetailsOpen}
+                className="flex shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-amber-950/80 transition hover:bg-amber-950/10"
+              >
+                {modelDetailsOpen ? (
+                  <IoChevronUp className="h-3 w-3" />
+                ) : (
+                  <IoChevronDownSharp className="h-3 w-3" />
+                )}
+              </button>
+            </div>
 
             {modelTipOpen &&
               !modelMenuOpen &&
@@ -480,20 +502,34 @@ export default function FloorsPanel({
           </div>
         </div>
 
-        {/* Single-line stats — values stay, labels truncate */}
-        <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px] text-zinc-600">
-          <span className="shrink-0 font-semibold tabular-nums">{floors.length}</span>
-          <span className="min-w-0 truncate">{t(uiLanguage, "floors")}</span>
-          <span className="shrink-0 text-zinc-400">|</span>
-          <span className="shrink-0 font-semibold tabular-nums">{rooms.length}</span>
-          <span className="min-w-0 truncate">{t(uiLanguage, "rooms")}</span>
-          <span className="shrink-0 text-zinc-400">|</span>
-          <span className="shrink-0 font-semibold tabular-nums">{totalComponents}</span>
-          <span className="min-w-0 truncate">Komp.</span>
-          <span className="shrink-0 text-zinc-400">|</span>
-          <span className="shrink-0 font-semibold">
-            {formatBytes(activeModelFileSizeBytes)}
-          </span>
+        {/* Details — toggled by badge arrow */}
+        <div
+          className={`overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${
+            modelDetailsOpen
+              ? "mt-1.5 max-h-16 opacity-100"
+              : "mt-0 max-h-0 opacity-0"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 overflow-hidden text-[11px] text-zinc-600">
+            <span className="shrink-0 font-semibold tabular-nums">
+              {floors.length}
+            </span>
+            <span className="min-w-0 truncate">{t(uiLanguage, "floors")}</span>
+            <span className="shrink-0 text-zinc-400">|</span>
+            <span className="shrink-0 font-semibold tabular-nums">
+              {rooms.length}
+            </span>
+            <span className="min-w-0 truncate">{t(uiLanguage, "rooms")}</span>
+            <span className="shrink-0 text-zinc-400">|</span>
+            <span className="shrink-0 font-semibold tabular-nums">
+              {totalComponents}
+            </span>
+            <span className="min-w-0 truncate">Komp.</span>
+            <span className="shrink-0 text-zinc-400">|</span>
+            <span className="shrink-0 font-semibold">
+              {formatBytes(activeModelFileSizeBytes)}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -608,10 +644,10 @@ export default function FloorsPanel({
                       <img
                         src={snapshotUrl}
                         alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
-                        className="aspect-square w-full object-contain"
+                        className="block h-auto w-full object-contain"
                       />
                     ) : (
-                      <div className="flex aspect-square items-center justify-center text-[11px] text-zinc-400">
+                      <div className="flex min-h-[7rem] w-full items-center justify-center text-[11px] text-zinc-400">
                         {t(uiLanguage, "noFloorPlan")}
                       </div>
                     )}

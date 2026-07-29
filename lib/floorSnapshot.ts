@@ -9,7 +9,7 @@ const snapshotCache = new Map<CacheKey, string>();
 
 let sharedRenderer: THREE.WebGLRenderer | null = null;
 
-function getRenderer(size: number): THREE.WebGLRenderer {
+function getRenderer(width: number, height: number): THREE.WebGLRenderer {
   if (!sharedRenderer) {
     sharedRenderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -21,7 +21,7 @@ function getRenderer(size: number): THREE.WebGLRenderer {
     sharedRenderer.outputColorSpace = THREE.SRGBColorSpace;
     sharedRenderer.localClippingEnabled = true;
   }
-  sharedRenderer.setSize(size, size, false);
+  sharedRenderer.setSize(width, height, false);
   sharedRenderer.setPixelRatio(1);
   sharedRenderer.setClearColor(0x000000, 0);
   return sharedRenderer;
@@ -58,7 +58,7 @@ export function renderFloorSnapshot(
     selectedRoomId ?? "none"
   }::palette=${activeColorPalette ?? "default"}::range=${heizlastRange
     .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
-    .join(",")}::selColor=${selectedHeatColor}::v4`;
+    .join(",")}::selColor=${selectedHeatColor}::v5`;
   const cached = snapshotCache.get(cacheKey);
   if (cached) return cached;
 
@@ -169,12 +169,15 @@ export function renderFloorSnapshot(
 
   scene.add(planGroup);
 
-  const span = Math.max(size3.x, size3.z, 1) * 1.12;
+  // Frame to model footprint (X×Z) with a small margin — not a forced square.
+  const pad = 1.04;
+  const worldW = Math.max(size3.x, 0.1) * pad;
+  const worldD = Math.max(size3.z, 0.1) * pad;
   const camera = new THREE.OrthographicCamera(
-    -span / 2,
-    span / 2,
-    span / 2,
-    -span / 2,
+    -worldW / 2,
+    worldW / 2,
+    worldD / 2,
+    -worldD / 2,
     0.1,
     5000,
   );
@@ -183,7 +186,18 @@ export function renderFloorSnapshot(
   camera.lookAt(center.x, midY, center.z);
   camera.updateProjectionMatrix();
 
-  const renderer = getRenderer(size);
+  const maxPx = size;
+  let outW: number;
+  let outH: number;
+  if (worldW >= worldD) {
+    outW = maxPx;
+    outH = Math.max(64, Math.round(maxPx * (worldD / worldW)));
+  } else {
+    outH = maxPx;
+    outW = Math.max(64, Math.round(maxPx * (worldW / worldD)));
+  }
+
+  const renderer = getRenderer(outW, outH);
   renderer.render(scene, camera);
   const dataUrl = renderer.domElement.toDataURL("image/png");
 

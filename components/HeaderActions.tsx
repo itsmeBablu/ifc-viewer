@@ -22,12 +22,31 @@ type Props = {
   isLoadingModel: boolean;
 };
 
-const MODE_LETTER: Record<HeaderMode, string> = {
-  heizlast: "H",
-  luftung: "L",
-  kuhllast: "K",
-  editor: "T",
+const MODE_ICON: Record<HeaderMode, string> = {
+  heizlast: "/Heating.svg",
+  luftung: "/ventilation.svg",
+  kuhllast: "/cooling.svg",
+  editor: "/tool.svg",
 };
+
+function ModeIcon({
+  mode,
+  className = "h-5 w-5 object-contain sm:h-[1.35rem] sm:w-[1.35rem]",
+}: {
+  mode: HeaderMode;
+  className?: string;
+}) {
+  return (
+    <Image
+      src={MODE_ICON[mode]}
+      alt=""
+      width={22}
+      height={22}
+      className={className}
+      aria-hidden
+    />
+  );
+}
 
 function UploadIcon() {
   return (
@@ -176,7 +195,7 @@ export default function HeaderActions({
   const yellowGloss =
     "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
   const roundBtn =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-bold transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const roundIdle = `${roundBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const roundActive = `${roundBtn} ${yellowGloss}`;
 
@@ -215,7 +234,7 @@ export default function HeaderActions({
         {modeOpen && (
           <div className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]">
             <GlassPanel variant="control" zIndex={50}>
-              <div className="w-max min-w-[12rem] p-1 text-xs text-zinc-700">
+              <div className="w-max min-w-[12rem] divide-y divide-zinc-200/70 p-1 text-xs text-zinc-700">
                 {modeOptions.map((opt) => (
                   <button
                     key={opt.id}
@@ -230,8 +249,8 @@ export default function HeaderActions({
                         : "border border-transparent hover:border-white/55 hover:bg-white/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] hover:backdrop-blur-md"
                     }`}
                   >
-                    <span className="mr-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-800/90 text-[10px] font-bold text-white">
-                      {MODE_LETTER[opt.id]}
+                    <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70">
+                      <ModeIcon mode={opt.id} className="h-4 w-4 object-contain" />
                     </span>
                     {opt.label}
                   </button>
@@ -330,7 +349,7 @@ export default function HeaderActions({
                       aria-label={t(uiLanguage, "heating")}
                       className={modeOpen ? roundActive : roundIdle}
                     >
-                      <span className="leading-none">{MODE_LETTER[mode]}</span>
+                      <ModeIcon mode={mode} />
                     </button>
                   </HeaderTip>
                 </div>
