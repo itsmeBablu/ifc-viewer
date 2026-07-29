@@ -8,7 +8,7 @@ export default function AppHeader() {
   return (
     <div
       data-app-header
-      className="pointer-events-none fixed top-3 left-4 z-[45]"
+      className="pointer-events-none fixed top-2 left-2 z-[45] sm:top-3 sm:left-3 md:left-4"
     >
       <div className="pointer-events-auto">
         <GlassPanel variant="panel" zIndex={45}>

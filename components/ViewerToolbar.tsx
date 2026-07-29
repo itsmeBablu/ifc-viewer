@@ -347,7 +347,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const blueGloss =
     "border border-sky-200/70 bg-gradient-to-br from-sky-200/95 via-sky-300/85 to-sky-400/75 text-sky-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(56,189,248,0.35)] backdrop-blur-md";
   const btnBase =
-    "flex h-10 w-10 items-center justify-center rounded-full p-2 transition-all duration-200 active:scale-95";
+    "flex h-8 w-8 items-center justify-center rounded-full p-1.5 transition-all duration-200 active:scale-95 sm:h-10 sm:w-10 sm:p-2";
   const btnIdle = `${btnBase} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
   const btnActive = `${btnBase} ${yellowGloss}`;
   const btnPresentationIdle = `${btnBase} ${yellowGloss}`;
@@ -554,13 +554,13 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
   return (
     <>
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2">
+      <div className="pointer-events-none fixed bottom-[max(0.65rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(100vw-1rem,36rem)] -translate-x-1/2 px-1 sm:bottom-5 sm:w-auto sm:px-0">
         <GlassPanel
           variant="panel"
           zIndex={40}
-          wrapperClassName="pointer-events-auto"
+          wrapperClassName="pointer-events-auto mx-auto max-w-full"
         >
-          <div className="flex items-center gap-1.5 px-2.5 py-2">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto px-1.5 py-1.5 scrollbar-none sm:gap-1.5 sm:overflow-visible sm:px-2.5 sm:py-2">
             <ToolTipWrap
               label={t(uiLanguage, "fitModel")}
               hint={t(uiLanguage, "fitModelHint")}

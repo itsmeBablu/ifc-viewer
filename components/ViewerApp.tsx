@@ -298,11 +298,11 @@ export default function ViewerApp() {
         </div>
 
         {isDraggingIfc && !isLoadingModel && (
-          <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/35 p-6 backdrop-blur-[2px]">
+          <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/35 p-4 backdrop-blur-[2px] sm:p-6">
             <GlassPanel
               variant="panel"
               zIndex={100}
-              wrapperClassName="w-full max-w-md"
+              wrapperClassName="w-full max-w-[min(28rem,calc(100vw-2rem))]"
             >
               <div className="px-6 py-8 text-center">
                 <p className="text-base font-semibold tracking-wide text-zinc-900">
@@ -317,11 +317,11 @@ export default function ViewerApp() {
         )}
 
         {isLoadingModel && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-6">
+          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
             <GlassPanel
               variant="panel"
               zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-sm"
+              wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
             >
               <div className="p-6">
                 <div className="mb-3 flex items-center gap-3">
@@ -349,11 +349,11 @@ export default function ViewerApp() {
         )}
 
         {showEmptyCta && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-6">
+          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
             <GlassPanel
               variant="panel"
               zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-sm"
+              wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
             >
               <div className="p-6 text-center">
                 <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
@@ -371,11 +371,11 @@ export default function ViewerApp() {
         )}
 
         {showError && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-6">
+          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
             <GlassPanel
               variant="panel"
               zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-md"
+              wrapperClassName="pointer-events-auto w-full max-w-[min(28rem,calc(100vw-2rem))]"
             >
               <div className="p-6 text-center">
                 <div className="mb-3 flex justify-center">
@@ -428,9 +428,9 @@ export default function ViewerApp() {
         {/* LEFT — Floors & Rooms (hidden during Presentation View) */}
         {isDesktop && !isPresentationView && (
           <aside
-            className={`fixed top-28 bottom-4 z-[35] flex w-[min(360px,calc(100vw-2rem))] flex-col ${motion.sidebar} ${
+            className={`fixed top-20 bottom-3 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col md:top-24 md:bottom-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] ${motion.sidebar} ${
               leftPanelOpen
-                ? "left-4 pointer-events-auto translate-x-0"
+                ? "left-2 pointer-events-auto translate-x-0 md:left-4"
                 : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
             }`}
           >
@@ -481,13 +481,13 @@ export default function ViewerApp() {
         {/* RIGHT — Legend (basic) / combined Legend+Rooms (presentation) */}
         {isDesktop && (
           <aside
-            className={`fixed top-56 z-[35] flex w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden ${
+            className={`fixed top-44 z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden md:top-52 md:w-[min(22rem,calc(100vw-2rem))] lg:top-56 lg:w-[min(24rem,calc(100vw-2rem))] ${
               isPresentationView && presentationRoomsOpen
                 ? "bottom-20 pb-1"
                 : ""
             } ${motion.sidebar} ${
               rightPanelOpen
-                ? "right-4 pointer-events-auto translate-x-0"
+                ? "right-2 pointer-events-auto translate-x-0 md:right-4"
                 : "right-0 pointer-events-auto translate-x-[calc(100%-1.25rem)]"
             }`}
           >
@@ -560,7 +560,7 @@ export default function ViewerApp() {
                   setRightPanelOpen(true);
                 }}
                 aria-label={t(uiLanguage, "showPanels")}
-                className="fixed right-4 bottom-5 z-40 h-14 w-14"
+                className="fixed right-3 z-40 h-12 w-12 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:right-4 sm:h-14 sm:w-14"
               >
                 <GlassPanel
                   variant="control"
@@ -602,7 +602,7 @@ export default function ViewerApp() {
                 }}
               />
               <div
-                className={`absolute inset-x-3 bottom-3 top-[14%] flex flex-col ${motion.sidebar} ${
+                className={`absolute inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] top-[12%] flex flex-col sm:inset-x-3 sm:bottom-3 sm:top-[14%] ${motion.sidebar} ${
                   leftPanelOpen || rightPanelOpen
                     ? "translate-y-0"
                     : "translate-y-10"

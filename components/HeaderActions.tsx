@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { MdOutlineAccountCircle } from "react-icons/md";
 import { t } from "@/lib/i18n";
@@ -22,18 +29,17 @@ const MODE_LETTER: Record<HeaderMode, string> = {
   editor: "T",
 };
 
-function UploadIcon({ className = "" }: { className?: string }) {
+function UploadIcon() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
       aria-hidden
     >
       <path d="M12 16V5" />
@@ -43,9 +49,91 @@ function UploadIcon({ className = "" }: { className?: string }) {
   );
 }
 
+/** Hover explanation popup below a header control. */
+function HeaderTip({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [suppressed, setSuppressed] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const updatePos = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ top: r.bottom + 10, left: r.left + r.width / 2 });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="relative flex items-center justify-center"
+      onMouseEnter={() => {
+        if (suppressed) return;
+        updatePos();
+        setOpen(true);
+      }}
+      onMouseLeave={() => {
+        setOpen(false);
+        setSuppressed(false);
+      }}
+      onFocus={() => {
+        if (suppressed) return;
+        updatePos();
+        setOpen(true);
+      }}
+      onBlur={() => setOpen(false)}
+      onClick={() => {
+        setOpen(false);
+        setSuppressed(true);
+      }}
+    >
+      {children}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-[200] w-max max-w-[220px] -translate-x-1/2 animate-[fadeTip_160ms_ease-out]"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <GlassPanel variant="control" zIndex={200}>
+              <div className="px-3 py-2 text-center">
+                <p className="text-[11px] font-semibold tracking-wide text-zinc-900">
+                  {label}
+                </p>
+                <p className="mt-0.5 text-[10px] leading-snug text-zinc-600">
+                  {hint}
+                </p>
+              </div>
+            </GlassPanel>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 /**
- * Top-right actions: View | Data | Profile (icon on top, label below).
- * Offset left to clear the 3D view cube (~100px + margin).
+ * Compact round Heating control — expands on hover to Data + Profile.
  */
 export default function HeaderActions({
   onFile,
@@ -58,14 +146,18 @@ export default function HeaderActions({
   const [mode, setMode] = useState<HeaderMode>("heizlast");
   const [modeOpen, setModeOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const expanded = hovered || modeOpen || langOpen;
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
         setModeOpen(false);
         setLangOpen(false);
+        setHovered(false);
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -81,16 +173,25 @@ export default function HeaderActions({
 
   const yellowGloss =
     "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
-  const btnBase =
-    "flex h-7 w-7 items-center justify-center rounded-full p-1 transition-all duration-200 active:scale-95 sm:h-8 sm:w-8";
-  const btnIdle = `${btnBase} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
-  const btnActive = `${btnBase} ${yellowGloss}`;
+  const roundBtn =
+    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all duration-300 ease-out active:scale-95";
+  const roundIdle = `${roundBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
+  const roundActive = `${roundBtn} ${yellowGloss}`;
+
+  const sideBtn =
+    "flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-full transition-all duration-300 ease-out active:scale-95";
+  const sideIdle = `${sideBtn} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
+  const sideActive = `${sideBtn} ${yellowGloss}`;
 
   return (
     <div
       ref={rootRef}
       data-app-header-actions
-      className="pointer-events-none fixed top-3 z-[45] right-[8.75rem] sm:right-36 md:right-40"
+      className="pointer-events-none fixed top-2 z-[45] right-[7.25rem] sm:top-3 sm:right-32 md:right-[8.5rem]"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        if (!modeOpen && !langOpen) setHovered(false);
+      }}
     >
       <input
         ref={fileInputRef}
@@ -104,9 +205,9 @@ export default function HeaderActions({
         }}
       />
 
-      <div className="pointer-events-auto relative w-max min-w-[11.5rem] sm:min-w-[13.5rem] max-w-[min(100vw-9rem,18rem)]">
+      <div className="pointer-events-auto relative w-max">
         {modeOpen && (
-          <div className="absolute top-[calc(100%+0.35rem)] left-0 z-[50]">
+          <div className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]">
             <GlassPanel variant="control" zIndex={50}>
               <div className="w-48 p-1 text-xs text-zinc-700 sm:w-52">
                 {modeOptions.map((opt) => (
@@ -135,7 +236,7 @@ export default function HeaderActions({
         )}
 
         {langOpen && (
-          <div className="absolute top-[calc(100%+0.35rem)] right-0 z-[50]">
+          <div className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]">
             <GlassPanel variant="control" zIndex={50}>
               <div className="min-w-[148px] p-1.5 sm:min-w-[160px] sm:p-2">
                 <p className="mb-1.5 px-1.5 text-[10px] font-semibold tracking-wide text-zinc-500">
@@ -184,63 +285,75 @@ export default function HeaderActions({
         )}
 
         <GlassPanel variant="panel" zIndex={45}>
-          <div className="grid grid-cols-3 gap-2 px-2.5 py-0.5 sm:gap-3.5 sm:px-4 sm:py-0.5">
-            {/* View */}
-            <div className="flex min-w-0 flex-col items-center leading-none">
+          <div
+            className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              expanded
+                ? "gap-0.5 px-1 py-0.5"
+                : "justify-center gap-0 px-0.5 py-0.5"
+            }`}
+          >
+            <HeaderTip
+              label={t(uiLanguage, "heating")}
+              hint={t(uiLanguage, "viewHint")}
+            >
               <button
                 type="button"
                 onClick={() => {
                   setModeOpen((v) => !v);
                   setLangOpen(false);
+                  setHovered(true);
                 }}
-                aria-expanded={modeOpen}
-                aria-label={t(uiLanguage, "view")}
-                className={`${modeOpen ? btnActive : btnIdle} text-xs font-bold sm:text-sm`}
+                aria-expanded={modeOpen || expanded}
+                aria-label={t(uiLanguage, "heating")}
+                className={modeOpen ? roundActive : roundIdle}
               >
                 {MODE_LETTER[mode]}
               </button>
-              <span className="mt-px w-full truncate text-center text-[8px] font-medium text-zinc-600 sm:text-[9px]">
-                {t(uiLanguage, "view")}
-              </span>
-            </div>
+            </HeaderTip>
 
-            {/* Data (IFC) */}
-            <div className="flex min-w-0 flex-col items-center leading-none">
-              <button
-                type="button"
-                disabled={isLoadingModel}
-                onClick={() => {
-                  setModeOpen(false);
-                  setLangOpen(false);
-                  fileInputRef.current?.click();
-                }}
-                aria-label={t(uiLanguage, "loadIfc")}
-                className={`${hasModel ? btnActive : btnIdle} disabled:opacity-45`}
+            <div
+              className={`flex items-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                expanded
+                  ? "ml-0.5 max-w-[5.5rem] gap-0.5 opacity-100"
+                  : "ml-0 max-w-0 gap-0 opacity-0 pointer-events-none"
+              }`}
+            >
+              <HeaderTip
+                label={t(uiLanguage, "data")}
+                hint={t(uiLanguage, "dataHint")}
               >
-                <UploadIcon />
-              </button>
-              <span className="mt-px w-full truncate text-center text-[8px] font-medium text-zinc-600 sm:text-[9px]">
-                {t(uiLanguage, "data")}
-              </span>
-            </div>
+                <button
+                  type="button"
+                  disabled={isLoadingModel}
+                  onClick={() => {
+                    setModeOpen(false);
+                    setLangOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  aria-label={t(uiLanguage, "loadIfc")}
+                  className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
+                >
+                  <UploadIcon />
+                </button>
+              </HeaderTip>
 
-            {/* Profile */}
-            <div className="flex min-w-0 flex-col items-center leading-none">
-              <button
-                type="button"
-                onClick={() => {
-                  setLangOpen((v) => !v);
-                  setModeOpen(false);
-                }}
-                aria-expanded={langOpen}
-                aria-label={t(uiLanguage, "profile")}
-                className={langOpen ? btnActive : btnIdle}
+              <HeaderTip
+                label={t(uiLanguage, "profile")}
+                hint={t(uiLanguage, "profileHint")}
               >
-                <MdOutlineAccountCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-              </button>
-              <span className="mt-px w-full truncate text-center text-[8px] font-medium text-zinc-600 sm:text-[9px]">
-                {t(uiLanguage, "profile")}
-              </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLangOpen((v) => !v);
+                    setModeOpen(false);
+                  }}
+                  aria-expanded={langOpen}
+                  aria-label={t(uiLanguage, "profile")}
+                  className={langOpen ? sideActive : sideIdle}
+                >
+                  <MdOutlineAccountCircle className="h-4 w-4" />
+                </button>
+              </HeaderTip>
             </div>
           </div>
         </GlassPanel>

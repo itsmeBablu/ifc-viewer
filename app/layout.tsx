@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,14 @@ export const metadata: Metadata = {
     "Client-side IFC viewer for building heating load (Heizlast) and room temperature visualization",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f4f4f5",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +36,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full overflow-hidden bg-zinc-100 text-zinc-900">
+      <body className="min-h-full overflow-hidden overscroll-none bg-zinc-100 text-zinc-900 touch-manipulation">
         {children}
       </body>
     </html>

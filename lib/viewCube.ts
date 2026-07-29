@@ -7,10 +7,10 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  * Bump `revision` whenever size/margins change so Viewer3D remounts the instance.
  */
 export const VIEW_CUBE_LAYOUT = {
-  revision: 16,
-  size: 112,
-  marginTop: 72,
-  marginRight: 148,
+  revision: 17,
+  size: 104,
+  marginTop: 64,
+  marginRight: 18,
 } as const;
 
 type ZoneKind = "face" | "edge" | "corner";
