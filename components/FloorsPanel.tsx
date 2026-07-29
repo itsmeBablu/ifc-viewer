@@ -332,25 +332,41 @@ export default function FloorsPanel({
         viewportDataUrl: string | null;
         pageFormat?: PageFormat;
       }[] = [];
+      let prevIsolate = presentationIsolate;
+      let prevFloorId = presentationFloorId;
       for (let i = 0; i < selected.length; i += 1) {
         const view = selected[i];
         setPdfProgress(
           `${t(uiLanguage, "capturingSaved")} (${i + 1}/${selected.length}: ${view.name})`,
         );
         // When exporting in presentation mode, also restore the presentation isolate state.
+        // Changing isolate/floor triggers presentation flyIso — wait, then re-apply saved pose.
         if (isPresentationView) {
           const fid = view.floorId;
-          setPresentationIsolate(fid != null);
+          const nextIsolate = fid != null;
+          const layoutChanged =
+            nextIsolate !== prevIsolate || fid !== prevFloorId;
+          setPresentationIsolate(nextIsolate);
           setPresentationFloorId(fid);
           setSelectedFloor(null);
+          prevIsolate = nextIsolate;
+          prevFloorId = fid;
+          if (layoutChanged) {
+            await new Promise((r) => setTimeout(r, 1100));
+          } else {
+            await new Promise((r) => setTimeout(r, 120));
+          }
+          await viewerRef.current.flyToPose(view.position, view.target, 1);
         } else {
           setSelectedFloor(view.floorId);
+          await viewerRef.current.flyToPose(view.position, view.target, 700);
         }
-        await viewerRef.current.flyToPose(view.position, view.target, 700);
-        // Wait one frame for camera + overlays to settle.
         await new Promise((resolve) =>
-          requestAnimationFrame(() => resolve(undefined)),
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => resolve(undefined)),
+          ),
         );
+        await new Promise((r) => setTimeout(r, 100));
         const viewportDataUrl =
           viewerRef.current.captureViewport({ scale: 2.2 }) ?? null;
         pages.push({

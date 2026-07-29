@@ -165,6 +165,11 @@ export default function HeaderActions({
   const [mode, setMode] = useState<HeaderMode>("heizlast");
   const [modeOpen, setModeOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  /** Which dropdown row is under the pointer — highlight follows this, not only selection. */
+  const [modeHoverId, setModeHoverId] = useState<HeaderMode | null>(null);
+  const [langHoverId, setLangHoverId] = useState<"en" | "de" | "es" | null>(
+    null,
+  );
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +182,8 @@ export default function HeaderActions({
       if (!rootRef.current?.contains(e.target as Node)) {
         setModeOpen(false);
         setLangOpen(false);
+        setModeHoverId(null);
+        setLangHoverId(null);
         setHovered(false);
         setPinned(false);
       }
@@ -232,36 +239,54 @@ export default function HeaderActions({
 
       <div className="relative w-full">
         {modeOpen && (
-          <div className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]">
+          <div
+            className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]"
+            onMouseLeave={() => setModeHoverId(null)}
+          >
             <GlassPanel variant="control" zIndex={50}>
               <div className="w-max min-w-[12rem] divide-y divide-zinc-200/70 p-1 text-xs text-zinc-700">
-                {modeOptions.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      setMode(opt.id);
-                      setModeOpen(false);
-                    }}
-                    className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left transition-all duration-200 ${
-                      mode === opt.id
-                        ? "border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] backdrop-blur-md"
-                        : "border border-transparent hover:border-white/55 hover:bg-white/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] hover:backdrop-blur-md"
-                    }`}
-                  >
-                    <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70">
-                      <ModeIcon mode={opt.id} className="h-4 w-4 object-contain" />
-                    </span>
-                    {opt.label}
-                  </button>
-                ))}
+                {modeOptions.map((opt) => {
+                  const selected = mode === opt.id;
+                  const highlighted =
+                    modeHoverId != null
+                      ? modeHoverId === opt.id
+                      : selected;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onMouseEnter={() => setModeHoverId(opt.id)}
+                      onClick={() => {
+                        setMode(opt.id);
+                        setModeOpen(false);
+                        setModeHoverId(null);
+                      }}
+                      className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left transition-all duration-200 ${
+                        highlighted
+                          ? "border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] backdrop-blur-md"
+                          : `border border-transparent ${selected ? "font-semibold text-zinc-800" : ""}`
+                      }`}
+                    >
+                      <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70">
+                        <ModeIcon
+                          mode={opt.id}
+                          className="h-4 w-4 object-contain"
+                        />
+                      </span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
             </GlassPanel>
           </div>
         )}
 
         {langOpen && (
-          <div className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]">
+          <div
+            className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]"
+            onMouseLeave={() => setLangHoverId(null)}
+          >
             <GlassPanel variant="control" zIndex={50}>
               <div className="min-w-[148px] p-1.5 sm:min-w-[160px] sm:p-2">
                 <p className="mb-1.5 px-1.5 text-[10px] font-semibold tracking-wide text-zinc-500">
@@ -276,18 +301,24 @@ export default function HeaderActions({
                     ] as const
                   ).map(([lang, labelKey]) => {
                     const selected = uiLanguage === lang;
+                    const highlighted =
+                      langHoverId != null
+                        ? langHoverId === lang
+                        : selected;
                     return (
                       <button
                         key={lang}
                         type="button"
+                        onMouseEnter={() => setLangHoverId(lang)}
                         onClick={() => {
                           setUiLanguage(lang);
                           setLangOpen(false);
+                          setLangHoverId(null);
                         }}
                         className={`flex items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition-all duration-200 ${
-                          selected
+                          highlighted
                             ? "border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] backdrop-blur-md"
-                            : "border border-transparent text-zinc-700 hover:border-white/55 hover:bg-white/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] hover:backdrop-blur-md"
+                            : `border border-transparent text-zinc-700 ${selected ? "font-semibold text-zinc-800" : ""}`
                         }`}
                       >
                         <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
@@ -343,6 +374,8 @@ export default function HeaderActions({
                       onClick={() => {
                         setModeOpen((v) => !v);
                         setLangOpen(false);
+                        setLangHoverId(null);
+                        setModeHoverId(null);
                         setHovered(true);
                       }}
                       aria-expanded={modeOpen || expanded}
@@ -385,6 +418,8 @@ export default function HeaderActions({
                       onClick={() => {
                         setLangOpen((v) => !v);
                         setModeOpen(false);
+                        setModeHoverId(null);
+                        setLangHoverId(null);
                       }}
                       aria-expanded={langOpen}
                       aria-label={t(uiLanguage, "profile")}

@@ -6,6 +6,11 @@ import { MdKeyboardArrowRight } from "react-icons/md";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
+import {
+  capturePresentationAssets,
+  pdfLegendFromStore,
+} from "@/lib/pdfCapture";
+import { exportPresentationPdf } from "@/lib/pdfExport";
 import GlassPanel from "./GlassPanel";
 import SliceHeightSlider from "./SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
@@ -52,6 +57,7 @@ export default function ViewerContextMenu({
   const [viewName, setViewName] = useState("");
   const [pageFormat, setPageFormat] = useState<PageFormat>("a4");
   const [toast, setToast] = useState<string | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
@@ -169,6 +175,29 @@ export default function ViewerContextMenu({
     close();
   };
 
+  const downloadPresentationPdfNow = async () => {
+    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
+    setPdfExporting(true);
+    close();
+    try {
+      const presentation = await capturePresentationAssets(viewerRef.current, {
+        scale: 3,
+      });
+      const modelName =
+        activeModelLabel?.replace(/\.ifc$/i, "").trim() ||
+        activeModelId ||
+        "IFC Model";
+      exportPresentationPdf({
+        modelName,
+        presentation,
+        legend: pdfLegendFromStore(),
+        pageFormat,
+      });
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
   const isolateFloor = (floorId: string | null) => {
     setSelectedFloor(floorId);
     close();
@@ -259,14 +288,24 @@ export default function ViewerContextMenu({
                 type="button"
                 role="menuitem"
                 className={itemCls}
-                disabled={!activeModelId}
-                onClick={() =>
-                  setSidePanel((p) => (p === "save" ? null : "save"))
-                }
+                disabled={!activeModelId || pdfExporting || (isPresentationView && rooms.length === 0)}
+                onClick={() => {
+                  if (isPresentationView) {
+                    void downloadPresentationPdfNow();
+                    return;
+                  }
+                  setSidePanel((p) => (p === "save" ? null : "save"));
+                }}
                 aria-expanded={sidePanel === "save"}
               >
-                <span>{t(uiLanguage, "saveView")}</span>
-                <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
+                <span>
+                  {isPresentationView
+                    ? t(uiLanguage, "downloadPresentation")
+                    : t(uiLanguage, "saveView")}
+                </span>
+                {!isPresentationView && (
+                  <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-zinc-500" />
+                )}
               </button>
 
               <button

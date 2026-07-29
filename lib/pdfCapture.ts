@@ -155,7 +155,10 @@ export async function captureAllPagesAssets(
 }
 
 /**
- * Capture presentation stack dual view (Heizlast | Temperature) at high scale.
+ * Capture presentation dual view (Heizlast | Temperature).
+ * When already in presentation, keeps the user's camera / isolate / layout
+ * (only enables dual compare for the capture when needed — then snaps pose back).
+ * When not in presentation, enters stack presentation and fits once.
  */
 export async function capturePresentationAssets(
   viewer: Viewer3DHandle,
@@ -164,6 +167,7 @@ export async function capturePresentationAssets(
   const scale = opts?.scale ?? 3;
   const report = opts?.onProgress ?? (() => undefined);
   const store = useAppStore.getState();
+  const alreadyPresenting = store.isPresentationView;
 
   const restore = {
     colorMode: store.colorMode,
@@ -171,6 +175,7 @@ export async function capturePresentationAssets(
     isPresentationView: store.isPresentationView,
     presentationLayoutMode: store.presentationLayoutMode,
     presentationIsolate: store.presentationIsolate,
+    presentationFloorId: store.presentationFloorId,
     compareBothModes: store.compareBothModes,
     pose: viewer.getCameraPose(),
   };
@@ -181,24 +186,39 @@ export async function capturePresentationAssets(
     setPresentationView,
     setPresentationLayoutMode,
     setPresentationIsolate,
+    setPresentationFloorId,
     setCompareBothModes,
   } = useAppStore.getState();
 
   try {
-    setSelectedFloor(null);
-    setPresentationLayoutMode("stack");
-    setPresentationIsolate(false);
-    setCompareBothModes(true);
-    if (!store.isPresentationView) {
+    if (!alreadyPresenting) {
+      report("Presentation view…");
+      setSelectedFloor(null);
+      setPresentationLayoutMode("stack");
+      setPresentationIsolate(false);
+      setCompareBothModes(true);
       setPresentationView(true);
       await waitMs(1200);
+      await waitFrames(3);
+      viewer.fitVisible();
+      await settle(viewer, 350);
     } else {
-      setPresentationLayoutMode("stack");
-      await waitMs(600);
+      // Keep current framing — do not fit / change isolate / layout / floor.
+      report("Capture current presentation view…");
+      const pose = viewer.getCameraPose();
+      if (!store.compareBothModes) {
+        setCompareBothModes(true);
+        // Compare + presentation effects call fitVisible / flyIso — wait, then restore.
+        await waitMs(1100);
+        await viewer.flyToPose(pose.position, pose.target, 1);
+        await waitFrames(4);
+        await waitMs(120);
+      } else {
+        await waitFrames(2);
+        await waitMs(80);
+      }
     }
-    await waitFrames(3);
-    viewer.fitVisible();
-    await settle(viewer, 350);
+
     report("Presentation — dual capture…");
     const dualImage = viewer.captureViewport({ scale }) ?? null;
     return { dualImage };
@@ -211,13 +231,14 @@ export async function capturePresentationAssets(
     }
     setPresentationLayoutMode(restore.presentationLayoutMode);
     setPresentationIsolate(restore.presentationIsolate);
+    setPresentationFloorId(restore.presentationFloorId);
     setColorMode(restore.colorMode as ColorMode);
     setSelectedFloor(restore.selectedFloor);
     await waitMs(200);
     await viewer.flyToPose(
       restore.pose.position,
       restore.pose.target,
-      500,
+      alreadyPresenting ? 1 : 500,
     );
   }
 }
