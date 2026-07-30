@@ -20,6 +20,7 @@ import {
 } from "@/lib/pdfCapture";
 import { exportAllPagesPdf, exportHeizlastPdf, exportPresentationPdf } from "@/lib/pdfExport";
 import { heading } from "@/lib/designTokens";
+import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import { useModelScene } from "./ModelSceneContext";
@@ -163,8 +164,8 @@ export default function FloorsPanel({
   ]);
 
   const sortedFloors = useMemo(
-    () => [...floors].sort((a, b) => a.elevation - b.elevation),
-    [floors],
+    () => listVisibleFloors(floors, rooms, shellGroup),
+    [floors, rooms, shellGroup],
   );
 
   useEffect(() => {
@@ -659,7 +660,7 @@ export default function FloorsPanel({
               <span className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate">{t(uiLanguage, "view3d")}</span>
                 <span className="tabular-nums text-[10px] text-zinc-400">
-                  {floors.length}
+                  {sortedFloors.length}
                 </span>
               </span>
             </button>

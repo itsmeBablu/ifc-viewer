@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { heizlastToColor } from "@/lib/colorMapping";
 import { heading } from "@/lib/designTokens";
+import { listVisibleFloors } from "@/lib/floorFilter";
 import {
   resolvePresentationLayout,
   type PresentationLayoutMode,
@@ -67,10 +68,10 @@ export default function PresentationSidePanel({
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
 
-  const floorsWithRooms = useMemo(() => {
-    const sorted = [...floors].sort((a, b) => a.elevation - b.elevation);
-    return sorted.filter((f) => rooms.some((r) => r.floorId === f.id));
-  }, [floors, rooms]);
+  const floorsWithRooms = useMemo(
+    () => listVisibleFloors(floors, rooms),
+    [floors, rooms],
+  );
 
   const activeLayout = resolvePresentationLayout(
     floorsWithRooms.length || floors.length,

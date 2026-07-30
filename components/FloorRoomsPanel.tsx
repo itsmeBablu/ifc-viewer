@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
+import { listVisibleFloors } from "@/lib/floorFilter";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
@@ -29,15 +30,9 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
 
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
 
-  const sortedFloors = useMemo(
-    () => [...floors].sort((a, b) => a.elevation - b.elevation),
-    [floors],
-  );
-
   const floorsWithRooms = useMemo(
-    () =>
-      sortedFloors.filter((f) => rooms.some((r) => r.floorId === f.id)),
-    [sortedFloors, rooms],
+    () => listVisibleFloors(floors, rooms),
+    [floors, rooms],
   );
 
   const floorRooms = useMemo(() => {
@@ -56,7 +51,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
     }
   }, [selectedFloor, floorsWithRooms, setSelectedFloor]);
 
-  const selectedFloorObj = sortedFloors.find((f) => f.id === selectedFloor);
+  const selectedFloorObj = floorsWithRooms.find((f) => f.id === selectedFloor);
 
   useEffect(() => {
     if (activeModelId) clearFloorSnapshots(activeModelId);
@@ -73,7 +68,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
         renderFloorSnapshot(
           shellGroup,
           selectedFloorObj,
-          sortedFloors,
+          floorsWithRooms,
           activeModelId,
           rooms,
         ),
@@ -81,7 +76,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
     } catch {
       setSnapshotUrl(null);
     }
-  }, [shellGroup, selectedFloorObj, sortedFloors, activeModelId, rooms]);
+  }, [shellGroup, selectedFloorObj, floorsWithRooms, activeModelId, rooms]);
 
   const body = (
     <div className="space-y-3">

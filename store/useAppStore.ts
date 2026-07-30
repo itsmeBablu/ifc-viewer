@@ -7,6 +7,7 @@ import {
   DEFAULT_TEMPERATURE_RANGE,
   parseLegendRange,
 } from "@/lib/colorMapping";
+import { listVisibleFloors } from "@/lib/floorFilter";
 import type {
   ColorMode,
   Floor,
@@ -315,7 +316,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   presentationPrevFloor: null,
   presentationFloorId: null,
   presentationRoomsOpen: false,
-  presentationLayoutMode: "auto",
+  presentationLayoutMode: "stack",
   presentationIsolate: false,
   compareBothModes: false,
   activeFilter: null,
@@ -413,9 +414,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const s = get();
     if (active === s.isPresentationView) return;
     if (active) {
-      const floorsWithRooms = s.floors.filter((f) =>
-        s.rooms.some((r) => r.floorId === f.id),
-      );
+      const floorsWithRooms = listVisibleFloors(s.floors, s.rooms);
       const pool = floorsWithRooms.length ? floorsWithRooms : s.floors;
       const erd = pool.find((f) =>
         /erdgeschoss|\beg\b|ground\s*floor|egeschoss/i.test(f.name),

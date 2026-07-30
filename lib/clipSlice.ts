@@ -8,6 +8,112 @@ export type ClipOrientation = "horizontal" | "verticalZ";
 /** Unlit cap fill — matches room/legend colors (no light shading mismatch). */
 type CapMaterial = THREE.MeshBasicMaterial;
 
+const _fpA = new THREE.Vector3();
+const _fpB = new THREE.Vector3();
+const _fpC = new THREE.Vector3();
+const _fpAb = new THREE.Vector3();
+const _fpCb = new THREE.Vector3();
+
+/**
+ * Flatten room mesh triangles onto XZ (y=0) so Schnitthöhe caps match the
+ * real footprint — including L-shapes / n-gons — instead of the AABB quad.
+ */
+function buildHorizontalFootprintGeometry(
+  mesh: THREE.Mesh,
+): THREE.BufferGeometry | null {
+  const geom = mesh.geometry;
+  const pos = geom.attributes.position;
+  if (!pos) return null;
+
+  mesh.updateWorldMatrix(true, false);
+  const world = mesh.matrixWorld;
+  const index = geom.index;
+  const triCount = index ? index.count / 3 : Math.floor(pos.count / 3);
+  const out: number[] = [];
+
+  for (let t = 0; t < triCount; t++) {
+    let i0: number;
+    let i1: number;
+    let i2: number;
+    if (index) {
+      i0 = index.getX(t * 3);
+      i1 = index.getX(t * 3 + 1);
+      i2 = index.getX(t * 3 + 2);
+    } else {
+      i0 = t * 3;
+      i1 = t * 3 + 1;
+      i2 = t * 3 + 2;
+    }
+    _fpA.fromBufferAttribute(pos, i0).applyMatrix4(world);
+    _fpB.fromBufferAttribute(pos, i1).applyMatrix4(world);
+    _fpC.fromBufferAttribute(pos, i2).applyMatrix4(world);
+
+    // Skip wall-like / degenerate projections (near-zero area in XZ)
+    _fpAb.set(_fpA.x - _fpB.x, 0, _fpA.z - _fpB.z);
+    _fpCb.set(_fpC.x - _fpB.x, 0, _fpC.z - _fpB.z);
+    const area2 = Math.abs(_fpAb.x * _fpCb.z - _fpAb.z * _fpCb.x);
+    if (area2 < 1e-8) continue;
+
+    out.push(_fpA.x, 0, _fpA.z, _fpB.x, 0, _fpB.z, _fpC.x, 0, _fpC.z);
+  }
+
+  if (out.length < 9) return null;
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function pointInFootprintCap(
+  cap: THREE.Mesh,
+  x: number,
+  z: number,
+): boolean {
+  const pos = cap.geometry.attributes.position;
+  if (!pos) return false;
+  const n = pos.count;
+  for (let i = 0; i + 2 < n; i += 3) {
+    const ax = pos.getX(i);
+    const az = pos.getZ(i);
+    const bx = pos.getX(i + 1);
+    const bz = pos.getZ(i + 1);
+    const cx = pos.getX(i + 2);
+    const cz = pos.getZ(i + 2);
+    if (pointInTriangle2D(x, z, ax, az, bx, bz, cx, cz)) return true;
+  }
+  return false;
+}
+
+function pointInTriangle2D(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  cx: number,
+  cz: number,
+): boolean {
+  const v0x = cx - ax;
+  const v0z = cz - az;
+  const v1x = bx - ax;
+  const v1z = bz - az;
+  const v2x = px - ax;
+  const v2z = pz - az;
+  const dot00 = v0x * v0x + v0z * v0z;
+  const dot01 = v0x * v1x + v0z * v1z;
+  const dot02 = v0x * v2x + v0z * v2z;
+  const dot11 = v1x * v1x + v1z * v1z;
+  const dot12 = v1x * v2x + v1z * v2z;
+  const denom = dot00 * dot11 - dot01 * dot01;
+  if (Math.abs(denom) < 1e-18) return false;
+  const inv = 1 / denom;
+  const u = (dot11 * dot02 - dot01 * dot12) * inv;
+  const v = (dot00 * dot12 - dot01 * dot02) * inv;
+  return u >= -1e-6 && v >= -1e-6 && u + v <= 1 + 1e-6;
+}
+
 /**
  * Floor slice: clipping plane + stencil solid caps.
  *
@@ -118,7 +224,7 @@ export class ClipSliceController {
 
   /**
    * Pick the smallest room whose footprint contains the ray∩cut-plane point.
-   * Reliable when coplanar shell/room geometry confuses mesh raycasts.
+   * Prefer actual XZ triangle coverage over AABB (avoids L-shape overlap).
    */
   pickRoomMeshAtCut(
     raycaster: THREE.Raycaster,
@@ -138,6 +244,7 @@ export class ClipSliceController {
       this._pickBox.setFromObject(mesh);
       if (this._pickBox.isEmpty()) continue;
       const { min, max } = this._pickBox;
+      // Quick reject
       if (
         this._pickPt.x < min.x ||
         this._pickPt.x > max.x ||
@@ -146,10 +253,16 @@ export class ClipSliceController {
       ) {
         continue;
       }
-      // Room must actually span the cut height
       if (this._pickPt.y < min.y - 0.05 || this._pickPt.y > max.y + 0.05) {
         continue;
       }
+
+      const entry = this.entries.find((e) => e.mesh === mesh);
+      const inside = entry?.cap.userData.useFootprint
+        ? pointInFootprintCap(entry.cap, this._pickPt.x, this._pickPt.z)
+        : true;
+      if (!inside) continue;
+
       const area = Math.max(1e-6, (max.x - min.x) * (max.z - min.z));
       if (area < bestArea) {
         bestArea = area;
@@ -191,6 +304,13 @@ export class ClipSliceController {
   }
 
   private placeCap(cap: THREE.Mesh, mesh: THREE.Mesh) {
+    // Footprint caps are already in world XZ; only the cut height moves.
+    if (cap.userData.useFootprint) {
+      cap.position.set(0, this.cutValue, 0);
+      cap.rotation.set(0, 0, 0);
+      return;
+    }
+
     mesh.updateWorldMatrix(true, false);
     this._box.setFromObject(mesh);
     if (this._box.isEmpty()) return;
@@ -198,15 +318,15 @@ export class ClipSliceController {
     this._box.getCenter(this._center);
 
     if (this.orientation === "horizontal") {
-      const w = Math.max(this._size.x, 0.05) * 1.05;
-      const d = Math.max(this._size.z, 0.05) * 1.05;
+      const w = Math.max(this._size.x, 0.05);
+      const d = Math.max(this._size.z, 0.05);
       cap.geometry.dispose();
       cap.geometry = new THREE.PlaneGeometry(w, d);
       cap.rotation.set(-Math.PI / 2, 0, 0);
       cap.position.set(this._center.x, this.cutValue, this._center.z);
     } else {
-      const w = Math.max(this._size.x, 0.05) * 1.05;
-      const h = Math.max(this._size.y, 0.05) * 1.05;
+      const w = Math.max(this._size.x, 0.05);
+      const h = Math.max(this._size.y, 0.05);
       cap.geometry.dispose();
       cap.geometry = new THREE.PlaneGeometry(w, h);
       cap.rotation.set(0, 0, 0);
@@ -276,20 +396,36 @@ export class ClipSliceController {
       this._box.getSize(this._size);
       this._box.getCenter(this._center);
 
-      const baseOrder = i * 3;
-      const stencil = this.createStencilGroup(mesh.geometry, baseOrder);
+      // Per-mesh stencil→cap must finish before the next mesh starts.
+      // Batching all stencils then all caps lets AABB quads paint other rooms.
+      // Vertical: rooms after shells so room fills win on the half-section.
+      const orderBase =
+        i * 3 + (isRoom && this.orientation === "verticalZ" ? 10_000 : 0);
+      const stencil = this.createStencilGroup(mesh.geometry, orderBase);
       mesh.add(stencil);
 
-      let geo: THREE.PlaneGeometry;
-      if (this.orientation === "horizontal") {
+      let geo: THREE.BufferGeometry;
+      let useFootprint = false;
+      if (this.orientation === "horizontal" && isRoom) {
+        const footprint = buildHorizontalFootprintGeometry(mesh);
+        if (footprint) {
+          geo = footprint;
+          useFootprint = true;
+        } else {
+          geo = new THREE.PlaneGeometry(
+            Math.max(this._size.x, 0.05),
+            Math.max(this._size.z, 0.05),
+          );
+        }
+      } else if (this.orientation === "horizontal") {
         geo = new THREE.PlaneGeometry(
-          Math.max(this._size.x, 0.05) * 1.05,
-          Math.max(this._size.z, 0.05) * 1.05,
+          Math.max(this._size.x, 0.05),
+          Math.max(this._size.z, 0.05),
         );
       } else {
         geo = new THREE.PlaneGeometry(
-          Math.max(this._size.x, 0.05) * 1.05,
-          Math.max(this._size.y, 0.05) * 1.05,
+          Math.max(this._size.x, 0.05),
+          Math.max(this._size.y, 0.05),
         );
       }
 
@@ -309,15 +445,18 @@ export class ClipSliceController {
       this.applySourceAppearance(capMat, mesh);
 
       const cap = new THREE.Mesh(geo, capMat);
-      if (this.orientation === "horizontal") {
+      cap.userData.useFootprint = useFootprint;
+      if (useFootprint) {
+        cap.rotation.set(0, 0, 0);
+        cap.position.set(0, this.cutValue, 0);
+      } else if (this.orientation === "horizontal") {
         cap.rotation.x = -Math.PI / 2;
         cap.position.set(this._center.x, this.cutValue, this._center.z);
       } else {
         cap.rotation.set(0, 0, 0);
         cap.position.set(this._center.x, this._center.y, this.cutValue);
       }
-      // Rooms above shell when both exist (vertical presentation cut)
-      cap.renderOrder = baseOrder + 1.5 + (isRoom ? 1000 : 0);
+      cap.renderOrder = orderBase + 1.5;
       cap.userData.isClipCap = true;
       if (mesh.userData.roomId != null) {
         cap.userData.roomId = mesh.userData.roomId;

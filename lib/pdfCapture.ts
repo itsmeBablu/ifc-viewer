@@ -1,6 +1,7 @@
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Floor, Room } from "@/lib/types";
 import type { Viewer3DHandle } from "@/components/Viewer3D";
+import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore } from "@/store/useAppStore";
 import type {
   FloorPdfSection,
@@ -34,9 +35,7 @@ async function settle(viewer: Viewer3DHandle, ms = 280): Promise<void> {
 }
 
 function floorsWithRooms(floors: Floor[], rooms: Room[]): Floor[] {
-  return [...floors]
-    .sort((a, b) => a.elevation - b.elevation)
-    .filter((f) => rooms.some((r) => r.floorId === f.id));
+  return listVisibleFloors(floors, rooms);
 }
 
 export function pdfLegendFromStore(): PdfLegendContext {

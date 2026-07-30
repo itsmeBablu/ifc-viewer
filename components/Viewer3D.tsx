@@ -1044,7 +1044,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
 
     const floorMeshes: THREE.Mesh[] = [];
-    // Shell first, rooms last → room Schnitthöhe caps get higher renderOrder and draw on top.
+    // Shell first, rooms last. Cap stencil/fill are interleaved per mesh in ClipSlice.
     shellCloneRef.current?.traverse((o) => {
       if (isShellMesh(o) && o.userData.floorId === selectedFloor) {
         floorMeshes.push(o);
