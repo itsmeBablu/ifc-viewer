@@ -13,9 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Heizlast Präsentation",
+  title: "IBV Viewer",
   description:
     "Client-side IFC viewer for building heating load (Heizlast) and room temperature visualization",
+  icons: {
+    icon: [{ url: "/ibv.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/ibv.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/ibv.svg", type: "image/svg+xml" }],
+  },
 };
 
 export const viewport: Viewport = {
