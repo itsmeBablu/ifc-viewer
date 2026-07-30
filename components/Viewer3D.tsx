@@ -1591,10 +1591,16 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           );
           if (details) {
             setSelectedElement(details);
-            setLeftPanelOpen(true);
-            setRightPanelOpen(true);
-            if (useAppStore.getState().isPresentationView) {
-              useAppStore.getState().setPresentationRoomsOpen(true);
+            const isTouchDevice =
+              typeof window !== "undefined" &&
+              window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+            // Keep mobile menu closed on scene taps; user opens it explicitly.
+            if (!isTouchDevice) {
+              setLeftPanelOpen(true);
+              setRightPanelOpen(true);
+              if (useAppStore.getState().isPresentationView) {
+                useAppStore.getState().setPresentationRoomsOpen(true);
+              }
             }
             const room =
               roomId != null

@@ -81,10 +81,10 @@ export default function MobileCornerMenu({
 
   return (
     <div
-      className="pointer-events-auto fixed right-3 z-[55]"
+      className="pointer-events-auto fixed right-2 z-[55]"
       style={{
         bottom:
-          "calc(4.15rem + env(safe-area-inset-bottom, 0px))",
+          "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
       {(open || shown) && (
