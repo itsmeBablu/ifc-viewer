@@ -177,6 +177,17 @@ export default function HeaderActions({
 
   const expanded = pinned || hovered || modeOpen || langOpen;
 
+  // Desktop / iPad: mode icon always visible; Data + Profile slide.
+  // Phones: keep compact logo-only until expand (unchanged).
+  const [isWideHeader, setIsWideHeader] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsWideHeader(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
@@ -340,7 +351,7 @@ export default function HeaderActions({
           </div>
         )}
 
-        {/* One glass: logo + actions + side arrow — expanded width matches Modell panel */}
+        {/* One glass: logo + mode (always on md+) + sliding Data/Profile + arrow */}
         <GlassPanel
           variant="panel"
           zIndex={45}
@@ -357,37 +368,51 @@ export default function HeaderActions({
                 priority
               />
 
+              {/* Mode — always visible on desktop/iPad; on phone only when expanded */}
               <div
-                className={`flex h-full min-w-0 items-center overflow-hidden transition-[flex-grow,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                  expanded
-                    ? "ml-2 flex-1 opacity-100"
-                    : "ml-0 w-0 flex-none opacity-0 pointer-events-none"
+                className={`flex h-full shrink-0 items-center transition-[margin,opacity,width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isWideHeader || expanded
+                    ? "ml-0 w-auto opacity-100"
+                    : "ml-0 w-0 overflow-hidden opacity-0 pointer-events-none"
                 }`}
               >
-                <div className="flex h-full flex-1 items-center justify-center">
-                  <HeaderTip
-                    label={t(uiLanguage, "heating")}
-                    hint={t(uiLanguage, "viewHint")}
+                {(isWideHeader || expanded) && (
+                  <span
+                    className="mx-2.5 h-5 w-px shrink-0 self-center bg-amber-400/80 sm:mx-3 sm:h-6"
+                    aria-hidden
+                  />
+                )}
+                <HeaderTip
+                  label={t(uiLanguage, "heating")}
+                  hint={t(uiLanguage, "viewHint")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModeOpen((v) => !v);
+                      setLangOpen(false);
+                      setLangHoverId(null);
+                      setModeHoverId(null);
+                      setHovered(true);
+                    }}
+                    aria-expanded={modeOpen}
+                    aria-label={t(uiLanguage, "heating")}
+                    className={modeOpen ? roundActive : roundIdle}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModeOpen((v) => !v);
-                        setLangOpen(false);
-                        setLangHoverId(null);
-                        setModeHoverId(null);
-                        setHovered(true);
-                      }}
-                      aria-expanded={modeOpen || expanded}
-                      aria-label={t(uiLanguage, "heating")}
-                      className={modeOpen ? roundActive : roundIdle}
-                    >
-                      <ModeIcon mode={mode} />
-                    </button>
-                  </HeaderTip>
-                </div>
+                    <ModeIcon mode={mode} />
+                  </button>
+                </HeaderTip>
+              </div>
 
-                <div className="flex h-full flex-1 items-center justify-center">
+              {/* Data + Profile — slide in/out (all breakpoints) */}
+              <div
+                className={`flex h-full min-w-0 items-center overflow-hidden transition-[flex-grow,opacity,margin,max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  expanded
+                    ? "ml-1 flex-1 opacity-100 max-w-[12rem]"
+                    : "ml-0 w-0 max-w-0 flex-none opacity-0 pointer-events-none"
+                }`}
+              >
+                <div className="flex h-full flex-1 items-center justify-evenly gap-0.5">
                   <HeaderTip
                     label={t(uiLanguage, "data")}
                     hint={t(uiLanguage, "dataHint")}
@@ -406,9 +431,7 @@ export default function HeaderActions({
                       <UploadIcon />
                     </button>
                   </HeaderTip>
-                </div>
 
-                <div className="flex h-full flex-1 items-center justify-center">
                   <HeaderTip
                     label={t(uiLanguage, "profile")}
                     hint={t(uiLanguage, "profileHint")}
@@ -438,7 +461,9 @@ export default function HeaderActions({
                 setPinned((v) => !v);
                 setHovered(true);
               }}
-              aria-label={expanded ? "Hide header actions" : "Show header actions"}
+              aria-label={
+                expanded ? "Hide header actions" : "Show header actions"
+              }
               className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
             >
               <svg
