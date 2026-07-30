@@ -17,6 +17,8 @@ import LegendRangeInput from "./LegendRangeInput";
 type Props = {
   /** Kept for callers; legend uses compact top padding either way. */
   paddedTop?: boolean;
+  /** Tighter spacing for mobile presentation dock. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -46,6 +48,7 @@ function Chevron({ open }: { open: boolean }) {
  */
 export default function LegendBody({
   paddedTop = false,
+  compact = false,
   className = "",
 }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
@@ -114,13 +117,21 @@ export default function LegendBody({
   return (
     <div className={`min-w-0 overflow-hidden text-zinc-800 ${className}`} ref={pickerRef}>
       <section
-        className={`space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`}
+        className={
+          compact
+            ? "space-y-1.5 px-2.5 pb-2 pt-1.5"
+            : `space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`
+        }
       >
-        <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+        {!compact && (
+          <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+        )}
         {!compareBothModes && (
         <div
           ref={modeBarRef}
-          className="flex rounded-xl border border-zinc-300/50 bg-white/40 p-0.5"
+          className={`flex rounded-xl border border-zinc-300/50 bg-white/40 ${
+            compact ? "p-0.5" : "p-0.5"
+          }`}
         >
           <div
             className={`flex flex-1 items-center rounded-lg transition-colors ${
@@ -132,7 +143,11 @@ export default function LegendBody({
             <button
               type="button"
               onClick={() => setColorMode("heizlast")}
-              className="min-w-0 flex-1 whitespace-nowrap px-1.5 py-1.5 text-left text-[11px] font-medium"
+              className={`min-w-0 flex-1 whitespace-nowrap text-left font-medium ${
+                compact
+                  ? "px-1 py-1 text-[10px]"
+                  : "px-1.5 py-1.5 text-[11px]"
+              }`}
             >
               {t(uiLanguage, "heizlastWm2")}
             </button>
@@ -145,7 +160,9 @@ export default function LegendBody({
               }
               aria-expanded={rangeOpen && colorMode === "heizlast"}
               onClick={() => toggleRange("heizlast")}
-              className="flex h-full items-center px-1.5 py-1.5 text-zinc-500 hover:text-zinc-800"
+              className={`flex h-full items-center text-zinc-500 hover:text-zinc-800 ${
+                compact ? "px-1 py-1" : "px-1.5 py-1.5"
+              }`}
             >
               <Chevron open={rangeOpen && colorMode === "heizlast"} />
             </button>
@@ -160,7 +177,11 @@ export default function LegendBody({
             <button
               type="button"
               onClick={() => setColorMode("temperature")}
-              className="min-w-0 flex-1 whitespace-nowrap px-1.5 py-1.5 text-left text-[11px] font-medium"
+              className={`min-w-0 flex-1 whitespace-nowrap text-left font-medium ${
+                compact
+                  ? "px-1 py-1 text-[10px]"
+                  : "px-1.5 py-1.5 text-[11px]"
+              }`}
             >
               {t(uiLanguage, "temperature")}
             </button>
@@ -173,7 +194,9 @@ export default function LegendBody({
               }
               aria-expanded={rangeOpen && colorMode === "temperature"}
               onClick={() => toggleRange("temperature")}
-              className="flex h-full items-center px-1.5 py-1.5 text-zinc-500 hover:text-zinc-800"
+              className={`flex h-full items-center text-zinc-500 hover:text-zinc-800 ${
+                compact ? "px-1 py-1" : "px-1.5 py-1.5"
+              }`}
             >
               <Chevron open={rangeOpen && colorMode === "temperature"} />
             </button>
@@ -182,7 +205,7 @@ export default function LegendBody({
         )}
 
         {(compareBothModes || colorMode === "heizlast") && (
-          <div className="space-y-2">
+          <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-zinc-500">
                 {t(uiLanguage, "heizlastTopLeft")}
@@ -195,7 +218,9 @@ export default function LegendBody({
               className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
               <div
-                className="relative h-4 w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95"
+                className={`relative w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95 ${
+                  compact ? "h-3" : "h-4"
+                }`}
                 style={{
                   background: heizlastGradientCss(
                     "to right",
@@ -210,7 +235,11 @@ export default function LegendBody({
                 />
               </div>
             </button>
-            <div className="flex items-end justify-between gap-0.5 text-[10px] tabular-nums text-zinc-500">
+            <div
+              className={`flex items-end justify-between gap-0.5 tabular-nums text-zinc-500 ${
+                compact ? "text-[9px]" : "text-[10px]"
+              }`}
+            >
               {heizlastRange.map((t) => (
                 <span key={t} className="min-w-0 truncate text-center">
                   {t}
@@ -231,7 +260,7 @@ export default function LegendBody({
         )}
 
         {(compareBothModes || colorMode === "temperature") && (
-          <div className="space-y-2">
+          <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-zinc-500">
                 {t(uiLanguage, "tempBottomRight")}
@@ -241,15 +270,21 @@ export default function LegendBody({
               type="button"
               title={t(uiLanguage, "changePalette")}
               onClick={() => setPaletteOpen((v) => !v)}
-              className="flex w-full flex-nowrap items-center justify-between gap-1 rounded-xl p-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+              className="flex w-full flex-nowrap items-center justify-between gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
               {tempStops.map((s) => (
                 <div
                   key={s.value}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl bg-white/45 px-0.5 py-1.5"
+                  className={`flex min-w-0 flex-1 flex-col items-center rounded-lg bg-white/45 ${
+                    compact
+                      ? "gap-0.5 px-0.5 py-1"
+                      : "gap-1 px-0.5 py-1.5 rounded-xl"
+                  }`}
                 >
                   <span
-                    className="relative inline-block h-4 w-4 shrink-0 overflow-hidden rounded-md border border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_6px_rgba(0,0,0,0.14)]"
+                    className={`relative inline-block shrink-0 overflow-hidden rounded-md border border-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_6px_rgba(0,0,0,0.14)] ${
+                      compact ? "h-3 w-3" : "h-4 w-4"
+                    }`}
                     style={{ backgroundColor: s.color }}
                   >
                     <span
@@ -257,7 +292,11 @@ export default function LegendBody({
                       aria-hidden
                     />
                   </span>
-                  <span className="truncate text-[10px] font-medium tabular-nums text-zinc-700">
+                  <span
+                    className={`truncate font-medium tabular-nums text-zinc-700 ${
+                      compact ? "text-[9px]" : "text-[10px]"
+                    }`}
+                  >
                     {s.value}°
                   </span>
                 </div>

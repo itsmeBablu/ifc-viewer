@@ -372,6 +372,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
 
   const fitToVisible = () => {
@@ -1591,6 +1592,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           if (details) {
             setSelectedElement(details);
             setLeftPanelOpen(true);
+            setRightPanelOpen(true);
+            if (useAppStore.getState().isPresentationView) {
+              useAppStore.getState().setPresentationRoomsOpen(true);
+            }
             const room =
               roomId != null
                 ? useAppStore.getState().rooms.find((r) => r.id === roomId)
@@ -1715,6 +1720,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     setSelectedRoomId,
     setSelectedElement,
     setLeftPanelOpen,
+    setRightPanelOpen,
   ]);
 
   return (

@@ -101,8 +101,60 @@ body {
   border-radius: inherit;
 }
 
+/*
+ * Mobile / touch: CSS frosted glass (iOS 26–style liquid glass feel).
+ * Avoids @liquidglass displacement which looks muddy on mobile WebKit.
+ */
+.ios-glass {
+  display: flex;
+  width: 100%;
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  isolation: isolate;
+  /* Match desktop LiquidGlass: no outer shadow (reads as a sharp rectangle on mobile) */
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+}
+
+.ios-glass--control {
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: saturate(190%) blur(20px);
+  backdrop-filter: saturate(190%) blur(20px);
+}
+
+.ios-glass--chip {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
+}
+
+.ios-glass--fill {
+  height: 100%;
+  min-height: 100%;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ios-glass,
+  .ios-glass--control,
+  .ios-glass--chip {
+    background: rgba(255, 255, 255, 0.88);
+  }
+}
+
 .duration-350 {
   transition-duration: 350ms;
+}
+.duration-400 {
+  transition-duration: 400ms;
 }
 
 .scrollbar-none {

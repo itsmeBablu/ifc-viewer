@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Group } from "three";
 import type { LoadedModel } from "@/lib/types";
 import {
@@ -16,7 +16,7 @@ import {
   persistModelId,
   useAppStore,
 } from "@/store/useAppStore";
-import { heading, motion } from "@/lib/designTokens";
+import { motion } from "@/lib/designTokens";
 import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
 import RoomTooltip from "./RoomTooltip";
@@ -24,7 +24,9 @@ import LoadIfcButton from "./LoadIfcButton";
 import HeaderActions from "./HeaderActions";
 import FloorsPanel from "./FloorsPanel";
 import LegendPanel from "./LegendPanel";
+import PresentationMobileDock from "./PresentationMobileDock";
 import PresentationSidePanel from "./PresentationSidePanel";
+import MobileCornerMenu from "./MobileCornerMenu";
 import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
@@ -44,6 +46,7 @@ export default function ViewerApp() {
   const [shellGroup, setShellGroup] = useState<Group | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [isDesktop, setIsDesktop] = useState(true);
+  const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const dragDepthRef = useRef(0);
 
@@ -83,12 +86,29 @@ export default function ViewerApp() {
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const update = () => setIsDesktop(mq.matches);
+    const update = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      // Phones in landscape are often ≥768 wide — keep compact UI when short.
+      setIsDesktop(w >= 768 && h >= 560);
+      setIsLandscape(w > h);
+    };
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
   }, []);
+
+  // Presentation on mobile: don't leave the corner-menu dimmer open.
+  // (store sets rightPanelOpen for desktop legend — that must not open the mobile menu.)
+  useLayoutEffect(() => {
+    if (isDesktop || !isPresentationView) return;
+    setLeftPanelOpen(false);
+    setRightPanelOpen(false);
+  }, [isPresentationView, isDesktop, setLeftPanelOpen, setRightPanelOpen]);
 
   const runLoad = useCallback(
     async (source: LoadSource) => {
@@ -558,98 +578,37 @@ export default function ViewerApp() {
           </aside>
         )}
 
-        {/* Mobile bottom sheet — floors + legend stacked */}
+        {/* Mobile — top-right morph menu + presentation legend dock */}
         {!isDesktop && (
           <>
-            {!(leftPanelOpen || rightPanelOpen) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setLeftPanelOpen(true);
-                  setRightPanelOpen(true);
-                }}
-                aria-label={t(uiLanguage, "showPanels")}
-                className="fixed right-3 z-40 h-12 w-12 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:right-4 sm:h-14 sm:w-14"
-              >
-                <GlassPanel
-                  variant="control"
-                  zIndex={40}
-                  fill
-                  wrapperClassName="h-full w-full"
-                >
-                  <div className="flex h-full items-center justify-center text-zinc-700">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.75"
-                      aria-hidden
-                    >
-                      <path d="M4 7h16M4 12h16M4 17h10" />
-                    </svg>
-                  </div>
-                </GlassPanel>
-              </button>
-            )}
-
-            <div
-              className={`fixed inset-0 z-50 transition-opacity duration-300 ease-out ${
-                leftPanelOpen || rightPanelOpen
-                  ? "pointer-events-auto opacity-100"
-                  : "pointer-events-none opacity-0"
-              }`}
+            <MobileCornerMenu
+              open={leftPanelOpen}
+              onOpenChange={(open) => {
+                setLeftPanelOpen(open);
+                // Keep right flag in sync for desktop; on mobile menu is left-only
+                // so presentation's rightPanelOpen never leaves a gray scrim.
+                if (!open) setRightPanelOpen(false);
+              }}
+              title={t(uiLanguage, "details")}
             >
-              <button
-                type="button"
-                aria-label={t(uiLanguage, "closePanels")}
-                className="absolute inset-0 bg-zinc-900/30"
-                onClick={() => {
-                  setLeftPanelOpen(false);
-                  setRightPanelOpen(false);
-                }}
+              <FloorsPanel
+                viewerRef={viewerRef}
+                onFile={handleFile}
+                isLoadingModel={isLoadingModel}
               />
-              <div
-                className={`absolute inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] top-[12%] flex flex-col sm:inset-x-3 sm:bottom-3 sm:top-[14%] ${motion.sidebar} ${
-                  leftPanelOpen || rightPanelOpen
-                    ? "translate-y-0"
-                    : "translate-y-10"
-                }`}
-              >
-                <GlassPanel
-                  variant="panel"
-                  zIndex={50}
-                  fill
-                  wrapperClassName="flex h-full min-h-0 flex-col overflow-hidden"
-                >
-                  <div className="flex items-center justify-between border-b border-zinc-300/40 px-4 py-3">
-                    <p className={heading.panel}>{t(uiLanguage, "details")}</p>
-                    <GlassButton
-                      className="!px-3"
-                      onClick={() => {
-                        setLeftPanelOpen(false);
-                        setRightPanelOpen(false);
-                      }}
-                    >
-                      {t(uiLanguage, "close")}
-                    </GlassButton>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-                    <div className={isPresentationView ? "hidden" : undefined}>
-                      <FloorsPanel
-                        viewerRef={viewerRef}
-                        onFile={handleFile}
-                        isLoadingModel={isLoadingModel}
-                      />
-                      <div className="mx-3 border-t border-zinc-300/50" />
-                      <LegendPanel />
-                    </div>
-                    {isPresentationView && <PresentationSidePanel />}
-                  </div>
-                </GlassPanel>
-              </div>
-            </div>
+              {!isPresentationView && (
+                <>
+                  <div className="mx-3 border-t border-zinc-300/50" />
+                  <LegendPanel />
+                </>
+              )}
+            </MobileCornerMenu>
+
+            {isPresentationView && (
+              <PresentationMobileDock
+                align={isLandscape ? "right" : "center"}
+              />
+            )}
           </>
         )}
       </div>
