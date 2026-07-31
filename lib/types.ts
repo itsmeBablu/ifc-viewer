@@ -8,6 +8,10 @@ export type Room = {
   heatLoad: number;
   /** Absolute Heizlast parameter from IFC (typically W), if present. */
   heizlast: number | null;
+  /** Specific cooling load for coloring (W/m²) — IFC "Kühllast W/m²". */
+  coolLoad: number;
+  /** Absolute Kühllast from IFC (W), if present. */
+  kuhllast: number | null;
   temperature: number;
   floorId: string;
   expressId: number;

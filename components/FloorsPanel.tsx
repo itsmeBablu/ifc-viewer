@@ -62,6 +62,8 @@ export default function FloorsPanel({
   const colorMode = useAppStore((s) => s.colorMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
@@ -785,7 +787,10 @@ export default function FloorsPanel({
                                   {room.name}
                                 </ModelText>
                                 <span className="tabular-nums text-[10px] text-zinc-400">
-                                  {room.heatLoad.toFixed(0)}
+                                  {(dataViewMode === "kuhllast"
+                                    ? room.coolLoad
+                                    : room.heatLoad
+                                  ).toFixed(0)}
                                 </span>
                               </button>
                             </li>

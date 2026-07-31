@@ -98,6 +98,41 @@ export const HEAT_DENSITY_PROP_NAMES = [
   "SpecificHeatLoad",
 ];
 
+/** Cooling density W/m² — Revit / SimCalc export names. */
+export const COOL_DENSITY_PROP_NAMES = [
+  "Kühllast W/m²",
+  "Kühllast W/m2",
+  "Kühllast/m²",
+  "Kühllast/m2",
+  "Kühllast_m2",
+  "Kuehllast W/m²",
+  "Kuehllast W/m2",
+  "Kuehllast/m²",
+  "Kuehllast/m2",
+  "SC_Raum_spezifischeKuehllast",
+  "SC_Raum_spezifischeKühllast",
+  "spezifischeKühllast",
+  "spezifischeKuehllast",
+  "Kühllastdichte",
+  "CoolingLoadPerArea",
+  "SpecificCoolingLoad",
+];
+
+export const ABSOLUTE_KUHLLAST_PROP_NAMES = [
+  "Kühllast W",
+  "KühllastW",
+  "Kühllast_W",
+  "Kuehllast W",
+  "KuehllastW",
+  "Bemessungslast Kühlung",
+  "Bemessungslast Kuehlung",
+  "SC_Raum_Kuehllast",
+  "SC_Raum_Kühllast",
+  "Kühllast",
+  "Kuehllast",
+  "CoolingLoad",
+];
+
 const WASM_PATH = "/wasm/";
 
 type OpenIfcHandle = { api: WebIFC.IfcAPI; modelID: number };
@@ -501,6 +536,10 @@ function compactPropKey(name: string): string {
   return name
     .trim()
     .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
     .replace(/²/g, "2")
     .replace(/[_\s/-]+/g, "");
 }
@@ -562,13 +601,12 @@ function extractAbsoluteHeizlast(
   const preferExact: number[] = [];
   const preferFuzzy: number[] = [];
   for (const item of flat) {
-    const n = item.name.trim().toLowerCase().replace(/\s+/g, "");
+    const n = compactPropKey(item.name);
     if (
       n.includes("spezifisch") ||
       n.includes("dichte") ||
       n.includes("perarea") ||
       n.includes("/m") ||
-      n.includes("m²") ||
       n.includes("m2") ||
       n.includes("werte") // e.g. Heizlastwerte = enum string
     ) {
@@ -590,6 +628,60 @@ function extractAbsoluteHeizlast(
     ) {
       preferFuzzy.push(num);
     } else if (n.includes("bemessungslast") && n.includes("heizung")) {
+      preferExact.push(num);
+    }
+  }
+  return preferExact[0] ?? preferFuzzy[0] ?? null;
+}
+
+function fuzzyCoolLoadDensity(name: string): boolean {
+  const n = compactPropKey(name);
+  return (
+    n.includes("kuehllastm") ||
+    n.includes("kuehllastwm2") ||
+    n.includes("spezifischekuehllast") ||
+    n.includes("kuehllastdichte") ||
+    n.includes("coolingloadperarea") ||
+    n.includes("specificcoolingload") ||
+    (n.includes("kuehllast") &&
+      (n.includes("spezif") || n.includes("dichte") || n.includes("m2")))
+  );
+}
+
+/** Absolute Kühllast (W) — not density (W/m²). */
+function extractAbsoluteKuhllast(
+  flat: { pset: string; name: string; value: unknown }[],
+): number | null {
+  const fromNamed = extractExactNamedNumeric(flat, ABSOLUTE_KUHLLAST_PROP_NAMES);
+  if (fromNamed != null) return fromNamed;
+
+  const preferExact: number[] = [];
+  const preferFuzzy: number[] = [];
+  for (const item of flat) {
+    const n = compactPropKey(item.name);
+    if (
+      n.includes("spezifisch") ||
+      n.includes("dichte") ||
+      n.includes("perarea") ||
+      n.includes("m2") ||
+      n.includes("werte")
+    ) {
+      continue;
+    }
+    const num = readNumber(item.value);
+    if (num == null) continue;
+    if (
+      n === "kuehllast" ||
+      n === "kuehllastw" ||
+      n === "sc_raum_kuehllast" ||
+      n === "bemessungslastkuehlung" ||
+      n === "coolingload" ||
+      n.endsWith(".kuehllast")
+    ) {
+      preferExact.push(num);
+    } else if (n.includes("kuehllast") || n.includes("coolingload")) {
+      preferFuzzy.push(num);
+    } else if (n.includes("bemessungslast") && n.includes("kuehl")) {
       preferExact.push(num);
     }
   }
@@ -660,12 +752,16 @@ async function extractSpaceProps(
 ): Promise<{
   heatLoad: number;
   heizlast: number | null;
+  coolLoad: number;
+  kuhllast: number | null;
   temperature: number;
   number: string;
   propDump: string[];
 }> {
   let heatLoad = 0;
   let heizlast: number | null = null;
+  let coolLoad = 0;
+  let kuhllast: number | null = null;
   let temperature = 20;
   let number = "";
   const propDump: string[] = [];
@@ -680,6 +776,7 @@ async function extractSpaceProps(
     // This IFC (SimCalc / Revit):
     //   SC_Raum_spezifischeHeizlast → W/m²
     //   Bemessungslast Heizung      → W
+    //   Kühllast W/m² / Kühllast W → cooling
     //   SC_Raum_Temperatur / CAx_Raum_Temperatur → °C
     heatLoad =
       extractExactNamedNumeric(flat, HEAT_DENSITY_PROP_NAMES) ??
@@ -697,6 +794,23 @@ async function extractSpaceProps(
     heizlast =
       extractExactNamedNumeric(flat, ABSOLUTE_HEIZLAST_PROP_NAMES) ??
       extractAbsoluteHeizlast(flat);
+
+    coolLoad =
+      extractExactNamedNumeric(flat, COOL_DENSITY_PROP_NAMES) ??
+      extractNumericProp(
+        psets,
+        [
+          "Ergebnisse der Analyse",
+          ...HEAT_LOAD_PSET_NAMES,
+        ],
+        COOL_DENSITY_PROP_NAMES,
+        fuzzyCoolLoadDensity,
+      ) ??
+      0;
+
+    kuhllast =
+      extractExactNamedNumeric(flat, ABSOLUTE_KUHLLAST_PROP_NAMES) ??
+      extractAbsoluteKuhllast(flat);
 
     temperature =
       extractExactNamedNumeric(flat, [
@@ -730,7 +844,15 @@ async function extractSpaceProps(
     // Property lookup can fail on incomplete exports — keep defaults.
   }
 
-  return { heatLoad, heizlast, temperature, number, propDump };
+  return {
+    heatLoad,
+    heizlast,
+    coolLoad,
+    kuhllast,
+    temperature,
+    number,
+    propDump,
+  };
 }
 
 export type IfcSource = string | File | ArrayBuffer | Uint8Array;
@@ -1183,7 +1305,7 @@ export async function loadIfcModel(
           );
           debugLog(
             "ifcClient",
-            `parsed heatLoad=${props.heatLoad} heizlast=${props.heizlast} temperature=${props.temperature}`,
+            `parsed heatLoad=${props.heatLoad} heizlast=${props.heizlast} coolLoad=${props.coolLoad} kuhllast=${props.kuhllast} temperature=${props.temperature}`,
             props.heatLoad === 0 || props.heizlast == null ? "warn" : "ok",
           );
         }
@@ -1204,6 +1326,8 @@ export async function loadIfcModel(
           number: props.number || tagNumber,
           heatLoad: props.heatLoad,
           heizlast: props.heizlast,
+          coolLoad: props.coolLoad,
+          kuhllast: props.kuhllast,
           temperature: props.temperature,
           floorId,
           expressId: spaceExpressId,
@@ -1212,11 +1336,14 @@ export async function loadIfcModel(
       }
 
       const heatValues = rooms.map((r) => r.heatLoad);
+      const coolValues = rooms.map((r) => r.coolLoad);
       const minH = heatValues.length ? Math.min(...heatValues) : 0;
       const maxH = heatValues.length ? Math.max(...heatValues) : 0;
+      const minC = coolValues.length ? Math.min(...coolValues) : 0;
+      const maxC = coolValues.length ? Math.max(...coolValues) : 0;
       debugLog(
         "ifcClient",
-        `rooms built: ${rooms.length} — Heizlast range ${minH}…${maxH}`,
+        `rooms built: ${rooms.length} — Heizlast ${minH}…${maxH} · Kühllast ${minC}…${maxC}`,
         maxH === 0 && rooms.length > 0 ? "warn" : "ok",
       );
 

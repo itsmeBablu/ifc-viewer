@@ -5,7 +5,9 @@ import {
   COLOR_PALETTE_IDS,
   COLOR_PALETTES,
   HEIZLAST_RANGE_PRESETS,
+  KUHLLAST_RANGE_PRESETS,
   heizlastGradientCss,
+  kuhllastGradientCss,
   temperatureLegendStops,
   type ColorPaletteId,
 } from "@/lib/colorMapping";
@@ -62,8 +64,10 @@ export default function LegendBody({
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
+  const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
   const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
@@ -77,6 +81,11 @@ export default function LegendBody({
     activeColorPalette,
     temperatureRange,
   );
+  const cooling = dataViewMode === "kuhllast";
+  const loadRange = cooling ? kuhllastRange : heizlastRange;
+  const loadGradient = cooling ? kuhllastGradientCss : heizlastGradientCss;
+  const setLoadRange = cooling ? setKuhllastRange : setHeizlastRange;
+  const loadPresets = cooling ? KUHLLAST_RANGE_PRESETS : HEIZLAST_RANGE_PRESETS;
 
   const toggleRange = (mode: "heizlast" | "temperature") => {
     if (colorMode !== mode) {
@@ -201,8 +210,14 @@ export default function LegendBody({
               type="button"
               aria-label={
                 rangeOpen && colorMode === "heizlast"
-                  ? t(uiLanguage, "hideHeizlastRange")
-                  : t(uiLanguage, "editHeizlastRange")
+                  ? t(
+                      uiLanguage,
+                      cooling ? "hideKuhllastRange" : "hideHeizlastRange",
+                    )
+                  : t(
+                      uiLanguage,
+                      cooling ? "editKuhllastRange" : "editHeizlastRange",
+                    )
               }
               aria-expanded={rangeOpen && colorMode === "heizlast"}
               onClick={() => toggleRange("heizlast")}
@@ -254,7 +269,10 @@ export default function LegendBody({
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-zinc-500">
-                {t(uiLanguage, "heizlastTopLeft")}
+                {t(
+                  uiLanguage,
+                  cooling ? "kuhllastTopLeft" : "heizlastTopLeft",
+                )}
               </p>
             )}
             <button
@@ -268,10 +286,10 @@ export default function LegendBody({
                   compact ? "h-3" : "h-4"
                 }`}
                 style={{
-                  background: heizlastGradientCss(
+                  background: loadGradient(
                     "to right",
                     activeColorPalette,
-                    heizlastRange,
+                    loadRange,
                   ),
                 }}
               >
@@ -286,7 +304,7 @@ export default function LegendBody({
                 compact ? "text-[9px]" : "text-[10px]"
               }`}
             >
-              {heizlastRange.map((t) => (
+              {loadRange.map((t) => (
                 <span key={t} className="min-w-0 truncate text-center">
                   {t}
                 </span>
@@ -295,10 +313,10 @@ export default function LegendBody({
             {!compareBothModes && rangeOpen && colorMode === "heizlast" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
-                  values={heizlastRange}
-                  onCommit={setHeizlastRange}
+                  values={loadRange}
+                  onCommit={setLoadRange}
                   unitHint="W/m²"
-                  presets={HEIZLAST_RANGE_PRESETS}
+                  presets={loadPresets}
                 />
               </div>
             )}
@@ -388,10 +406,10 @@ export default function LegendBody({
                   <div
                     className="h-1.5 w-full rounded-full"
                     style={{
-                      background: heizlastGradientCss(
+                      background: loadGradient(
                         "to right",
                         id,
-                        heizlastRange,
+                        loadRange,
                       ),
                     }}
                   />

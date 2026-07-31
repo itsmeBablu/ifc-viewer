@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { heizlastToColor } from "@/lib/colorMapping";
+import { roomLoadColor, roomDensityLoad } from "@/lib/roomLoad";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore } from "@/store/useAppStore";
@@ -42,6 +42,8 @@ export default function PresentationSidePanel({
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
 
   const floorsWithRooms = useMemo(
     () => listVisibleFloors(floors, rooms),
@@ -90,11 +92,7 @@ export default function PresentationSidePanel({
   }
 
   return (
-    <div
-      className={`flex min-h-0 flex-col text-zinc-800 ${
-        presentationIsolate ? "h-full min-h-0 flex-1" : ""
-      }`}
-    >
+    <div className="flex flex-col text-zinc-800">
       {includeLegend && (
         <div className="shrink-0">
           <LegendBody paddedTop />
@@ -105,8 +103,8 @@ export default function PresentationSidePanel({
         <section
           className={
             compact
-              ? "flex min-h-0 flex-1 flex-col space-y-1.5 overflow-hidden px-2.5 pb-2"
-              : "flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden px-3 pb-3"
+              ? "flex flex-col space-y-1.5 px-2.5 pb-2"
+              : "flex flex-col space-y-2 px-3 pb-3"
           }
         >
           <p className={`${heading.muted} shrink-0`}>
@@ -152,13 +150,20 @@ export default function PresentationSidePanel({
               {t(uiLanguage, "noRoomsOnFloor")}
             </p>
           ) : (
-            <ul className="thin-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pr-0.5 pb-1">
+            <ul
+              className={`thin-scroll space-y-0.5 overflow-y-auto overscroll-contain pr-0.5 pb-1 ${
+                compact ? "max-h-40" : "max-h-52"
+              }`}
+            >
               {floorRooms.map((room) => {
-                const hex = heizlastToColor(
-                  room.heatLoad,
+                const hex = roomLoadColor(
+                  room,
+                  dataViewMode,
                   activeColorPalette,
                   heizlastRange,
+                  kuhllastRange,
                 );
+                const density = roomDensityLoad(room, dataViewMode);
                 const active = room.id === selectedRoomId;
                 return (
                   <li key={room.id}>
@@ -181,7 +186,7 @@ export default function PresentationSidePanel({
                         {room.name}
                       </ModelText>
                       <span className="flex shrink-0 items-center gap-1.5 tabular-nums text-[10px] text-zinc-600">
-                        <span>{room.heatLoad.toFixed(0)} W/m²</span>
+                        <span>{density.toFixed(0)} W/m²</span>
                         <span className="text-zinc-400">·</span>
                         <span>{room.temperature.toFixed(1)} °C</span>
                         <span

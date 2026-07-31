@@ -46,7 +46,7 @@ export default function PresentationMobileDock({ align }: Props) {
           </div>
 
           {presentationIsolate && (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/35">
+            <div className="shrink-0 border-t border-white/35">
               <PresentationSidePanel includeLegend={false} compact />
             </div>
           )}

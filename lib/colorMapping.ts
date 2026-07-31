@@ -37,6 +37,8 @@ export type ColorPalette = {
   id: ColorPaletteId;
   name: string;
   heizlastStops: ColorStop[];
+  /** Summer cooling load (Kühllast) — cyan → teal → indigo → violet. */
+  kuhllastStops: ColorStop[];
   temperatureStops: ColorStop[];
 };
 
@@ -51,6 +53,19 @@ const STANDARD_HEIZLAST: ColorStop[] = [
   { value: 40, color: "#FF8C00" },
   { value: 50, color: "#DC0000" },
   { value: Number.POSITIVE_INFINITY, color: "#7A3300" },
+];
+
+/** Summer cooling — ice cyan (low) → aqua → sky → indigo → violet (high). */
+const STANDARD_KUHLLAST: ColorStop[] = [
+  { value: Number.NEGATIVE_INFINITY, color: "#E0F7FA" },
+  { value: 0, color: "#B2EBF2" },
+  { value: 10, color: "#4DD0E1" },
+  { value: 20, color: "#00ACC1" },
+  { value: 25, color: "#0288D1" },
+  { value: 30, color: "#1565C0" },
+  { value: 40, color: "#5C6BC0" },
+  { value: 50, color: "#7B1FA2" },
+  { value: Number.POSITIVE_INFINITY, color: "#4A148C" },
 ];
 
 const STANDARD_TEMP: ColorStop[] = [
@@ -74,6 +89,18 @@ const SOFT_HEIZLAST: ColorStop[] = [
   { value: Number.POSITIVE_INFINITY, color: "#B07A6A" },
 ];
 
+const SOFT_KUHLLAST: ColorStop[] = [
+  { value: Number.NEGATIVE_INFINITY, color: "#E8F6F8" },
+  { value: 0, color: "#C5E8EE" },
+  { value: 10, color: "#9AD4DE" },
+  { value: 20, color: "#7BB8D4" },
+  { value: 25, color: "#7AA8C8" },
+  { value: 30, color: "#8A9EC8" },
+  { value: 40, color: "#A090C0" },
+  { value: 50, color: "#B888B8" },
+  { value: Number.POSITIVE_INFINITY, color: "#9A7098" },
+];
+
 const SOFT_TEMP: ColorStop[] = [
   { value: 6, color: "#8FA8C8" },
   { value: 15, color: "#8FC4B0" },
@@ -93,6 +120,19 @@ const WARM_HEIZLAST: ColorStop[] = [
   { value: 40, color: "#E8A070" },
   { value: 50, color: "#D87868" },
   { value: Number.POSITIVE_INFINITY, color: "#A86858" },
+];
+
+/** Warm-summer cooling — mint → lagoon → periwinkle → soft plum. */
+const WARM_KUHLLAST: ColorStop[] = [
+  { value: Number.NEGATIVE_INFINITY, color: "#E4F2E8" },
+  { value: 0, color: "#B8DCC8" },
+  { value: 10, color: "#88C8B8" },
+  { value: 20, color: "#70B0C8" },
+  { value: 25, color: "#8890C8" },
+  { value: 30, color: "#A088C8" },
+  { value: 40, color: "#B878B0" },
+  { value: 50, color: "#C07098" },
+  { value: Number.POSITIVE_INFINITY, color: "#A05878" },
 ];
 
 const WARM_TEMP: ColorStop[] = [
@@ -116,6 +156,18 @@ const DARK_HEIZLAST: ColorStop[] = [
   { value: Number.POSITIVE_INFINITY, color: "#5C1818" },
 ];
 
+const DARK_KUHLLAST: ColorStop[] = [
+  { value: Number.NEGATIVE_INFINITY, color: "#0D2137" },
+  { value: 0, color: "#123A4A" },
+  { value: 10, color: "#0E5C6B" },
+  { value: 20, color: "#0A7A8C" },
+  { value: 25, color: "#1565A0" },
+  { value: 30, color: "#2A4A9E" },
+  { value: 40, color: "#4A3A8C" },
+  { value: 50, color: "#6A2080" },
+  { value: Number.POSITIVE_INFINITY, color: "#3A1058" },
+];
+
 const DARK_TEMP: ColorStop[] = [
   { value: 6, color: "#1E3A5F" },
   { value: 15, color: "#1F5C4A" },
@@ -129,24 +181,28 @@ export const COLOR_PALETTES: Record<ColorPaletteId, ColorPalette> = {
     id: "standard",
     name: "Standard",
     heizlastStops: STANDARD_HEIZLAST,
+    kuhllastStops: STANDARD_KUHLLAST,
     temperatureStops: STANDARD_TEMP,
   },
   softPastel: {
     id: "softPastel",
     name: "Soft Pastel",
     heizlastStops: SOFT_HEIZLAST,
+    kuhllastStops: SOFT_KUHLLAST,
     temperatureStops: SOFT_TEMP,
   },
   warmPastel: {
     id: "warmPastel",
     name: "Warm Pastel",
     heizlastStops: WARM_HEIZLAST,
+    kuhllastStops: WARM_KUHLLAST,
     temperatureStops: WARM_TEMP,
   },
   dark: {
     id: "dark",
     name: "Dark",
     heizlastStops: DARK_HEIZLAST,
+    kuhllastStops: DARK_KUHLLAST,
     temperatureStops: DARK_TEMP,
   },
 };
@@ -168,24 +224,31 @@ export function heizlastStopsFor(paletteId?: ColorPaletteId | string): ColorStop
   return getPalette(paletteId).heizlastStops;
 }
 
+export function kuhllastStopsFor(paletteId?: ColorPaletteId | string): ColorStop[] {
+  return getPalette(paletteId).kuhllastStops;
+}
+
 export function temperatureStopsFor(paletteId?: ColorPaletteId | string): ColorStop[] {
   return getPalette(paletteId).temperatureStops;
 }
 
 export const DEFAULT_HEIZLAST_RANGE = [0, 10, 20, 30, 40, 50];
+export const DEFAULT_KUHLLAST_RANGE = [0, 10, 20, 30, 40, 50];
 export const DEFAULT_TEMPERATURE_RANGE = [0, 6, 15, 18, 20, 24];
 export const MIN_LEGEND_STOPS = 6;
 export const MAX_LEGEND_STOPS = 8;
 
-/** Built-in Heizlast range presets for the legend dropdown. */
+/** Built-in Heizlast / Kühllast range presets for the legend dropdown. */
 export const HEIZLAST_RANGE_PRESETS: { id: string; label: string; values: number[] }[] = [
   { id: "fine", label: "0, 5, 15, 20, 25, 30", values: [0, 5, 15, 20, 25, 30] },
   { id: "std", label: "0, 10, 20, 30, 40, 50", values: [0, 10, 20, 30, 40, 50] },
   { id: "wide", label: "0, 15, 25, 35, 45, 55", values: [0, 15, 25, 35, 45, 55] },
 ];
 
+export const KUHLLAST_RANGE_PRESETS = HEIZLAST_RANGE_PRESETS;
+
 /**
- * Pick the tightest Heizlast preset that covers the model's heat-load values.
+ * Pick the tightest load preset that covers the model's W/m² values.
  * Uses ~95th percentile so a few outliers don't force the widest scale.
  */
 export function pickHeizlastRangeFromLoads(heatLoads: number[]): number[] {
@@ -214,6 +277,8 @@ export function pickHeizlastRangeFromLoads(heatLoads: number[]): number[] {
   );
   return [...widest.values];
 }
+
+export const pickKuhllastRangeFromLoads = pickHeizlastRangeFromLoads;
 
 /** Parse "0, 10, 20, 30, 40, 50" → sorted unique numbers (6–8). */
 export function parseLegendRange(input: string): number[] | null {
@@ -286,7 +351,26 @@ export function heizlastToColor(
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_HEIZLAST_RANGE,
 ): string {
-  const stops = resolveStopsForRange(heizlastStopsFor(paletteId), range);
+  return loadToColor(value, heizlastStopsFor(paletteId), range);
+}
+
+/**
+ * Multi-stop linear RGB gradient for Kühllast / summer cooling (W/m²).
+ */
+export function kuhllastToColor(
+  value: number,
+  paletteId?: ColorPaletteId | string,
+  range: number[] = DEFAULT_KUHLLAST_RANGE,
+): string {
+  return loadToColor(value, kuhllastStopsFor(paletteId), range);
+}
+
+function loadToColor(
+  value: number,
+  paletteStops: ColorStop[],
+  range: number[],
+): string {
+  const stops = resolveStopsForRange(paletteStops, range);
   if (!Number.isFinite(value) || value < stops[0].value) {
     return stops[0].color;
   }
@@ -314,6 +398,15 @@ export function heizlastGradientCss(
   range: number[] = DEFAULT_HEIZLAST_RANGE,
 ): string {
   const stops = resolveStopsForRange(heizlastStopsFor(paletteId), range);
+  return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
+}
+
+export function kuhllastGradientCss(
+  direction = "to right",
+  paletteId?: ColorPaletteId | string,
+  range: number[] = DEFAULT_KUHLLAST_RANGE,
+): string {
+  const stops = resolveStopsForRange(kuhllastStopsFor(paletteId), range);
   return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 

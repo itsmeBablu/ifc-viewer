@@ -3,22 +3,27 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import { frameBoundingBoxOrtho } from "@/lib/flyTo";
 import type { Room } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
+import type { DataViewMode } from "@/lib/dataViewMode";
 
 type Props = {
   onPointerMove?: (x: number, y: number) => void;
   className?: string;
 };
 
-function roomColor(room: Room, mode: "heizlast" | "temperature"): string {
-  return mode === "heizlast"
-    ? heizlastToColor(room.heatLoad)
-    : temperatureToColor(room.temperature);
+function roomColor(
+  room: Room,
+  mode: "heizlast" | "temperature",
+  dataViewMode: DataViewMode = "heizlast",
+): string {
+  if (mode === "temperature") return temperatureToColor(room.temperature);
+  if (dataViewMode === "kuhllast") return kuhllastToColor(room.coolLoad);
+  return heizlastToColor(room.heatLoad);
 }
 
 export default function Plan2D({ onPointerMove, className }: Props) {
@@ -37,6 +42,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const activeFilter = useAppStore((s) => s.activeFilter);
@@ -45,6 +51,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const roomsFromStore = useAppStore((s) => s.rooms);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
 
   const fitOrtho = () => {
     const camera = cameraRef.current;
@@ -200,7 +207,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     for (const room of sourceRooms) {
       if (!room.geometry || room.geometry.attributes.position == null) continue;
       const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(roomColor(room, colorMode)),
+        color: new THREE.Color(roomColor(room, colorMode, dataViewMode)),
         transparent: true,
         opacity: 0.6,
         depthWrite: false,
@@ -224,9 +231,9 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       const room = byId.get(id);
       if (!room) continue;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.set(roomColor(room, colorMode));
+      mat.color.set(roomColor(room, colorMode, dataViewMode));
     }
-  }, [colorMode, rooms, roomsFromStore]);
+  }, [colorMode, dataViewMode, rooms, roomsFromStore]);
 
   useEffect(() => {
     const apply = (obj: THREE.Object3D) => {
@@ -257,11 +264,18 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       const isSel = id === selectedRoomId;
       mat.opacity = !passes ? 0.12 : isSel ? 0.85 : 0.6;
       if (isSel && passes && room) {
-        const sel = heizlastToColor(
-          room.heatLoad,
-          activeColorPalette,
-          heizlastRange,
-        );
+        const sel =
+          dataViewMode === "kuhllast"
+            ? kuhllastToColor(
+                room.coolLoad,
+                activeColorPalette,
+                kuhllastRange,
+              )
+            : heizlastToColor(
+                room.heatLoad,
+                activeColorPalette,
+                heizlastRange,
+              );
         mat.emissive.set(new THREE.Color(sel));
       } else {
         mat.emissive.setHex(0x000000);
@@ -274,6 +288,8 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     roomsFromStore,
     activeColorPalette,
     heizlastRange,
+    kuhllastRange,
+    dataViewMode,
   ]);
 
   useEffect(() => {

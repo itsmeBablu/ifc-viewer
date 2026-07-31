@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -21,36 +21,46 @@ function RoomInfoBody({
   room,
   palette,
   heizlastRange,
+  kuhllastRange,
   temperatureRange,
   uiLanguage,
+  cooling,
   compact = false,
 }: {
   room: Room;
   palette: string;
   heizlastRange: number[];
+  kuhllastRange: number[];
   temperatureRange: number[];
   uiLanguage: UiLanguage;
+  cooling: boolean;
   compact?: boolean;
 }) {
-  const heatColor = heizlastToColor(room.heatLoad, palette, heizlastRange);
+  const loadColor = cooling
+    ? kuhllastToColor(room.coolLoad, palette, kuhllastRange)
+    : heizlastToColor(room.heatLoad, palette, heizlastRange);
   const tempColor = temperatureToColor(
     room.temperature,
     palette,
     temperatureRange,
   );
-  const absHeizlast = room.heizlast;
+  const absLoad = cooling ? room.kuhllast : room.heizlast;
+  const densityVal = cooling ? room.coolLoad : room.heatLoad;
   const name = room.name?.trim() || "—";
   const number = room.number?.trim() || "—";
   const watts =
-    absHeizlast != null && Number.isFinite(absHeizlast)
-      ? `${Math.round(absHeizlast)}W`
+    absLoad != null && Number.isFinite(absLoad)
+      ? `${Math.round(absLoad)}W`
       : "—";
-  const density = Number.isFinite(room.heatLoad)
-    ? `${room.heatLoad.toFixed(1).replace(".", ",")} W/m²`
+  const density = Number.isFinite(densityVal)
+    ? `${densityVal.toFixed(1).replace(".", ",")} W/m²`
     : "—";
   const temp = Number.isFinite(room.temperature)
     ? `${Math.round(room.temperature)}°C`
     : "—";
+
+  const titleKey = cooling ? "normKuhllast" : "normHeizlast";
+  const loadKey = cooling ? "kuhllast" : "heizlast";
 
   const nameNumberRow = (sizeCls: string) => (
     <div className={`flex min-w-0 items-baseline gap-1 ${sizeCls}`}>
@@ -77,19 +87,19 @@ function RoomInfoBody({
     return (
       <div className="px-2 py-1.5">
         <p className="text-[9px] font-semibold tracking-wide text-zinc-800">
-          {t(uiLanguage, "normHeizlast")}
+          {t(uiLanguage, titleKey)}
         </p>
         <div className="my-0.5 h-px bg-white/40" />
         {nameNumberRow("text-[11px]")}
         <div className="my-0.5 h-px bg-white/40" />
         <div className="flex items-baseline justify-between gap-2 text-[10px]">
           <span className="shrink-0 font-medium text-zinc-500">
-            {t(uiLanguage, "heizlast")}
+            {t(uiLanguage, loadKey)}
           </span>
           <span className="flex min-w-0 items-center gap-1 text-right font-medium text-zinc-800">
             <span
               className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: heatColor }}
+              style={{ backgroundColor: loadColor }}
               aria-hidden
             />
             <span className="tabular-nums">
@@ -121,19 +131,19 @@ function RoomInfoBody({
   return (
     <div className="px-3.5 py-3">
       <p className="text-[11px] font-semibold tracking-wide text-zinc-800">
-        {t(uiLanguage, "normHeizlast")}
+        {t(uiLanguage, titleKey)}
       </p>
       <div className="my-2 h-px bg-white/35" />
       {nameNumberRow("text-sm")}
       <div className="mt-2 space-y-1.5 text-xs">
         <div className="flex items-baseline justify-between gap-3">
           <span className="shrink-0 font-medium text-zinc-500">
-            {t(uiLanguage, "heizlast")}
+            {t(uiLanguage, loadKey)}
           </span>
           <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-zinc-800">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: heatColor }}
+              style={{ backgroundColor: loadColor }}
               aria-hidden
             />
             <span className="tabular-nums">
@@ -174,7 +184,9 @@ export default function RoomTooltip({
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
   const palette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [isMobile, setIsMobile] = useState(false);
   const [headerLeft, setHeaderLeft] = useState(8);
@@ -216,6 +228,7 @@ export default function RoomTooltip({
 
   const isSelection = Boolean(roomProp);
   const compact = isMobile && isSelection;
+  const cooling = dataViewMode === "kuhllast";
 
   let style: CSSProperties;
 
@@ -273,8 +286,10 @@ export default function RoomTooltip({
           room={room}
           palette={palette}
           heizlastRange={heizlastRange}
+          kuhllastRange={kuhllastRange}
           temperatureRange={temperatureRange}
           uiLanguage={uiLanguage}
+          cooling={cooling}
           compact={compact}
         />
       </GlassPanel>

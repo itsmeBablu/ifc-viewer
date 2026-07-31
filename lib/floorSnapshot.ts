@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { Floor, Room } from "./types";
-import { heizlastToColor } from "./colorMapping";
+import { heizlastToColor, kuhllastToColor } from "./colorMapping";
 import { useAppStore } from "@/store/useAppStore";
 
 type CacheKey = string;
@@ -42,23 +42,35 @@ export function renderFloorSnapshot(
   size = 640,
   selectedRoomId: string | null = null,
 ): string | null {
-  const { activeColorPalette, heizlastRange } = useAppStore.getState();
+  const { activeColorPalette, heizlastRange, kuhllastRange, dataViewMode } =
+    useAppStore.getState();
 
   const selectedRoom = selectedRoomId
     ? rooms.find((r) => r.id === selectedRoomId) ?? null
     : null;
 
-  // Match 2D highlight to the same Heizlast palette used by 3D rendering.
-  // If heat data is missing, `heizlastToColor()` returns a safe fallback color.
   const selectedHeatColor = selectedRoom
-    ? heizlastToColor(selectedRoom.heatLoad, activeColorPalette, heizlastRange)
-    : heizlastToColor(Number.NaN, activeColorPalette, heizlastRange);
+    ? dataViewMode === "kuhllast"
+      ? kuhllastToColor(
+          selectedRoom.coolLoad,
+          activeColorPalette,
+          kuhllastRange,
+        )
+      : heizlastToColor(
+          selectedRoom.heatLoad,
+          activeColorPalette,
+          heizlastRange,
+        )
+    : dataViewMode === "kuhllast"
+      ? kuhllastToColor(Number.NaN, activeColorPalette, kuhllastRange)
+      : heizlastToColor(Number.NaN, activeColorPalette, heizlastRange);
 
+  const range = dataViewMode === "kuhllast" ? kuhllastRange : heizlastRange;
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
     selectedRoomId ?? "none"
-  }::palette=${activeColorPalette ?? "default"}::range=${heizlastRange
+  }::view=${dataViewMode}::palette=${activeColorPalette ?? "default"}::range=${range
     .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
-    .join(",")}::selColor=${selectedHeatColor}::v5`;
+    .join(",")}::selColor=${selectedHeatColor}::v6`;
   const cached = snapshotCache.get(cacheKey);
   if (cached) return cached;
 

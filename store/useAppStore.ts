@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { ColorPaletteId } from "@/lib/colorMapping";
 import {
   DEFAULT_HEIZLAST_RANGE,
+  DEFAULT_KUHLLAST_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
   parseLegendRange,
 } from "@/lib/colorMapping";
@@ -24,6 +25,7 @@ const RIGHT_PANEL_KEY = "ifc-viewer:rightPanelOpen";
 const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange";
+const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
 
@@ -120,6 +122,8 @@ type AppState = {
   activeColorPalette: ColorPaletteId;
   /** Legend Heizlast stop values (6–8). */
   heizlastRange: number[];
+  /** Legend Kühllast stop values (6–8). */
+  kuhllastRange: number[];
   /** Legend temperature stop values (6–8). */
   temperatureRange: number[];
   renderMode: RenderMode;
@@ -183,6 +187,7 @@ type AppState = {
   setDataViewMode: (mode: DataViewMode) => void;
   setActiveColorPalette: (id: ColorPaletteId) => void;
   setHeizlastRange: (values: number[]) => void;
+  setKuhllastRange: (values: number[]) => void;
   setTemperatureRange: (values: number[]) => void;
   setRenderMode: (mode: RenderMode) => void;
   setLighting: (
@@ -307,6 +312,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dataViewMode: "heizlast",
   activeColorPalette: initialPalette(),
   heizlastRange: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
+  kuhllastRange: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   renderMode: "fullColor",
   lighting: {
@@ -387,6 +393,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!parsed) return;
     persistRange(HEIZLAST_RANGE_KEY, parsed);
     set({ heizlastRange: parsed });
+  },
+  setKuhllastRange: (values) => {
+    const parsed = parseLegendRange(values.join(","));
+    if (!parsed) return;
+    persistRange(KUHLLAST_RANGE_KEY, parsed);
+    set({ kuhllastRange: parsed });
   },
   setTemperatureRange: (values) => {
     const parsed = parseLegendRange(values.join(","));

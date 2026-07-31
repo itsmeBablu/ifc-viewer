@@ -30,7 +30,7 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
-import { pickHeizlastRangeFromLoads } from "@/lib/colorMapping";
+import { pickHeizlastRangeFromLoads, pickKuhllastRangeFromLoads } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 
 type LoadSource =
@@ -59,13 +59,13 @@ export default function ViewerApp() {
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
-  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
   const setRooms = useAppStore((s) => s.setRooms);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
+  const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
   const setIsLoadingModel = useAppStore((s) => s.setIsLoadingModel);
   const setLoadError = useAppStore((s) => s.setLoadError);
   const setLoadProgress = useAppStore((s) => s.setLoadProgress);
@@ -164,6 +164,9 @@ export default function ViewerApp() {
         setHeizlastRange(
           pickHeizlastRangeFromLoads(result.rooms.map((r) => r.heatLoad)),
         );
+        setKuhllastRange(
+          pickKuhllastRangeFromLoads(result.rooms.map((r) => r.coolLoad)),
+        );
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
         debugLog(
@@ -191,6 +194,7 @@ export default function ViewerApp() {
       setLoadProgress,
       setRooms,
       setHeizlastRange,
+      setKuhllastRange,
     ],
   );
 
@@ -512,14 +516,13 @@ export default function ViewerApp() {
           </aside>
         )}
 
-        {/* RIGHT — Legend: bottom-aligned in basic view; top-right in presentation */}
+        {/* RIGHT — Legend: bottom-aligned in basic view; top-right in presentation.
+            Always size to content (max-height caps tall lists); never stretch empty. */}
         {isDesktop && (
           <aside
             className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,transform,opacity,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
               isPresentationView
-                ? presentationIsolate
-                  ? "top-32 bottom-20 md:top-36 lg:top-40"
-                  : "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
+                ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
                 : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
             } ${
               rightPanelOpen
@@ -530,15 +533,9 @@ export default function ViewerApp() {
             <GlassPanel
               variant="panel"
               zIndex={35}
-              fill={Boolean(isPresentationView && presentationIsolate)}
+              fill={false}
               allowOverflow={false}
-              wrapperClassName={`relative ${
-                isPresentationView && presentationIsolate
-                  ? "mb-2 flex h-full min-h-0 flex-col overflow-hidden"
-                  : isPresentationView
-                    ? "mb-2 max-h-[inherit]"
-                    : "max-h-[inherit]"
-              }`}
+              wrapperClassName="relative mb-2 max-h-[inherit]"
             >
               <button
                 type="button"
@@ -568,14 +565,10 @@ export default function ViewerApp() {
                 </svg>
               </button>
               <div
-                className={`pl-5 transition-opacity duration-300 ease-out ${
+                className={`pl-5 transition-opacity duration-300 ease-out thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain ${
                   rightPanelOpen
                     ? "opacity-100"
                     : "opacity-0 pointer-events-none"
-                } ${
-                  isPresentationView && presentationIsolate
-                    ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden"
-                    : "thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain"
                 }`}
               >
                 {isPresentationView ? (

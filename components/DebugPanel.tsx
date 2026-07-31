@@ -92,7 +92,7 @@ export default function DebugPanel() {
       lines.push(`roomId: ${selectedElement.roomId ?? "null"}`);
       if (selectedRoom) {
         lines.push(
-          `extracted: heatLoad=${selectedRoom.heatLoad} heizlast=${selectedRoom.heizlast} temperature=${selectedRoom.temperature}`,
+          `extracted: heatLoad=${selectedRoom.heatLoad} heizlast=${selectedRoom.heizlast} coolLoad=${selectedRoom.coolLoad} kuhllast=${selectedRoom.kuhllast} temperature=${selectedRoom.temperature}`,
         );
       }
       lines.push("properties:");
@@ -235,7 +235,9 @@ export default function DebugPanel() {
             {selectedRoom && (
               <p className="mb-1.5 font-mono text-[10px] text-emerald-800">
                 extracted: Heizlast/m²={selectedRoom.heatLoad} · Heizlast W=
-                {selectedRoom.heizlast ?? "—"} · Temp={selectedRoom.temperature}
+                {selectedRoom.heizlast ?? "—"} · Kühllast/m²=
+                {selectedRoom.coolLoad} · Kühllast W=
+                {selectedRoom.kuhllast ?? "—"} · Temp={selectedRoom.temperature}
               </p>
             )}
             <ul className="space-y-0.5 font-mono text-[10px] leading-snug">

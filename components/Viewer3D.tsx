@@ -9,10 +9,11 @@ import {
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
 import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
+import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
 import {
   ClipSliceController,
@@ -60,10 +61,16 @@ function roomColorHex(
   palette?: string,
   heizlastRange?: number[],
   temperatureRange?: number[],
+  dataViewMode: DataViewMode = "heizlast",
+  kuhllastRange?: number[],
 ): string {
-  return mode === "heizlast"
-    ? heizlastToColor(room.heatLoad, palette, heizlastRange)
-    : temperatureToColor(room.temperature, palette, temperatureRange);
+  if (mode === "temperature") {
+    return temperatureToColor(room.temperature, palette, temperatureRange);
+  }
+  if (dataViewMode === "kuhllast") {
+    return kuhllastToColor(room.coolLoad, palette, kuhllastRange);
+  }
+  return heizlastToColor(room.heatLoad, palette, heizlastRange);
 }
 
 /** Per-color material templates — always return a CLONE so rooms never share GPU state. */
@@ -364,8 +371,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const renderMode = useAppStore((s) => s.renderMode);
   const lighting = useAppStore((s) => s.lighting);
@@ -753,11 +762,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         activeColorPalette,
         heizlastRange,
         temperatureRange,
+        dataViewMode,
+        kuhllastRange,
       );
       if (logged < 8) {
         debugLog(
           "Viewer3D",
-          `color ${room.name}: ${hex} (H=${room.heatLoad}, T=${room.temperature})`,
+          `color ${room.name}: ${hex} (H=${room.heatLoad}, C=${room.coolLoad}, T=${room.temperature})`,
           "info",
         );
         logged += 1;
@@ -833,6 +844,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           activeColorPalette,
           heizlastRange,
           temperatureRange,
+          dataViewMode,
+          kuhllastRange,
         );
         mesh.material = materialCacheRef.current.get(hex);
         mesh.userData.colorHex = hex;
@@ -867,6 +880,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         activeColorPalette,
         heizlastRange,
         temperatureRange,
+        dataViewMode,
+        kuhllastRange,
       );
       mesh.material = materialCacheRef.current.get(hex);
       mesh.userData.colorHex = hex;
@@ -890,6 +905,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         activeColorPalette,
         heizlastRange,
         temperatureRange,
+        dataViewMode,
+        kuhllastRange,
       );
       const material = twinMaterialCacheRef.current.get(hex);
       const mesh = new THREE.Mesh(room.geometry, material);
@@ -969,7 +986,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     rooms,
     roomsFromStore,
     activeColorPalette,
+    dataViewMode,
     heizlastRange,
+    kuhllastRange,
     temperatureRange,
     renderMode,
     lighting,
@@ -993,6 +1012,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         activeColorPalette,
         heizlastRange,
         temperatureRange,
+        dataViewMode,
+        kuhllastRange,
       );
       const prev = mesh.material;
       mesh.material = materialCacheRef.current.get(hex);
@@ -1013,7 +1034,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     clipRef.current?.rebuildCaps();
     // Selection opacity/outline must win over shared-material rebuilds
     applySelectionHighlightRef.current();
-  }, [colorMode, activeColorPalette, heizlastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
+  }, [colorMode, dataViewMode, activeColorPalette, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {
@@ -1171,7 +1192,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     selectedFloor,
     colorMode,
     activeColorPalette,
+    dataViewMode,
     heizlastRange,
+    kuhllastRange,
     temperatureRange,
     floors,
     shellGroup,
@@ -1806,6 +1829,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               const n = p.name.toLowerCase().replace(/\s+/g, "");
               return (
                 n.includes("heizlast") ||
+                n.includes("kuehllast") ||
+                n.includes("kühllast") ||
+                n.includes("cooling") ||
                 n === "temp" ||
                 n.includes("temperatur") ||
                 n.includes("heatload")
@@ -1823,6 +1849,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                   ? {
                       heatLoad: room.heatLoad,
                       heizlast: room.heizlast,
+                      coolLoad: room.coolLoad,
+                      kuhllast: room.kuhllast,
                       temperature: room.temperature,
                     }
                   : null,

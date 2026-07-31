@@ -20,6 +20,7 @@ type Props = {
 
 export default function FloorRoomsPanel({ embedded = false }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const floors = useAppStore((s) => s.floors);
   const rooms = useAppStore((s) => s.rooms);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -149,7 +150,10 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
                           {room.name}
                         </ModelText>
                         <span className="shrink-0 tabular-nums text-zinc-400">
-                          {room.heatLoad.toFixed(0)}
+                          {(dataViewMode === "kuhllast"
+                            ? room.coolLoad
+                            : room.heatLoad
+                          ).toFixed(0)}
                         </span>
                       </button>
                     </li>

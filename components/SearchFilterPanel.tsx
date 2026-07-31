@@ -46,6 +46,7 @@ export default function SearchFilterPanel({
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const setActiveFilter = useAppStore((s) => s.setActiveFilter);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
 
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
@@ -239,7 +240,11 @@ export default function SearchFilterPanel({
                         </ModelText>
                       </span>
                       <span className="shrink-0 tabular-nums text-[10px] text-zinc-400">
-                        {room.heatLoad.toFixed(0)} W/m²
+                        {(dataViewMode === "kuhllast"
+                          ? room.coolLoad
+                          : room.heatLoad
+                        ).toFixed(0)}{" "}
+                        W/m²
                       </span>
                     </button>
                   </li>
