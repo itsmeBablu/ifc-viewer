@@ -6,62 +6,53 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { CiCircleMore } from "react-icons/ci";
+import { IoChevronDownSharp, IoChevronUp, IoClose } from "react-icons/io5";
 import GlassPanel from "./GlassPanel";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const DUR_MS = 400;
+const CHIP = 36;
 
-/** Three lines ↔ X morph (iOS-style). */
-function MorphMenuIcon({ open }: { open: boolean }) {
-  const bar =
-    "absolute left-1/2 top-1/2 h-[1.5px] w-[14px] -translate-x-1/2 rounded-full bg-current transition-[transform,opacity] duration-[400ms] ease-[cubic-bezier(0.32,0.72,0,1)]";
-  return (
-    <span className="relative mx-auto block h-4 w-4" aria-hidden>
-      <span
-        className={`${bar} ${
-          open
-            ? "-translate-y-1/2 rotate-45"
-            : "-translate-y-[5px] rotate-0"
-        }`}
-      />
-      <span
-        className={`${bar} -translate-y-1/2 ${
-          open ? "opacity-0 scale-x-50" : "opacity-100 scale-x-100"
-        }`}
-      />
-      <span
-        className={`${bar} ${
-          open
-            ? "-translate-y-1/2 -rotate-45"
-            : "translate-y-[3.5px] rotate-0"
-        }`}
-      />
-    </span>
-  );
-}
+const yellowLiquid =
+  "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** e.g. "Modell" — left label */
   title: string;
-  children: ReactNode;
+  /** IFC file name — yellow badge */
+  subtitle?: string | null;
+  onLoadIfc?: (file: File) => void;
+  isLoadingModel?: boolean;
+  children: (api: { detailsOpen: boolean }) => ReactNode;
 };
 
 /**
- * Circular chip at bottom-right (above toolbar). Panel scales upward from it.
+ * Yellow liquid-glass “more” chip — bottom-right.
+ * Header matches desktop: Modell | yellow IFC badge + details arrow.
  */
 export default function MobileCornerMenu({
   open,
   onOpenChange,
   title,
+  subtitle = null,
+  onLoadIfc,
+  isLoadingModel = false,
   children,
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(open);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -73,18 +64,39 @@ export default function MobileCornerMenu({
       return;
     }
     setShown(false);
+    setModelMenuOpen(false);
     closeTimer.current = window.setTimeout(() => setMounted(false), DUR_MS);
     return () => {
       if (closeTimer.current) window.clearTimeout(closeTimer.current);
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current?.contains(target) ||
+        badgeRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setModelMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [modelMenuOpen]);
+
+  const maxH =
+    "min(calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)), 36rem)";
+  const chipBox = { width: CHIP, height: CHIP };
+  const ifcName = subtitle?.trim() || "—";
+
   return (
     <div
       className="pointer-events-auto fixed right-2 z-[55]"
       style={{
-        bottom:
-          "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
+        bottom: "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
       {(open || shown) && (
@@ -102,17 +114,16 @@ export default function MobileCornerMenu({
         />
       )}
 
-      <div className="relative z-10 h-11 w-11">
+      <div className="relative z-10" style={chipBox}>
         {mounted && (
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={title}
+            aria-label={ifcName}
             className="absolute bottom-0 right-0 origin-bottom-right will-change-transform"
             style={{
               width: "min(calc(100vw - 1.5rem), 22rem)",
-              maxHeight:
-                "min(calc(100dvh - 8.5rem - env(safe-area-inset-bottom, 0px)), 36rem)",
+              maxHeight: maxH,
               transform: shown ? "scale(1)" : "scale(0.18)",
               opacity: shown ? 1 : 0,
               pointerEvents: shown ? "auto" : "none",
@@ -122,30 +133,105 @@ export default function MobileCornerMenu({
             <GlassPanel
               variant="panel"
               zIndex={56}
-              wrapperClassName="overflow-hidden rounded-[1.35rem]"
+              wrapperClassName="overflow-hidden rounded-[1.25rem]"
             >
               <div
                 className="flex flex-col overflow-hidden"
-                style={{
-                  maxHeight:
-                    "min(calc(100dvh - 8.5rem - env(safe-area-inset-bottom, 0px)), 36rem)",
-                }}
+                style={{ maxHeight: maxH }}
               >
-                <div className="flex h-11 shrink-0 items-center border-b border-white/35 pr-1 pl-3.5">
-                  <p className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-zinc-800">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/35 px-3 py-2">
+                  <p className="shrink-0 text-[11px] font-medium tracking-wide text-zinc-500">
                     {title}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => onOpenChange(false)}
-                    aria-label={t(uiLanguage, "closePanels")}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center text-zinc-800 active:opacity-70"
-                  >
-                    <MorphMenuIcon open />
-                  </button>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".ifc,application/x-step,application/octet-stream,.IFC"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) onLoadIfc?.(file);
+                      }}
+                    />
+                    <div className="relative max-w-[min(100%,11.5rem)]">
+                      <div
+                        ref={badgeRef}
+                        className={`flex max-w-full items-center gap-0.5 rounded-full py-0.5 pl-2.5 pr-1 ${yellowLiquid}`}
+                      >
+                        <button
+                          type="button"
+                          disabled={isLoadingModel}
+                          onClick={() => setModelMenuOpen((v) => !v)}
+                          className="notranslate min-w-0 truncate text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-45"
+                          translate="no"
+                          aria-expanded={modelMenuOpen}
+                          aria-label={ifcName}
+                        >
+                          {ifcName}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDetailsOpen((v) => !v)}
+                          aria-label={
+                            detailsOpen
+                              ? "Hide model details"
+                              : "Show model details"
+                          }
+                          aria-expanded={detailsOpen}
+                          className="flex shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-amber-950/80 transition hover:bg-amber-950/10"
+                        >
+                          {detailsOpen ? (
+                            <IoChevronUp className="h-3 w-3" />
+                          ) : (
+                            <IoChevronDownSharp className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
+                      {modelMenuOpen && (
+                        <div
+                          ref={menuRef}
+                          className="absolute top-[calc(100%+0.35rem)] right-0 z-[70] w-max min-w-[10.5rem]"
+                        >
+                          <GlassPanel variant="control" zIndex={70}>
+                            <div className="flex flex-col gap-1 p-1.5">
+                              <button
+                                type="button"
+                                disabled={isLoadingModel || !onLoadIfc}
+                                onClick={() => {
+                                  setModelMenuOpen(false);
+                                  fileInputRef.current?.click();
+                                }}
+                                className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 px-2.5 py-1.5 text-left text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:brightness-105 disabled:opacity-45"
+                              >
+                                {t(uiLanguage, "loadOtherIfc")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setModelMenuOpen(false)}
+                                className="rounded-xl border border-transparent px-2.5 py-1.5 text-left text-[11px] text-zinc-700 transition hover:border-white/55 hover:bg-white/40"
+                              >
+                                {t(uiLanguage, "cancel")}
+                              </button>
+                            </div>
+                          </GlassPanel>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenChange(false)}
+                      aria-label={t(uiLanguage, "closePanels")}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center text-zinc-800 active:opacity-70"
+                    >
+                      <IoClose className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
                 </div>
+
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-smooth">
-                  {children}
+                  {children({ detailsOpen })}
                 </div>
               </div>
             </GlassPanel>
@@ -159,25 +245,20 @@ export default function MobileCornerMenu({
           aria-label={
             open ? t(uiLanguage, "closePanels") : t(uiLanguage, "showPanels")
           }
-          className="absolute bottom-0 right-0 z-20 h-11 w-11"
+          className="absolute bottom-0 right-0 z-20 overflow-hidden rounded-full active:scale-95"
           style={{
+            ...chipBox,
             opacity: shown ? 0 : 1,
             pointerEvents: shown ? "none" : "auto",
             transform: shown ? "scale(0.85)" : "scale(1)",
             transition: `opacity ${DUR_MS * 0.55}ms ${EASE}, transform ${DUR_MS}ms ${EASE}`,
           }}
         >
-          <GlassPanel
-            variant="control"
-            zIndex={60}
-            fill
-            wrapperClassName="h-full w-full overflow-hidden !rounded-full"
-            wrapperStyle={{ borderRadius: 9999 }}
+          <span
+            className={`flex h-full w-full items-center justify-center ${yellowLiquid}`}
           >
-            <div className="flex h-full w-full items-center justify-center text-zinc-800">
-              <MorphMenuIcon open={false} />
-            </div>
-          </GlassPanel>
+            <CiCircleMore className="h-5 w-5" aria-hidden />
+          </span>
         </button>
       </div>
     </div>

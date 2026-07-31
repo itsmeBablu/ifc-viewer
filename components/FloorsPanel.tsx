@@ -34,6 +34,9 @@ type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
   onFile: (file: File) => void;
   isLoadingModel?: boolean;
+  /** Mobile sheet: hide Modell row (lives in menu header); details controlled by parent. */
+  mobileSheet?: boolean;
+  mobileDetailsOpen?: boolean;
 };
 
 function Divider() {
@@ -45,6 +48,8 @@ export default function FloorsPanel({
   viewerRef,
   onFile,
   isLoadingModel = false,
+  mobileSheet = false,
+  mobileDetailsOpen = false,
 }: Props) {
   const floors = useAppStore((s) => s.floors);
   const rooms = useAppStore((s) => s.rooms);
@@ -469,7 +474,8 @@ export default function FloorsPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col text-zinc-800">
       <section className="px-4 py-2">
-        {/* Header row: label + yellow glass IFC name badge */}
+        {/* Header row: label + yellow glass IFC name badge (desktop sidebar only) */}
+        {!mobileSheet && (
         <div className="flex items-center justify-between gap-2">
           <p className={heading.muted}>{t(uiLanguage, "model")}</p>
           <div className="relative max-w-[70%]">
@@ -584,34 +590,58 @@ export default function FloorsPanel({
             )}
           </div>
         </div>
+        )}
 
-        {/* Details — toggled by badge arrow */}
+        {/* Details — toggled by header badge arrow on mobile */}
         <div
           className={`overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${
-            modelDetailsOpen
-              ? "mt-1.5 max-h-16 opacity-100"
+            (mobileSheet ? mobileDetailsOpen : modelDetailsOpen)
+              ? `${mobileSheet ? "mt-0 pt-2" : "mt-1.5"} max-h-10 opacity-100`
               : "mt-0 max-h-0 opacity-0"
           }`}
         >
-          <div className="flex items-center gap-1.5 overflow-hidden text-[11px] text-zinc-600">
-            <span className="shrink-0 font-semibold tabular-nums">
-              {floors.length}
-            </span>
-            <span className="min-w-0 truncate">{t(uiLanguage, "floors")}</span>
-            <span className="shrink-0 text-zinc-400">|</span>
-            <span className="shrink-0 font-semibold tabular-nums">
-              {rooms.length}
-            </span>
-            <span className="min-w-0 truncate">{t(uiLanguage, "rooms")}</span>
-            <span className="shrink-0 text-zinc-400">|</span>
-            <span className="shrink-0 font-semibold tabular-nums">
-              {totalComponents}
-            </span>
-            <span className="min-w-0 truncate">Komp.</span>
-            <span className="shrink-0 text-zinc-400">|</span>
-            <span className="shrink-0 font-semibold">
-              {formatBytes(activeModelFileSizeBytes)}
-            </span>
+          <div className="flex w-full items-center text-[11px] text-zinc-600">
+            {(
+              [
+                {
+                  label: t(uiLanguage, "floors"),
+                  value: String(floors.length),
+                },
+                {
+                  label: t(uiLanguage, "rooms"),
+                  value: String(rooms.length),
+                },
+                {
+                  label: "Komp.",
+                  value: String(totalComponents),
+                },
+                {
+                  label: null as string | null,
+                  value: formatBytes(activeModelFileSizeBytes),
+                },
+              ] as const
+            ).map((item, i, arr) => (
+              <div key={item.label ?? "size"} className="contents">
+                <span className="flex min-w-0 flex-1 items-baseline justify-center gap-1 whitespace-nowrap px-0.5">
+                  {item.label != null && (
+                    <span className="truncate text-zinc-500">
+                      {item.label}:
+                    </span>
+                  )}
+                  <span className="font-semibold tabular-nums text-zinc-800">
+                    {item.value}
+                  </span>
+                </span>
+                {i < arr.length - 1 && (
+                  <span
+                    className="shrink-0 px-0.5 font-medium text-amber-400"
+                    aria-hidden
+                  >
+                    |
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>

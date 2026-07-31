@@ -231,8 +231,8 @@ function applyRenderMode(
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
-  const spaceOpacity = lighting?.spaceTransparency ?? 0.7;
-  const elementOpacity = lighting?.elementTransparency ?? 0.28;
+  const spaceOpacity = lighting?.spaceTransparency ?? 0.75;
+  const elementOpacity = lighting?.elementTransparency ?? 0.5;
   const colorAmt = lighting?.color ?? 1;
 
   if (overlays) {
@@ -1538,8 +1538,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
 
       const hasRoomSelection = Boolean(resolvedId);
-      const SEL_OPACITY = 1;
-      const OTHER_OPACITY = 0.2;
+      const SEL_OPACITY = 0.75;
+      const OTHER_OPACITY = 0.5;
 
       const styleRoomMesh = (id: string, mesh: THREE.Mesh) => {
         clearSelectionOutlines(mesh);
@@ -1758,8 +1758,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         if (match) roomId = match.id;
       }
 
-      if (roomId) setSelectedRoomId(roomId);
-      else setSelectedRoomId(null);
+      if (roomId) {
+        setSelectedRoomId(roomId);
+        setHoveredRoom(null);
+      } else setSelectedRoomId(null);
 
       if (expressId != null) {
         void (async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { heizlastToColor, temperatureToColor } from "@/lib/colorMapping";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage } from "@/lib/i18n";
@@ -13,9 +13,7 @@ type Props = {
   y?: number;
   /** Explicit room — used for list selection popup. */
   room?: Room | null;
-  /** Less transparency / more solid panel. */
-  opaque?: boolean;
-  /** Fixed screen position for list-selection popup. */
+  /** Fixed screen position for list-selection popup (desktop). */
   anchor?: { left: number; top: number } | null;
 };
 
@@ -25,12 +23,14 @@ function RoomInfoBody({
   heizlastRange,
   temperatureRange,
   uiLanguage,
+  compact = false,
 }: {
   room: Room;
   palette: string;
   heizlastRange: number[];
   temperatureRange: number[];
   uiLanguage: UiLanguage;
+  compact?: boolean;
 }) {
   const heatColor = heizlastToColor(room.heatLoad, palette, heizlastRange);
   const tempColor = temperatureToColor(
@@ -52,26 +52,79 @@ function RoomInfoBody({
     ? `${Math.round(room.temperature)}°C`
     : "—";
 
+  const nameNumberRow = (sizeCls: string) => (
+    <div className={`flex min-w-0 items-baseline gap-1 ${sizeCls}`}>
+      <span
+        className="notranslate min-w-0 truncate font-semibold text-zinc-900"
+        translate="no"
+        title={name}
+      >
+        {name}
+      </span>
+      <span className="shrink-0 font-medium text-zinc-400" aria-hidden>
+        |
+      </span>
+      <span
+        className="notranslate shrink-0 font-semibold tabular-nums text-zinc-800"
+        translate="no"
+      >
+        {number}
+      </span>
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="px-2 py-1.5">
+        <p className="text-[9px] font-semibold tracking-wide text-zinc-800">
+          {t(uiLanguage, "normHeizlast")}
+        </p>
+        <div className="my-0.5 h-px bg-white/40" />
+        {nameNumberRow("text-[11px]")}
+        <div className="my-0.5 h-px bg-white/40" />
+        <div className="flex items-baseline justify-between gap-2 text-[10px]">
+          <span className="shrink-0 font-medium text-zinc-500">
+            {t(uiLanguage, "heizlast")}
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-right font-medium text-zinc-800">
+            <span
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: heatColor }}
+              aria-hidden
+            />
+            <span className="tabular-nums">
+              {watts}
+              {density !== "—" ? (
+                <span className="font-normal text-zinc-600"> {density}</span>
+              ) : null}
+            </span>
+          </span>
+        </div>
+        <div className="my-0.5 h-px bg-white/40" />
+        <div className="flex items-baseline justify-between gap-2 text-[10px]">
+          <span className="shrink-0 font-medium text-zinc-500">
+            {t(uiLanguage, "temperature")}
+          </span>
+          <span className="flex items-center gap-1 font-medium text-zinc-800">
+            <span
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: tempColor }}
+              aria-hidden
+            />
+            <span className="tabular-nums">{temp}</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-3.5 py-3">
       <p className="text-[11px] font-semibold tracking-wide text-zinc-800">
         {t(uiLanguage, "normHeizlast")}
       </p>
-      <div className="my-2 h-px bg-zinc-300/70" />
-
-      <p className="truncate text-sm font-semibold text-zinc-900">
-        <span className="notranslate" translate="no">
-          {name}
-        </span>
-        <span className="font-medium text-zinc-500">
-          {" "}
-          |{" "}
-          <span className="notranslate" translate="no">
-            {number}
-          </span>
-        </span>
-      </p>
-
+      <div className="my-2 h-px bg-white/35" />
+      {nameNumberRow("text-sm")}
       <div className="mt-2 space-y-1.5 text-xs">
         <div className="flex items-baseline justify-between gap-3">
           <span className="shrink-0 font-medium text-zinc-500">
@@ -116,7 +169,6 @@ export default function RoomTooltip({
   x = 0,
   y = 0,
   room: roomProp = null,
-  opaque = false,
   anchor = null,
 }: Props) {
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
@@ -124,61 +176,107 @@ export default function RoomTooltip({
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const [isMobile, setIsMobile] = useState(false);
+  const [headerLeft, setHeaderLeft] = useState(8);
+  const [headerBottom, setHeaderBottom] = useState(56);
+
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setIsMobile(!(w >= 768 && h >= 560));
+
+      const header = document.querySelector(
+        "[data-app-header-actions]",
+      ) as HTMLElement | null;
+      if (header) {
+        const r = header.getBoundingClientRect();
+        setHeaderLeft(r.left);
+        setHeaderBottom(r.bottom + 6);
+      }
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(update)
+        : null;
+    const header = document.querySelector("[data-app-header-actions]");
+    if (header && ro) ro.observe(header);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      ro?.disconnect();
+    };
+  }, []);
 
   const room = roomProp ?? hoveredRoom;
   if (!room) return null;
 
-  // Prefer hover cursor follow; selection uses anchor or falls back beside left panel
-  let left: number;
-  let top: number;
-  if (anchor) {
-    left = anchor.left;
-    top = anchor.top;
-  } else if (roomProp && !hoveredRoom) {
-    left = typeof window !== "undefined" ? Math.min(360, window.innerWidth - 240) : 360;
-    top = typeof window !== "undefined" ? Math.min(160, window.innerHeight - 200) : 160;
-  } else {
-    const offset = 16;
-    left = Math.min(
-      x + offset,
-      typeof window !== "undefined" ? window.innerWidth - 260 : x,
-    );
-    top = Math.min(
-      y + offset,
-      typeof window !== "undefined" ? window.innerHeight - 180 : y,
-    );
-  }
+  const isSelection = Boolean(roomProp);
+  const compact = isMobile && isSelection;
 
-  const style: CSSProperties = {
-    position: "fixed",
-    left,
-    top,
-    zIndex: 60,
-    width: 248,
-    pointerEvents: roomProp ? "auto" : "none",
-    ...(opaque
-      ? {
-          filter: "none",
-        }
-      : {}),
-  };
+  let style: CSSProperties;
+
+  if (isSelection && isMobile) {
+    // Compact card, left-aligned under the logo header
+    style = {
+      position: "fixed",
+      top: headerBottom,
+      left: headerLeft,
+      right: "auto",
+      zIndex: 60,
+      width: 168,
+      pointerEvents: "auto",
+    };
+  } else {
+    let left: number;
+    let top: number;
+    if (anchor) {
+      left = anchor.left;
+      top = anchor.top;
+    } else if (roomProp && !hoveredRoom) {
+      left =
+        typeof window !== "undefined"
+          ? Math.min(360, window.innerWidth - 240)
+          : 360;
+      top =
+        typeof window !== "undefined"
+          ? Math.min(160, window.innerHeight - 200)
+          : 160;
+    } else {
+      const offset = 16;
+      left = Math.min(
+        x + offset,
+        typeof window !== "undefined" ? window.innerWidth - 260 : x,
+      );
+      top = Math.min(
+        y + offset,
+        typeof window !== "undefined" ? window.innerHeight - 180 : y,
+      );
+    }
+    style = {
+      position: "fixed",
+      left,
+      top,
+      zIndex: 60,
+      width: 248,
+      pointerEvents: roomProp ? "auto" : "none",
+    };
+  }
 
   return (
     <div style={style}>
-      <GlassPanel
-        variant="panel"
-        zIndex={60}
-        wrapperClassName={`w-full ${opaque ? "room-tooltip--opaque" : ""}`}
-      >
-        <div className={opaque ? "rounded-3xl bg-white/90" : undefined}>
-          <RoomInfoBody
-            room={room}
-            palette={palette}
-            heizlastRange={heizlastRange}
-            temperatureRange={temperatureRange}
-            uiLanguage={uiLanguage}
-          />
-        </div>
+      <GlassPanel variant="panel" zIndex={60} wrapperClassName="w-full">
+        <RoomInfoBody
+          room={room}
+          palette={palette}
+          heizlastRange={heizlastRange}
+          temperatureRange={temperatureRange}
+          uiLanguage={uiLanguage}
+          compact={compact}
+        />
       </GlassPanel>
     </div>
   );

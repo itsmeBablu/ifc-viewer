@@ -58,7 +58,6 @@ export default function ViewerApp() {
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
-  const hoveredRoom = useAppStore((s) => s.hoveredRoom);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
@@ -428,14 +427,16 @@ export default function ViewerApp() {
           </div>
         )}
 
-        <RoomTooltip x={pointer.x} y={pointer.y} />
-        {selectedRoomId && !hoveredRoom && (() => {
+        {/* One popup only: selection wins over hover */}
+        {!selectedRoomId && (
+          <RoomTooltip x={pointer.x} y={pointer.y} />
+        )}
+        {selectedRoomId && (() => {
           const room = rooms.find((r) => r.id === selectedRoomId);
           if (!room) return null;
           return (
             <RoomTooltip
               room={room}
-              opaque
               anchor={{
                 left: leftPanelOpen && !isPresentationView ? 380 : 24,
                 top: 120,
@@ -587,31 +588,36 @@ export default function ViewerApp() {
           </aside>
         )}
 
-        {/* Mobile — top-right morph menu + presentation legend dock */}
+        {/* Mobile — more menu (hidden in presentation) + presentation legend dock */}
         {!isDesktop && (
           <>
-            <MobileCornerMenu
-              open={leftPanelOpen}
-              onOpenChange={(open) => {
-                setLeftPanelOpen(open);
-                // Keep right flag in sync for desktop; on mobile menu is left-only
-                // so presentation's rightPanelOpen never leaves a gray scrim.
-                if (!open) setRightPanelOpen(false);
-              }}
-              title={t(uiLanguage, "details")}
-            >
-              <FloorsPanel
-                viewerRef={viewerRef}
-                onFile={handleFile}
+            {!isPresentationView && (
+              <MobileCornerMenu
+                open={leftPanelOpen}
+                onOpenChange={(open) => {
+                  setLeftPanelOpen(open);
+                  if (!open) setRightPanelOpen(false);
+                }}
+                title={t(uiLanguage, "model")}
+                subtitle={activeModelLabel}
+                onLoadIfc={handleFile}
                 isLoadingModel={isLoadingModel}
-              />
-              {!isPresentationView && (
-                <>
-                  <div className="mx-3 border-t border-zinc-300/50" />
-                  <LegendPanel />
-                </>
-              )}
-            </MobileCornerMenu>
+              >
+                {({ detailsOpen }) => (
+                  <>
+                    <FloorsPanel
+                      viewerRef={viewerRef}
+                      onFile={handleFile}
+                      isLoadingModel={isLoadingModel}
+                      mobileSheet
+                      mobileDetailsOpen={detailsOpen}
+                    />
+                    <div className="mx-3 border-t border-zinc-300/50" />
+                    <LegendPanel />
+                  </>
+                )}
+              </MobileCornerMenu>
+            )}
 
             {isPresentationView && (
               <PresentationMobileDock

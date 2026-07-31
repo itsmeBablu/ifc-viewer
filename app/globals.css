@@ -101,8 +101,9 @@ body {
 }
 
 /*
- * Mobile / touch: CSS frosted glass (iOS 26–style liquid glass feel).
- * Avoids @liquidglass displacement which looks muddy on mobile WebKit.
+ * Mobile / iPad / touch: CSS frosted “liquid” glass.
+ * Avoids @liquidglass displacement which looks muddy on WebKit.
+ * Keep fill translucent so the 3D scene blurs through.
  */
 .ios-glass {
   display: flex;
@@ -113,27 +114,42 @@ body {
   justify-content: flex-start;
   overflow: hidden;
   isolation: isolate;
-  /* Match desktop LiquidGlass: no outer shadow (reads as a sharp rectangle on mobile) */
-  box-shadow: none;
-  background: rgba(255, 255, 255, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  -webkit-backdrop-filter: saturate(180%) blur(24px);
-  backdrop-filter: saturate(180%) blur(24px);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.48) 0%,
+    rgba(255, 255, 255, 0.2) 42%,
+    rgba(255, 255, 255, 0.3) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: saturate(210%) blur(40px) brightness(1.06);
+  backdrop-filter: saturate(210%) blur(40px) brightness(1.06);
 }
 
 .ios-glass--control {
-  background: rgba(255, 255, 255, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  -webkit-backdrop-filter: saturate(190%) blur(20px);
-  backdrop-filter: saturate(190%) blur(20px);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.34) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: saturate(220%) blur(32px) brightness(1.05);
+  backdrop-filter: saturate(220%) blur(32px) brightness(1.05);
 }
 
 .ios-glass--chip {
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: none;
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-  backdrop-filter: saturate(180%) blur(14px);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.52) 0%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: saturate(200%) blur(22px) brightness(1.04);
+  backdrop-filter: saturate(200%) blur(22px) brightness(1.04);
 }
 
 .ios-glass--fill {

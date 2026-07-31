@@ -310,8 +310,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   renderMode: "fullColor",
   lighting: {
-    spaceTransparency: 0.7,
-    elementTransparency: 0.28,
+    spaceTransparency: 0.75,
+    elementTransparency: 0.5,
     color: 1,
     shadow: 0.55,
     indirectLight: 0.45,
@@ -365,8 +365,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedRoomId: (roomId) =>
     set(
       roomId
-        ? { selectedRoomId: roomId }
-        : { selectedRoomId: null, selectedElement: null },
+        ? { selectedRoomId: roomId, hoveredRoom: null }
+        : { selectedRoomId: null, selectedElement: null, hoveredRoom: null },
     ),
   setHoveredRoom: (room) => set({ hoveredRoom: room }),
   setSelectedElement: (el) => set({ selectedElement: el }),

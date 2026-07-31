@@ -54,11 +54,18 @@ export default function GlassPanel({
   const [cssGlass, setCssGlass] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setCssGlass(mq.matches);
+    // Phones + iPad / touch: CSS frosted glass. @liquidglass displacement
+    // often looks flat or muddy on iOS / iPadOS Safari.
+    const widthMq = window.matchMedia("(max-width: 1024px)");
+    const touchMq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = () => setCssGlass(widthMq.matches || touchMq.matches);
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    widthMq.addEventListener("change", update);
+    touchMq.addEventListener("change", update);
+    return () => {
+      widthMq.removeEventListener("change", update);
+      touchMq.removeEventListener("change", update);
+    };
   }, []);
 
   const overflowCls = allowOverflow ? "overflow-visible" : "overflow-hidden";

@@ -21,6 +21,8 @@ type Props = {
   /** Tighter spacing for mobile presentation dock. */
   compact?: boolean;
   className?: string;
+  /** Presentation heating/options menu open — parent can grow the dock. */
+  onPresentationMenuOpenChange?: (open: boolean) => void;
 };
 
 function Chevron({ open }: { open: boolean }) {
@@ -51,6 +53,7 @@ export default function LegendBody({
   paddedTop = false,
   compact = false,
   className = "",
+  onPresentationMenuOpenChange,
 }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
@@ -127,7 +130,7 @@ export default function LegendBody({
       <section
         className={
           compact
-            ? "relative space-y-1.5 px-2.5 pb-2 pt-1.5"
+            ? "relative space-y-1.5 overflow-visible px-2.5 pb-2 pt-1.5"
             : `relative space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`
         }
       >
@@ -135,10 +138,17 @@ export default function LegendBody({
           isPresentationView ? (
             <PresentationOptionsMenu
               compact={compact}
+              onMenuOpenChange={onPresentationMenuOpenChange}
               title={
-                !compact ? (
-                  <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
-                ) : undefined
+                <p
+                  className={
+                    compact
+                      ? "text-[11px] font-semibold tracking-wide text-zinc-800"
+                      : heading.panel
+                  }
+                >
+                  {t(uiLanguage, "legend")}
+                </p>
               }
             />
           ) : (

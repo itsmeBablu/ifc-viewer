@@ -1,7 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { IoOptionsOutline } from "react-icons/io5";
 import {
   DATA_VIEW_ICON,
@@ -16,7 +22,9 @@ import { listVisibleFloors } from "@/lib/floorFilter";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 
-const MENU_MS = 800;
+const OPEN_MS = 400;
+const CLOSE_MS = 300;
+const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 const LAYOUT_OPTIONS: {
   id: PresentationLayoutMode;
@@ -35,65 +43,115 @@ const DATA_VIEW_LABEL: Record<DataViewMode, UiTextKey> = {
 };
 
 const activeRow =
-  "overflow-hidden border border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
-const idleRow = "overflow-hidden border border-zinc-200/80 bg-zinc-50";
+  "overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
+const idleRow =
+  "overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50";
 
-/** Transparent by default; yellow only on hover / open. */
 const optionsBtnIdle =
   "border border-transparent bg-transparent text-zinc-800 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
 const optionsBtnOpen =
   "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
 
 const layoutChipOn =
-  "overflow-hidden border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_2px_8px_rgba(251,191,36,0.28)]";
+  "overflow-hidden rounded-lg border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
 const layoutChipOff =
-  "overflow-hidden border border-transparent text-zinc-600 hover:bg-white hover:border-amber-200/40";
+  "overflow-hidden rounded-lg border border-transparent text-zinc-600 hover:bg-white hover:border-amber-200/40";
 
 const viewChipOn =
-  "overflow-hidden border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  "overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 const viewChipOff =
-  "overflow-hidden border border-transparent text-zinc-600 hover:bg-zinc-100/80";
+  "overflow-hidden rounded-xl border border-transparent text-zinc-600 hover:bg-zinc-100/80";
 
 type Props = {
   compact?: boolean;
-  /** Left side of the header row (usually the Legend title). */
   title?: ReactNode;
+  onMenuOpenChange?: (open: boolean) => void;
 };
 
-function useOpenAnim(open: boolean, durationMs: number) {
+type MenuKind = "view" | "options";
+
+/** In-flow accordion (desktop). */
+function HeightAnim({
+  open,
+  panelKey,
+  children,
+}: {
+  open: boolean;
+  panelKey: string;
+  children: ReactNode;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
-  const [shown, setShown] = useState(false);
+  const [height, setHeight] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const prevKey = useRef(panelKey);
 
   useEffect(() => {
     if (open) {
       setMounted(true);
+      const switching = prevKey.current !== panelKey && visible;
+      prevKey.current = panelKey;
+      if (!switching) {
+        setHeight(0);
+        setVisible(false);
+      }
       const id = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => setShown(true));
+        window.requestAnimationFrame(() => {
+          setHeight(innerRef.current?.scrollHeight ?? 0);
+          setVisible(true);
+        });
       });
       return () => window.cancelAnimationFrame(id);
     }
-    setShown(false);
-    const t = window.setTimeout(() => setMounted(false), durationMs);
+    setVisible(false);
+    setHeight(0);
+    const t = window.setTimeout(() => setMounted(false), CLOSE_MS);
     return () => window.clearTimeout(t);
-  }, [open, durationMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, panelKey]);
 
-  return { mounted, shown };
+  useLayoutEffect(() => {
+    if (!mounted || !visible || !innerRef.current) return;
+    const el = innerRef.current;
+    const sync = () => {
+      const h = el.scrollHeight;
+      setHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mounted, visible, panelKey, children]);
+
+  if (!mounted) return null;
+
+  // Padding inside the clip so soft shadows aren’t squared off at the edges
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        height,
+        opacity: visible ? 1 : 0,
+        transition: `height ${open ? OPEN_MS : CLOSE_MS}ms ${EASE}, opacity ${
+          open ? 260 : 200
+        }ms ease`,
+      }}
+    >
+      <div ref={innerRef} className="px-1 pb-1.5 pt-2">
+        {children}
+      </div>
+    </div>
+  );
 }
 
-/**
- * Legend header + data-view picker + options dropdown.
- * Floor layout defaults to stack; user can switch Auto / Stack / Grid.
- */
 export default function PresentationOptionsMenu({
   compact = false,
   title,
+  onMenuOpenChange,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const [viewOpen, setViewOpen] = useState(false);
+  const [menu, setMenu] = useState<MenuKind | null>(null);
+  const [panel, setPanel] = useState<MenuKind>("view");
   const rootRef = useRef<HTMLDivElement>(null);
-
-  const optionsAnim = useOpenAnim(open, MENU_MS);
-  const viewAnim = useOpenAnim(viewOpen, MENU_MS);
 
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
@@ -115,41 +173,190 @@ export default function PresentationOptionsMenu({
     presentationLayoutMode,
   );
 
+  const setMenuOpen = (next: MenuKind | null) => {
+    if (next) setPanel(next);
+    setMenu(next);
+    onMenuOpenChange?.(next !== null);
+  };
+
+  const toggleMenu = (kind: MenuKind) => {
+    setMenuOpen(menu === kind ? null : kind);
+  };
+
   useEffect(() => {
-    if (!open && !viewOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-        setViewOpen(false);
-      }
+    if (!menu) return;
+    const onDoc = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      setMenuOpen(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        setViewOpen(false);
-      }
+      if (e.key === "Escape") setMenuOpen(null);
     };
     const id = window.setTimeout(() => {
-      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("pointerdown", onDoc);
       document.addEventListener("keydown", onKey);
     }, 0);
     return () => {
       window.clearTimeout(id);
-      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("pointerdown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, viewOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menu]);
 
   const switchTrack =
-    "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200";
+    "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-300 ease-out";
   const switchKnob =
-    "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200";
+    "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ease-out";
 
   const iconBtn = compact ? "h-7 w-7" : "h-8 w-8";
   const iconSize = compact ? "h-4 w-4" : "h-5 w-5";
 
+  const viewOpen = menu === "view";
+  const optionsOpen = menu === "options";
+  const open = menu !== null;
+
+  const menuBody =
+    panel === "view" ? (
+      <div
+        role="menu"
+        className="isolate overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/95 p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+      >
+        <div className="flex gap-0.5">
+          {DATA_VIEW_MODES.map((id) => {
+            const selected = dataViewMode === id;
+            const label = t(uiLanguage, DATA_VIEW_LABEL[id]);
+            return (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                title={label}
+                onClick={() => setDataViewMode(id)}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-xl px-1 py-1.5 text-center transition-[background,border,box-shadow,color] duration-300 ease-out ${
+                  selected ? viewChipOn : viewChipOff
+                }`}
+              >
+                <Image
+                  src={DATA_VIEW_ICON[id]}
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0 object-contain"
+                  aria-hidden
+                />
+                <span className="min-w-0 truncate text-[9px] font-semibold leading-tight">
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      <div
+        role="menu"
+        className="isolate space-y-2 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/95 p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+      >
+        <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50 p-2">
+          <div className="mb-1.5 flex items-center gap-2 px-0.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/floor_layout.svg"
+              alt=""
+              className="h-4 w-4 object-contain"
+            />
+            <p className="text-[11px] font-semibold text-zinc-800">
+              {t(uiLanguage, "floorLayout")}
+            </p>
+            <span className="ml-auto text-[9px] font-medium uppercase tracking-wide text-zinc-400">
+              {activeLayout}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {LAYOUT_OPTIONS.map((opt) => {
+              const on = presentationLayoutMode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="menuitem"
+                  title={t(uiLanguage, opt.hintKey)}
+                  onClick={() => setPresentationLayoutMode(opt.id)}
+                  className={`overflow-hidden rounded-lg px-1 py-1.5 text-[10px] font-semibold transition-all duration-300 ease-out ${
+                    on ? layoutChipOn : layoutChipOff
+                  }`}
+                >
+                  {t(uiLanguage, opt.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all duration-300 ease-out ${
+            presentationIsolate ? activeRow : idleRow
+          }`}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/isolate_view.svg"
+              alt=""
+              className="h-4 w-4 object-contain"
+            />
+            <p className="text-[11px] font-semibold text-zinc-800">
+              {t(uiLanguage, "isolateFloor")}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={presentationIsolate}
+            onClick={() => setPresentationIsolate(!presentationIsolate)}
+            className={`${switchTrack} ${
+              presentationIsolate ? "bg-amber-500" : "bg-zinc-300/80"
+            }`}
+          >
+            <span
+              className={`${switchKnob} ${
+                presentationIsolate ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div
+          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all duration-300 ease-out ${
+            compareBothModes ? activeRow : idleRow
+          }`}
+        >
+          <p className="text-[11px] font-semibold text-zinc-800">
+            {t(uiLanguage, "heizlastPlusTemp")}
+          </p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={compareBothModes}
+            onClick={() => setCompareBothModes(!compareBothModes)}
+            className={`${switchTrack} ${
+              compareBothModes ? "bg-amber-500" : "bg-zinc-300/80"
+            }`}
+          >
+            <span
+              className={`${switchKnob} ${
+                compareBothModes ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    );
+
   return (
-    <div ref={rootRef} className="w-full space-y-2">
+    <div ref={rootRef} className="w-full">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">{title}</div>
         <div className="flex shrink-0 items-center gap-1">
@@ -159,10 +366,7 @@ export default function PresentationOptionsMenu({
             aria-haspopup="menu"
             aria-label={t(uiLanguage, DATA_VIEW_LABEL[dataViewMode])}
             title={t(uiLanguage, "viewHint")}
-            onClick={() => {
-              setViewOpen((v) => !v);
-              setOpen(false);
-            }}
+            onClick={() => toggleMenu("view")}
             className={`flex items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 ${iconBtn} ${
               viewOpen ? optionsBtnOpen : optionsBtnIdle
             }`}
@@ -178,15 +382,12 @@ export default function PresentationOptionsMenu({
           </button>
           <button
             type="button"
-            aria-expanded={open}
+            aria-expanded={optionsOpen}
             aria-haspopup="menu"
             aria-label={t(uiLanguage, "moreOptions")}
-            onClick={() => {
-              setOpen((v) => !v);
-              setViewOpen(false);
-            }}
+            onClick={() => toggleMenu("options")}
             className={`flex items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 ${iconBtn} ${
-              open ? optionsBtnOpen : optionsBtnIdle
+              optionsOpen ? optionsBtnOpen : optionsBtnIdle
             }`}
           >
             <IoOptionsOutline className={iconSize} aria-hidden />
@@ -194,166 +395,9 @@ export default function PresentationOptionsMenu({
         </div>
       </div>
 
-      {viewAnim.mounted && (
-        <div
-          className={`grid transition-[grid-template-rows,opacity,transform] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            viewAnim.shown
-              ? "grid-rows-[1fr] translate-y-0 opacity-100"
-              : "grid-rows-[0fr] -translate-y-1 opacity-0"
-          }`}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div
-              role="menu"
-              className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-[0_6px_20px_rgba(0,0,0,0.08)]"
-            >
-              <div className="flex gap-0.5">
-                {DATA_VIEW_MODES.map((id) => {
-                  const selected = dataViewMode === id;
-                  const label = t(uiLanguage, DATA_VIEW_LABEL[id]);
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="menuitem"
-                      title={label}
-                      onClick={() => {
-                        setDataViewMode(id);
-                      }}
-                      className={`flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-xl px-1 py-1.5 text-center transition-all duration-200 ${
-                        selected ? viewChipOn : viewChipOff
-                      }`}
-                    >
-                      <Image
-                        src={DATA_VIEW_ICON[id]}
-                        alt=""
-                        width={14}
-                        height={14}
-                        className="h-3.5 w-3.5 shrink-0 object-contain"
-                        aria-hidden
-                      />
-                      <span className="min-w-0 truncate text-[9px] font-semibold leading-tight">
-                        {label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {optionsAnim.mounted && (
-        <div
-          className={`grid transition-[grid-template-rows,opacity,transform] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            optionsAnim.shown
-              ? "grid-rows-[1fr] translate-y-0 opacity-100"
-              : "grid-rows-[0fr] -translate-y-1 opacity-0"
-          }`}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div
-              role="menu"
-              className="space-y-2 overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.08)]"
-            >
-              <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50 p-2">
-                <div className="mb-1.5 flex items-center gap-2 px-0.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/floor_layout.svg"
-                    alt=""
-                    className="h-4 w-4 object-contain"
-                  />
-                  <p className="text-[11px] font-semibold text-zinc-800">
-                    {t(uiLanguage, "floorLayout")}
-                  </p>
-                  <span className="ml-auto text-[9px] font-medium uppercase tracking-wide text-zinc-400">
-                    {activeLayout}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {LAYOUT_OPTIONS.map((opt) => {
-                    const on = presentationLayoutMode === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="menuitem"
-                        title={t(uiLanguage, opt.hintKey)}
-                        onClick={() => setPresentationLayoutMode(opt.id)}
-                        className={`overflow-hidden rounded-lg px-1 py-1.5 text-[10px] font-semibold transition-all ${
-                          on ? layoutChipOn : layoutChipOff
-                        }`}
-                      >
-                        {t(uiLanguage, opt.labelKey)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div
-                className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all ${
-                  presentationIsolate ? activeRow : idleRow
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/isolate_view.svg"
-                    alt=""
-                    className="h-4 w-4 object-contain"
-                  />
-                  <p className="text-[11px] font-semibold text-zinc-800">
-                    {t(uiLanguage, "isolateFloor")}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={presentationIsolate}
-                  onClick={() => setPresentationIsolate(!presentationIsolate)}
-                  className={`${switchTrack} ${
-                    presentationIsolate ? "bg-amber-500" : "bg-zinc-300/80"
-                  }`}
-                >
-                  <span
-                    className={`${switchKnob} ${
-                      presentationIsolate ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <div
-                className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all ${
-                  compareBothModes ? activeRow : idleRow
-                }`}
-              >
-                <p className="text-[11px] font-semibold text-zinc-800">
-                  {t(uiLanguage, "heizlastPlusTemp")}
-                </p>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={compareBothModes}
-                  onClick={() => setCompareBothModes(!compareBothModes)}
-                  className={`${switchTrack} ${
-                    compareBothModes ? "bg-amber-500" : "bg-zinc-300/80"
-                  }`}
-                >
-                  <span
-                    className={`${switchKnob} ${
-                      compareBothModes ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <HeightAnim open={open} panelKey={panel}>
+        {menuBody}
+      </HeightAnim>
     </div>
   );
 }
