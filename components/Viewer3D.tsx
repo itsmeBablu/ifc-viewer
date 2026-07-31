@@ -1538,8 +1538,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
 
       const hasRoomSelection = Boolean(resolvedId);
-      const SEL_OPACITY = 0.75;
-      const OTHER_OPACITY = 0.5;
+      const SEL_OPACITY = 1;
+      const OTHER_OPACITY = 0.2;
 
       const styleRoomMesh = (id: string, mesh: THREE.Mesh) => {
         clearSelectionOutlines(mesh);
@@ -1567,6 +1567,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             : baseOpacity;
 
         applySurfaceOpacity(mat, nextOpacity, true);
+        // Selected must read fully solid (no leftover transparent flags)
+        if (isSel && passes && hasRoomSelection) {
+          mat.opacity = 1;
+          mat.transparent = false;
+          mat.depthWrite = true;
+          mat.alphaTest = 0;
+        }
 
         const baseHex =
           (mesh.userData.colorHex as string | undefined) ??
