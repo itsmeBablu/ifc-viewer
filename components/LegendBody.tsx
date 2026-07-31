@@ -13,6 +13,7 @@ import { heading } from "@/lib/designTokens";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import LegendRangeInput from "./LegendRangeInput";
+import PresentationOptionsMenu from "./PresentationOptionsMenu";
 
 type Props = {
   /** Kept for callers; legend uses compact top padding either way. */
@@ -54,6 +55,7 @@ export default function LegendBody({
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
@@ -61,6 +63,7 @@ export default function LegendBody({
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const isPresentationView = useAppStore((s) => s.isPresentationView);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [rangeOpen, setRangeOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -115,16 +118,34 @@ export default function LegendBody({
   }, [rangeOpen]);
 
   return (
-    <div className={`min-w-0 overflow-hidden text-zinc-800 ${className}`} ref={pickerRef}>
+    <div
+      className={`min-w-0 text-zinc-800 ${
+        isPresentationView ? "overflow-visible" : "overflow-hidden"
+      } ${className}`}
+      ref={pickerRef}
+    >
       <section
         className={
           compact
-            ? "space-y-1.5 px-2.5 pb-2 pt-1.5"
-            : `space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`
+            ? "relative space-y-1.5 px-2.5 pb-2 pt-1.5"
+            : `relative space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`
         }
       >
-        {!compact && (
-          <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+        {(isPresentationView || !compact) && (
+          isPresentationView ? (
+            <PresentationOptionsMenu
+              compact={compact}
+              title={
+                !compact ? (
+                  <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+                ) : undefined
+              }
+            />
+          ) : (
+            !compact && (
+              <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+            )
+          )
         )}
         {!compareBothModes && (
         <div
@@ -143,13 +164,28 @@ export default function LegendBody({
             <button
               type="button"
               onClick={() => setColorMode("heizlast")}
-              className={`min-w-0 flex-1 whitespace-nowrap text-left font-medium ${
+              title={t(
+                uiLanguage,
+                dataViewMode === "luftung"
+                  ? "luftungLegend"
+                  : dataViewMode === "kuhllast"
+                    ? "kuhllastWm2"
+                    : "heizlastWm2",
+              )}
+              className={`min-w-0 flex-1 truncate text-left font-medium ${
                 compact
                   ? "px-1 py-1 text-[10px]"
                   : "px-1.5 py-1.5 text-[11px]"
               }`}
             >
-              {t(uiLanguage, "heizlastWm2")}
+              {t(
+                uiLanguage,
+                dataViewMode === "luftung"
+                  ? "luftungLegend"
+                  : dataViewMode === "kuhllast"
+                    ? "kuhllastWm2"
+                    : "heizlastWm2",
+              )}
             </button>
             <button
               type="button"

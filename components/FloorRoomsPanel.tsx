@@ -12,6 +12,7 @@ import {
   PanelTitle,
   heading,
 } from "./ui";
+import ModelText from "./ModelText";
 
 type Props = {
   embedded?: boolean;
@@ -95,7 +96,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
           {floorsWithRooms.map((f) => {
             const count = rooms.filter((r) => r.floorId === f.id).length;
             return (
-              <option key={f.id} value={f.id}>
+              <option key={f.id} value={f.id} className="notranslate" translate="no">
                 {f.name} ({count})
               </option>
             );
@@ -143,10 +144,10 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
                             : "border border-transparent text-zinc-600 hover:bg-white/40"
                         }`}
                       >
-                        <span className="min-w-0 truncate">
+                        <ModelText className="min-w-0 truncate">
                           {room.number ? `${room.number} · ` : ""}
                           {room.name}
-                        </span>
+                        </ModelText>
                         <span className="shrink-0 tabular-nums text-zinc-400">
                           {room.heatLoad.toFixed(0)}
                         </span>

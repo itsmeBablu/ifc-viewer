@@ -8,6 +8,7 @@ import {
   parseLegendRange,
 } from "@/lib/colorMapping";
 import { listVisibleFloors } from "@/lib/floorFilter";
+import type { DataViewMode } from "@/lib/dataViewMode";
 import type {
   ColorMode,
   Floor,
@@ -114,6 +115,8 @@ type AppState = {
   hoveredRoom: Room | null;
   selectedElement: SelectedElement | null;
   colorMode: ColorMode;
+  /** Heating / ventilation / cooling — synced between header and legend. */
+  dataViewMode: DataViewMode;
   activeColorPalette: ColorPaletteId;
   /** Legend Heizlast stop values (6–8). */
   heizlastRange: number[];
@@ -177,6 +180,7 @@ type AppState = {
   setHoveredRoom: (room: Room | null) => void;
   setSelectedElement: (el: SelectedElement | null) => void;
   setColorMode: (mode: ColorMode) => void;
+  setDataViewMode: (mode: DataViewMode) => void;
   setActiveColorPalette: (id: ColorPaletteId) => void;
   setHeizlastRange: (values: number[]) => void;
   setTemperatureRange: (values: number[]) => void;
@@ -300,6 +304,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   hoveredRoom: null,
   selectedElement: null,
   colorMode: "heizlast",
+  dataViewMode: "heizlast",
   activeColorPalette: initialPalette(),
   heizlastRange: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
@@ -320,7 +325,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   presentationIsolate: false,
   compareBothModes: false,
   activeFilter: null,
-  sliceProgress: 0.5,
+  sliceProgress: 0.9,
   isLoadingModel: false,
   loadError: null,
   loadProgress: 0,
@@ -352,14 +357,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedFloor: (floorId) =>
     set({
       selectedFloor: floorId,
-      // Mid-height cross-section by default when a floor is chosen
-      sliceProgress: floorId ? 0.5 : 0.5,
+      // Default Schnitthöhe near the top of the floor (90%)
+      sliceProgress: 0.9,
       selectedRoomId: null,
+      selectedElement: null,
     }),
-  setSelectedRoomId: (roomId) => set({ selectedRoomId: roomId }),
+  setSelectedRoomId: (roomId) =>
+    set(
+      roomId
+        ? { selectedRoomId: roomId }
+        : { selectedRoomId: null, selectedElement: null },
+    ),
   setHoveredRoom: (room) => set({ hoveredRoom: room }),
   setSelectedElement: (el) => set({ selectedElement: el }),
   setColorMode: (mode) => set({ colorMode: mode }),
+  setDataViewMode: (mode) => set({ dataViewMode: mode }),
   setActiveColorPalette: (id) => {
     if (typeof window !== "undefined") {
       try {
@@ -422,6 +434,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const defaultFloor = erd?.id ?? pool[0]?.id ?? null;
       set({
         isPresentationView: true,
+        presentationLayoutMode: "stack",
         presentationPrevFloor: s.selectedFloor,
         selectedFloor: null,
         presentationFloorId: defaultFloor,
@@ -463,7 +476,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setPresentationLayoutMode: (mode) => set({ presentationLayoutMode: mode }),
-  setPresentationIsolate: (isolate) => set({ presentationIsolate: isolate }),
+  setPresentationIsolate: (isolate) => {
+    if (!isolate) {
+      set({ presentationIsolate: false });
+      return;
+    }
+    const s = get();
+    const visible = listVisibleFloors(s.floors, s.rooms);
+    const pool = visible.length ? visible : s.floors;
+    const erd = pool.find((f) =>
+      /erdgeschoss|\beg\b|ground\s*floor|egeschoss/i.test(f.name),
+    );
+    const floorId = erd?.id ?? pool[0]?.id ?? s.presentationFloorId;
+    set({
+      presentationIsolate: true,
+      presentationFloorId: floorId,
+      presentationRoomsOpen: false,
+    });
+  },
   setCompareBothModes: (on) => set({ compareBothModes: on }),
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),
@@ -541,7 +571,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedRoomId: null,
       hoveredRoom: null,
       selectedElement: null,
-      sliceProgress: 0.5,
+      sliceProgress: 0.9,
       isPresentationView: false,
       presentationPrevFloor: null,
       presentationFloorId: null,

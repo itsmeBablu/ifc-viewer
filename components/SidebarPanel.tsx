@@ -12,6 +12,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { Floor } from "@/lib/types";
+import ModelText from "./ModelText";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
@@ -284,7 +285,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
           {floorsWithRooms.map((f) => {
             const count = rooms.filter((r) => r.floorId === f.id).length;
             return (
-              <option key={f.id} value={f.id}>
+              <option key={f.id} value={f.id} className="notranslate" translate="no">
                 {f.name} ({count})
               </option>
             );
@@ -337,10 +338,10 @@ export default function SidebarPanel({ viewerRef }: Props) {
                             : "text-zinc-600 hover:bg-zinc-900/5"
                         }`}
                       >
-                        <span className="min-w-0 truncate">
+                        <ModelText className="min-w-0 truncate">
                           {room.number ? `${room.number} · ` : ""}
                           {room.name}
-                        </span>
+                        </ModelText>
                         <span className="tabular-nums text-zinc-400">
                           {room.heatLoad.toFixed(0)}
                         </span>

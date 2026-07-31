@@ -13,6 +13,7 @@ import type { Room } from "@/lib/types";
 import type { Viewer3DHandle } from "./Viewer3D";
 import Slider from "./ui/Slider";
 import type { RefObject } from "react";
+import ModelText from "./ModelText";
 
 type Mode = "search" | "filter";
 
@@ -228,12 +229,14 @@ export default function SearchFilterPanel({
                     >
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-zinc-900">
-                          {room.number ? `${room.number} · ` : ""}
-                          {room.name}
+                          <ModelText>
+                            {room.number ? `${room.number} · ` : ""}
+                            {room.name}
+                          </ModelText>
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <ModelText className="text-[10px] text-zinc-500">
                           {floorName(room.floorId)}
-                        </span>
+                        </ModelText>
                       </span>
                       <span className="shrink-0 tabular-nums text-[10px] text-zinc-400">
                         {room.heatLoad.toFixed(0)} W/m²

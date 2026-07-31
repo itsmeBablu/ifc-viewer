@@ -60,8 +60,16 @@ function RoomInfoBody({
       <div className="my-2 h-px bg-zinc-300/70" />
 
       <p className="truncate text-sm font-semibold text-zinc-900">
-        {name}
-        <span className="font-medium text-zinc-500"> | {number}</span>
+        <span className="notranslate" translate="no">
+          {name}
+        </span>
+        <span className="font-medium text-zinc-500">
+          {" "}
+          |{" "}
+          <span className="notranslate" translate="no">
+            {number}
+          </span>
+        </span>
       </p>
 
       <div className="mt-2 space-y-1.5 text-xs">

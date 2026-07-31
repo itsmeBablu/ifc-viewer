@@ -9,6 +9,7 @@ import type { PageFormat } from "@/lib/presentationLayout";
 import GlassPanel from "./GlassPanel";
 import SliceHeightSlider from "./SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
+import ModelText from "./ModelText";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
@@ -393,10 +394,10 @@ export default function ViewerContextMenu({
                         }`}
                         onClick={() => isolateFloor(f.id)}
                       >
-                        <span className="min-w-0 truncate">
+                        <ModelText className="min-w-0 truncate">
                           {f.name}
                           {count > 0 ? ` (${count})` : ""}
-                        </span>
+                        </ModelText>
                       </button>
                     );
                   })

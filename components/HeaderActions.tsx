@@ -13,20 +13,16 @@ import { MdOutlineAccountCircle } from "react-icons/md";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
-
-type HeaderMode = "heizlast" | "luftung" | "kuhllast" | "editor";
+import {
+  HEADER_MODE_ICON,
+  isDataViewMode,
+  type HeaderMode,
+} from "@/lib/dataViewMode";
 
 type Props = {
   onFile: (file: File) => void;
   hasModel: boolean;
   isLoadingModel: boolean;
-};
-
-const MODE_ICON: Record<HeaderMode, string> = {
-  heizlast: "/Heating.svg",
-  luftung: "/ventilation.svg",
-  kuhllast: "/cooling.svg",
-  editor: "/tool.svg",
 };
 
 function ModeIcon({
@@ -38,7 +34,7 @@ function ModeIcon({
 }) {
   return (
     <Image
-      src={MODE_ICON[mode]}
+      src={HEADER_MODE_ICON[mode]}
       alt=""
       width={22}
       height={22}
@@ -161,8 +157,12 @@ export default function HeaderActions({
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
+  const setDataViewMode = useAppStore((s) => s.setDataViewMode);
 
-  const [mode, setMode] = useState<HeaderMode>("heizlast");
+  /** Tool mode is local; heating/vent/cooling stay in the shared store. */
+  const [editorActive, setEditorActive] = useState(false);
+  const mode: HeaderMode = editorActive ? "editor" : dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   /** Which dropdown row is under the pointer — highlight follows this, not only selection. */
@@ -268,7 +268,12 @@ export default function HeaderActions({
                       type="button"
                       onMouseEnter={() => setModeHoverId(opt.id)}
                       onClick={() => {
-                        setMode(opt.id);
+                        if (isDataViewMode(opt.id)) {
+                          setDataViewMode(opt.id);
+                          setEditorActive(false);
+                        } else {
+                          setEditorActive(true);
+                        }
                         setModeOpen(false);
                         setModeHoverId(null);
                       }}
@@ -383,7 +388,15 @@ export default function HeaderActions({
                   />
                 )}
                 <HeaderTip
-                  label={t(uiLanguage, "heating")}
+                  label={
+                    mode === "editor"
+                      ? t(uiLanguage, "tool")
+                      : mode === "luftung"
+                        ? t(uiLanguage, "optionsLuft")
+                        : mode === "kuhllast"
+                          ? t(uiLanguage, "optionsCool")
+                          : t(uiLanguage, "heating")
+                  }
                   hint={t(uiLanguage, "viewHint")}
                 >
                   <button
@@ -396,7 +409,15 @@ export default function HeaderActions({
                       setHovered(true);
                     }}
                     aria-expanded={modeOpen}
-                    aria-label={t(uiLanguage, "heating")}
+                    aria-label={
+                      mode === "editor"
+                        ? t(uiLanguage, "tool")
+                        : mode === "luftung"
+                          ? t(uiLanguage, "optionsLuft")
+                          : mode === "kuhllast"
+                            ? t(uiLanguage, "optionsCool")
+                            : t(uiLanguage, "heating")
+                    }
                     className={modeOpen ? roundActive : roundIdle}
                   >
                     <ModeIcon mode={mode} />

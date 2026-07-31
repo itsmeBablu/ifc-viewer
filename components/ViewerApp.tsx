@@ -16,7 +16,6 @@ import {
   persistModelId,
   useAppStore,
 } from "@/store/useAppStore";
-import { motion } from "@/lib/designTokens";
 import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
 import RoomTooltip from "./RoomTooltip";
@@ -61,7 +60,7 @@ export default function ViewerApp() {
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
-  const presentationRoomsOpen = useAppStore((s) => s.presentationRoomsOpen);
+  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
@@ -347,7 +346,7 @@ export default function ViewerApp() {
             >
               <div className="p-6">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="h-7 w-7 animate-spin rounded-2xl border-2 border-zinc-300/60 border-t-zinc-700" />
+                  <div className="h-7 w-7 animate-spin rounded-2xl border-2 border-amber-200/50 border-t-amber-500" />
                   <p className="text-sm font-semibold tracking-wide text-zinc-800">
                     {t(uiLanguage, "loadingModel")}
                   </p>
@@ -356,13 +355,18 @@ export default function ViewerApp() {
                   {progressLabel}
                 </p>
                 {loadProgress >= 0 && (
-                  <div className="h-1.5 overflow-hidden rounded-2xl bg-white/30">
+                  <div className="h-2 overflow-hidden rounded-full border border-amber-200/40 bg-amber-50/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
                     <div
-                      className="h-full rounded-2xl bg-gradient-to-r from-zinc-600 to-zinc-800 transition-all duration-300 ease-out"
+                      className="relative h-full overflow-hidden rounded-full border border-amber-200/60 bg-gradient-to-br from-amber-200/95 via-yellow-300/90 to-amber-400/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_8px_rgba(251,191,36,0.35)] transition-all duration-300 ease-out"
                       style={{
                         width: `${Math.round(loadProgress * 100)}%`,
                       }}
-                    />
+                    >
+                      <span
+                        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/55 to-transparent"
+                        aria-hidden
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -450,12 +454,12 @@ export default function ViewerApp() {
         {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing) */}
         {isDesktop && (
           <aside
-            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] ${motion.sidebar} ${
+            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] transition-[transform,opacity,left] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
               isPresentationView
-                ? "hidden"
+                ? "left-2 pointer-events-none -translate-x-[calc(100%+1.5rem)] opacity-0 md:left-4"
                 : leftPanelOpen
-                  ? "left-2 pointer-events-auto translate-x-0 md:left-4"
-                  : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)]"
+                  ? "left-2 pointer-events-auto translate-x-0 opacity-100 md:left-4"
+                  : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)] opacity-100"
             }`}
             aria-hidden={isPresentationView}
           >
@@ -493,7 +497,7 @@ export default function ViewerApp() {
                 </svg>
               </button>
               <div
-                className={`flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth pr-5 transition-opacity duration-300 ease-out ${
+                className={`flex min-h-0 flex-1 flex-col overflow-hidden pr-5 transition-opacity duration-300 ease-out ${
                   leftPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
                 }`}
               >
@@ -507,29 +511,32 @@ export default function ViewerApp() {
           </aside>
         )}
 
-        {/* RIGHT — Legend (basic) / combined Legend+Rooms (presentation) */}
+        {/* RIGHT — Legend: bottom-aligned in basic view; top-right in presentation */}
         {isDesktop && (
           <aside
-            className={`fixed top-32 z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden md:top-36 md:w-[min(22rem,calc(100vw-2rem))] lg:top-40 lg:w-[min(24rem,calc(100vw-2rem))] ${
-              isPresentationView && presentationRoomsOpen
-                ? "bottom-20 pb-1"
-                : ""
-            } ${motion.sidebar} ${
+            className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,transform,opacity,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              isPresentationView
+                ? presentationIsolate
+                  ? "top-32 bottom-20 md:top-36 lg:top-40"
+                  : "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
+                : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
+            } ${
               rightPanelOpen
-                ? "right-2 pointer-events-auto translate-x-0 md:right-4"
-                : "right-0 pointer-events-auto translate-x-[calc(100%-1.25rem)]"
+                ? "right-2 pointer-events-auto translate-x-0 opacity-100 md:right-4"
+                : "right-0 pointer-events-auto translate-x-[calc(100%-1.25rem)] opacity-100"
             }`}
           >
             <GlassPanel
               variant="panel"
               zIndex={35}
-              fill={isPresentationView && presentationRoomsOpen}
-              wrapperClassName={`relative overflow-hidden ${
-                isPresentationView && presentationRoomsOpen
-                  ? "mb-2 flex min-h-0 flex-1 flex-col"
+              fill={Boolean(isPresentationView && presentationIsolate)}
+              allowOverflow={false}
+              wrapperClassName={`relative ${
+                isPresentationView && presentationIsolate
+                  ? "mb-2 flex h-full min-h-0 flex-col overflow-hidden"
                   : isPresentationView
-                    ? "mb-2"
-                    : ""
+                    ? "mb-2 max-h-[inherit]"
+                    : "max-h-[inherit]"
               }`}
             >
               <button
@@ -561,11 +568,13 @@ export default function ViewerApp() {
               </button>
               <div
                 className={`pl-5 transition-opacity duration-300 ease-out ${
-                  rightPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                  rightPanelOpen
+                    ? "opacity-100"
+                    : "opacity-0 pointer-events-none"
                 } ${
-                  isPresentationView && presentationRoomsOpen
-                    ? "flex h-full min-h-0 flex-1 flex-col"
-                    : ""
+                  isPresentationView && presentationIsolate
+                    ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+                    : "thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain"
                 }`}
               >
                 {isPresentationView ? (

@@ -25,6 +25,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import { useModelScene } from "./ModelSceneContext";
 import GlassPanel from "./GlassPanel";
+import ModelText from "./ModelText";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { Floor, Room } from "@/lib/types";
 import type { PageFormat } from "@/lib/presentationLayout";
@@ -617,10 +618,10 @@ export default function FloorsPanel({
 
       <Divider />
 
-      {/* === SCROLLABLE MIDDLE: Floors & Rooms === */}
-      <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
-      <section className="space-y-1.5 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
+      {/* === MIDDLE: Floors & Rooms — fills down to Selection divider === */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
+        <div className="flex shrink-0 items-center justify-between gap-2">
           <p className={heading.panel}>{t(uiLanguage, "floorsAndRooms")}</p>
           <button
             type="button"
@@ -636,12 +637,8 @@ export default function FloorsPanel({
           </button>
         </div>
 
-        <div
-          className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-            floorsExpanded ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="space-y-1 pt-0.5">
+        {floorsExpanded && (
+          <div className="flex min-h-0 flex-1 flex-col space-y-1 overflow-hidden pt-0.5">
             {/* 3D View (all elements, no isolation) */}
             <button
               type="button"
@@ -651,7 +648,7 @@ export default function FloorsPanel({
                 setSelectedFloor(null);
                 setRoomsExpanded(false);
               }}
-              className={`w-full rounded-lg border px-2 py-1 text-left text-[11px] transition-colors ${
+              className={`w-full shrink-0 rounded-lg border px-2 py-1 text-left text-[11px] transition-colors ${
                 selectedFloor == null
                   ? "border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-zinc-900"
                   : "border-zinc-300/60 bg-white/30 text-zinc-600 hover:bg-white/45"
@@ -666,7 +663,7 @@ export default function FloorsPanel({
             </button>
 
             {/* Floors list */}
-            <div className="divide-y divide-zinc-200/60 rounded-lg border border-zinc-300/50 bg-white/30">
+            <div className="thin-scroll max-h-[30%] shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-lg border border-zinc-300/50 bg-white/30">
               {sortedFloors.map((f) => {
                 const active = f.id === selectedFloor;
                 const count = rooms.filter((r) => r.floorId === f.id).length;
@@ -685,7 +682,7 @@ export default function FloorsPanel({
                         : "text-zinc-600 hover:bg-zinc-900/5"
                     }`}
                   >
-                    <span className="min-w-0 truncate">{f.name}</span>
+                    <ModelText className="min-w-0 truncate">{f.name}</ModelText>
                     <span className="tabular-nums text-[10px] text-zinc-400">
                       {count}
                     </span>
@@ -694,14 +691,14 @@ export default function FloorsPanel({
               })}
             </div>
 
-            {/* Rooms tab + 2D layout */}
+            {/* Rooms tab + 2D layout — grows to Selection top line */}
             {selectedFloor ? (
-              <div className="space-y-1 pt-0.5">
+              <div className="flex min-h-0 flex-1 flex-col space-y-1 overflow-hidden pt-0.5">
                 <button
                   type="button"
                   onClick={() => setRoomsExpanded((v) => !v)}
                   aria-label={roomsExpanded ? "Hide rooms" : "Show rooms"}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-300/60 bg-white/35 px-2 py-1 text-left"
+                  className="flex w-full shrink-0 items-center justify-between gap-2 rounded-lg border border-zinc-300/60 bg-white/35 px-2 py-1 text-left"
                 >
                   <span className="text-[11px] font-semibold text-zinc-700">
                     {t(uiLanguage, "roomsInSelectedFloor")}
@@ -713,65 +710,61 @@ export default function FloorsPanel({
                   )}
                 </button>
 
-                <div
-                  className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-                    roomsExpanded
-                      ? "max-h-[560px] opacity-100"
-                      : "max-h-0 opacity-0"
-                  }`}
-                >
-                  <div className="overflow-hidden rounded-lg border border-zinc-300/50 bg-[#f2f4f7]">
-                    {snapshotUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={snapshotUrl}
-                        alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
-                        className="block h-auto w-full object-contain"
-                      />
+                {roomsExpanded && (
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="shrink-0 overflow-hidden rounded-lg border border-zinc-300/50 bg-[#f2f4f7]">
+                      {snapshotUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={snapshotUrl}
+                          alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
+                          className="block h-auto max-h-36 w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex min-h-[5rem] w-full items-center justify-center text-[11px] text-zinc-400">
+                          {t(uiLanguage, "noFloorPlan")}
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="mt-1 shrink-0 px-0.5 text-[10px] font-medium text-zinc-500">
+                      {t(uiLanguage, "rooms")} ({floorRooms.length})
+                    </p>
+
+                    {floorRooms.length === 0 ? (
+                      <p className="text-[11px] text-zinc-400">
+                        {t(uiLanguage, "noRoomsOnFloor")}
+                      </p>
                     ) : (
-                      <div className="flex min-h-[7rem] w-full items-center justify-center text-[11px] text-zinc-400">
-                        {t(uiLanguage, "noFloorPlan")}
-                      </div>
+                      <ul className="thin-scroll min-h-0 flex-1 space-y-0 overflow-y-auto pb-1 pr-0.5">
+                        {floorRooms.map((room) => {
+                          const active = room.id === selectedRoomId;
+                          return (
+                            <li key={room.id}>
+                              <button
+                                type="button"
+                                onClick={() => selectRoomFromList(room)}
+                                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-0.5 text-left text-[11px] transition-colors ${
+                                  active
+                                    ? "bg-zinc-900/10 font-semibold text-zinc-900"
+                                    : "text-zinc-600 hover:bg-zinc-900/5"
+                                }`}
+                              >
+                                <ModelText className="min-w-0 truncate">
+                                  {room.number ? `${room.number} · ` : ""}
+                                  {room.name}
+                                </ModelText>
+                                <span className="tabular-nums text-[10px] text-zinc-400">
+                                  {room.heatLoad.toFixed(0)}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     )}
                   </div>
-
-                  <p className="mt-1 px-0.5 text-[10px] font-medium text-zinc-500">
-                    {t(uiLanguage, "rooms")} ({floorRooms.length})
-                  </p>
-
-                  {floorRooms.length === 0 ? (
-                    <p className="text-[11px] text-zinc-400">
-                      {t(uiLanguage, "noRoomsOnFloor")}
-                    </p>
-                  ) : (
-                    <ul className="thin-scroll max-h-48 space-y-0 overflow-y-auto pb-1 pr-0.5">
-                      {floorRooms.map((room) => {
-                        const active = room.id === selectedRoomId;
-                        return (
-                          <li key={room.id}>
-                            <button
-                              type="button"
-                              onClick={() => selectRoomFromList(room)}
-                              className={`flex w-full items-center justify-between gap-2 rounded px-2 py-0.5 text-left text-[11px] transition-colors ${
-                                active
-                                  ? "bg-zinc-900/10 font-semibold text-zinc-900"
-                                  : "text-zinc-600 hover:bg-zinc-900/5"
-                              }`}
-                            >
-                              <span className="min-w-0 truncate">
-                                {room.number ? `${room.number} · ` : ""}
-                                {room.name}
-                              </span>
-                              <span className="tabular-nums text-[10px] text-zinc-400">
-                                {room.heatLoad.toFixed(0)}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
+                )}
               </div>
             ) : (
               <p className="px-1 text-[11px] text-zinc-400">
@@ -779,10 +772,10 @@ export default function FloorsPanel({
               </p>
             )}
           </div>
-        </div>
+        )}
       </section>
       </div>
-      {/* === END SCROLLABLE MIDDLE === */}
+      {/* === END MIDDLE === */}
 
       <Divider />
 
@@ -797,9 +790,12 @@ export default function FloorsPanel({
           <div className="flex min-w-0 items-center gap-2">
             <p className={heading.muted}>{t(uiLanguage, "selection")}</p>
             {selectedElement && (
-              <p className="truncate text-[11px] font-semibold text-zinc-800">
+              <ModelText
+                as="p"
+                className="truncate text-[11px] font-semibold text-zinc-800"
+              >
                 {selectedElement.name}
-              </p>
+              </ModelText>
             )}
           </div>
           <div className="flex items-center gap-2">

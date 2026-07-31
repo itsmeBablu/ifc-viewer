@@ -43,9 +43,9 @@ export default function LoadIfcButton({
           type="button"
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
-          className={`${motion.base} ${iconOnly ? "rounded-full h-10 w-10 p-0" : radius.control} inline-flex ${iconOnly ? "" : "min-w-[168px] px-6 py-2.5 text-sm"} items-center justify-center gap-2 font-medium active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
+          className={`${motion.base} ${iconOnly ? "rounded-full h-10 w-10 p-0" : radius.control} inline-flex ${iconOnly ? "" : "min-w-[168px] px-6 py-2.5 text-sm"} items-center justify-center gap-2 font-semibold active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
             primary
-              ? "bg-gradient-to-b from-zinc-800/90 to-zinc-950/90 text-white"
+              ? "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md hover:brightness-105"
               : "bg-white/20 text-zinc-800 hover:bg-white/35"
           } ${className}`}
           aria-label={label}

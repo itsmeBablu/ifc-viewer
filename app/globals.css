@@ -97,7 +97,6 @@ body {
   align-items: stretch;
   justify-content: flex-start;
   text-align: left;
-  overflow: hidden;
   border-radius: inherit;
 }
 

@@ -5,6 +5,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { getModelById } from "@/lib/modelRegistry";
 import { t } from "@/lib/i18n";
 import { GlassInset, PanelTitle, heading } from "./ui";
+import ModelText from "./ModelText";
 
 type Props = {
   embedded?: boolean;
@@ -62,7 +63,7 @@ export default function BuildingSummary({ embedded = false }: Props) {
               key={f.id}
               className="flex items-center justify-between rounded-2xl px-2.5 py-1.5 text-xs text-zinc-600 transition-all duration-300 ease-out hover:bg-white/40"
             >
-              <span className="truncate pr-2 font-medium">{f.name}</span>
+              <ModelText className="truncate pr-2 font-medium">{f.name}</ModelText>
               <span className="tabular-nums text-zinc-400">{f.count}</span>
             </li>
           ))}

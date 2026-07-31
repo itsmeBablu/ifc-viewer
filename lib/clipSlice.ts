@@ -133,6 +133,9 @@ export class ClipSliceController {
   }[] = [];
   private enabled = false;
   private capsEnabled = false;
+  /** Room ids (and optional expressIds) skipped for caps + clipping when selected. */
+  private excludeRoomIds = new Set<string>();
+  private excludeExpressIds = new Set<number>();
   private scene: THREE.Scene | null = null;
   private cutValue = 0;
   private orientation: ClipOrientation = "horizontal";
@@ -190,6 +193,33 @@ export class ClipSliceController {
     if (on && this.enabled) this.buildCaps();
     else this.clearCaps();
     this.capsGroup.visible = on && this.enabled;
+  }
+
+  /**
+   * Selected room: keep Schnitthöhe cap (so the cut fill can highlight),
+   * but disable clipping so the full solid volume is visible.
+   */
+  setExcludedSelection(opts: {
+    roomId?: string | null;
+    expressId?: number | null;
+  }) {
+    this.excludeRoomIds.clear();
+    this.excludeExpressIds.clear();
+    if (opts.roomId) this.excludeRoomIds.add(opts.roomId);
+    if (opts.expressId != null) this.excludeExpressIds.add(opts.expressId);
+    this.applyPlanesToTracked();
+    // Always rebuild caps for every room — in basic view the cap IS the
+    // visible highlight; skipping the selected room made picks look unstyled.
+    if (this.enabled && this.capsEnabled) this.buildCaps();
+    else this.clearCaps();
+  }
+
+  private isExcludedMesh(mesh: THREE.Mesh): boolean {
+    const roomId = mesh.userData.roomId as string | undefined;
+    const expressId = mesh.userData.expressId as number | undefined;
+    if (roomId && this.excludeRoomIds.has(roomId)) return true;
+    if (expressId != null && this.excludeExpressIds.has(expressId)) return true;
+    return false;
   }
 
   /** Cut value: world Y (horizontal) or world Z (verticalZ). */
@@ -257,10 +287,13 @@ export class ClipSliceController {
         continue;
       }
 
+      // Prefer actual XZ triangle coverage over AABB (avoids L-shape overlap).
+      // Rooms without a cap entry (e.g. currently selected / excluded) still pick via AABB.
       const entry = this.entries.find((e) => e.mesh === mesh);
-      const inside = entry?.cap.userData.useFootprint
-        ? pointInFootprintCap(entry.cap, this._pickPt.x, this._pickPt.z)
-        : true;
+      const inside =
+        entry?.cap?.userData?.useFootprint
+          ? pointInFootprintCap(entry.cap, this._pickPt.x, this._pickPt.z)
+          : true;
       if (!inside) continue;
 
       const area = Math.max(1e-6, (max.x - min.x) * (max.z - min.z));
@@ -336,6 +369,7 @@ export class ClipSliceController {
 
   private applyPlanesToTracked() {
     for (const mesh of this.tracked) {
+      const skipClip = this.isExcludedMesh(mesh);
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const m of mats) {
         if (!m || !("clippingPlanes" in m)) continue;
@@ -343,7 +377,7 @@ export class ClipSliceController {
           clippingPlanes: THREE.Plane[] | null;
           clipShadows?: boolean;
         };
-        mat.clippingPlanes = this.enabled ? [this.plane] : [];
+        mat.clippingPlanes = this.enabled && !skipClip ? [this.plane] : [];
         mat.clipShadows = true;
         mat.needsUpdate = true;
       }
@@ -382,6 +416,8 @@ export class ClipSliceController {
     let i = 1;
     for (const mesh of this.tracked) {
       if (!mesh.geometry) continue;
+      // Build caps for all rooms (including the selected one) so Schnitthöhe
+      // picks stay visible — selection only removes clipping, not the fill.
 
       const isRoom =
         mesh.userData.kind === "room" || Boolean(mesh.userData.roomId);
@@ -529,6 +565,10 @@ export class ClipSliceController {
     if (e.mesh.userData.roomId != null) {
       e.cap.userData.roomId = e.mesh.userData.roomId;
     }
+    const opaque = (e.capMat.opacity ?? 1) >= 0.995;
+    if (opaque) {
+      e.cap.renderOrder = Math.max(e.cap.renderOrder, 60);
+    }
   }
 
   private applySourceAppearance(capMat: CapMaterial, mesh: THREE.Mesh) {
@@ -553,13 +593,20 @@ export class ClipSliceController {
       else capMat.color.setHex(0xb8bec8);
     }
 
-    const opacity = isRoom
-      ? lighting.spaceTransparency
-      : lighting.elementTransparency;
+    // Match live mesh opacity (selection fade, lighting sliders, etc.)
+    const liveOpacity =
+      src && typeof src.opacity === "number" ? src.opacity : undefined;
+    const opacity =
+      liveOpacity != null
+        ? liveOpacity
+        : isRoom
+          ? lighting.spaceTransparency
+          : lighting.elementTransparency;
     const opaque = opacity >= 0.995;
     capMat.opacity = opaque ? 1 : Math.max(0, Math.min(1, opacity));
     capMat.transparent = !opaque;
-    capMat.depthWrite = opaque || isRoom;
+    capMat.depthWrite = opaque;
+    capMat.depthTest = true;
     capMat.toneMapped = false;
     capMat.needsUpdate = true;
   }

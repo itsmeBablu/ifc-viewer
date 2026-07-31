@@ -45,6 +45,13 @@ export function frameBoundingBox(
   box: THREE.Box3,
   camera: THREE.PerspectiveCamera,
   padding = 1.35,
+  options?: {
+    /**
+     * Keep this view direction (camera − target). When omitted, uses a fixed
+     * isometric direction (presentation / default framing).
+     */
+    keepDirection?: THREE.Vector3;
+  },
 ): { position: THREE.Vector3; target: THREE.Vector3 } {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -54,7 +61,11 @@ export function frameBoundingBox(
   let distance = (maxDim / (2 * Math.tan(fov / 2))) * padding;
   distance = Math.max(distance, maxDim * 0.8);
 
-  const direction = new THREE.Vector3(1, 0.75, 1).normalize();
+  const direction = options?.keepDirection?.clone() ?? new THREE.Vector3(1, 0.75, 1);
+  if (direction.lengthSq() < 1e-10) {
+    direction.set(1, 0.75, 1);
+  }
+  direction.normalize();
   const position = center.clone().add(direction.multiplyScalar(distance));
 
   return { position, target: center };

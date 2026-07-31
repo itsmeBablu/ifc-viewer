@@ -25,6 +25,8 @@ type Props = {
   zIndex?: number;
   /** Stretch to parent height (sidebar sheets). Default: size to content. */
   fill?: boolean;
+  /** Allow dropdowns / absolute menus to paint outside the glass clip. */
+  allowOverflow?: boolean;
 };
 
 const RADIUS_CSS: Record<GlassVariant, number> = {
@@ -46,6 +48,7 @@ export default function GlassPanel({
   variant = "panel",
   zIndex = 1,
   fill = false,
+  allowOverflow = false,
 }: Props) {
   const preset = liquidGlass[variant];
   const [cssGlass, setCssGlass] = useState(false);
@@ -58,13 +61,20 @@ export default function GlassPanel({
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  const overflowCls = allowOverflow ? "overflow-visible" : "overflow-hidden";
+  const contentOverflow = allowOverflow
+    ? "overflow-visible"
+    : fill
+      ? "min-h-0 flex-1 overflow-hidden"
+      : "overflow-hidden";
+
   if (cssGlass) {
     const r =
       (wrapperStyle?.borderRadius as number | string | undefined) ??
       RADIUS_CSS[variant];
     return (
       <div
-        className={`relative overflow-hidden ${fill ? "h-full min-h-0" : ""} ${motion.base} ${wrapperClassName}`}
+        className={`relative ${overflowCls} ${fill ? "h-full min-h-0" : ""} ${motion.base} ${wrapperClassName}`}
         style={{
           ...wrapperStyle,
           zIndex,
@@ -74,13 +84,13 @@ export default function GlassPanel({
         <div
           className={`ios-glass ios-glass--${variant} ${
             fill ? "ios-glass--fill" : ""
-          } ${className}`}
+          } ${allowOverflow ? "overflow-visible" : ""} ${className}`}
           style={{ borderRadius: r }}
         >
           <div
             className={`glass-surface-content ${
-              fill ? "min-h-0 flex-1 overflow-hidden" : ""
-            }`}
+              fill ? "min-h-0 flex-1" : ""
+            } ${contentOverflow}`}
           >
             {children}
           </div>
@@ -91,7 +101,7 @@ export default function GlassPanel({
 
   return (
     <div
-      className={`relative ${fill ? "h-full min-h-0" : ""} ${motion.base} ${wrapperClassName}`}
+      className={`relative ${allowOverflow ? "overflow-visible" : ""} ${fill ? "h-full min-h-0" : ""} ${motion.base} ${wrapperClassName}`}
       style={wrapperStyle}
     >
       <LiquidGlass
@@ -100,7 +110,9 @@ export default function GlassPanel({
         className={`glass-surface ${fill ? "glass-surface--fill" : ""} ${className}`}
       >
         <div
-          className={`glass-surface-content ${fill ? "min-h-0 flex-1 overflow-hidden" : ""}`}
+          className={`glass-surface-content ${
+            fill ? "min-h-0 flex-1" : ""
+          } ${contentOverflow}`}
         >
           {children}
         </div>
