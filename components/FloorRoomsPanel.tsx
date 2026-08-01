@@ -29,7 +29,6 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
-  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
