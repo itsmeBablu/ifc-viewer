@@ -27,6 +27,7 @@ import LegendPanel from "./LegendPanel";
 import PresentationMobileDock from "./PresentationMobileDock";
 import PresentationSidePanel from "./PresentationSidePanel";
 import MobileCornerMenu from "./MobileCornerMenu";
+import MobileLegendDock from "./MobileLegendDock";
 import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
@@ -682,20 +683,23 @@ export default function ViewerApp() {
         {!isDesktop && (
           <>
             {!isPresentationView && (
-              <MobileCornerMenu
-                open={leftPanelOpen}
-                onOpenChange={(open) => {
-                  setLeftPanelOpen(open);
-                  if (!open) setRightPanelOpen(false);
-                }}
-                title={t(uiLanguage, "model")}
-                subtitle={activeModelLabel}
-                onLoadIfc={handleFile}
-                isLoadingModel={isLoadingModel}
-                landscapeMobile={!isDesktop && isLandscape}
-              >
-                {({ detailsOpen }) => (
-                  <>
+              <>
+                {!leftPanelOpen && (
+                  <MobileLegendDock landscapeMobile={isLandscape} />
+                )}
+                <MobileCornerMenu
+                  open={leftPanelOpen}
+                  onOpenChange={(open) => {
+                    setLeftPanelOpen(open);
+                    if (!open) setRightPanelOpen(false);
+                  }}
+                  title={t(uiLanguage, "model")}
+                  subtitle={activeModelLabel}
+                  onLoadIfc={handleFile}
+                  isLoadingModel={isLoadingModel}
+                  landscapeMobile={isLandscape}
+                >
+                  {({ detailsOpen }) => (
                     <FloorsPanel
                       viewerRef={viewerRef}
                       onFile={handleFile}
@@ -703,17 +707,15 @@ export default function ViewerApp() {
                       mobileSheet
                       mobileDetailsOpen={detailsOpen}
                     />
-                    <div className="mx-3 border-t border-zinc-300/50" />
-                    <LegendPanel />
-                  </>
-                )}
-              </MobileCornerMenu>
+                  )}
+                </MobileCornerMenu>
+              </>
             )}
 
             {isPresentationView && (
               <PresentationMobileDock
                 align={isLandscape ? "right" : "center"}
-                landscapeMobile={!isDesktop && isLandscape}
+                landscapeMobile={isLandscape}
               />
             )}
           </>

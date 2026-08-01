@@ -21,6 +21,22 @@ export function isLandscapeMobile(
   return viewportWidth > viewportHeight && isCompactMobileViewport(viewportWidth, viewportHeight);
 }
 
+/** Full-height mobile dock — below header, above safe area / toolbar. */
+export const mobileDockTopClass =
+  "top-[calc(3.25rem+env(safe-area-inset-top,0px))]";
+
+export const mobileDockBottomLandscapeClass =
+  "bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))]";
+
+export const mobileDockBottomPortraitClass =
+  "bottom-[calc(3.7rem+env(safe-area-inset-bottom,0px))]";
+
+export function mobileDockHeightCss(landscapeMobile: boolean): string {
+  return landscapeMobile
+    ? "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - max(0.35rem, env(safe-area-inset-bottom, 0px)))"
+    : "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - calc(3.7rem + env(safe-area-inset-bottom, 0px)))";
+}
+
 export const mobileSafeTopClass = "top-[calc(3.25rem+env(safe-area-inset-top,0px))]";
 export const mobileSafeBottomClass = "bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))]";
 

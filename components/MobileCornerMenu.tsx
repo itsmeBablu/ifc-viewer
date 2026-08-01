@@ -13,6 +13,11 @@ import GlassPanel from "./GlassPanel";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { useAppStore } from "@/store/useAppStore";
+import {
+  mobileDockBottomLandscapeClass,
+  mobileDockHeightCss,
+  mobileDockTopClass,
+} from "@/lib/layoutTokens";
 
 const CHIP = 36;
 
@@ -28,7 +33,7 @@ type Props = {
   subtitle?: string | null;
   onLoadIfc?: (file: File) => void;
   isLoadingModel?: boolean;
-  /** Landscape phone — full-height sheet beside left toolbar. */
+  /** Landscape phone — full-height sheet on the right. */
   landscapeMobile?: boolean;
   children: (api: { detailsOpen: boolean }) => ReactNode;
 };
@@ -85,7 +90,7 @@ export default function MobileCornerMenu({
         killGsap(sheet);
           gsap.fromTo(
           sheet,
-          { scale: 0.18, autoAlpha: 0, transformOrigin: landscapeMobile ? "top left" : "bottom right" },
+          { scale: 0.18, autoAlpha: 0, transformOrigin: landscapeMobile ? "top right" : "bottom right" },
           {
             scale: 1,
             autoAlpha: 1,
@@ -159,7 +164,7 @@ export default function MobileCornerMenu({
   }, [modelMenuOpen]);
 
   const maxH = landscapeMobile
-    ? "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - max(0.35rem, env(safe-area-inset-bottom, 0px)))"
+    ? mobileDockHeightCss(true)
     : "min(calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)), 36rem)";
   const chipBox = { width: CHIP, height: CHIP };
   const ifcName = subtitle?.trim() || "—";
@@ -168,14 +173,14 @@ export default function MobileCornerMenu({
     <div
       className={`pointer-events-auto fixed z-[55] ${
         landscapeMobile
-          ? "left-[calc(3.25rem+env(safe-area-inset-left,0px))]"
+          ? "right-2 top-[calc(3.25rem+env(safe-area-inset-top,0px)+0.35rem)]"
           : "right-2"
       }`}
-      style={{
-        bottom: landscapeMobile
-          ? "max(0.35rem, env(safe-area-inset-bottom, 0px))"
-          : "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
-      }}
+      style={
+        landscapeMobile
+          ? undefined
+          : { bottom: "calc(3.7rem + env(safe-area-inset-bottom, 0px))" }
+      }
     >
       {mounted && (
         <button
@@ -198,13 +203,13 @@ export default function MobileCornerMenu({
             aria-label={ifcName}
             className={
               landscapeMobile
-                ? "fixed left-[calc(3.25rem+env(safe-area-inset-left,0px))] top-[calc(3.25rem+env(safe-area-inset-top,0px))] origin-top-left will-change-transform"
+                ? `fixed right-2 ${mobileDockTopClass} ${mobileDockBottomLandscapeClass} origin-top-right will-change-transform`
                 : "absolute bottom-0 right-0 origin-bottom-right will-change-transform"
             }
             style={
               landscapeMobile
                 ? {
-                    width: "min(calc(100vw - 4.5rem), 24rem)",
+                    width: "min(calc(100vw - 1.5rem), 24rem)",
                     height: maxH,
                     visibility: "hidden",
                   }
@@ -332,9 +337,7 @@ export default function MobileCornerMenu({
           aria-label={
             open ? t(uiLanguage, "closePanels") : t(uiLanguage, "showPanels")
           }
-          className={`absolute bottom-0 z-20 overflow-hidden rounded-full active:scale-95 ${
-            landscapeMobile ? "left-0" : "right-0"
-          }`}
+          className="absolute bottom-0 right-0 z-20 overflow-hidden rounded-full active:scale-95"
           style={chipBox}
         >
           <span

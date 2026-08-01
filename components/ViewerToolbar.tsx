@@ -252,17 +252,10 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     if (panel !== "shade" || !shadeBtnRef.current) return;
     const update = () => {
       const r = shadeBtnRef.current!.getBoundingClientRect();
-      if (detectLandscapeMobile()) {
-        setShadePos({
-          bottom: window.innerHeight - (r.top + r.height / 2),
-          left: r.right + 10,
-        });
-      } else {
-        setShadePos({
-          bottom: window.innerHeight - r.top + 10,
-          left: r.left + r.width / 2,
-        });
-      }
+      setShadePos({
+        bottom: window.innerHeight - r.top + 10,
+        left: r.left + r.width / 2,
+      });
     };
     update();
     window.addEventListener("resize", update);
@@ -273,17 +266,10 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     if (panel !== "light" || !lightBtnRef.current) return;
     const update = () => {
       const r = lightBtnRef.current!.getBoundingClientRect();
-      if (detectLandscapeMobile()) {
-        setLightPos({
-          bottom: window.innerHeight - (r.top + r.height / 2),
-          left: r.right + 10,
-        });
-      } else {
-        setLightPos({
-          bottom: window.innerHeight - r.top + 10,
-          left: r.left + r.width / 2,
-        });
-      }
+      setLightPos({
+        bottom: window.innerHeight - r.top + 10,
+        left: r.left + r.width / 2,
+      });
     };
     update();
     window.addEventListener("resize", update);
@@ -294,17 +280,10 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     if (panel !== "save" || !saveBtnRef.current) return;
     const update = () => {
       const r = saveBtnRef.current!.getBoundingClientRect();
-      if (detectLandscapeMobile()) {
-        setSavePos({
-          bottom: window.innerHeight - (r.top + r.height / 2),
-          left: r.right + 10,
-        });
-      } else {
-        setSavePos({
-          bottom: window.innerHeight - r.top + 10,
-          left: r.left + r.width / 2,
-        });
-      }
+      setSavePos({
+        bottom: window.innerHeight - r.top + 10,
+        left: r.left + r.width / 2,
+      });
     };
     update();
     window.addEventListener("resize", update);
@@ -315,24 +294,14 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     if (panel !== "search" || !searchBtnRef.current) return;
     const update = () => {
       const r = searchBtnRef.current!.getBoundingClientRect();
-      const landscape = detectLandscapeMobile();
+      const portraitMobile = window.innerWidth < 768 && !detectLandscapeMobile();
       const panelWidth = Math.min(340, window.innerWidth - 16);
-      if (landscape) {
-        setSearchPos({
-          bottom: window.innerHeight - (r.top + r.height / 2),
-          left: r.right + 10,
-        });
-      } else if (window.innerWidth < 768) {
-        setSearchPos({
-          bottom: window.innerHeight - r.top + 10,
-          left: 0,
-        });
-      } else {
-        setSearchPos({
-          bottom: window.innerHeight - r.top + 10,
-          left: clampPopoverCenterX(r.left + r.width / 2, panelWidth),
-        });
-      }
+      setSearchPos({
+        bottom: window.innerHeight - r.top + 10,
+        left: portraitMobile
+          ? 0
+          : clampPopoverCenterX(r.left + r.width / 2, panelWidth),
+      });
     };
     update();
     window.addEventListener("resize", update);
@@ -427,10 +396,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const menuHeading = "text-[var(--text-body)]";
   const menuDivider = "border-[var(--panel-divider)]";
 
-  const popoverShell = isLandscapeMobile
-    ? "fixed z-[80] -translate-y-1/2"
-    : "fixed z-[80] -translate-x-1/2";
-  const btnWrap = isLandscapeMobile ? "shrink-0" : "flex-1 min-w-0";
+  const popoverShell = "fixed z-[80] -translate-x-1/2";
 
   // Presentation uses fullscreen on the viewer root — menus must portal inside it
   const portalRoot =
@@ -677,11 +643,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
       <div
         ref={searchMenuRef}
         className={
-          isLandscapeMobile
-            ? popoverShell
-            : isMobileToolbar
-              ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
-              : popoverShell
+          isMobileToolbar && !isLandscapeMobile
+            ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
+            : popoverShell
         }
         style={{
           bottom: searchPos.bottom,
@@ -708,27 +672,17 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
       <div
         className={
           isLandscapeMobile
-            ? "pointer-events-none fixed left-[max(0.35rem,env(safe-area-inset-left))] top-[calc(3.25rem+env(safe-area-inset-top,0px))] bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))] z-40 flex"
+            ? "pointer-events-none fixed bottom-[max(0.65rem,env(safe-area-inset-bottom))] left-[max(0.5rem,env(safe-area-inset-left))] z-40 w-auto max-w-[min(calc(100vw-5rem),36rem)] px-1"
             : "pointer-events-none fixed bottom-[max(0.65rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(100vw-1rem,36rem)] -translate-x-1/2 px-1 sm:bottom-5 sm:w-auto sm:px-0"
         }
       >
         <GlassPanel
           variant="panel"
           zIndex={40}
-          wrapperClassName={
-            isLandscapeMobile
-              ? "pointer-events-auto h-full"
-              : "pointer-events-auto mx-auto max-w-full"
-          }
+          wrapperClassName="pointer-events-auto mx-auto max-w-full"
         >
-          <div
-            className={
-              isLandscapeMobile
-                ? "flex h-full flex-col items-center justify-center gap-0.5 px-1 py-1.5"
-                : "flex w-full max-w-full items-center gap-0 px-1 py-1 sm:gap-1 sm:px-2 sm:py-1"
-            }
-          >
-            <div className={btnWrap}>
+          <div className="flex w-full max-w-full items-center gap-0 px-1 py-1 sm:gap-1 sm:px-2 sm:py-1">
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "fitModel")}
                 hint={t(uiLanguage, "fitModelHint")}
@@ -744,7 +698,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "searchFilter")}
                 hint={t(uiLanguage, "searchFilterHint")}
@@ -766,7 +720,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "shading")}
                 hint={t(uiLanguage, "shadingHint")}
@@ -786,7 +740,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "lighting")}
                 hint={t(uiLanguage, "lightingHint")}
@@ -806,7 +760,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={t(uiLanguage, "saveView")}
                 hint={t(uiLanguage, "saveViewHint")}
@@ -830,7 +784,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={
                   isFullscreen
@@ -862,16 +816,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div
-              className={
-                isLandscapeMobile
-                  ? "my-0.5 h-px w-4 bg-[var(--panel-divider)]"
-                  : "hidden sm:block mx-0.5 h-4 w-px bg-[var(--panel-divider)]"
-              }
-              aria-hidden
-            />
+            <div className="hidden sm:block mx-0.5 h-4 w-px bg-[var(--panel-divider)]" aria-hidden />
 
-            <div className={btnWrap}>
+            <div className="flex-1 min-w-0">
               <ToolTipWrap
                 label={
                   isPresentationView
