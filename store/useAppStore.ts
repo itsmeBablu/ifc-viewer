@@ -406,11 +406,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedElement: (el) => set({ selectedElement: el }),
   setColorMode: (mode) => set({ colorMode: mode }),
   setDataViewMode: (mode) => {
-    const theme = get().colorTheme;
     set({ dataViewMode: mode });
-    if (get().autoSceneBackground) {
-      get().setSceneBackground(getModeSkyPreset(mode, theme));
-    }
   },
   setActiveColorPalette: (id) => {
     if (typeof window !== "undefined") {

@@ -39,20 +39,13 @@ export function mobileDockHeightCss(landscapeMobile: boolean): string {
 
 /** Landscape bottom bar / mirrored corner controls — matches ViewerToolbar insets. */
 export const mobileLandscapeBottomClass =
-  "bottom-[max(0.65rem,env(safe-area-inset-bottom,0px))]";
+  "bottom-[max(0.65rem,env(safe-area-inset-bottom))]";
 
 export const mobileLandscapeLeftClass =
   "left-[max(0.5rem,env(safe-area-inset-left))]";
 
 export const mobileLandscapeRightClass =
-  "right-[max(0.5rem,env(safe-area-inset-right,0px))]";
-
-/** Right-aligned landscape panel widths — flush to right inset, not centered. */
-export const mobileLandscapeLegendWidthClass =
-  "w-[min(20rem,calc(100vw-max(0.5rem,env(safe-area-inset-right,0px))-max(0.5rem,env(safe-area-inset-left,0px))))]";
-
-export const mobileLandscapeOptionsWidthClass =
-  "w-[min(24rem,calc(100vw-max(0.5rem,env(safe-area-inset-right,0px))-max(0.5rem,env(safe-area-inset-left,0px))))]";
+  "right-[max(0.5rem,env(safe-area-inset-right))]";
 
 export const mobileSafeTopClass = "top-[calc(3.25rem+env(safe-area-inset-top,0px))]";
 export const mobileSafeBottomClass = "bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))]";

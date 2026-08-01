@@ -8,25 +8,35 @@ import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import {
   applyThemeBlend,
   applyThemeVars,
-  lerpHex,
   type ColorTheme,
 } from "@/lib/themeColors";
 import {
   getDefaultSceneBackground,
+  getModeSkyBottomHex,
   getModeSkyHex,
   getModeSkyPreset,
   isDefaultSceneBackground,
+  lerpSceneBackgroundValue,
 } from "@/lib/sceneSky";
+import type { DataViewMode } from "@/lib/dataViewMode";
 import { useAppStore } from "@/store/useAppStore";
 
 const FULL = gsapDuration.theme;
 const FAST = 1.35;
+const MODE_SKY = 1.15;
 
 type BlendState = {
   from: ColorTheme;
   to: ColorTheme;
   t: number;
 };
+
+function modeSkySurfaces(mode: DataViewMode, theme: ColorTheme) {
+  return {
+    sceneBackground: getModeSkyHex(mode, theme),
+    pageBackground: getModeSkyBottomHex(mode, theme),
+  };
+}
 
 /**
  * Cinematic day ↔ night — supports fast toggles by reversing mid-blend
@@ -42,15 +52,27 @@ export default function ThemeTransition() {
   const sunRef = useRef<HTMLDivElement>(null);
   const moonRef = useRef<HTMLDivElement>(null);
   const blendRef = useRef<BlendState>({ from: colorTheme, to: colorTheme, t: 1 });
+  const prevModeRef = useRef(dataViewMode);
   const ready = useRef(false);
   const tweenRef = useRef<gsap.core.Timeline | null>(null);
 
   useLayoutEffect(() => {
+    const prevMode = prevModeRef.current;
+    const modeChanged = prevMode !== dataViewMode;
+    prevModeRef.current = dataViewMode;
+
+    const applyAutoSkySurfaces = (theme: ColorTheme, mode = dataViewMode) => {
+      const surfaces = modeSkySurfaces(mode, theme);
+      applyThemeVars(theme, surfaces);
+      return surfaces;
+    };
+
     if (!ready.current) {
-      applyThemeVars(colorTheme);
       if (autoSceneBackground) {
+        applyAutoSkySurfaces(colorTheme);
         setSceneBackground(getModeSkyPreset(dataViewMode, colorTheme));
       } else {
+        applyThemeVars(colorTheme);
         setSceneBackground(getDefaultSceneBackground(colorTheme), {
           persist: false,
         });
@@ -63,8 +85,7 @@ export default function ThemeTransition() {
     const to = colorTheme;
     const active = blendRef.current;
     const wasAnimating = active.t < 1;
-
-    if (!wasAnimating && active.to === to) return;
+    const themeChanged = active.to !== to || wasAnimating;
 
     tweenRef.current?.kill();
     tweenRef.current = null;
@@ -74,11 +95,61 @@ export default function ThemeTransition() {
       ),
     );
 
+    if (modeChanged && autoSceneBackground && !themeChanged) {
+      const fromPreset = getModeSkyPreset(prevMode, colorTheme);
+      const toPreset = getModeSkyPreset(dataViewMode, colorTheme);
+      if (fromPreset === toPreset) return;
+
+      const fromSurfaces = modeSkySurfaces(prevMode, colorTheme);
+      const toSurfaces = modeSkySurfaces(dataViewMode, colorTheme);
+      const state = { t: 0 };
+
+      const finishMode = () => {
+        applyThemeVars(colorTheme, toSurfaces);
+        setSceneBackground(toPreset);
+        tweenRef.current = null;
+      };
+
+      const tl = gsap.timeline({ onComplete: finishMode, onInterrupt: finishMode });
+      tl.to(
+        state,
+        {
+          t: 1,
+          duration: MODE_SKY,
+          ease: "power1.inOut",
+          onUpdate: () => {
+            const sceneValue = lerpSceneBackgroundValue(
+              fromPreset,
+              toPreset,
+              state.t,
+            );
+            setSceneBackground(sceneValue, { persist: false });
+            applyThemeBlend(colorTheme, colorTheme, state.t, {
+              from: fromSurfaces,
+              to: toSurfaces,
+            });
+          },
+        },
+        0,
+      );
+      tweenRef.current = tl;
+      return () => {
+        tl.kill();
+      };
+    }
+
+    if (!themeChanged) return;
+
     let from: ColorTheme;
     let startT = 0;
 
     if (wasAnimating) {
-      applyThemeBlend(active.from, active.to, active.t);
+      applyThemeBlend(active.from, active.to, active.t, autoSceneBackground
+        ? {
+            from: modeSkySurfaces(dataViewMode, active.from),
+            to: modeSkySurfaces(dataViewMode, active.to),
+          }
+        : undefined);
       if (to === active.from) {
         from = active.to;
         startT = 1 - active.t;
@@ -106,6 +177,19 @@ export default function ThemeTransition() {
 
     blendRef.current = { from, to, t: startT };
 
+    const fromSkyPreset = autoSceneBackground
+      ? getModeSkyPreset(dataViewMode, from)
+      : null;
+    const toSkyPreset = autoSceneBackground
+      ? getModeSkyPreset(dataViewMode, to)
+      : null;
+    const fromSurfaces = autoSceneBackground
+      ? modeSkySurfaces(dataViewMode, from)
+      : undefined;
+    const toSurfaces = autoSceneBackground
+      ? modeSkySurfaces(dataViewMode, to)
+      : undefined;
+
     const hideOverlay = () => {
       if (overlay) gsap.set(overlay, { autoAlpha: 0 });
       if (veil) gsap.set(veil, { autoAlpha: 0 });
@@ -114,13 +198,14 @@ export default function ThemeTransition() {
     };
 
     const finish = () => {
-      applyThemeVars(to);
-      if (useAppStore.getState().autoSceneBackground) {
-        setSceneBackground(getModeSkyPreset(dataViewMode, to));
-      } else if (
-        isDefaultSceneBackground(useAppStore.getState().sceneBackground, from)
-      ) {
-        setSceneBackground(getDefaultSceneBackground(to));
+      if (autoSceneBackground) {
+        applyThemeVars(to, toSurfaces);
+        setSceneBackground(toSkyPreset!);
+      } else {
+        applyThemeVars(to);
+        if (isDefaultSceneBackground(useAppStore.getState().sceneBackground, from)) {
+          setSceneBackground(getDefaultSceneBackground(to));
+        }
       }
       blendRef.current = { from: to, to, t: 1 };
       tweenRef.current = null;
@@ -145,14 +230,16 @@ export default function ThemeTransition() {
         ease: "power1.inOut",
         onUpdate: () => {
           blendRef.current.t = state.t;
-          applyThemeBlend(from, to, state.t);
-          if (useAppStore.getState().autoSceneBackground) {
-            const sceneHex = lerpHex(
-              getModeSkyHex(dataViewMode, from),
-              getModeSkyHex(dataViewMode, to),
+          applyThemeBlend(from, to, state.t, autoSceneBackground
+            ? { from: fromSurfaces, to: toSurfaces }
+            : undefined);
+          if (autoSceneBackground && fromSkyPreset && toSkyPreset) {
+            const sceneValue = lerpSceneBackgroundValue(
+              fromSkyPreset,
+              toSkyPreset,
               state.t,
             );
-            setSceneBackground(sceneHex, { persist: false });
+            setSceneBackground(sceneValue, { persist: false });
           }
         },
       },
@@ -255,7 +342,7 @@ export default function ThemeTransition() {
     return () => {
       tl.kill();
     };
-  }, [colorTheme, dataViewMode, setSceneBackground]);
+  }, [colorTheme, dataViewMode, setSceneBackground, autoSceneBackground]);
 
   if (typeof document === "undefined") return null;
 

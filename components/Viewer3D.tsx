@@ -18,7 +18,7 @@ import { debugLog } from "@/lib/debugLog";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
 import { isCompactMobileViewport } from "@/lib/layoutTokens";
-import { DEFAULT_SCENE_BG, resolveSceneBackground } from "@/lib/sceneSky";
+import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
 import {
@@ -1097,17 +1097,45 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (skyTextureRef.current) {
-      skyTextureRef.current.dispose();
-      skyTextureRef.current = null;
+
+    const existingTex = skyTextureRef.current;
+
+    const lerpGrad = parseGradientLerp(sceneBackground);
+    if (lerpGrad) {
+      if (existingTex) {
+        updateSkyGradientTexture(existingTex, lerpGrad.top, lerpGrad.bottom);
+        scene.background = existingTex;
+        return;
+      }
+      const tex = resolveSceneBackground(sceneBackground);
+      if (tex instanceof THREE.CanvasTexture) {
+        skyTextureRef.current = tex;
+        scene.background = tex;
+      }
+      return;
     }
+
     const bg = resolveSceneBackground(sceneBackground);
     if (bg instanceof THREE.CanvasTexture) {
+      const preset = findScenePreset(sceneBackground);
+      if (existingTex && preset?.gradient) {
+        updateSkyGradientTexture(
+          existingTex,
+          preset.gradient.top,
+          preset.gradient.bottom,
+        );
+        scene.background = existingTex;
+        return;
+      }
+      existingTex?.dispose();
       skyTextureRef.current = bg;
       scene.background = bg;
-    } else {
-      scene.background = bg;
+      return;
     }
+
+    existingTex?.dispose();
+    skyTextureRef.current = null;
+    scene.background = bg;
   }, [sceneBackground]);
 
   // Single slice path (basic view only) — skipped in Presentation / compare

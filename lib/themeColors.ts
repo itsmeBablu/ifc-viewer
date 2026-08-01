@@ -175,31 +175,57 @@ function applyGlassBlend(from: ColorTheme, to: ColorTheme, t: number) {
   );
 }
 
-export function applyThemeVars(theme: ColorTheme) {
+export type ThemeSurfaceOverrides = {
+  sceneBackground?: string;
+  pageBackground?: string;
+};
+
+export function applyThemeVars(
+  theme: ColorTheme,
+  surfaces?: ThemeSurfaceOverrides,
+) {
   if (typeof document === "undefined") return;
   const p = THEME_COLORS[theme];
   const root = document.documentElement;
   root.dataset.theme = theme;
-  root.style.setProperty("--background", p.background);
+  root.style.setProperty(
+    "--background",
+    surfaces?.pageBackground ?? p.background,
+  );
   root.style.setProperty("--foreground", p.foreground);
-  root.style.setProperty("--scene-bg", p.sceneBackground);
+  root.style.setProperty(
+    "--scene-bg",
+    surfaces?.sceneBackground ?? p.sceneBackground,
+  );
   root.style.setProperty("--text-strong", p.textStrong);
   root.style.setProperty("--text-body", p.textBody);
   root.style.setProperty("--text-muted", p.textMuted);
   applyGlassVars(theme);
 }
 
-export function applyThemeBlend(from: ColorTheme, to: ColorTheme, t: number) {
+export function applyThemeBlend(
+  from: ColorTheme,
+  to: ColorTheme,
+  t: number,
+  surfaces?: {
+    from?: ThemeSurfaceOverrides;
+    to?: ThemeSurfaceOverrides;
+  },
+) {
   if (typeof document === "undefined") return;
   const a = THEME_COLORS[from];
   const b = THEME_COLORS[to];
   const root = document.documentElement;
-  root.style.setProperty("--background", lerpHex(a.background, b.background, t));
+  const fromPage = surfaces?.from?.pageBackground ?? a.background;
+  const toPage = surfaces?.to?.pageBackground ?? b.background;
+  const fromScene = surfaces?.from?.sceneBackground ?? a.sceneBackground;
+  const toScene = surfaces?.to?.sceneBackground ?? b.sceneBackground;
+  root.style.setProperty("--background", lerpHex(fromPage, toPage, t));
   root.style.setProperty("--foreground", lerpHex(a.foreground, b.foreground, t));
-  root.style.setProperty("--scene-bg", lerpHex(a.sceneBackground, b.sceneBackground, t));
+  root.style.setProperty("--scene-bg", lerpHex(fromScene, toScene, t));
   root.style.setProperty("--text-strong", lerpHex(a.textStrong, b.textStrong, t));
   root.style.setProperty("--text-body", lerpHex(a.textBody, b.textBody, t));
   root.style.setProperty("--text-muted", lerpHex(a.textMuted, b.textMuted, t));
   applyGlassBlend(from, to, t);
-  return lerpHex(a.sceneBackground, b.sceneBackground, t);
+  return lerpHex(fromScene, toScene, t);
 }
