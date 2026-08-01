@@ -137,7 +137,7 @@ export default function LegendBody({
       <section
         className={
           compact
-            ? "relative space-y-1.5 overflow-visible px-2.5 pb-2 pt-1.5"
+            ? "relative space-y-1 overflow-visible px-2 pb-1.5 pt-1"
             : `relative space-y-2.5 px-3 pb-3 ${paddedTop ? "pt-3" : "pt-2.5"}`
         }
       >
@@ -339,7 +339,7 @@ export default function LegendBody({
                   key={s.value}
                   className={`flex min-w-0 flex-1 flex-col items-center rounded-lg bg-white/45 ${
                     compact
-                      ? "gap-0.5 px-0.5 py-1"
+                      ? "gap-0.5 px-0.5 py-0.5"
                       : "gap-1 px-0.5 py-1.5 rounded-xl"
                   }`}
                 >
@@ -377,7 +377,11 @@ export default function LegendBody({
         )}
 
         {paletteOpen && (
-          <div className="space-y-1.5 rounded-xl border border-white/50 bg-white/90 p-2 shadow-md backdrop-blur-md">
+          <div
+            className={`rounded-xl border border-white/50 bg-white/90 shadow-md backdrop-blur-md ${
+              compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
+            }`}
+          >
             <p className="px-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
               {t(uiLanguage, "palette")}
             </p>
@@ -392,7 +396,9 @@ export default function LegendBody({
                     setActiveColorPalette(id as ColorPaletteId);
                     setPaletteOpen(false);
                   }}
-                  className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
+                  className={`w-full rounded-lg border px-2 text-left transition-colors ${
+                    compact ? "py-1" : "py-1.5"
+                  } ${
                     active
                       ? "border-zinc-500/40 bg-zinc-900/5"
                       : "border-transparent hover:bg-zinc-900/5"

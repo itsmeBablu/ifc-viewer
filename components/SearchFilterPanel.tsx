@@ -23,6 +23,8 @@ type Props = {
   open: boolean;
   /** Called after a search result is chosen (closes the toolbar popup). */
   onClose: () => void;
+  /** Tighter layout for landscape mobile toolbar popover. */
+  compact?: boolean;
 };
 
 /**
@@ -34,6 +36,7 @@ export default function SearchFilterPanel({
   viewerRef,
   open,
   onClose,
+  compact = false,
 }: Props) {
   const rooms = useAppStore((s) => s.rooms);
   const floors = useAppStore((s) => s.floors);
@@ -175,12 +178,18 @@ export default function SearchFilterPanel({
   ]);
 
   return (
-    <div className="min-w-0 max-w-full space-y-2.5 overflow-hidden p-1">
+    <div
+      className={`min-w-0 max-w-full overflow-hidden ${
+        compact ? "space-y-1.5 p-0.5" : "space-y-2.5 p-1"
+      }`}
+    >
       <div className="glass-inset flex rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-0.5">
         <button
           type="button"
           onClick={() => setMode("search")}
-          className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex-1 rounded-lg px-2 font-medium transition-colors ${
+            compact ? "py-1 text-[11px]" : "py-1.5 text-xs"
+          } ${
             mode === "search"
               ? "bg-[var(--chip-active-bg)] text-[var(--text-strong)] shadow-sm"
               : "text-[var(--text-body)]"
@@ -191,7 +200,9 @@ export default function SearchFilterPanel({
         <button
           type="button"
           onClick={() => setMode("filter")}
-          className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex-1 rounded-lg px-2 font-medium transition-colors ${
+            compact ? "py-1 text-[11px]" : "py-1.5 text-xs"
+          } ${
             mode === "filter"
               ? "bg-[var(--chip-active-bg)] text-[var(--text-strong)] shadow-sm"
               : "text-[var(--text-body)]"
@@ -212,10 +223,16 @@ export default function SearchFilterPanel({
               if (e.key === "Escape") onClose();
             }}
             placeholder={t(uiLanguage, "searchPlaceholder")}
-            className="glass-input box-border w-full max-w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-white/55"
+            className={`glass-input box-border w-full max-w-full rounded-xl px-3 outline-none focus:border-white/55 ${
+              compact ? "py-1.5 text-xs" : "py-2 text-sm"
+            }`}
           />
           {query.trim() && (
-            <ul className="glass-inset max-h-48 space-y-0.5 overflow-y-auto rounded-xl p-1.5">
+            <ul
+              className={`glass-inset space-y-0.5 overflow-y-auto rounded-xl p-1 ${
+                compact ? "max-h-28" : "max-h-48 p-1.5"
+              }`}
+            >
               {searchResults.length === 0 ? (
                 <li className="px-2 py-2 text-xs text-[var(--text-muted)]">
                   {t(uiLanguage, "noRoomsMatch")}
@@ -254,7 +271,7 @@ export default function SearchFilterPanel({
           )}
         </div>
       ) : (
-        <div className="min-w-0 space-y-3 overflow-hidden">
+        <div className={`min-w-0 overflow-hidden ${compact ? "space-y-2" : "space-y-3"}`}>
           <div className="min-w-0">
             <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium text-[var(--text-body)]">
               <span className="min-w-0 truncate pr-1">

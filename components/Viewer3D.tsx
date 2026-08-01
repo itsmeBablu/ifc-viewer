@@ -17,6 +17,7 @@ import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
+import { isCompactMobileViewport } from "@/lib/layoutTokens";
 import { DEFAULT_SCENE_BG, resolveSceneBackground } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
@@ -1877,11 +1878,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             } else if (roomId) {
               setSelectedRoomId(roomId);
             }
-            const isTouchDevice =
-              typeof window !== "undefined" &&
-              window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-            // Keep mobile menu closed on scene taps; user opens it explicitly.
-            if (!isTouchDevice) {
+            // Mobile / compact layout: keep panels closed; user opens options explicitly.
+            if (!isCompactMobileViewport()) {
               setLeftPanelOpen(true);
               setRightPanelOpen(true);
               if (useAppStore.getState().isPresentationView) {

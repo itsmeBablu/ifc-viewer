@@ -450,7 +450,13 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
         aria-label={t(uiLanguage, "lighting")}
       >
         <GlassPanel variant="panel" zIndex={80}>
-          <div className="w-56 p-1.5 max-md:max-h-[min(380px,70vh)] max-md:overflow-y-auto md:overflow-visible">
+          <div
+            className={
+              isLandscapeMobile
+                ? "max-h-[min(210px,52dvh)] w-52 overflow-y-auto overscroll-contain p-1.5"
+                : "w-56 p-1.5 max-md:max-h-[min(380px,70vh)] max-md:overflow-y-auto md:overflow-visible"
+            }
+          >
         <p className={`mb-0.5 px-1 text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}>
           {t(uiLanguage, "lighting")}
         </p>
@@ -643,9 +649,11 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
       <div
         ref={searchMenuRef}
         className={
-          isMobileToolbar && !isLandscapeMobile
-            ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
-            : popoverShell
+          isLandscapeMobile
+            ? "fixed z-[80] w-[min(16rem,calc(100vw-6rem))] -translate-x-1/2"
+            : isMobileToolbar
+              ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
+              : popoverShell
         }
         style={{
           bottom: searchPos.bottom,
@@ -655,11 +663,18 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
         aria-label={t(uiLanguage, "searchFilter")}
       >
         <GlassPanel variant="panel" zIndex={80}>
-          <div className="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto p-2 sm:max-h-[min(75vh,32rem)]">
+          <div
+            className={
+              isLandscapeMobile
+                ? "max-h-[min(52dvh,13rem)] overflow-x-hidden overflow-y-auto p-1.5"
+                : "max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto p-2 sm:max-h-[min(75vh,32rem)]"
+            }
+          >
             <SearchFilterPanel
               viewerRef={viewerRef}
               open={panel === "search"}
               onClose={() => setPanel(null)}
+              compact={isLandscapeMobile}
             />
           </div>
         </GlassPanel>

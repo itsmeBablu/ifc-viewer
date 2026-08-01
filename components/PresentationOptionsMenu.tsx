@@ -137,12 +137,17 @@ export default function PresentationOptionsMenu({
   const optionsOpen = menu === "options";
   const open = menu !== null;
 
+  const viewMenuClass = compact
+    ? "presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-0.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+    : "presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
+
+  const optionsMenuClass = compact
+    ? "presentation-menu-surface isolate space-y-1 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+    : "presentation-menu-surface isolate space-y-2 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
+
   const menuBody =
     panel === "view" ? (
-      <div
-        role="menu"
-        className="presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
-      >
+      <div role="menu" className={viewMenuClass}>
         <div className="flex gap-0.5">
           {DATA_VIEW_MODES.map((id) => {
             const selected = dataViewMode === id;
@@ -154,9 +159,9 @@ export default function PresentationOptionsMenu({
                 role="menuitem"
                 title={label}
                 onClick={() => setDataViewMode(id)}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-xl px-1 py-1.5 text-center transition-[background,border,box-shadow,color] duration-300 ease-out ${
-                  selected ? viewChipOn : viewChipOff
-                }`}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-xl px-1 text-center transition-[background,border,box-shadow,color] duration-300 ease-out ${
+                  compact ? "py-1" : "py-1.5"
+                } ${selected ? viewChipOn : viewChipOff}`}
               >
                 <Image
                   src={DATA_VIEW_ICON[id]}
@@ -175,12 +180,17 @@ export default function PresentationOptionsMenu({
         </div>
       </div>
     ) : (
-      <div
-        role="menu"
-        className="presentation-menu-surface isolate space-y-2 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
-      >
-        <div className="overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] p-2">
-          <div className="mb-1.5 flex items-center gap-2 px-0.5">
+      <div role="menu" className={optionsMenuClass}>
+        <div
+          className={`overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
+            compact ? "p-1.5" : "p-2"
+          }`}
+        >
+          <div
+            className={`flex items-center gap-2 px-0.5 ${
+              compact ? "mb-1" : "mb-1.5"
+            }`}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/floor_layout.svg"
@@ -204,9 +214,9 @@ export default function PresentationOptionsMenu({
                   role="menuitem"
                   title={t(uiLanguage, opt.hintKey)}
                   onClick={() => setPresentationLayoutMode(opt.id)}
-                  className={`overflow-hidden rounded-lg px-1 py-1.5 text-[10px] font-semibold transition-all duration-300 ease-out ${
-                    on ? layoutChipOn : layoutChipOff
-                  }`}
+                  className={`overflow-hidden rounded-lg px-1 text-[10px] font-semibold transition-all duration-300 ease-out ${
+                    compact ? "py-1" : "py-1.5"
+                  } ${on ? layoutChipOn : layoutChipOff}`}
                 >
                   {t(uiLanguage, opt.labelKey)}
                 </button>
@@ -216,9 +226,9 @@ export default function PresentationOptionsMenu({
         </div>
 
         <div
-          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all duration-300 ease-out ${
-            presentationIsolate ? activeRow : idleRow
-          }`}
+          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
+            compact ? "p-1.5" : "p-2"
+          } ${presentationIsolate ? activeRow : idleRow}`}
         >
           <div className="flex min-w-0 items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -249,9 +259,9 @@ export default function PresentationOptionsMenu({
         </div>
 
         <div
-          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl p-2 transition-all duration-300 ease-out ${
-            compareBothModes ? activeRow : idleRow
-          }`}
+          className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
+            compact ? "p-1.5" : "p-2"
+          } ${compareBothModes ? activeRow : idleRow}`}
         >
           <p className="text-[11px] font-semibold text-[var(--text-strong)]">
             {t(uiLanguage, "heizlastPlusTemp")}
@@ -277,7 +287,7 @@ export default function PresentationOptionsMenu({
 
   return (
     <div ref={rootRef} className="w-full">
-      <div className="flex items-center justify-between gap-2">
+      <div className={`flex items-center justify-between ${compact ? "gap-1" : "gap-2"}`}>
         <div className="min-w-0 flex-1">{title}</div>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -315,7 +325,11 @@ export default function PresentationOptionsMenu({
         </div>
       </div>
 
-      <GsapHeightAccordion open={open} contentKey={panel} innerClassName="px-1 pb-1.5 pt-2">
+      <GsapHeightAccordion
+        open={open}
+        contentKey={panel}
+        innerClassName={compact ? "px-0.5 pb-0.5 pt-1" : "px-1 pb-1.5 pt-2"}
+      >
         {menuBody}
       </GsapHeightAccordion>
     </div>

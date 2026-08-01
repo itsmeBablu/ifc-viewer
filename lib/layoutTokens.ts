@@ -33,9 +33,19 @@ export const mobileDockBottomPortraitClass =
 
 export function mobileDockHeightCss(landscapeMobile: boolean): string {
   return landscapeMobile
-    ? "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - max(0.35rem, env(safe-area-inset-bottom, 0px)))"
+    ? "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - max(0.65rem, env(safe-area-inset-bottom, 0px)))"
     : "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - calc(3.7rem + env(safe-area-inset-bottom, 0px)))";
 }
+
+/** Landscape bottom bar / mirrored corner controls — matches ViewerToolbar insets. */
+export const mobileLandscapeBottomClass =
+  "bottom-[max(0.65rem,env(safe-area-inset-bottom))]";
+
+export const mobileLandscapeLeftClass =
+  "left-[max(0.5rem,env(safe-area-inset-left))]";
+
+export const mobileLandscapeRightClass =
+  "right-[max(0.5rem,env(safe-area-inset-right))]";
 
 export const mobileSafeTopClass = "top-[calc(3.25rem+env(safe-area-inset-top,0px))]";
 export const mobileSafeBottomClass = "bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))]";

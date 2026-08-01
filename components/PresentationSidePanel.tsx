@@ -103,7 +103,7 @@ export default function PresentationSidePanel({
         <section
           className={
             compact
-              ? "flex flex-col space-y-1.5 px-2.5 pb-2"
+              ? "flex flex-col space-y-1 px-2 pb-1.5"
               : "flex flex-col space-y-2 px-3 pb-3"
           }
         >
@@ -125,7 +125,7 @@ export default function PresentationSidePanel({
                     type="button"
                     onClick={() => setPresentationFloorId(f.id)}
                     className={`flex w-full items-center justify-between gap-2 px-2.5 text-left transition-colors ${
-                      compact ? "py-1.5 text-[11px]" : "py-2 text-xs"
+                      compact ? "py-1 text-[11px]" : "py-2 text-xs"
                     } ${
                       active
                         ? "bg-zinc-900/10 font-semibold text-zinc-900"
@@ -173,7 +173,7 @@ export default function PresentationSidePanel({
                         selectRoom(room.id, room.expressId, room.floorId)
                       }
                       className={`flex w-full items-center gap-2 rounded-lg border text-left transition-all ${
-                        compact ? "px-1.5 py-1" : "px-2 py-1.5"
+                        compact ? "px-1.5 py-0.5" : "px-2 py-1.5"
                       } ${
                         active
                           ? "border-zinc-500/50 shadow-sm ring-1 ring-zinc-400/40"
