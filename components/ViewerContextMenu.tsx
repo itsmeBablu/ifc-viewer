@@ -316,7 +316,7 @@ export default function ViewerContextMenu({
                     if (e.key === "Escape") close();
                   }}
                   placeholder={t(uiLanguage, "viewName")}
-                  className="w-full rounded-xl border border-zinc-300/60 bg-white/70 px-2.5 py-1.5 text-xs outline-none focus:border-zinc-400"
+                  className="glass-input w-full rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-white/55"
                 />
                 <p className="px-0.5 text-[10px] font-medium text-zinc-500">
                   {t(uiLanguage, "pdfPageSize")}

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import gsap from "gsap";
 import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -191,6 +193,7 @@ export default function RoomTooltip({
   const [isMobile, setIsMobile] = useState(false);
   const [headerLeft, setHeaderLeft] = useState(8);
   const [headerBottom, setHeaderBottom] = useState(56);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const update = () => {
@@ -224,63 +227,72 @@ export default function RoomTooltip({
   }, []);
 
   const room = roomProp ?? hoveredRoom;
-  if (!room) return null;
-
   const isSelection = Boolean(roomProp);
   const compact = isMobile && isSelection;
   const cooling = dataViewMode === "kuhllast";
 
-  let style: CSSProperties;
+  let targetLeft = 0;
+  let targetTop = 0;
+  let targetWidth = 248;
+  let useFollow = false;
 
-  if (isSelection && isMobile) {
-    // Compact card, left-aligned under the logo header
-    style = {
-      position: "fixed",
-      top: headerBottom,
-      left: headerLeft,
-      right: "auto",
-      zIndex: 60,
-      width: 168,
-      pointerEvents: "auto",
-    };
-  } else {
-    let left: number;
-    let top: number;
-    if (anchor) {
-      left = anchor.left;
-      top = anchor.top;
+  if (room) {
+    if (isSelection && isMobile) {
+      targetLeft = headerLeft;
+      targetTop = headerBottom;
+      targetWidth = 168;
+    } else if (anchor) {
+      targetLeft = anchor.left;
+      targetTop = anchor.top;
     } else if (roomProp && !hoveredRoom) {
-      left =
+      targetLeft =
         typeof window !== "undefined"
           ? Math.min(360, window.innerWidth - 240)
           : 360;
-      top =
+      targetTop =
         typeof window !== "undefined"
           ? Math.min(160, window.innerHeight - 200)
           : 160;
     } else {
+      useFollow = true;
       const offset = 16;
-      left = Math.min(
+      targetLeft = Math.min(
         x + offset,
         typeof window !== "undefined" ? window.innerWidth - 260 : x,
       );
-      top = Math.min(
+      targetTop = Math.min(
         y + offset,
         typeof window !== "undefined" ? window.innerHeight - 180 : y,
       );
     }
-    style = {
-      position: "fixed",
-      left,
-      top,
-      zIndex: 60,
-      width: 248,
-      pointerEvents: roomProp ? "auto" : "none",
-    };
   }
 
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el || !room) return;
+    gsap.to(el, {
+      left: targetLeft,
+      top: targetTop,
+      width: targetWidth,
+      duration: useFollow ? gsapDuration.follow : gsapDuration.tooltip,
+      ease: gsapEase.iosOut,
+      overwrite: true,
+    });
+  }, [room, targetLeft, targetTop, targetWidth, useFollow]);
+
+  if (!room) return null;
+
+  const style: CSSProperties = {
+    position: "fixed",
+    left: targetLeft,
+    top: targetTop,
+    zIndex: 60,
+    width: targetWidth,
+    pointerEvents: isSelection || roomProp ? "auto" : "none",
+  };
+
   return (
-    <div style={style}>
+    <div ref={wrapRef} style={style}>
       <GlassPanel variant="panel" zIndex={60} wrapperClassName="w-full">
         <RoomInfoBody
           room={room}

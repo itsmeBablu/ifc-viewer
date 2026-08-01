@@ -4,9 +4,12 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { canHover } from "@/lib/canHover";
+import { isRoomPickAllowed } from "@/lib/pickAllowed";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import { frameBoundingBoxOrtho } from "@/lib/flyTo";
 import type { Room } from "@/lib/types";
+import { THEME_COLORS } from "@/lib/themeColors";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import type { DataViewMode } from "@/lib/dataViewMode";
@@ -19,11 +22,19 @@ type Props = {
 function roomColor(
   room: Room,
   mode: "heizlast" | "temperature",
-  dataViewMode: DataViewMode = "heizlast",
+  dataViewMode: DataViewMode,
+  palette: string,
+  heizlastRange: number[],
+  kuhllastRange: number[],
+  temperatureRange: number[],
 ): string {
-  if (mode === "temperature") return temperatureToColor(room.temperature);
-  if (dataViewMode === "kuhllast") return kuhllastToColor(room.coolLoad);
-  return heizlastToColor(room.heatLoad);
+  if (mode === "temperature") {
+    return temperatureToColor(room.temperature, palette, temperatureRange);
+  }
+  if (dataViewMode === "kuhllast") {
+    return kuhllastToColor(room.coolLoad, palette, kuhllastRange);
+  }
+  return heizlastToColor(room.heatLoad, palette, heizlastRange);
 }
 
 export default function Plan2D({ onPointerMove, className }: Props) {
@@ -52,6 +63,9 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const temperatureRange = useAppStore((s) => s.temperatureRange);
+
+  const colorTheme = useAppStore((s) => s.colorTheme);
 
   const fitOrtho = () => {
     const camera = cameraRef.current;
@@ -87,7 +101,9 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf4f5f7);
+    scene.background = new THREE.Color(
+      THEME_COLORS[colorTheme].sceneBackground,
+    );
 
     const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 5000);
     camera.position.set(0, 100, 0);
@@ -163,6 +179,14 @@ export default function Plan2D({ onPointerMove, className }: Props) {
 
   useEffect(() => {
     const scene = sceneRef.current;
+    if (!scene) return;
+    scene.background = new THREE.Color(
+      THEME_COLORS[colorTheme].sceneBackground,
+    );
+  }, [colorTheme]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
     const overlays = overlaysRef.current;
     if (!scene || !overlays) return;
 
@@ -207,7 +231,17 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     for (const room of sourceRooms) {
       if (!room.geometry || room.geometry.attributes.position == null) continue;
       const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(roomColor(room, colorMode, dataViewMode)),
+        color: new THREE.Color(
+          roomColor(
+            room,
+            colorMode,
+            dataViewMode,
+            activeColorPalette,
+            heizlastRange,
+            kuhllastRange,
+            temperatureRange,
+          ),
+        ),
         transparent: true,
         opacity: 0.6,
         depthWrite: false,
@@ -231,9 +265,28 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       const room = byId.get(id);
       if (!room) continue;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.set(roomColor(room, colorMode, dataViewMode));
+      mat.color.set(
+        roomColor(
+          room,
+          colorMode,
+          dataViewMode,
+          activeColorPalette,
+          heizlastRange,
+          kuhllastRange,
+          temperatureRange,
+        ),
+      );
     }
-  }, [colorMode, dataViewMode, rooms, roomsFromStore]);
+  }, [
+    colorMode,
+    dataViewMode,
+    rooms,
+    roomsFromStore,
+    activeColorPalette,
+    heizlastRange,
+    kuhllastRange,
+    temperatureRange,
+  ]);
 
   useEffect(() => {
     const apply = (obj: THREE.Object3D) => {
@@ -265,17 +318,23 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       mat.opacity = !passes ? 0.12 : isSel ? 0.85 : 0.6;
       if (isSel && passes && room) {
         const sel =
-          dataViewMode === "kuhllast"
-            ? kuhllastToColor(
-                room.coolLoad,
+          colorMode === "temperature"
+            ? temperatureToColor(
+                room.temperature,
                 activeColorPalette,
-                kuhllastRange,
+                temperatureRange,
               )
-            : heizlastToColor(
-                room.heatLoad,
-                activeColorPalette,
-                heizlastRange,
-              );
+            : dataViewMode === "kuhllast"
+              ? kuhllastToColor(
+                  room.coolLoad,
+                  activeColorPalette,
+                  kuhllastRange,
+                )
+              : heizlastToColor(
+                  room.heatLoad,
+                  activeColorPalette,
+                  heizlastRange,
+                );
         mat.emissive.set(new THREE.Color(sel));
       } else {
         mat.emissive.setHex(0x000000);
@@ -290,6 +349,8 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     heizlastRange,
     kuhllastRange,
     dataViewMode,
+    colorMode,
+    temperatureRange,
   ]);
 
   useEffect(() => {
@@ -317,6 +378,11 @@ export default function Plan2D({ onPointerMove, className }: Props) {
 
     const onMove = (e: PointerEvent) => {
       onPointerMove?.(e.clientX, e.clientY);
+      if (!canHover()) {
+        setHoveredRoom(null);
+        canvas.style.cursor = "grab";
+        return;
+      }
       const room = pickRoom(e.clientX, e.clientY);
       setHoveredRoom(room);
       canvas.style.cursor = room ? "pointer" : "grab";
@@ -326,7 +392,11 @@ export default function Plan2D({ onPointerMove, className }: Props) {
 
     const onClick = (e: PointerEvent) => {
       const room = pickRoom(e.clientX, e.clientY);
-      setSelectedRoomId(room?.id ?? null);
+      if (room && isRoomPickAllowed(room.id, room.floorId)) {
+        setSelectedRoomId(room.id);
+      } else {
+        setSelectedRoomId(null);
+      }
     };
 
     canvas.addEventListener("pointermove", onMove);

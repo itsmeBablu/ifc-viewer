@@ -45,7 +45,7 @@ export default function SliceHeightSlider({
   }, [floors, selectedFloor, sliceProgress, isDisabled]);
 
   return (
-    <div className="rounded-xl border border-zinc-300/50 bg-white/45 px-3 py-2.5 backdrop-blur-sm">
+    <div className="glass-inset rounded-xl px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold tracking-wide text-zinc-600">
           {t(uiLanguage, "sliceHeight")}

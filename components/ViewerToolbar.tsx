@@ -11,11 +11,13 @@ import { LuPresentation } from "react-icons/lu";
 import { IoSearchOutline } from "react-icons/io5";
 import type { RenderMode } from "@/lib/types";
 import { SCENE_BACKGROUND_PRESETS, useAppStore } from "@/store/useAppStore";
+import { getModeSkyPreset } from "@/lib/sceneSky";
 import { BG_PRESET_LABEL_KEYS, t, type UiTextKey } from "@/lib/i18n";
 import GlassPanel from "./GlassPanel";
 import SearchFilterPanel from "./SearchFilterPanel";
 import Slider from "./ui/Slider";
 import SliceHeightSlider from "./SliceHeightSlider";
+import { canHover, clampPopoverCenterX } from "@/lib/canHover";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { RefObject } from "react";
 
@@ -46,8 +48,8 @@ function SliderRow({
   return (
     <label className="block px-1 py-0.5">
       <div className="mb-0.5 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-zinc-700">{label}</span>
-        <span className="tabular-nums text-[10px] text-zinc-500">
+        <span className="text-[11px] font-medium text-[var(--text-body)]">{label}</span>
+        <span className="tabular-nums text-[10px] text-[var(--text-muted)]">
           {Math.round(value * 100)}%
         </span>
       </div>
@@ -76,6 +78,7 @@ function ToolTipWrap({
   const [open, setOpen] = useState(false);
   const [suppressed, setSuppressed] = useState(false);
   const [pos, setPos] = useState({ bottom: 0, left: 0 });
+  const hoverCapable = canHover();
 
   const updatePos = () => {
     const el = wrapRef.current;
@@ -103,7 +106,7 @@ function ToolTipWrap({
       ref={wrapRef}
       className="relative flex items-center justify-center"
       onMouseEnter={() => {
-        if (suppressed) return;
+        if (!hoverCapable || suppressed) return;
         updatePos();
         setOpen(true);
       }}
@@ -112,7 +115,7 @@ function ToolTipWrap({
         setSuppressed(false);
       }}
       onFocus={() => {
-        if (suppressed) return;
+        if (!hoverCapable || suppressed) return;
         updatePos();
         setOpen(true);
       }}
@@ -124,6 +127,7 @@ function ToolTipWrap({
     >
       {children}
       {open &&
+        hoverCapable &&
         typeof document !== "undefined" &&
         createPortal(
           <div
@@ -131,12 +135,12 @@ function ToolTipWrap({
             className="pointer-events-none fixed z-[200] w-max max-w-[240px] -translate-x-1/2"
             style={{ bottom: pos.bottom, left: pos.left }}
           >
-            <GlassPanel variant="control" zIndex={200}>
+            <GlassPanel variant="panel" zIndex={200}>
               <div className="px-3.5 py-2.5 text-center">
-                <p className="text-[12px] font-semibold tracking-wide text-zinc-900">
+                <p className="text-[12px] font-semibold tracking-wide text-[var(--text-strong)]">
                   {label}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-600">
+                <p className="mt-1 text-[11px] leading-snug text-[var(--text-body)]">
                   {hint}
                 </p>
               </div>
@@ -156,6 +160,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const setLighting = useAppStore((s) => s.setLighting);
   const sceneBackground = useAppStore((s) => s.sceneBackground);
   const setSceneBackground = useAppStore((s) => s.setSceneBackground);
+  const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
+  const setAutoSceneBackground = useAppStore((s) => s.setAutoSceneBackground);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const addSavedView = useAppStore((s) => s.addSavedView);
   const activeModelId = useAppStore((s) => s.activeModelId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
@@ -166,6 +173,8 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const floors = useAppStore((s) => s.floors);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
+  const colorTheme = useAppStore((s) => s.colorTheme);
+  const isDark = colorTheme === "dark";
 
   const defaultSaveViewName = () => {
     if (isPresentationView) {
@@ -188,6 +197,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
   const [panel, setPanel] = useState<Panel>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMobileToolbar, setIsMobileToolbar] = useState(false);
   const [shadePos, setShadePos] = useState({ bottom: 0, left: 0 });
   const [lightPos, setLightPos] = useState({ bottom: 0, left: 0 });
   const [savePos, setSavePos] = useState({ bottom: 0, left: 0 });
@@ -217,6 +227,14 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     };
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileToolbar(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
   }, []);
 
   useLayoutEffect(() => {
@@ -265,15 +283,19 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     if (panel !== "search" || !searchBtnRef.current) return;
     const update = () => {
       const r = searchBtnRef.current!.getBoundingClientRect();
+      const mobile = window.innerWidth < 768;
+      const panelWidth = Math.min(340, window.innerWidth - 16);
       setSearchPos({
         bottom: window.innerHeight - r.top + 10,
-        left: r.left + r.width / 2,
+        left: mobile
+          ? 0
+          : clampPopoverCenterX(r.left + r.width / 2, panelWidth),
       });
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [panel]);
+  }, [panel, isMobileToolbar]);
 
   useEffect(() => {
     if (!panel) return;
@@ -343,20 +365,27 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     setPanel(null);
   };
 
-  const yellowGloss =
-    "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
+  const yellowGloss = isDark
+    ? "border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.42)] backdrop-blur-md"
+    : "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
   const blueGloss =
     "border border-sky-200/70 bg-gradient-to-br from-sky-200/95 via-sky-300/85 to-sky-400/75 text-sky-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(56,189,248,0.35)] backdrop-blur-md";
-  // Compact bar; fixed-width rounded rectangle highlight (no width stretch on hover)
   const btnBase =
     "flex h-7 w-10 items-center justify-center rounded-xl transition-[background,border,box-shadow,color,transform] duration-200 ease-out active:scale-95 sm:h-8 sm:w-11";
-  const btnIdle = `${btnBase} border border-transparent text-zinc-700 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
+  const btnIdle = isDark
+    ? `${btnBase} toolbar-icon-btn border border-transparent text-[var(--toolbar-icon)] hover:border-amber-300/80 hover:bg-gradient-to-br hover:from-amber-300/95 hover:via-yellow-200/88 hover:to-amber-400/78 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.42)] hover:backdrop-blur-md`
+    : `${btnBase} toolbar-icon-btn border border-transparent text-[var(--toolbar-icon)] hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
   const btnActive = `${btnBase} ${yellowGloss}`;
   const btnPresentationIdle = `${btnBase} ${yellowGloss}`;
   const btnPresentationOn = `${btnBase} ${blueGloss}`;
 
-  const glassPopover =
-    "fixed z-[80] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/40 bg-white/70 shadow-lg backdrop-blur-md";
+  const menuItemActive = "bg-[var(--chip-active-bg)] text-[var(--text-strong)]";
+  const menuItemIdle =
+    "text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]";
+  const menuHeading = "text-[var(--text-body)]";
+  const menuDivider = "border-[var(--panel-divider)]";
+
+  const popoverShell = "fixed z-[80] -translate-x-1/2";
 
   // Presentation uses fullscreen on the viewer root — menus must portal inside it
   const portalRoot =
@@ -370,28 +399,30 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     createPortal(
       <div
         ref={shadeMenuRef}
-        className={`${glassPopover} max-h-52 w-44 overflow-y-auto p-1.5`}
+        className={popoverShell}
         style={{ bottom: shadePos.bottom, left: shadePos.left }}
         role="menu"
       >
-        {(Object.keys(MODE_LABEL_KEYS) as RenderMode[]).map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setRenderMode(id);
-              setPanel(null);
-            }}
-            className={`block w-full rounded-xl px-3 py-2 text-left text-xs font-medium transition-colors ${
-              renderMode === id
-                ? "bg-zinc-900/10 text-zinc-900"
-                : "text-zinc-600 hover:bg-white/50"
-            }`}
-          >
-            {t(uiLanguage, MODE_LABEL_KEYS[id])}
-          </button>
-        ))}
+        <GlassPanel variant="panel" zIndex={80}>
+          <div className="max-h-52 w-44 overflow-y-auto p-1.5">
+            {(Object.keys(MODE_LABEL_KEYS) as RenderMode[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setRenderMode(id);
+                  setPanel(null);
+                }}
+                className={`block w-full rounded-xl px-3 py-2 text-left text-xs font-medium transition-colors ${
+                  renderMode === id ? menuItemActive : menuItemIdle
+                }`}
+              >
+                {t(uiLanguage, MODE_LABEL_KEYS[id])}
+              </button>
+            ))}
+          </div>
+        </GlassPanel>
       </div>,
       portalRoot,
     );
@@ -402,12 +433,14 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     createPortal(
       <div
         ref={lightMenuRef}
-        className={`${glassPopover} max-h-[min(380px,70vh)] w-56 overflow-y-auto p-1.5`}
+        className={popoverShell}
         style={{ bottom: lightPos.bottom, left: lightPos.left }}
         role="dialog"
         aria-label={t(uiLanguage, "lighting")}
       >
-        <p className="mb-0.5 px-1 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <GlassPanel variant="panel" zIndex={80}>
+          <div className="w-56 p-1.5 max-md:max-h-[min(380px,70vh)] max-md:overflow-y-auto md:overflow-visible">
+        <p className={`mb-0.5 px-1 text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}>
           {t(uiLanguage, "lighting")}
         </p>
         <SliderRow
@@ -438,14 +471,42 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           onChange={(indirectLight) => setLighting({ indirectLight })}
         />
 
-        <div className="mt-1 border-t border-zinc-300/50 pt-1.5">
-          <p className="mb-1 px-1 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
-            {t(uiLanguage, "bg3d")}
-          </p>
-          <div className="grid grid-cols-3 gap-1 px-0.5">
+        <div className={`mt-1 border-t pt-1.5 ${menuDivider}`}>
+          <div className="mb-1 flex items-center justify-between gap-2 px-1">
+            <p className={`text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}>
+              {t(uiLanguage, "bg3d")}
+            </p>
+            <label className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[10px] font-medium text-[var(--text-body)]">
+                {t(uiLanguage, "skyAuto")}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoSceneBackground}
+                aria-label={t(uiLanguage, "skyAuto")}
+                onClick={() => setAutoSceneBackground(!autoSceneBackground)}
+                className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200 ${
+                  autoSceneBackground
+                    ? "border-amber-300/80 bg-gradient-to-br from-amber-300/95 to-amber-400/80"
+                    : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    autoSceneBackground ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
+          <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5">
             {SCENE_BACKGROUND_PRESETS.map((p) => {
-              const active =
-                sceneBackground.toLowerCase() === p.hex.toLowerCase();
+              const autoSkyId = getModeSkyPreset(dataViewMode, colorTheme);
+              const active = autoSceneBackground
+                ? p.id === autoSkyId
+                : sceneBackground === p.id ||
+                  sceneBackground.toLowerCase() === p.hex.toLowerCase();
               const presetLabel = BG_PRESET_LABEL_KEYS[p.id]
                 ? t(uiLanguage, BG_PRESET_LABEL_KEYS[p.id])
                 : p.label;
@@ -454,18 +515,35 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
                   key={p.id}
                   type="button"
                   title={presetLabel}
-                  onClick={() => setSceneBackground(p.hex)}
-                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1 transition-colors ${
+                  onClick={() => {
+                    setAutoSceneBackground(false);
+                    setSceneBackground(p.id);
+                  }}
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1 transition-[background-color,box-shadow] ${
                     active
-                      ? "border-zinc-500/50 bg-white/70"
-                      : "border-transparent hover:bg-white/50"
+                      ? isDark
+                        ? "bg-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
+                        : "bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.06)]"
+                      : "hover:bg-[var(--glass-inset-bg)]"
                   }`}
                 >
                   <span
-                    className="h-5 w-full rounded-md border border-zinc-400/30"
-                    style={{ backgroundColor: p.hex }}
+                    className="h-3 w-full shrink-0 rounded-[5px] border border-[var(--panel-divider)]/55"
+                    style={{
+                      background: p.gradient
+                        ? `linear-gradient(to bottom, ${p.gradient.top}, ${p.gradient.bottom})`
+                        : p.hex,
+                    }}
                   />
-                  <span className="text-[9px] font-medium leading-tight text-zinc-600">
+                  <span
+                    className={`line-clamp-2 min-h-[1.15rem] w-full px-0.5 text-center text-[7px] font-medium leading-[1.1] ${
+                      active
+                        ? isDark
+                          ? "text-zinc-200"
+                          : "text-zinc-700"
+                        : "text-[var(--text-muted)]"
+                    }`}
+                  >
                     {presetLabel}
                   </span>
                 </button>
@@ -473,6 +551,8 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
             })}
           </div>
         </div>
+          </div>
+        </GlassPanel>
       </div>,
       portalRoot,
     );
@@ -483,12 +563,14 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     createPortal(
       <div
         ref={saveMenuRef}
-        className={`${glassPopover} w-56 p-2.5`}
+        className={popoverShell}
         style={{ bottom: savePos.bottom, left: savePos.left }}
         role="dialog"
         aria-label={t(uiLanguage, "saveView")}
       >
-        <p className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <GlassPanel variant="panel" zIndex={80}>
+          <div className="w-56 p-2.5">
+        <p className={`mb-1.5 px-0.5 text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}>
           {t(uiLanguage, "saveView")}
         </p>
         <input
@@ -501,9 +583,9 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
             if (e.key === "Escape") setPanel(null);
           }}
           placeholder={t(uiLanguage, "viewName")}
-          className="mb-2 w-full rounded-xl border border-zinc-300/60 bg-white/70 px-2.5 py-1.5 text-xs outline-none focus:border-zinc-400"
+          className="glass-input mb-2 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-white/55"
         />
-        <p className="mb-1 px-0.5 text-[10px] font-medium text-zinc-500">
+        <p className={`mb-1 px-0.5 text-[10px] font-medium ${menuHeading}`}>
           {t(uiLanguage, "pdfPageSize")}
         </p>
         <div className="mb-2 grid grid-cols-5 gap-0.5">
@@ -514,8 +596,8 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               onClick={() => setPageFormat(f)}
               className={`rounded-lg py-1 text-[10px] font-semibold uppercase ${
                 pageFormat === f
-                  ? "bg-zinc-800 text-white"
-                  : "bg-white/60 text-zinc-600 hover:bg-white/90"
+                  ? "bg-[var(--chip-active-bg)] text-[var(--chip-active-text)]"
+                  : "bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
               }`}
             >
               {f}
@@ -533,10 +615,12 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           type="button"
           disabled={!viewName.trim() || !activeModelId}
           onClick={commitSaveView}
-          className="w-full rounded-xl bg-zinc-800 px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="w-full rounded-xl bg-[var(--text-strong)] px-2 py-1.5 text-xs font-medium text-[var(--background)] disabled:opacity-40"
         >
           {t(uiLanguage, "save")}
         </button>
+          </div>
+        </GlassPanel>
       </div>,
       portalRoot,
     );
@@ -547,16 +631,27 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
     createPortal(
       <div
         ref={searchMenuRef}
-        className={`${glassPopover} w-[min(340px,calc(100vw-1.5rem))] p-2`}
-        style={{ bottom: searchPos.bottom, left: searchPos.left }}
+        className={
+          isMobileToolbar
+            ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
+            : popoverShell
+        }
+        style={{
+          bottom: searchPos.bottom,
+          ...(isMobileToolbar ? {} : { left: searchPos.left }),
+        }}
         role="dialog"
         aria-label={t(uiLanguage, "searchFilter")}
       >
-        <SearchFilterPanel
-          viewerRef={viewerRef}
-          open={panel === "search"}
-          onClose={() => setPanel(null)}
-        />
+        <GlassPanel variant="panel" zIndex={80}>
+          <div className="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto p-2 sm:max-h-[min(75vh,32rem)]">
+            <SearchFilterPanel
+              viewerRef={viewerRef}
+              open={panel === "search"}
+              onClose={() => setPanel(null)}
+            />
+          </div>
+        </GlassPanel>
       </div>,
       portalRoot,
     );
@@ -704,7 +799,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="hidden sm:block mx-0.5 h-4 w-px bg-zinc-300/60" aria-hidden />
+            <div className="hidden sm:block mx-0.5 h-4 w-px bg-[var(--panel-divider)]" aria-hidden />
 
             <div className="flex-1 min-w-0">
               <ToolTipWrap

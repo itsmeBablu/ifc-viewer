@@ -82,7 +82,7 @@ export default function LegendRangeInput({
             onChange={(e) => {
               if (e.target.value !== "custom") applyPreset(e.target.value);
             }}
-            className="w-full rounded-xl border border-zinc-300/60 bg-white/55 px-2.5 py-1.5 text-[11px] text-zinc-800 outline-none focus:border-zinc-400"
+            className="glass-input w-full rounded-xl px-2.5 py-1.5 text-[11px] text-zinc-800 outline-none focus:border-white/55"
             aria-label={t(uiLanguage, "legendRangePreset")}
           >
             <option value="custom" disabled={Boolean(matchedPreset)}>
@@ -115,7 +115,7 @@ export default function LegendRangeInput({
             }
           }}
           spellCheck={false}
-          className="w-full rounded-xl border border-zinc-300/60 bg-white/55 px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-zinc-800 outline-none focus:border-zinc-400"
+          className="glass-input w-full rounded-xl px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-zinc-800 outline-none focus:border-white/55"
           placeholder="0, 10, 20, 30, 40, 50"
           aria-label={`${t(uiLanguage, "legendRangePreset")} (${unitHint})`}
         />

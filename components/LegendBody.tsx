@@ -131,9 +131,7 @@ export default function LegendBody({
 
   return (
     <div
-      className={`min-w-0 text-zinc-800 ${
-        isPresentationView ? "overflow-visible" : "overflow-hidden"
-      } ${className}`}
+      className={`w-full min-w-0 overflow-visible text-zinc-800 ${className}`}
       ref={pickerRef}
     >
       <section
@@ -169,15 +167,15 @@ export default function LegendBody({
         {!compareBothModes && (
         <div
           ref={modeBarRef}
-          className={`flex rounded-xl border border-zinc-300/50 bg-white/40 ${
+          className={`legend-mode-bar flex rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
             compact ? "p-0.5" : "p-0.5"
           }`}
         >
           <div
             className={`flex flex-1 items-center rounded-lg transition-colors ${
               colorMode === "heizlast"
-                ? "bg-white text-zinc-900 shadow-sm"
-                : "text-zinc-500"
+                ? "legend-segment-active bg-[var(--chip-active-bg)] text-[var(--chip-active-text)] shadow-sm"
+                : "legend-segment-idle text-[var(--text-muted)]"
             }`}
           >
             <button
@@ -221,7 +219,7 @@ export default function LegendBody({
               }
               aria-expanded={rangeOpen && colorMode === "heizlast"}
               onClick={() => toggleRange("heizlast")}
-              className={`flex h-full items-center text-zinc-500 hover:text-zinc-800 ${
+              className={`flex h-full items-center text-[var(--text-muted)] hover:text-[var(--text-strong)] ${
                 compact ? "px-1 py-1" : "px-1.5 py-1.5"
               }`}
             >
@@ -231,8 +229,8 @@ export default function LegendBody({
           <div
             className={`flex flex-1 items-center rounded-lg transition-colors ${
               colorMode === "temperature"
-                ? "bg-white text-zinc-900 shadow-sm"
-                : "text-zinc-500"
+                ? "legend-segment-active bg-[var(--chip-active-bg)] text-[var(--chip-active-text)] shadow-sm"
+                : "legend-segment-idle text-[var(--text-muted)]"
             }`}
           >
             <button
@@ -255,7 +253,7 @@ export default function LegendBody({
               }
               aria-expanded={rangeOpen && colorMode === "temperature"}
               onClick={() => toggleRange("temperature")}
-              className={`flex h-full items-center text-zinc-500 hover:text-zinc-800 ${
+              className={`flex h-full items-center text-[var(--text-muted)] hover:text-[var(--text-strong)] ${
                 compact ? "px-1 py-1" : "px-1.5 py-1.5"
               }`}
             >

@@ -1,19 +1,19 @@
 "use client";
 
 import {
-  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import gsap from "gsap";
 import { CiCircleMore } from "react-icons/ci";
 import { IoChevronDownSharp, IoChevronUp, IoClose } from "react-icons/io5";
 import GlassPanel from "./GlassPanel";
 import { t } from "@/lib/i18n";
+import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { useAppStore } from "@/store/useAppStore";
 
-const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
-const DUR_MS = 400;
 const CHIP = 36;
 
 const yellowLiquid =
@@ -46,32 +46,100 @@ export default function MobileCornerMenu({
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [mounted, setMounted] = useState(open);
-  const [shown, setShown] = useState(open);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const closeTimer = useRef<number | null>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backdropRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const chipBtnRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      if (closeTimer.current) window.clearTimeout(closeTimer.current);
-      setMounted(true);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setShown(true));
-      });
-      return;
-    }
-    setShown(false);
-    setModelMenuOpen(false);
-    closeTimer.current = window.setTimeout(() => setMounted(false), DUR_MS);
-    return () => {
-      if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    };
+  useLayoutEffect(() => {
+    if (open) setMounted(true);
   }, [open]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const backdrop = backdropRef.current;
+    const sheet = sheetRef.current;
+    const chip = chipBtnRef.current;
+    if (!mounted) return;
+
+    if (open) {
+      if (backdrop) {
+        killGsap(backdrop);
+        gsap.fromTo(
+          backdrop,
+          { autoAlpha: 0 },
+          {
+            autoAlpha: 1,
+            duration: gsapDuration.mobile,
+            ease: gsapEase.mobile,
+          },
+        );
+      }
+      if (sheet) {
+        killGsap(sheet);
+        gsap.fromTo(
+          sheet,
+          { scale: 0.18, autoAlpha: 0, transformOrigin: "bottom right" },
+          {
+            scale: 1,
+            autoAlpha: 1,
+            duration: gsapDuration.mobile,
+            ease: gsapEase.snap,
+          },
+        );
+      }
+      if (chip) {
+        killGsap(chip);
+        gsap.to(chip, {
+          scale: 0.85,
+          autoAlpha: 0,
+          duration: gsapDuration.mobile * 0.55,
+          ease: gsapEase.mobile,
+          pointerEvents: "none",
+        });
+      }
+      return;
+    }
+
+    if (backdrop) {
+      killGsap(backdrop);
+      gsap.to(backdrop, {
+        autoAlpha: 0,
+        duration: gsapDuration.mobile,
+        ease: gsapEase.mobile,
+        pointerEvents: "none",
+      });
+    }
+    if (sheet) {
+      killGsap(sheet);
+      gsap.to(sheet, {
+        scale: 0.18,
+        autoAlpha: 0,
+        duration: gsapDuration.mobile,
+        ease: gsapEase.mobile,
+        pointerEvents: "none",
+        onComplete: () => setMounted(false),
+      });
+    } else {
+      setMounted(false);
+    }
+    if (chip) {
+      killGsap(chip);
+      gsap.to(chip, {
+        scale: 1,
+        autoAlpha: 1,
+        duration: gsapDuration.mobile,
+        ease: gsapEase.snap,
+        pointerEvents: "auto",
+      });
+    }
+    setModelMenuOpen(false);
+  }, [open, mounted]);
+
+  useLayoutEffect(() => {
     if (!modelMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -99,17 +167,14 @@ export default function MobileCornerMenu({
         bottom: "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
-      {(open || shown) && (
+      {mounted && (
         <button
+          ref={backdropRef}
           type="button"
           aria-label={t(uiLanguage, "closePanels")}
           tabIndex={open ? 0 : -1}
           className="fixed inset-0 z-0 bg-zinc-900/28"
-          style={{
-            opacity: shown ? 1 : 0,
-            pointerEvents: shown ? "auto" : "none",
-            transition: `opacity ${DUR_MS}ms ${EASE}`,
-          }}
+          style={{ visibility: "hidden" }}
           onClick={() => onOpenChange(false)}
         />
       )}
@@ -117,6 +182,7 @@ export default function MobileCornerMenu({
       <div className="relative z-10" style={chipBox}>
         {mounted && (
           <div
+            ref={sheetRef}
             role="dialog"
             aria-modal="true"
             aria-label={ifcName}
@@ -124,10 +190,7 @@ export default function MobileCornerMenu({
             style={{
               width: "min(calc(100vw - 1.5rem), 22rem)",
               maxHeight: maxH,
-              transform: shown ? "scale(1)" : "scale(0.18)",
-              opacity: shown ? 1 : 0,
-              pointerEvents: shown ? "auto" : "none",
-              transition: `transform ${DUR_MS}ms ${EASE}, opacity ${DUR_MS * 0.75}ms ${EASE}`,
+              visibility: "hidden",
             }}
           >
             <GlassPanel
@@ -239,6 +302,7 @@ export default function MobileCornerMenu({
         )}
 
         <button
+          ref={chipBtnRef}
           type="button"
           onClick={() => onOpenChange(!open)}
           aria-expanded={open}
@@ -246,13 +310,7 @@ export default function MobileCornerMenu({
             open ? t(uiLanguage, "closePanels") : t(uiLanguage, "showPanels")
           }
           className="absolute bottom-0 right-0 z-20 overflow-hidden rounded-full active:scale-95"
-          style={{
-            ...chipBox,
-            opacity: shown ? 0 : 1,
-            pointerEvents: shown ? "none" : "auto",
-            transform: shown ? "scale(0.85)" : "scale(1)",
-            transition: `opacity ${DUR_MS * 0.55}ms ${EASE}, transform ${DUR_MS}ms ${EASE}`,
-          }}
+          style={chipBox}
         >
           <span
             className={`flex h-full w-full items-center justify-center ${yellowLiquid}`}

@@ -49,7 +49,7 @@ function FloorSliceSlider({
   }, [floors, selectedFloor, sliceProgress]);
 
   return (
-    <div className="rounded-xl border border-zinc-300/50 bg-white/45 px-3 py-2.5 backdrop-blur-sm">
+    <div className="glass-inset rounded-xl px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold tracking-wide text-zinc-600">
           Schnitthöhe
@@ -88,6 +88,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const colorMode = useAppStore((s) => s.colorMode);
+  const colorTheme = useAppStore((s) => s.colorTheme);
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
 
@@ -158,7 +159,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
     } catch {
       setSnapshotUrl(null);
     }
-  }, [shellGroup, selectedFloorObj, sortedFloors, activeModelId]);
+  }, [shellGroup, selectedFloorObj, sortedFloors, activeModelId, colorTheme]);
 
   const handleSaveView = () => {
     const trimmed = viewName.trim();
@@ -185,7 +186,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
           Click any room or building component in the 3D view to inspect it.
         </p>
         {selectedElement ? (
-          <div className="space-y-2 rounded-xl border border-zinc-300/50 bg-white/45 p-3">
+          <div className="glass-inset space-y-2 rounded-xl p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-zinc-900">
@@ -279,7 +280,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
           onChange={(e) =>
             setSelectedFloor(e.target.value === "" ? null : e.target.value)
           }
-          className="w-full rounded-xl border border-zinc-300/60 bg-white/50 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+          className="glass-input w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-white/55"
         >
           <option value="">All floors — pick one for plan</option>
           {floorsWithRooms.map((f) => {
@@ -294,7 +295,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
 
         {selectedFloor ? (
           <>
-            <div className="overflow-hidden rounded-xl border border-zinc-300/50 bg-[#f2f4f7]">
+            <div className="overflow-hidden rounded-xl border border-zinc-300/50 bg-[var(--scene-bg)]">
               {snapshotUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -369,7 +370,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
       {/* Legend */}
       <section className="space-y-2.5 px-4 py-3">
         <p className={heading.panel}>Legend</p>
-        <div className="flex rounded-xl border border-zinc-300/50 bg-white/40 p-0.5">
+        <div className="glass-inset flex rounded-xl p-0.5">
           <button
             type="button"
             onClick={() => setColorMode("heizlast")}
@@ -413,7 +414,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
             {TEMPERATURE_STOPS.map((s) => (
               <div
                 key={s.value}
-                className="flex items-center gap-1.5 rounded-lg border border-zinc-300/50 bg-white/40 px-2 py-1"
+                className="glass-inset flex items-center gap-1.5 rounded-lg px-2 py-1"
               >
                 <span
                   className="h-2.5 w-2.5 rounded"
@@ -454,7 +455,7 @@ export default function SidebarPanel({ viewerRef }: Props) {
                     }
                   }}
                   placeholder="View name"
-                  className="w-full rounded-xl border border-zinc-300/60 bg-white/50 px-3 py-2 text-sm outline-none"
+                  className="glass-input w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-white/55"
                 />
                 <div className="flex gap-2">
                   <button

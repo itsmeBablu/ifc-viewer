@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { Floor, Room } from "./types";
-import { heizlastToColor, kuhllastToColor } from "./colorMapping";
+import {
+  heizlastToColor,
+  kuhllastToColor,
+  temperatureToColor,
+} from "./colorMapping";
+import { THEME_COLORS } from "./themeColors";
 import { useAppStore } from "@/store/useAppStore";
 
 type CacheKey = string;
@@ -42,40 +47,57 @@ export function renderFloorSnapshot(
   size = 640,
   selectedRoomId: string | null = null,
 ): string | null {
-  const { activeColorPalette, heizlastRange, kuhllastRange, dataViewMode } =
-    useAppStore.getState();
+  const {
+    activeColorPalette,
+    heizlastRange,
+    kuhllastRange,
+    dataViewMode,
+    colorMode,
+    compareBothModes,
+    temperatureRange,
+    colorTheme,
+  } = useAppStore.getState();
 
-  const selectedRoom = selectedRoomId
-    ? rooms.find((r) => r.id === selectedRoomId) ?? null
-    : null;
+  const snapshotColorMode = compareBothModes ? "heizlast" : colorMode;
 
-  const selectedHeatColor = selectedRoom
-    ? dataViewMode === "kuhllast"
-      ? kuhllastToColor(
-          selectedRoom.coolLoad,
-          activeColorPalette,
-          kuhllastRange,
-        )
-      : heizlastToColor(
-          selectedRoom.heatLoad,
-          activeColorPalette,
-          heizlastRange,
-        )
-    : dataViewMode === "kuhllast"
-      ? kuhllastToColor(Number.NaN, activeColorPalette, kuhllastRange)
-      : heizlastToColor(Number.NaN, activeColorPalette, heizlastRange);
+  const roomPlanColor = (room: Room): string => {
+    if (snapshotColorMode === "temperature") {
+      return temperatureToColor(
+        room.temperature,
+        activeColorPalette,
+        temperatureRange,
+      );
+    }
+    if (dataViewMode === "kuhllast") {
+      return kuhllastToColor(
+        room.coolLoad,
+        activeColorPalette,
+        kuhllastRange,
+      );
+    }
+    return heizlastToColor(
+      room.heatLoad,
+      activeColorPalette,
+      heizlastRange,
+    );
+  };
 
-  const range = dataViewMode === "kuhllast" ? kuhllastRange : heizlastRange;
+  const range =
+    snapshotColorMode === "temperature"
+      ? temperatureRange
+      : dataViewMode === "kuhllast"
+        ? kuhllastRange
+        : heizlastRange;
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
     selectedRoomId ?? "none"
-  }::view=${dataViewMode}::palette=${activeColorPalette ?? "default"}::range=${range
+  }::view=${dataViewMode}::color=${snapshotColorMode}::theme=${colorTheme}::palette=${activeColorPalette ?? "default"}::range=${range
     .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
-    .join(",")}::selColor=${selectedHeatColor}::v6`;
+    .join(",")}::v8`;
   const cached = snapshotCache.get(cacheKey);
   if (cached) return cached;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf2f4f7);
+  scene.background = new THREE.Color(THEME_COLORS[colorTheme].sceneBackground);
 
   const planGroup = new THREE.Group();
   const wallMat = new THREE.MeshBasicMaterial({
@@ -84,20 +106,18 @@ export function renderFloorSnapshot(
     transparent: false,
     depthWrite: true,
   });
-  const roomMat = new THREE.MeshBasicMaterial({
-    color: 0x9ca3af,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.55,
-    depthWrite: false,
-  });
-  const roomMatSelected = new THREE.MeshBasicMaterial({
-    color: selectedHeatColor,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.9,
-    depthWrite: false,
-  });
+  const roomMats: THREE.Material[] = [];
+  const roomMatFor = (room: Room) => {
+    const mat = new THREE.MeshBasicMaterial({
+      color: roomPlanColor(room),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: room.id === selectedRoomId ? 0.9 : 0.55,
+      depthWrite: false,
+    });
+    roomMats.push(mat);
+    return mat;
+  };
 
   const box = new THREE.Box3();
   let hasGeom = false;
@@ -135,7 +155,7 @@ export function renderFloorSnapshot(
     addMesh(
       room.geometry,
       null,
-      room.id === selectedRoomId ? roomMatSelected : roomMat,
+      roomMatFor(room),
     );
   }
 
@@ -165,8 +185,7 @@ export function renderFloorSnapshot(
 
   if (!hasGeom) {
     wallMat.dispose();
-    roomMat.dispose();
-    roomMatSelected.dispose();
+    for (const mat of roomMats) mat.dispose();
     return null;
   }
 
@@ -176,8 +195,9 @@ export function renderFloorSnapshot(
   const midY = box.min.y + Math.max(size3.y, 0.1) * 0.5;
   const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), midY);
   wallMat.clippingPlanes = [clipPlane];
-  roomMat.clippingPlanes = [clipPlane];
-  roomMatSelected.clippingPlanes = [clipPlane];
+  for (const mat of roomMats) {
+    mat.clippingPlanes = [clipPlane];
+  }
 
   scene.add(planGroup);
 
@@ -214,8 +234,7 @@ export function renderFloorSnapshot(
   const dataUrl = renderer.domElement.toDataURL("image/png");
 
   wallMat.dispose();
-  roomMat.dispose();
-  roomMatSelected.dispose();
+  for (const mat of roomMats) mat.dispose();
   // Dispose only cloned scene meshes' refs — geometries are shared, don't dispose
   while (planGroup.children.length) {
     planGroup.remove(planGroup.children[0]);

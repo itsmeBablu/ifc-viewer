@@ -32,6 +32,7 @@ type Props = {
 const RADIUS_CSS: Record<GlassVariant, number> = {
   panel: radius.panelPx,
   control: radius.controlPx,
+  menu: radius.controlPx,
   chip: radius.chipPx,
 };
 
@@ -90,8 +91,8 @@ export default function GlassPanel({
       >
         <div
           className={`ios-glass ios-glass--${variant} ${
-            fill ? "ios-glass--fill" : ""
-          } ${allowOverflow ? "overflow-visible" : ""} ${className}`}
+            variant === "menu" ? "ios-glass--menu" : ""
+          } ${fill ? "ios-glass--fill" : ""} ${allowOverflow ? "overflow-visible" : ""} ${className}`}
           style={{ borderRadius: r }}
         >
           <div
@@ -114,7 +115,7 @@ export default function GlassPanel({
       <LiquidGlass
         {...preset}
         zIndex={zIndex}
-        className={`glass-surface ${fill ? "glass-surface--fill" : ""} ${className}`}
+        className={`glass-surface ${variant === "menu" ? "glass-surface--menu" : ""} ${fill ? "glass-surface--fill" : ""} ${className}`}
       >
         <div
           className={`glass-surface-content ${

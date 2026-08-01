@@ -175,15 +175,15 @@ export default function SearchFilterPanel({
   ]);
 
   return (
-    <div className="space-y-2.5 p-1">
-      <div className="flex rounded-xl border border-zinc-300/50 bg-white/40 p-0.5">
+    <div className="min-w-0 max-w-full space-y-2.5 overflow-hidden p-1">
+      <div className="glass-inset flex rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-0.5">
         <button
           type="button"
           onClick={() => setMode("search")}
           className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
             mode === "search"
-              ? "bg-white text-zinc-900 shadow-sm"
-              : "text-zinc-500"
+              ? "bg-[var(--chip-active-bg)] text-[var(--text-strong)] shadow-sm"
+              : "text-[var(--text-body)]"
           }`}
         >
           {t(uiLanguage, "search")}
@@ -193,8 +193,8 @@ export default function SearchFilterPanel({
           onClick={() => setMode("filter")}
           className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
             mode === "filter"
-              ? "bg-white text-zinc-900 shadow-sm"
-              : "text-zinc-500"
+              ? "bg-[var(--chip-active-bg)] text-[var(--text-strong)] shadow-sm"
+              : "text-[var(--text-body)]"
           }`}
         >
           {t(uiLanguage, "filter")}
@@ -212,12 +212,12 @@ export default function SearchFilterPanel({
               if (e.key === "Escape") onClose();
             }}
             placeholder={t(uiLanguage, "searchPlaceholder")}
-            className="w-full rounded-xl border border-zinc-300/60 bg-white/60 px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            className="glass-input box-border w-full max-w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-white/55"
           />
           {query.trim() && (
-            <ul className="max-h-48 space-y-0.5 overflow-y-auto rounded-xl border border-zinc-300/40 bg-white/70 p-1.5">
+            <ul className="glass-inset max-h-48 space-y-0.5 overflow-y-auto rounded-xl p-1.5">
               {searchResults.length === 0 ? (
-                <li className="px-2 py-2 text-xs text-zinc-400">
+                <li className="px-2 py-2 text-xs text-[var(--text-muted)]">
                   {t(uiLanguage, "noRoomsMatch")}
                 </li>
               ) : (
@@ -226,20 +226,20 @@ export default function SearchFilterPanel({
                     <button
                       type="button"
                       onClick={() => void handleSearchSelect(room)}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-zinc-900/5"
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-[var(--glass-inset-bg)]"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate font-semibold text-zinc-900">
+                        <span className="block truncate font-semibold text-[var(--text-strong)]">
                           <ModelText>
                             {room.number ? `${room.number} · ` : ""}
                             {room.name}
                           </ModelText>
                         </span>
-                        <ModelText className="text-[10px] text-zinc-500">
+                        <ModelText className="text-[10px] text-[var(--text-muted)]">
                           {floorName(room.floorId)}
                         </ModelText>
                       </span>
-                      <span className="shrink-0 tabular-nums text-[10px] text-zinc-400">
+                      <span className="shrink-0 tabular-nums text-[10px] text-[var(--text-muted)]">
                         {(dataViewMode === "kuhllast"
                           ? room.coolLoad
                           : room.heatLoad
@@ -254,45 +254,53 @@ export default function SearchFilterPanel({
           )}
         </div>
       ) : (
-        <div className="space-y-3">
-          <div>
-            <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-zinc-600">
-              <span>{t(uiLanguage, "heizlastFilter")}</span>
-              <span className="tabular-nums text-zinc-500">
+        <div className="min-w-0 space-y-3 overflow-hidden">
+          <div className="min-w-0">
+            <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium text-[var(--text-body)]">
+              <span className="min-w-0 truncate pr-1">
+                {dataViewMode === "kuhllast"
+                  ? t(uiLanguage, "kuhllastWm2")
+                  : t(uiLanguage, "heizlastFilter")}
+              </span>
+              <span className="shrink-0 tabular-nums text-[var(--text-muted)]">
                 {minHeat} – {maxHeat}
               </span>
             </div>
-            <label className="mb-1.5 block">
-              <span className="mb-0.5 block text-[10px] text-zinc-400">
+            <label className="mb-1.5 block min-w-0">
+              <span className="mb-0.5 block text-[10px] text-[var(--text-muted)]">
                 {t(uiLanguage, "min")}
               </span>
-              <Slider
-                min={heatBounds.min}
-                max={heatBounds.max}
-                step={1}
-                value={minHeat}
-                onChange={(v) => setMinHeat(Math.min(v, maxHeat))}
-              />
+              <div className="min-w-0 px-0.5">
+                <Slider
+                  min={heatBounds.min}
+                  max={heatBounds.max}
+                  step={1}
+                  value={minHeat}
+                  onChange={(v) => setMinHeat(Math.min(v, maxHeat))}
+                />
+              </div>
             </label>
-            <label className="block">
-              <span className="mb-0.5 block text-[10px] text-zinc-400">
+            <label className="block min-w-0">
+              <span className="mb-0.5 block text-[10px] text-[var(--text-muted)]">
                 {t(uiLanguage, "max")}
               </span>
-              <Slider
-                min={heatBounds.min}
-                max={heatBounds.max}
-                step={1}
-                value={maxHeat}
-                onChange={(v) => setMaxHeat(Math.max(v, minHeat))}
-              />
+              <div className="min-w-0 px-0.5">
+                <Slider
+                  min={heatBounds.min}
+                  max={heatBounds.max}
+                  step={1}
+                  value={maxHeat}
+                  onChange={(v) => setMaxHeat(Math.max(v, minHeat))}
+                />
+              </div>
             </label>
           </div>
 
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-zinc-600">
+          <div className="min-w-0">
+            <p className="mb-1.5 text-[11px] font-medium text-[var(--text-body)]">
               {t(uiLanguage, "temperature")}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-1.5">
               {tempChips.map((s) => {
                 const on = temps.includes(s.value);
                 return (
@@ -300,10 +308,10 @@ export default function SearchFilterPanel({
                     key={s.value}
                     type="button"
                     onClick={() => toggleTemp(s.value)}
-                    className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums transition-colors ${
+                    className={`flex min-w-0 items-center justify-center gap-1 rounded-full border px-1.5 py-1 text-[10px] font-medium tabular-nums transition-colors sm:px-2.5 sm:text-[11px] ${
                       on
-                        ? "border-zinc-500/50 bg-white shadow-sm text-zinc-900"
-                        : "border-transparent bg-white/40 text-zinc-600 hover:bg-white/60"
+                        ? "border-[var(--panel-divider)] bg-[var(--chip-active-bg)] text-[var(--text-strong)] shadow-sm"
+                        : "border-transparent bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
                     }`}
                   >
                     <span
@@ -323,9 +331,9 @@ export default function SearchFilterPanel({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-zinc-500">
-              <span className="font-semibold tabular-nums text-zinc-800">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <p className="min-w-0 text-[11px] leading-snug text-[var(--text-muted)]">
+              <span className="font-semibold tabular-nums text-[var(--text-strong)]">
                 {matchCount.match}
               </span>{" "}
               {t(uiLanguage, "ofRoomsMatch")}{" "}
@@ -335,7 +343,7 @@ export default function SearchFilterPanel({
             <button
               type="button"
               onClick={resetFilter}
-              className="rounded-xl bg-zinc-800/90 px-2.5 py-1.5 text-[11px] font-medium text-white"
+              className="w-full shrink-0 rounded-xl bg-[var(--text-strong)] px-2.5 py-2 text-[11px] font-medium text-[var(--background)] md:w-auto md:py-1.5"
             >
               {t(uiLanguage, "resetFilter")}
             </button>

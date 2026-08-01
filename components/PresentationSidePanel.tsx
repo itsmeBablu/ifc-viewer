@@ -110,7 +110,7 @@ export default function PresentationSidePanel({
           <p className={`${heading.muted} shrink-0`}>
             {t(uiLanguage, "floorLevel")}
           </p>
-          <div className="thin-scroll max-h-28 shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-xl border border-zinc-300/50 bg-white/40">
+          <div className="glass-inset thin-scroll max-h-28 shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-xl">
             {floorsWithRooms.length === 0 ? (
               <p className="px-2.5 py-2 text-[11px] text-zinc-400">
                 {t(uiLanguage, "noFloors")}
@@ -181,13 +181,13 @@ export default function PresentationSidePanel({
                       }`}
                       style={{ backgroundColor: lightTint(hex, 0.82) }}
                     >
-                      <ModelText className="min-w-0 flex-1 truncate text-[11px] font-semibold text-zinc-900">
+                      <ModelText className="min-w-0 flex-1 truncate text-[11px] font-semibold text-on-tint">
                         {room.number ? `${room.number} · ` : ""}
                         {room.name}
                       </ModelText>
-                      <span className="flex shrink-0 items-center gap-1.5 tabular-nums text-[10px] text-zinc-600">
+                      <span className="flex shrink-0 items-center gap-1.5 tabular-nums text-[10px] text-on-tint-muted">
                         <span>{density.toFixed(0)} W/m²</span>
-                        <span className="text-zinc-400">·</span>
+                        <span className="text-on-tint-muted">·</span>
                         <span>{room.temperature.toFixed(1)} °C</span>
                         <span
                           className="h-2.5 w-2.5 rounded-sm border border-zinc-400/30"

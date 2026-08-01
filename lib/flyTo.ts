@@ -1,12 +1,9 @@
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
+import { flyToProgress } from "./gsapMotion";
 
 /**
- * Smoothly animate a camera + OrbitControls target over `duration` ms.
+ * Smoothly animate a camera + OrbitControls target over `duration` ms (GSAP).
  */
 export function flyTo(
   camera: THREE.Camera,
@@ -17,26 +14,17 @@ export function flyTo(
 ): Promise<void> {
   const startPos = camera.position.clone();
   const startTarget = controls.target.clone();
-  const startTime = performance.now();
 
   return new Promise((resolve) => {
-    const step = (now: number) => {
-      const elapsed = now - startTime;
-      const t = Math.min(1, elapsed / duration);
-      const e = easeInOutCubic(t);
-
-      camera.position.lerpVectors(startPos, targetPosition, e);
-      controls.target.lerpVectors(startTarget, targetLookAt, e);
-      controls.update();
-
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        resolve();
-      }
-    };
-
-    requestAnimationFrame(step);
+    flyToProgress(
+      duration,
+      (t) => {
+        camera.position.lerpVectors(startPos, targetPosition, t);
+        controls.target.lerpVectors(startTarget, targetLookAt, t);
+        controls.update();
+      },
+      resolve,
+    );
   });
 }
 

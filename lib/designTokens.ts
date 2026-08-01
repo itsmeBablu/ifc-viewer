@@ -1,9 +1,9 @@
 /**
- * Design tokens — radius scale + LiquidGlass presets.
+ * Design tokens — radius scale + liquid glass presets.
  * All floating UI goes through components/GlassPanel.tsx using these values.
  */
 export const radius = {
-  /** Panels / cards / header / sidebar (px for LiquidGlass) */
+  /** Panels / cards / header / sidebar (px) */
   panelPx: 24,
   /** Buttons, chips, inputs (px) */
   controlPx: 16,
@@ -17,56 +17,66 @@ export const radius = {
 export const motion = {
   base: "transition-all duration-300 ease-out",
   sidebar: "transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+  /** Complex panel / overlay / 3D motion is handled via GSAP — see lib/gsapMotion.ts */
 } as const;
 
 /**
- * Shared @liquidglass/react props.
- * IMPORTANT: `blur` is CSS pixels (not 0–1). ~15px ≈ light-medium frosted glass.
+ * Shared @liquidglass/react props — iOS 26 Liquid Glass tuning.
+ * Strong blur + lensing; CSS vars handle frosted tint/specular on `.glass-surface`.
  */
 export const liquidGlass = {
   panel: {
     borderRadius: radius.panelPx,
-    blur: 15,
-    contrast: 1.12,
-    brightness: 1.06,
-    saturation: 1.2,
+    blur: 48,
+    contrast: 1.24,
+    brightness: 1.09,
+    saturation: 1.45,
     shadowIntensity: 0,
-    elasticity: 0.35,
-    displacementScale: 0.4,
+    elasticity: 0.42,
+    displacementScale: 0.48,
   },
   control: {
     borderRadius: radius.controlPx,
-    blur: 12,
-    contrast: 1.1,
-    brightness: 1.05,
-    saturation: 1.15,
+    blur: 40,
+    contrast: 1.2,
+    brightness: 1.08,
+    saturation: 1.38,
     shadowIntensity: 0,
-    elasticity: 0.3,
-    displacementScale: 0.3,
+    elasticity: 0.38,
+    displacementScale: 0.42,
+  },
+  menu: {
+    borderRadius: radius.controlPx,
+    blur: 44,
+    contrast: 1.22,
+    brightness: 1.08,
+    saturation: 1.42,
+    shadowIntensity: 0,
+    elasticity: 0.4,
+    displacementScale: 0.44,
   },
   chip: {
     borderRadius: radius.chipPx,
-    blur: 10,
-    contrast: 1.08,
-    brightness: 1.04,
-    saturation: 1.12,
+    blur: 32,
+    contrast: 1.14,
+    brightness: 1.06,
+    saturation: 1.32,
     shadowIntensity: 0,
-    elasticity: 0.25,
-    displacementScale: 0.25,
+    elasticity: 0.34,
+    displacementScale: 0.38,
   },
 } as const;
 
 export type GlassVariant = keyof typeof liquidGlass;
 
-/** Soft inset surface inside a glass panel (not a separate LiquidGlass). */
+/** Nested surface inside a glass panel — lighter frosted inset. */
 export const glassInset = [
   radius.control,
-  "border border-white/25",
-  "bg-white/25",
+  "glass-inset",
 ].join(" ");
 
 export const heading = {
-  app: "text-base font-semibold tracking-wide text-zinc-900 md:text-lg",
-  panel: "text-sm font-semibold tracking-wide text-zinc-800",
-  muted: "text-xs font-medium tracking-wide text-zinc-500",
+  app: "text-base font-semibold tracking-wide text-[var(--text-strong)] md:text-lg",
+  panel: "text-sm font-semibold tracking-wide text-[var(--text-strong)]",
+  muted: "text-xs font-medium tracking-wide text-[var(--text-muted)]",
 } as const;

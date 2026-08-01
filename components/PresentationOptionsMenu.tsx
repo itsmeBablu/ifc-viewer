@@ -1,13 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import GsapHeightAccordion from "./GsapHeightAccordion";
 import { IoOptionsOutline } from "react-icons/io5";
 import {
   DATA_VIEW_ICON,
@@ -24,7 +19,6 @@ import { useAppStore } from "@/store/useAppStore";
 
 const OPEN_MS = 400;
 const CLOSE_MS = 300;
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 const LAYOUT_OPTIONS: {
   id: PresentationLayoutMode;
@@ -43,24 +37,24 @@ const DATA_VIEW_LABEL: Record<DataViewMode, UiTextKey> = {
 };
 
 const activeRow =
-  "overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
+  "amber-gloss-surface overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
 const idleRow =
-  "overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50";
+  "overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]";
 
 const optionsBtnIdle =
-  "border border-transparent bg-transparent text-zinc-800 hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
+  "presentation-icon-idle border border-transparent bg-transparent text-[var(--text-body)] hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
 const optionsBtnOpen =
-  "border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
+  "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
 
 const layoutChipOn =
-  "overflow-hidden rounded-lg border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
+  "amber-gloss-surface overflow-hidden rounded-lg border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
 const layoutChipOff =
-  "overflow-hidden rounded-lg border border-transparent text-zinc-600 hover:bg-white hover:border-amber-200/40";
+  "presentation-chip-off overflow-hidden rounded-lg border border-transparent text-[var(--text-muted)] hover:border-amber-200/40 hover:bg-[var(--glass-inset-bg)]";
 
 const viewChipOn =
-  "overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  "amber-gloss-surface overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
 const viewChipOff =
-  "overflow-hidden rounded-xl border border-transparent text-zinc-600 hover:bg-zinc-100/80";
+  "presentation-chip-off overflow-hidden rounded-xl border border-transparent text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]";
 
 type Props = {
   compact?: boolean;
@@ -69,80 +63,6 @@ type Props = {
 };
 
 type MenuKind = "view" | "options";
-
-/** In-flow accordion (desktop). */
-function HeightAnim({
-  open,
-  panelKey,
-  children,
-}: {
-  open: boolean;
-  panelKey: string;
-  children: ReactNode;
-}) {
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
-  const [height, setHeight] = useState(0);
-  const [visible, setVisible] = useState(false);
-  const prevKey = useRef(panelKey);
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true);
-      const switching = prevKey.current !== panelKey && visible;
-      prevKey.current = panelKey;
-      if (!switching) {
-        setHeight(0);
-        setVisible(false);
-      }
-      const id = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          setHeight(innerRef.current?.scrollHeight ?? 0);
-          setVisible(true);
-        });
-      });
-      return () => window.cancelAnimationFrame(id);
-    }
-    setVisible(false);
-    setHeight(0);
-    const t = window.setTimeout(() => setMounted(false), CLOSE_MS);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, panelKey]);
-
-  useLayoutEffect(() => {
-    if (!mounted || !visible || !innerRef.current) return;
-    const el = innerRef.current;
-    const sync = () => {
-      const h = el.scrollHeight;
-      setHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
-    };
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [mounted, visible, panelKey, children]);
-
-  if (!mounted) return null;
-
-  // Padding inside the clip so soft shadows aren’t squared off at the edges
-  return (
-    <div
-      className="overflow-hidden"
-      style={{
-        height,
-        opacity: visible ? 1 : 0,
-        transition: `height ${open ? OPEN_MS : CLOSE_MS}ms ${EASE}, opacity ${
-          open ? 260 : 200
-        }ms ease`,
-      }}
-    >
-      <div ref={innerRef} className="px-1 pb-1.5 pt-2">
-        {children}
-      </div>
-    </div>
-  );
-}
 
 export default function PresentationOptionsMenu({
   compact = false,
@@ -221,7 +141,7 @@ export default function PresentationOptionsMenu({
     panel === "view" ? (
       <div
         role="menu"
-        className="isolate overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/95 p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+        className="presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
       >
         <div className="flex gap-0.5">
           {DATA_VIEW_MODES.map((id) => {
@@ -257,20 +177,20 @@ export default function PresentationOptionsMenu({
     ) : (
       <div
         role="menu"
-        className="isolate space-y-2 overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/95 p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+        className="presentation-menu-surface isolate space-y-2 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
       >
-        <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50 p-2">
+        <div className="overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] p-2">
           <div className="mb-1.5 flex items-center gap-2 px-0.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/floor_layout.svg"
               alt=""
-              className="h-4 w-4 object-contain"
+              className="presentation-svg-icon h-4 w-4 object-contain"
             />
-            <p className="text-[11px] font-semibold text-zinc-800">
+            <p className="text-[11px] font-semibold text-[var(--text-strong)]">
               {t(uiLanguage, "floorLayout")}
             </p>
-            <span className="ml-auto text-[9px] font-medium uppercase tracking-wide text-zinc-400">
+            <span className="ml-auto text-[9px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
               {activeLayout}
             </span>
           </div>
@@ -305,9 +225,9 @@ export default function PresentationOptionsMenu({
             <img
               src="/isolate_view.svg"
               alt=""
-              className="h-4 w-4 object-contain"
+              className="presentation-svg-icon h-4 w-4 object-contain"
             />
-            <p className="text-[11px] font-semibold text-zinc-800">
+            <p className="text-[11px] font-semibold text-[var(--text-strong)]">
               {t(uiLanguage, "isolateFloor")}
             </p>
           </div>
@@ -333,7 +253,7 @@ export default function PresentationOptionsMenu({
             compareBothModes ? activeRow : idleRow
           }`}
         >
-          <p className="text-[11px] font-semibold text-zinc-800">
+          <p className="text-[11px] font-semibold text-[var(--text-strong)]">
             {t(uiLanguage, "heizlastPlusTemp")}
           </p>
           <button
@@ -390,14 +310,14 @@ export default function PresentationOptionsMenu({
               optionsOpen ? optionsBtnOpen : optionsBtnIdle
             }`}
           >
-            <IoOptionsOutline className={iconSize} aria-hidden />
+            <IoOptionsOutline className={`${iconSize} text-current`} aria-hidden />
           </button>
         </div>
       </div>
 
-      <HeightAnim open={open} panelKey={panel}>
+      <GsapHeightAccordion open={open} contentKey={panel} innerClassName="px-1 pb-1.5 pt-2">
         {menuBody}
-      </HeightAnim>
+      </GsapHeightAccordion>
     </div>
   );
 }

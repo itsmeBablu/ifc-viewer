@@ -11,8 +11,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
+import { animateProgress, gsapEase } from "@/lib/gsapMotion";
+import gsap from "gsap";
 import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
+import { canHover } from "@/lib/canHover";
+import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
+import { DEFAULT_SCENE_BG, resolveSceneBackground } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
 import {
@@ -363,10 +368,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     position: [number, number, number];
     target: [number, number, number];
   } | null>(null);
-  const explodeAnimRef = useRef<number>(0);
-  const compareAnimRef = useRef<number>(0);
+  const explodeTweenRef = useRef<gsap.core.Tween | null>(null);
+  const compareTweenRef = useRef<gsap.core.Tween | null>(null);
   const wasPresentationRef = useRef(false);
-  /** Re-apply room pick styling after material/lighting rebuilds. */
+  const skyTextureRef = useRef<THREE.CanvasTexture | null>(null);
   const applySelectionHighlightRef = useRef<() => void>(() => {});
 
   const { shellGroup, rooms } = useModelScene();
@@ -540,9 +545,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(
-      useAppStore.getState().sceneBackground || 0xe8eaed,
+    const initialBg = resolveSceneBackground(
+      useAppStore.getState().sceneBackground || DEFAULT_SCENE_BG,
     );
+    scene.background = initialBg;
+    if (initialBg instanceof THREE.CanvasTexture) {
+      skyTextureRef.current = initialBg;
+    }
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
     camera.position.set(20, 20, 20);
@@ -828,7 +837,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     if (!compareBothModes) {
-      cancelAnimationFrame(compareAnimRef.current);
+      compareTweenRef.current?.kill();
       clearTwin();
       // Restore primary colors to active colorMode
       const sourceRooms = rooms.length ? rooms : roomsFromStore;
@@ -941,8 +950,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     root.visible = true;
 
-    // Place twin: stacked below (floor view) or beside (presentation) — slow slide
-    cancelAnimationFrame(compareAnimRef.current);
+    // Place twin: stacked below (floor view) or beside (presentation) — smooth slide
+    compareTweenRef.current?.kill();
     const measure = new THREE.Box3();
     if (overlays) {
       overlays.updateWorldMatrix(true, true);
@@ -962,22 +971,26 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     const slideMs = 1400;
     const fitMs = isPresentationView ? 2000 : 1600;
-    const slideStart = performance.now();
-    const tickSlide = (now: number) => {
-      const e = Math.min(1, (now - slideStart) / slideMs);
-      const ease = e < 0.5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
-      root.position.set(endX * ease, endY * ease, 0);
-      if (e < 1) {
-        compareAnimRef.current = requestAnimationFrame(tickSlide);
-      } else {
-        root.position.set(endX, endY, 0);
-        // After both sides are placed, fit Heizlast + Temperature to screen
-        requestAnimationFrame(() => fitToVisible(fitMs));
-      }
-    };
-    compareAnimRef.current = requestAnimationFrame(tickSlide);
+    root.position.set(0, 0, 0);
 
-    return () => cancelAnimationFrame(compareAnimRef.current);
+    const slide = { x: 0, y: 0 };
+    compareTweenRef.current = gsap.to(slide, {
+      x: endX,
+      y: endY,
+      duration: slideMs / 1000,
+      ease: gsapEase.ios,
+      onUpdate: () => {
+        root.position.set(slide.x, slide.y, 0);
+      },
+      onComplete: () => {
+        root.position.set(endX, endY, 0);
+        fitToVisible(fitMs);
+      },
+    });
+
+    return () => {
+      compareTweenRef.current?.kill();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     compareBothModes,
@@ -1079,11 +1092,21 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
   }, [renderMode, lighting]);
 
-  // 3D viewport background color
+  // 3D viewport background — solid or sky gradient
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    scene.background = new THREE.Color(sceneBackground);
+    if (skyTextureRef.current) {
+      skyTextureRef.current.dispose();
+      skyTextureRef.current = null;
+    }
+    const bg = resolveSceneBackground(sceneBackground);
+    if (bg instanceof THREE.CanvasTexture) {
+      skyTextureRef.current = bg;
+      scene.background = bg;
+    } else {
+      scene.background = bg;
+    }
   }, [sceneBackground]);
 
   // Single slice path (basic view only) — skipped in Presentation / compare
@@ -1225,7 +1248,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const controls = controlsRef.current;
     if (!clip || !camera || !controls) return;
 
-    cancelAnimationFrame(explodeAnimRef.current);
+    explodeTweenRef.current?.kill();
 
     const collectFloorMeshes = () => {
       const map = new Map<string, THREE.Mesh[]>();
@@ -1408,38 +1431,30 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         return;
       }
 
-      const start = performance.now();
-      const duration = 1600;
       let lastGap = 0;
       let flew = false;
-      const tick = (now: number) => {
-        const e = Math.min(1, (now - start) / duration);
-        // Slow ease-in-out cubic
-        const ease = e < 0.5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
-        lastGap = applyExplode(ease);
-        applyIsolateVisibility();
-        // Drift camera mid-explode…
-        if (!flew && e >= 0.4) {
-          flew = true;
-          flyIso(1600);
-        }
-        if (e < 1) {
-          explodeAnimRef.current = requestAnimationFrame(tick);
-        } else {
-          // Always re-fit once explode is fully settled so nothing is cropped
+      explodeTweenRef.current = animateProgress({
+        duration: 1.6,
+        ease: gsapEase.explode,
+        onUpdate: (e) => {
+          lastGap = applyExplode(e);
+          applyIsolateVisibility();
+          if (!flew && e >= 0.4) {
+            flew = true;
+            flyIso(1600);
+          }
+        },
+        onComplete: () => {
           applyExplode(1);
           applyIsolateVisibility();
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => flyIso(1800));
-          });
+          requestAnimationFrame(() => flyIso(1800));
           debugLog(
             "Viewer3D",
             `presentation n=${collectAllMeshes().length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
             "ok",
           );
-        }
-      };
-      explodeAnimRef.current = requestAnimationFrame(tick);
+        },
+      });
     } else if (wasPresentationRef.current) {
       wasPresentationRef.current = false;
       clip.setOrientation("horizontal");
@@ -1447,8 +1462,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       clip.setEnabled(false);
       clip.setCapsEnabled(false);
 
-      const start = performance.now();
-      const duration = 1200;
       const startOffsets = new Map<
         THREE.Mesh,
         { y: number; x: number }
@@ -1462,27 +1475,27 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         }
       });
 
-      const tick = (now: number) => {
-        const e = Math.min(1, (now - start) / duration);
-        const ease = e < 0.5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
-        const t = 1 - ease;
-        startOffsets.forEach((startOff, mesh) => {
-          const targetY = startOff.y * t;
-          const targetX = startOff.x * t;
-          const prevY = (mesh.userData.presentationOffsetY as number) ?? 0;
-          const prevX = (mesh.userData.presentationOffsetX as number) ?? 0;
-          mesh.position.y += targetY - prevY;
-          mesh.position.x += targetX - prevX;
-          mesh.userData.presentationOffsetY = targetY;
-          mesh.userData.presentationOffsetX = targetX;
-          if (e >= 1) {
-            delete mesh.userData.presentationOffsetY;
-            delete mesh.userData.presentationOffsetX;
-          }
-        });
-        if (e < 1) {
-          explodeAnimRef.current = requestAnimationFrame(tick);
-        } else {
+      explodeTweenRef.current = animateProgress({
+        duration: 1.2,
+        ease: gsapEase.explode,
+        onUpdate: (e) => {
+          const t = 1 - e;
+          startOffsets.forEach((startOff, mesh) => {
+            const targetY = startOff.y * t;
+            const targetX = startOff.x * t;
+            const prevY = (mesh.userData.presentationOffsetY as number) ?? 0;
+            const prevX = (mesh.userData.presentationOffsetX as number) ?? 0;
+            mesh.position.y += targetY - prevY;
+            mesh.position.x += targetX - prevX;
+            mesh.userData.presentationOffsetY = targetY;
+            mesh.userData.presentationOffsetX = targetX;
+            if (e >= 1) {
+              delete mesh.userData.presentationOffsetY;
+              delete mesh.userData.presentationOffsetX;
+            }
+          });
+        },
+        onComplete: () => {
           const saved = presentationCamRef.current;
           if (saved) {
             void flyTo(
@@ -1496,12 +1509,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           } else {
             requestAnimationFrame(() => fitToVisible());
           }
-        }
-      };
-      explodeAnimRef.current = requestAnimationFrame(tick);
+        },
+      });
     }
 
-    return () => cancelAnimationFrame(explodeAnimRef.current);
+    return () => {
+      explodeTweenRef.current?.kill();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isPresentationView,
@@ -1554,6 +1568,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         if (byExpress && meshHas(byExpress.id)) resolvedId = byExpress.id;
       }
       if (!meshHas(resolvedId)) resolvedId = null;
+
+      const scopedSelection = effectiveSelectedRoomId(resolvedId);
+      if (scopedSelection !== resolvedId) {
+        resolvedId = scopedSelection;
+        if (!scopedSelection && selectedRoom) {
+          useAppStore.getState().setSelectedRoomId(null);
+          useAppStore.getState().setSelectedElement(null);
+        }
+      }
 
       // Heal store if we found the real mesh id
       if (resolvedId && resolvedId !== selectedRoom) {
@@ -1665,6 +1688,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     rooms,
     roomsFromStore,
     compareBothModes,
+    presentationIsolate,
+    presentationFloorId,
   ]);
 
   // Pointer: select only — no camera flyTo
@@ -1700,7 +1725,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             const src = clip?.getSourceMeshForCap(hit.object);
             if (src) ids = pickIdsFromObject(src);
           }
-          if (ids.roomId != null) {
+          if (ids.roomId != null && isRoomPickAllowed(ids.roomId, ids.floorId)) {
             const mesh =
               roomMeshById.current.get(ids.roomId) ??
               clip?.getSourceMeshForCap(hit.object);
@@ -1722,25 +1747,42 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       if (capsOn && clip) {
         const roomMeshes: THREE.Mesh[] = [];
         overlaysRef.current?.traverse((o) => {
-          if (isOverlayRoomMesh(o) && o.visible) roomMeshes.push(o);
+          if (!isOverlayRoomMesh(o) || !o.visible) return;
+          const ids = pickIdsFromObject(o);
+          if (isRoomPickAllowed(ids.roomId, ids.floorId)) roomMeshes.push(o);
         });
         const roomMesh = clip.pickRoomMeshAtCut(raycaster.current, roomMeshes);
         if (roomMesh) {
-          return {
-            object: roomMesh,
-            distance: 0,
-            point: new THREE.Vector3(),
-            face: null,
-            faceIndex: 0,
-            uv: undefined,
-          } as THREE.Intersection;
+          const ids = pickIdsFromObject(roomMesh);
+          if (isRoomPickAllowed(ids.roomId, ids.floorId)) {
+            return {
+              object: roomMesh,
+              distance: 0,
+              point: new THREE.Vector3(),
+              face: null,
+              faceIndex: 0,
+              uv: undefined,
+            } as THREE.Intersection;
+          }
         }
       }
 
       const targets: THREE.Object3D[] = [];
-      if (overlaysRef.current) targets.push(...overlaysRef.current.children);
-      // Skip shell while floor caps are active — shell hits clear room selection.
-      if (!capsOn && shellCloneRef.current) targets.push(shellCloneRef.current);
+      const addVisibleRooms = (root: THREE.Object3D | null | undefined) => {
+        root?.traverse((o) => {
+          if (isOverlayRoomMesh(o) && o.visible) targets.push(o);
+        });
+      };
+      addVisibleRooms(overlaysRef.current);
+      if (useAppStore.getState().compareBothModes) {
+        addVisibleRooms(compareRootRef.current);
+      }
+
+      const presentation = useAppStore.getState().isPresentationView;
+      // Shell roofs/walls block room hits from above in presentation — pick rooms only.
+      if (!capsOn && !presentation && shellCloneRef.current) {
+        targets.push(shellCloneRef.current);
+      }
 
       const hits = raycaster.current.intersectObjects(targets, true);
       const usable = hits.filter(
@@ -1762,6 +1804,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const chosen = roomHit ?? usable[0];
 
       const ids = resolveIds(chosen.object);
+      if (
+        ids.roomId != null &&
+        !isRoomPickAllowed(ids.roomId, ids.floorId ?? null)
+      ) {
+        return null;
+      }
       if (ids.roomId != null) chosen.object.userData.roomId = ids.roomId;
       if (ids.expressId != null) chosen.object.userData.expressId = ids.expressId;
       if (ids.floorId != null) chosen.object.userData.floorId = ids.floorId;
@@ -1788,6 +1836,16 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         if (match) roomId = match.id;
       }
 
+      const resolvedFloor =
+        floorId ??
+        (roomId
+          ? useAppStore.getState().rooms.find((r) => r.id === roomId)?.floorId
+          : null) ??
+        null;
+      if (!isRoomPickAllowed(roomId, resolvedFloor)) {
+        return;
+      }
+
       if (roomId) {
         setSelectedRoomId(roomId);
         setHoveredRoom(null);
@@ -1801,6 +1859,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             roomId ?? null,
           );
           if (details) {
+            const detailRoomId = details.roomId ?? roomId;
+            const detailFloor =
+              details.floorId ??
+              floorId ??
+              (detailRoomId
+                ? useAppStore.getState().rooms.find((r) => r.id === detailRoomId)
+                    ?.floorId
+                : null) ??
+              null;
+            if (!isRoomPickAllowed(detailRoomId, detailFloor)) return;
+
             setSelectedElement(details);
             // Keep room id in sync with element details (highlight key)
             if (details.roomId) {
@@ -1882,12 +1951,16 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         return;
       }
       const roomId = pickIdsFromObject(hit.object).roomId;
-      if (roomId) {
+      if (roomId && canHover()) {
         const room =
           rooms.find((r) => r.id === roomId) ??
           roomsFromStore.find((r) => r.id === roomId) ??
           null;
-        setHoveredRoom(room);
+        if (room && isRoomPickAllowed(room.id, room.floorId)) {
+          setHoveredRoom(room);
+        } else {
+          setHoveredRoom(null);
+        }
       } else {
         setHoveredRoom(null);
       }

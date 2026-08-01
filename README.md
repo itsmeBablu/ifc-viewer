@@ -21,7 +21,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 The viewport starts empty (fullscreen grid + axes). Use **Load IFC** to open a local `.ifc` file — that is the primary load path. Registry models under `public/models/` are secondary and only fetch when you pick them in the dropdown.
 
-Glass UI uses `@liquidglass/react` through the shared `components/GlassPanel.tsx` wrapper (retune once in `lib/designTokens.ts`).
+Glass UI uses `react-liquid-glass-svg` through the shared `components/GlassPanel.tsx` wrapper (retune once in `lib/designTokens.ts`).
 
 ## Adding IFC models
 

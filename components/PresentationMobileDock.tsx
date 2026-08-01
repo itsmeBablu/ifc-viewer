@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import gsap from "gsap";
 import { useAppStore } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
+import GsapHeightAccordion from "./GsapHeightAccordion";
 import LegendBody from "./LegendBody";
+import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import PresentationSidePanel from "./PresentationSidePanel";
 
 type Props = {
@@ -18,13 +21,24 @@ type Props = {
 export default function PresentationMobileDock({ align }: Props) {
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const [menuOpen, setMenuOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const isRight = align === "right";
 
-  const maxH = menuOpen
-    ? "max-h-[min(calc(100dvh-5rem),40rem)]"
+  const maxHeight = menuOpen
+    ? "min(calc(100dvh - 5rem), 40rem)"
     : presentationIsolate
-      ? "max-h-[min(78vh,34rem)]"
-      : "max-h-[min(52vh,22rem)]";
+      ? "min(78vh, 34rem)"
+      : "min(52vh, 22rem)";
+
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    gsap.to(el, {
+      maxHeight,
+      duration: gsapDuration.accordion,
+      ease: gsapEase.ios,
+    });
+  }, [maxHeight]);
 
   return (
     <div
@@ -36,7 +50,9 @@ export default function PresentationMobileDock({ align }: Props) {
     >
       <GlassPanel variant="panel" zIndex={40}>
         <div
-          className={`flex min-h-0 flex-col thin-scroll overflow-y-auto overscroll-contain transition-[max-height] duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${maxH}`}
+          ref={bodyRef}
+          className="flex min-h-0 flex-col thin-scroll overflow-y-auto overscroll-contain"
+          style={{ maxHeight }}
         >
           <div className="shrink-0">
             <LegendBody

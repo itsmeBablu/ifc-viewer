@@ -26,6 +26,14 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const activeModelId = useAppStore((s) => s.activeModelId);
+  const colorMode = useAppStore((s) => s.colorMode);
+  const colorTheme = useAppStore((s) => s.colorTheme);
+  const compareBothModes = useAppStore((s) => s.compareBothModes);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
+  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const heizlastRange = useAppStore((s) => s.heizlastRange);
+  const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const temperatureRange = useAppStore((s) => s.temperatureRange);
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const { shellGroup } = useModelScene();
@@ -73,12 +81,29 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
           floorsWithRooms,
           activeModelId,
           rooms,
+          640,
+          selectedRoomId,
         ),
       );
     } catch {
       setSnapshotUrl(null);
     }
-  }, [shellGroup, selectedFloorObj, floorsWithRooms, activeModelId, rooms]);
+  }, [
+    shellGroup,
+    selectedFloorObj,
+    floorsWithRooms,
+    activeModelId,
+    rooms,
+    selectedRoomId,
+    colorMode,
+    colorTheme,
+    compareBothModes,
+    dataViewMode,
+    activeColorPalette,
+    heizlastRange,
+    kuhllastRange,
+    temperatureRange,
+  ]);
 
   const body = (
     <div className="space-y-3">
@@ -113,7 +138,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
               <img
                 src={snapshotUrl}
                 alt={selectedFloorObj?.name ?? ""}
-                className="block h-auto w-full rounded-2xl object-contain bg-[#f2f4f7]"
+                className="block h-auto w-full rounded-2xl object-contain bg-[var(--scene-bg)]"
               />
             ) : (
               <div className="flex aspect-square items-center justify-center rounded-2xl bg-white/30 text-xs text-zinc-400">

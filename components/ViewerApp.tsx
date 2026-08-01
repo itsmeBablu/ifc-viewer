@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
 import type { Group } from "three";
 import type { LoadedModel } from "@/lib/types";
 import {
@@ -32,6 +33,11 @@ import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
 import { pickHeizlastRangeFromLoads, pickKuhllastRangeFromLoads } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
+import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
+import GsapOverlay from "./GsapOverlay";
+import ThemeTransition from "./ThemeTransition";
+import ThemeHydration from "./ThemeHydration";
+import { canHover } from "@/lib/canHover";
 
 type LoadSource =
   | { kind: "registry"; modelId: string }
@@ -40,6 +46,15 @@ type LoadSource =
 export default function ViewerApp() {
   const viewerRef = useRef<Viewer3DHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const rightContentRef = useRef<HTMLDivElement>(null);
+  const leftAsideRef = useRef<HTMLElement>(null);
+  const leftContentRef = useRef<HTMLDivElement>(null);
+  const leftChevronRef = useRef<SVGSVGElement>(null);
+  const rightAsideRef = useRef<HTMLElement>(null);
+  const rightChevronRef = useRef<SVGSVGElement>(null);
+  const leftPanelReady = useRef(false);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const loadSpinnerRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef<LoadedModel | null>(null);
   const loadSourceRef = useRef<LoadSource | null>(null);
   const [shellGroup, setShellGroup] = useState<Group | null>(null);
@@ -107,6 +122,88 @@ export default function ViewerApp() {
     setLeftPanelOpen(false);
     setRightPanelOpen(false);
   }, [isPresentationView, isDesktop, setLeftPanelOpen, setRightPanelOpen]);
+
+  useLayoutEffect(() => {
+    const bar = progressBarRef.current;
+    if (!bar || loadProgress < 0) return;
+    gsap.to(bar, {
+      width: `${Math.round(loadProgress * 100)}%`,
+      duration: gsapDuration.progress,
+      ease: gsapEase.ios,
+    });
+  }, [loadProgress]);
+
+  useLayoutEffect(() => {
+    const spinner = loadSpinnerRef.current;
+    if (!spinner || !isLoadingModel) return;
+    const tween = gsap.to(spinner, {
+      rotation: 360,
+      duration: 0.9,
+      ease: "none",
+      repeat: -1,
+    });
+    return () => {
+      tween.kill();
+      gsap.set(spinner, { rotation: 0 });
+    };
+  }, [isLoadingModel]);
+
+  useLayoutEffect(() => {
+    if (!isDesktop) return;
+    const aside = leftAsideRef.current;
+    if (!aside) return;
+    const state = isPresentationView
+      ? "hidden"
+      : leftPanelOpen
+        ? "open"
+        : "peek";
+
+    if (!leftPanelReady.current) {
+      const width = aside.offsetWidth;
+      const x =
+        state === "open"
+          ? 0
+          : state === "peek"
+            ? -(width - 20)
+            : -(width + 24);
+      gsap.set(aside, { x, opacity: state === "hidden" ? 0 : 1 });
+      leftPanelReady.current = true;
+    } else {
+      animateSidebarPanel(aside, state);
+    }
+
+    if (leftContentRef.current) {
+      animateSidebarContent(
+        leftContentRef.current,
+        leftPanelOpen && !isPresentationView,
+      );
+    }
+    if (leftChevronRef.current) {
+      gsap.to(leftChevronRef.current, {
+        rotation: leftPanelOpen ? 0 : 180,
+        duration: gsapDuration.fast,
+        ease: gsapEase.iosOut,
+      });
+    }
+  }, [isDesktop, leftPanelOpen, isPresentationView]);
+
+  useLayoutEffect(() => {
+    if (!isDesktop) return;
+    const aside = rightAsideRef.current;
+    if (!aside) return;
+    const state = rightPanelOpen ? "open" : "peek";
+    animateSidebarPanel(aside, state, { side: "right" });
+    if (rightContentRef.current) {
+      animateSidebarContent(rightContentRef.current, rightPanelOpen);
+    }
+    if (rightChevronRef.current) {
+      gsap.to(rightChevronRef.current, {
+        rotation: rightPanelOpen ? 0 : 180,
+        duration: gsapDuration.fast,
+        ease: gsapEase.iosOut,
+      });
+    }
+  }, [isDesktop, rightPanelOpen]);
 
   const runLoad = useCallback(
     async (source: LoadSource) => {
@@ -299,6 +396,8 @@ export default function ViewerApp() {
 
   return (
     <ModelSceneContext.Provider value={sceneValue}>
+      <ThemeHydration />
+      <ThemeTransition />
       <div
         ref={rootRef}
         className="relative h-dvh w-dvw overflow-hidden text-zinc-900"
@@ -321,118 +420,126 @@ export default function ViewerApp() {
           />
         </div>
 
-        {isDraggingIfc && !isLoadingModel && (
-          <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/35 p-4 backdrop-blur-[2px] sm:p-6">
-            <GlassPanel
-              variant="panel"
-              zIndex={100}
-              wrapperClassName="w-full max-w-[min(28rem,calc(100vw-2rem))]"
-            >
-              <div className="px-6 py-8 text-center">
-                <p className="text-base font-semibold tracking-wide text-zinc-900">
-                  {t(uiLanguage, "dropIfc")}
-                </p>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  {t(uiLanguage, "dropIfcHint")}
+        <GsapOverlay
+          show={isDraggingIfc && !isLoadingModel}
+          className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/35 p-4 backdrop-blur-[2px] sm:p-6"
+        >
+          <GlassPanel
+            variant="panel"
+            zIndex={100}
+            wrapperClassName="w-full max-w-[min(28rem,calc(100vw-2rem))]"
+          >
+            <div className="px-6 py-8 text-center">
+              <p className="text-base font-semibold tracking-wide text-zinc-900">
+                {t(uiLanguage, "dropIfc")}
+              </p>
+              <p className="mt-1.5 text-xs text-zinc-500">
+                {t(uiLanguage, "dropIfcHint")}
+              </p>
+            </div>
+          </GlassPanel>
+        </GsapOverlay>
+
+        <GsapOverlay
+          show={isLoadingModel}
+          className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6"
+        >
+          <GlassPanel
+            variant="panel"
+            zIndex={30}
+            wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
+          >
+            <div className="p-6">
+              <div className="mb-3 flex items-center gap-3">
+                <div
+                  ref={loadSpinnerRef}
+                  className="h-7 w-7 rounded-2xl border-2 border-amber-200/50 border-t-amber-500"
+                />
+                <p className="text-sm font-semibold tracking-wide text-zinc-800">
+                  {t(uiLanguage, "loadingModel")}
                 </p>
               </div>
-            </GlassPanel>
-          </div>
-        )}
-
-        {isLoadingModel && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
-            <GlassPanel
-              variant="panel"
-              zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
-            >
-              <div className="p-6">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="h-7 w-7 animate-spin rounded-2xl border-2 border-amber-200/50 border-t-amber-500" />
-                  <p className="text-sm font-semibold tracking-wide text-zinc-800">
-                    {t(uiLanguage, "loadingModel")}
-                  </p>
-                </div>
-                <p className="mb-3 text-xs font-medium text-zinc-500">
-                  {progressLabel}
-                </p>
-                {loadProgress >= 0 && (
-                  <div className="h-2 overflow-hidden rounded-full border border-amber-200/40 bg-amber-50/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
-                    <div
-                      className="relative h-full overflow-hidden rounded-full border border-amber-200/60 bg-gradient-to-br from-amber-200/95 via-yellow-300/90 to-amber-400/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_8px_rgba(251,191,36,0.35)] transition-all duration-300 ease-out"
-                      style={{
-                        width: `${Math.round(loadProgress * 100)}%`,
-                      }}
-                    >
-                      <span
-                        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/55 to-transparent"
-                        aria-hidden
-                      />
-                    </div>
+              <p className="mb-3 text-xs font-medium text-zinc-500">
+                {progressLabel}
+              </p>
+              {loadProgress >= 0 && (
+                <div className="h-2 overflow-hidden rounded-full border border-amber-200/40 bg-amber-50/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
+                  <div
+                    ref={progressBarRef}
+                    className="relative h-full overflow-hidden rounded-full border border-amber-200/60 bg-gradient-to-br from-amber-200/95 via-yellow-300/90 to-amber-400/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_2px_8px_rgba(251,191,36,0.35)]"
+                    style={{
+                      width: `${Math.round(loadProgress * 100)}%`,
+                    }}
+                  >
+                    <span
+                      className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/55 to-transparent"
+                      aria-hidden
+                    />
                   </div>
-                )}
-              </div>
-            </GlassPanel>
-          </div>
-        )}
-
-        {showEmptyCta && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
-            <GlassPanel
-              variant="panel"
-              zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
-            >
-              <div className="p-6 text-center">
-                <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
-                  {t(uiLanguage, "noModel")}
-                </p>
-                <p className="mb-4 text-xs font-medium leading-relaxed text-zinc-500">
-                  {t(uiLanguage, "chooseIfc")}
-                </p>
-                <div className="flex justify-center">
-                  <LoadIfcButton onFile={handleFile} label={t(uiLanguage, "loadIfc")} />
                 </div>
-              </div>
-            </GlassPanel>
-          </div>
-        )}
+              )}
+            </div>
+          </GlassPanel>
+        </GsapOverlay>
 
-        {showError && (
-          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6">
-            <GlassPanel
-              variant="panel"
-              zIndex={30}
-              wrapperClassName="pointer-events-auto w-full max-w-[min(28rem,calc(100vw-2rem))]"
-            >
-              <div className="p-6 text-center">
-                <div className="mb-3 flex justify-center">
-                  <IconAlert />
-                </div>
-                <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
-                  {t(uiLanguage, "couldNotLoad")}
-                </p>
-                <p className="mb-4 text-xs font-medium leading-relaxed break-words text-zinc-500">
-                  {loadError}
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <GlassButton variant="primary" onClick={handleRetry}>
-                    {t(uiLanguage, "retry")}
-                  </GlassButton>
-                  <LoadIfcButton
-                    onFile={handleFile}
-                    variant="default"
-                    label={t(uiLanguage, "loadOtherIfc")}
-                  />
-                </div>
+        <GsapOverlay
+          show={showEmptyCta}
+          className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6"
+        >
+          <GlassPanel
+            variant="panel"
+            zIndex={30}
+            wrapperClassName="pointer-events-auto w-full max-w-[min(24rem,calc(100vw-2rem))]"
+          >
+            <div className="p-6 text-center">
+              <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
+                {t(uiLanguage, "noModel")}
+              </p>
+              <p className="mb-4 text-xs font-medium leading-relaxed text-zinc-500">
+                {t(uiLanguage, "chooseIfc")}
+              </p>
+              <div className="flex justify-center">
+                <LoadIfcButton onFile={handleFile} label={t(uiLanguage, "loadIfc")} />
               </div>
-            </GlassPanel>
-          </div>
-        )}
+            </div>
+          </GlassPanel>
+        </GsapOverlay>
 
-        {/* One popup only: selection wins over hover */}
-        {!selectedRoomId && (
+        <GsapOverlay
+          show={showError}
+          className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6"
+        >
+          <GlassPanel
+            variant="panel"
+            zIndex={30}
+            wrapperClassName="pointer-events-auto w-full max-w-[min(28rem,calc(100vw-2rem))]"
+          >
+            <div className="p-6 text-center">
+              <div className="mb-3 flex justify-center">
+                <IconAlert />
+              </div>
+              <p className="mb-1 text-sm font-semibold tracking-wide text-zinc-900">
+                {t(uiLanguage, "couldNotLoad")}
+              </p>
+              <p className="mb-4 text-xs font-medium leading-relaxed break-words text-zinc-500">
+                {loadError}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <GlassButton variant="primary" onClick={handleRetry}>
+                  {t(uiLanguage, "retry")}
+                </GlassButton>
+                <LoadIfcButton
+                  onFile={handleFile}
+                  variant="default"
+                  label={t(uiLanguage, "loadOtherIfc")}
+                />
+              </div>
+            </div>
+          </GlassPanel>
+        </GsapOverlay>
+
+        {/* Hover popup — desktop pointer only; mobile uses selection popup */}
+        {canHover() && !selectedRoomId && (
           <RoomTooltip x={pointer.x} y={pointer.y} />
         )}
         {selectedRoomId && (() => {
@@ -459,12 +566,9 @@ export default function ViewerApp() {
         {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing) */}
         {isDesktop && (
           <aside
-            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] transition-[transform,opacity,left] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              isPresentationView
-                ? "left-2 pointer-events-none -translate-x-[calc(100%+1.5rem)] opacity-0 md:left-4"
-                : leftPanelOpen
-                  ? "left-2 pointer-events-auto translate-x-0 opacity-100 md:left-4"
-                  : "left-0 pointer-events-auto translate-x-[calc(-100%+1.25rem)] opacity-100"
+            ref={leftAsideRef}
+            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:left-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] left-2 ${
+              isPresentationView ? "pointer-events-none" : ""
             }`}
             aria-hidden={isPresentationView}
           >
@@ -485,6 +589,7 @@ export default function ViewerApp() {
                 className="absolute inset-y-0 right-0 z-10 flex w-5 items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
+                  ref={leftChevronRef}
                   width="12"
                   height="12"
                   viewBox="0 0 24 24"
@@ -494,16 +599,14 @@ export default function ViewerApp() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden
-                  className={`transition-transform duration-300 ease-out ${
-                    leftPanelOpen ? "" : "rotate-180"
-                  }`}
                 >
                   <path d="m15 6-6 6 6 6" />
                 </svg>
               </button>
               <div
-                className={`flex min-h-0 flex-1 flex-col overflow-hidden pr-5 transition-opacity duration-300 ease-out ${
-                  leftPanelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+                ref={leftContentRef}
+                className={`flex min-h-0 flex-1 flex-col overflow-hidden pr-5 ${
+                  leftPanelOpen ? "" : "pointer-events-none"
                 }`}
               >
                 <FloorsPanel
@@ -520,22 +623,19 @@ export default function ViewerApp() {
             Always size to content (max-height caps tall lists); never stretch empty. */}
         {isDesktop && (
           <aside
-            className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,transform,opacity,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            ref={rightAsideRef}
+            className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
               isPresentationView
                 ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
                 : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
-            } ${
-              rightPanelOpen
-                ? "right-2 pointer-events-auto translate-x-0 opacity-100 md:right-4"
-                : "right-0 pointer-events-auto translate-x-[calc(100%-1.25rem)] opacity-100"
-            }`}
+            } right-2 pointer-events-auto md:right-4`}
           >
             <GlassPanel
               variant="panel"
               zIndex={35}
               fill={false}
-              allowOverflow={false}
-              wrapperClassName="relative mb-2 max-h-[inherit]"
+              allowOverflow
+              wrapperClassName="relative mb-2 max-h-[inherit] w-full min-w-0"
             >
               <button
                 type="button"
@@ -548,6 +648,7 @@ export default function ViewerApp() {
                 className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center rounded-l-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
+                  ref={rightChevronRef}
                   width="12"
                   height="12"
                   viewBox="0 0 24 24"
@@ -557,18 +658,14 @@ export default function ViewerApp() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden
-                  className={`transition-transform duration-300 ease-out ${
-                    rightPanelOpen ? "" : "rotate-180"
-                  }`}
                 >
                   <path d="m9 6 6 6-6 6" />
                 </svg>
               </button>
               <div
-                className={`pl-5 transition-opacity duration-300 ease-out thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain ${
-                  rightPanelOpen
-                    ? "opacity-100"
-                    : "opacity-0 pointer-events-none"
+                ref={rightContentRef}
+                className={`w-full min-w-0 pl-5 pr-1 thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain ${
+                  rightPanelOpen ? "" : "pointer-events-none"
                 }`}
               >
                 {isPresentationView ? (

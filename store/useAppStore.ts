@@ -10,6 +10,12 @@ import {
 } from "@/lib/colorMapping";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import type { DataViewMode } from "@/lib/dataViewMode";
+import {
+  DEFAULT_SCENE_BG,
+  getDefaultSceneBackground,
+  getModeSkyPreset,
+  SCENE_BACKGROUND_PRESETS,
+} from "@/lib/sceneSky";
 import type {
   ColorMode,
   Floor,
@@ -24,26 +30,16 @@ const LEFT_PANEL_KEY = "ifc-viewer:leftPanelOpen";
 const RIGHT_PANEL_KEY = "ifc-viewer:rightPanelOpen";
 const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
+const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
+const THEME_KEY = "ifc-viewer:colorTheme";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
 
-/** Preset 3D viewport background colors (environment feel). */
-export const SCENE_BACKGROUND_PRESETS: {
-  id: string;
-  label: string;
-  hex: string;
-}[] = [
-  { id: "softGray", label: "Soft gray", hex: "#e8eaed" },
-  { id: "coolGray", label: "Cool gray", hex: "#cfd5df" },
-  { id: "lightBlue", label: "Light blue", hex: "#c8d9ea" },
-  { id: "sky", label: "Sky", hex: "#b4cce0" },
-  { id: "mist", label: "Mist", hex: "#dce6ef" },
-  { id: "warmGray", label: "Warm gray", hex: "#e4e0da" },
-];
+export { SCENE_BACKGROUND_PRESETS } from "@/lib/sceneSky";
 
-const DEFAULT_BG = SCENE_BACKGROUND_PRESETS[0].hex;
+const DEFAULT_BG = DEFAULT_SCENE_BG;
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -136,8 +132,10 @@ type AppState = {
     shadow: number;
     indirectLight: number;
   };
-  /** Hex color for the 3D scene background. */
+  /** Hex color or preset id for the 3D scene background. */
   sceneBackground: string;
+  /** When true, sky follows heating/cooling mode (+ day/night). Default off. */
+  autoSceneBackground: boolean;
   /** Presentation (exploded) vs basic imported view. */
   isPresentationView: boolean;
   /** selectedFloor restored when leaving presentation. */
@@ -171,6 +169,8 @@ type AppState = {
   headerExpanded: boolean;
   isHeaderCollapsed: boolean;
   uiLanguage: import("@/lib/i18n").UiLanguage;
+  /** Day (light) vs night (dark) UI theme. */
+  colorTheme: import("@/lib/themeColors").ColorTheme;
 
   setActiveModelId: (
     id: string | null,
@@ -199,7 +199,8 @@ type AppState = {
       indirectLight: number;
     }>,
   ) => void;
-  setSceneBackground: (hex: string) => void;
+  setSceneBackground: (value: string, options?: { persist?: boolean }) => void;
+  setAutoSceneBackground: (on: boolean) => void;
   setSliceProgress: (t: number) => void;
   setPresentationView: (active: boolean) => void;
   setPresentationFloorId: (floorId: string | null) => void;
@@ -229,6 +230,7 @@ type AppState = {
   setHeaderCollapsed: (collapsed: boolean) => void;
   toggleHeaderCollapsed: () => void;
   setUiLanguage: (lang: import("@/lib/i18n").UiLanguage) => void;
+  setColorTheme: (theme: import("@/lib/themeColors").ColorTheme) => void;
   addSavedView: (
     name: string,
     position: [number, number, number],
@@ -291,11 +293,35 @@ function initialBackground(): string {
   if (typeof window === "undefined") return DEFAULT_BG;
   try {
     const raw = localStorage.getItem(BG_KEY);
-    if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+    if (raw) {
+      if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+      if (SCENE_BACKGROUND_PRESETS.some((p) => p.id === raw)) return raw;
+    }
+    return getDefaultSceneBackground(initialTheme());
+  } catch {
+    return getDefaultSceneBackground(initialTheme());
+  }
+}
+
+function initialAutoSceneBackground(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(AUTO_BG_KEY) === "1";
   } catch {
     // ignore
   }
-  return DEFAULT_BG;
+  return false;
+}
+
+function initialTheme(): import("@/lib/themeColors").ColorTheme {
+  if (typeof window === "undefined") return "light";
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    if (raw === "light" || raw === "dark") return raw;
+  } catch {
+    // ignore
+  }
+  return "light";
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -323,6 +349,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     indirectLight: 0.45,
   },
   sceneBackground: initialBackground(),
+  autoSceneBackground: initialAutoSceneBackground(),
   isPresentationView: false,
   presentationPrevFloor: null,
   presentationFloorId: null,
@@ -343,6 +370,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   headerExpanded: true,
   isHeaderCollapsed: false,
   uiLanguage: "de",
+  colorTheme: initialTheme(),
 
   setActiveModelId: (id, label, fileSizeBytes) => {
     set({
@@ -377,7 +405,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setHoveredRoom: (room) => set({ hoveredRoom: room }),
   setSelectedElement: (el) => set({ selectedElement: el }),
   setColorMode: (mode) => set({ colorMode: mode }),
-  setDataViewMode: (mode) => set({ dataViewMode: mode }),
+  setDataViewMode: (mode) => {
+    const theme = get().colorTheme;
+    set({ dataViewMode: mode });
+    if (get().autoSceneBackground) {
+      get().setSceneBackground(getModeSkyPreset(mode, theme));
+    }
+  },
   setActiveColorPalette: (id) => {
     if (typeof window !== "undefined") {
       try {
@@ -423,15 +457,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       },
     })),
-  setSceneBackground: (hex) => {
-    if (typeof window !== "undefined") {
+  setSceneBackground: (value, options) => {
+    const persist = options?.persist !== false;
+    if (persist && typeof window !== "undefined") {
       try {
-        localStorage.setItem(BG_KEY, hex);
+        localStorage.setItem(BG_KEY, value);
       } catch {
         // ignore
       }
     }
-    set({ sceneBackground: hex });
+    set({ sceneBackground: value });
+  },
+  setAutoSceneBackground: (on) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(AUTO_BG_KEY, on ? "1" : "0");
+      } catch {
+        // ignore
+      }
+    }
+    set({ autoSceneBackground: on });
+    if (on) {
+      const s = get();
+      get().setSceneBackground(getModeSkyPreset(s.dataViewMode, s.colorTheme));
+    }
   },
   setSliceProgress: (t) => set({ sliceProgress: clamp01(t) }),
   setPresentationView: (active) => {
@@ -504,6 +553,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       presentationIsolate: true,
       presentationFloorId: floorId,
       presentationRoomsOpen: false,
+      selectedRoomId: null,
+      selectedElement: null,
     });
   },
   setCompareBothModes: (on) => set({ compareBothModes: on }),
@@ -535,6 +586,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleHeaderCollapsed: () =>
     set({ isHeaderCollapsed: !get().isHeaderCollapsed }),
   setUiLanguage: (lang) => set({ uiLanguage: lang }),
+  setColorTheme: (theme) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        // ignore
+      }
+    }
+    set({ colorTheme: theme });
+  },
 
   addSavedView: (name, position, target, opts) => {
     const {

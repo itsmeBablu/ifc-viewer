@@ -5,6 +5,7 @@ import {
   TEMPERATURE_STOPS,
 } from "@/lib/colorMapping";
 import { useAppStore } from "@/store/useAppStore";
+import GsapCrossfade from "./GsapCrossfade";
 import GlassPanel from "./GlassPanel";
 import { GlassChip, PanelTitle } from "./ui";
 
@@ -37,42 +38,44 @@ export default function Legend({ embedded = false }: Props) {
         </GlassChip>
       </div>
 
-      {colorMode === "heizlast" ? (
-        <GlassPanel variant="control" zIndex={2} wrapperClassName="w-full">
-          <div className="px-3 py-2.5">
-            <div
-              className="h-3 w-full rounded-2xl"
-              style={{ background: `linear-gradient(to right, ${gradient})` }}
-            />
-            <div className="mt-1.5 flex justify-between text-[10px] font-medium tracking-wide text-zinc-500">
-              {ticks.map((t) => (
-                <span key={t}>{t}</span>
-              ))}
-            </div>
-          </div>
-        </GlassPanel>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {TEMPERATURE_STOPS.map((s) => (
-            <GlassPanel
-              key={s.value}
-              variant="chip"
-              zIndex={2}
-              wrapperClassName="inline-flex"
-            >
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5">
-                <span
-                  className="h-3.5 w-3.5 rounded-xl shadow-inner"
-                  style={{ backgroundColor: s.color }}
-                />
-                <span className="text-xs font-medium text-zinc-700">
-                  {s.value}°C
-                </span>
+      <GsapCrossfade contentKey={colorMode}>
+        {colorMode === "heizlast" ? (
+          <GlassPanel variant="control" zIndex={2} wrapperClassName="w-full">
+            <div className="px-3 py-2.5">
+              <div
+                className="h-3 w-full rounded-2xl"
+                style={{ background: `linear-gradient(to right, ${gradient})` }}
+              />
+              <div className="mt-1.5 flex justify-between text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
+                {ticks.map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
               </div>
-            </GlassPanel>
-          ))}
-        </div>
-      )}
+            </div>
+          </GlassPanel>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {TEMPERATURE_STOPS.map((s) => (
+              <GlassPanel
+                key={s.value}
+                variant="chip"
+                zIndex={2}
+                wrapperClassName="inline-flex"
+              >
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5">
+                  <span
+                    className="h-3.5 w-3.5 rounded-xl shadow-inner"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  <span className="text-xs font-medium text-[var(--text-body)]">
+                    {s.value}°C
+                  </span>
+                </div>
+              </GlassPanel>
+            ))}
+          </div>
+        )}
+      </GsapCrossfade>
     </div>
   );
 

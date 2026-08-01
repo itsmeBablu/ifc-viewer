@@ -35,7 +35,7 @@ export function GlassButton({
         className={`${motion.base} ${radius.control} px-3.5 py-2 text-sm font-medium active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
           primary
             ? "bg-gradient-to-b from-zinc-800/90 to-zinc-950/90 text-white"
-            : "bg-white/20 text-zinc-800 hover:bg-white/35"
+            : "bg-transparent text-zinc-800 hover:bg-white/15"
         } ${className}`}
         {...props}
       >
@@ -57,8 +57,8 @@ export function GlassChip({
         type="button"
         className={`${motion.base} w-full px-3 py-1.5 text-xs ${
           active
-            ? "font-semibold text-zinc-900"
-            : "font-medium text-zinc-600 hover:text-zinc-800"
+            ? "font-semibold text-[var(--chip-active-text)]"
+            : "font-medium text-[var(--text-muted)] hover:text-[var(--text-body)]"
         } ${className}`}
         {...props}
       >

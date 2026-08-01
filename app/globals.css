@@ -1,8 +1,57 @@
 @import "tailwindcss";
 
-:root {
-  --background: #d8dde6;
+:root,
+[data-theme="light"] {
+  --background: #cfd5df;
   --foreground: #18181b;
+  --scene-bg: #e8eaed;
+  --text-strong: #18181b;
+  --text-body: #3f3f46;
+  --text-muted: #71717a;
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-inset-bg: rgba(255, 255, 255, 0.28);
+  --glass-tint: rgba(255, 255, 255, 0.72);
+  --glass-menu-tint: rgba(255, 255, 255, 0.88);
+  --glass-specular: rgba(255, 255, 255, 0.78);
+  --glass-blur-panel: 52px;
+  --glass-blur-control: 42px;
+  --glass-blur-menu: 48px;
+  --glass-blur-chip: 32px;
+  --glass-saturate: 215%;
+  --panel-muted: #71717a;
+  --panel-divider: rgba(113, 113, 122, 0.35);
+  --toolbar-icon: #3f3f46;
+  --chip-active-bg: rgba(255, 255, 255, 0.92);
+  --chip-active-text: #18181b;
+  --popover-bg: rgba(255, 255, 255, 0.96);
+  --surface-muted: #f4f4f5;
+}
+
+[data-theme="dark"] {
+  --background: #0f1419;
+  --foreground: #e4e4e7;
+  --scene-bg: #1a2230;
+  --text-strong: #f4f4f5;
+  --text-body: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --glass-border: rgba(255, 255, 255, 0.24);
+  --glass-inset-bg: rgba(255, 255, 255, 0.12);
+  --glass-tint: rgba(22, 28, 38, 0.88);
+  --glass-menu-tint: rgba(26, 32, 44, 0.94);
+  --glass-specular: rgba(255, 255, 255, 0.38);
+  --glass-blur-panel: 56px;
+  --glass-blur-control: 46px;
+  --glass-blur-menu: 52px;
+  --glass-blur-chip: 34px;
+  --glass-saturate: 190%;
+  --panel-muted: #a1a1aa;
+  --panel-divider: rgba(255, 255, 255, 0.12);
+  --toolbar-icon: #f4f4f5;
+  --chip-active-bg: rgba(255, 255, 255, 0.16);
+  --chip-active-text: #fafafa;
+  --popover-bg: rgba(18, 24, 34, 0.97);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -13,9 +62,10 @@
 }
 
 body {
-  background: #cfd5df;
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  transition: none;
 }
 
 /* Shared thin glass slider — components/ui/Slider.tsx */
@@ -68,21 +118,62 @@ body {
 }
 
 /*
- * @liquidglass/react sets display:flex; align/justify center; height/width 100%.
- * Normalize so our panels can be top-aligned, stretch, and size to content.
+ * @liquidglass/react — iOS 26 Liquid Glass (frosted, specular, refractive).
+ * Layout overrides only: stretch + fill height for sidebars.
  */
 .glass-surface {
+  position: relative;
   align-items: stretch !important;
   justify-content: flex-start !important;
   height: auto !important;
   width: 100% !important;
-  /* Soft outer shadow only — keep LiquidGlass backdrop-filter / displacement intact */
-  box-shadow: none !important;
-  /* Kill LiquidGlass inset dark rim that reads as sharp corner shadows */
   filter: none !important;
-  /* Translucent fill so frosted blur reads against the 3D scene behind */
-  background-color: rgba(255, 255, 255, 0.22) !important;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  isolation: isolate;
+  overflow: hidden !important;
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--glass-tint) 92%, white 8%) 0%,
+    var(--glass-tint) 44%,
+    color-mix(in srgb, var(--glass-tint) 88%, transparent 12%) 100%
+  ) !important;
+  /* Inset specular only — no outer box shadow on rounded glass */
+  box-shadow:
+    inset 0 1px 0 var(--glass-specular),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+.glass-surface--menu {
+  border-width: 1.5px;
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--glass-menu-tint) 94%, white 6%) 0%,
+    var(--glass-menu-tint) 50%,
+    color-mix(in srgb, var(--glass-menu-tint) 92%, transparent 8%) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1.5px 0 var(--glass-specular),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+.glass-surface--menu::before {
+  opacity: 0.68;
+}
+
+.glass-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    168deg,
+    var(--glass-specular) 0%,
+    rgba(255, 255, 255, 0.12) 28%,
+    transparent 58%
+  );
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
 }
 
 .glass-surface--fill {
@@ -91,6 +182,8 @@ body {
 }
 
 .glass-surface-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   width: 100%;
   flex-direction: column;
@@ -100,11 +193,7 @@ body {
   border-radius: inherit;
 }
 
-/*
- * Mobile / iPad / touch: CSS frosted “liquid” glass.
- * Avoids @liquidglass displacement which looks muddy on WebKit.
- * Keep fill translucent so the 3D scene blurs through.
- */
+/* Mobile / touch fallback — same iOS 26 frosted material via CSS */
 .ios-glass {
   display: flex;
   width: 100%;
@@ -114,42 +203,51 @@ body {
   justify-content: flex-start;
   overflow: hidden;
   isolation: isolate;
+  border: 1px solid var(--glass-border);
   background: linear-gradient(
-    165deg,
-    rgba(255, 255, 255, 0.48) 0%,
-    rgba(255, 255, 255, 0.2) 42%,
-    rgba(255, 255, 255, 0.3) 100%
+    168deg,
+    color-mix(in srgb, var(--glass-tint) 92%, white 8%) 0%,
+    var(--glass-tint) 44%,
+    color-mix(in srgb, var(--glass-tint) 88%, transparent 12%) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 1px 0 var(--glass-specular),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+    blur(var(--glass-blur-panel)) brightness(1.08);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-panel))
+    brightness(1.08);
+}
+
+.ios-glass--menu {
+  border-width: 1.5px;
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--glass-menu-tint) 94%, white 6%) 0%,
+    var(--glass-menu-tint) 50%,
+    color-mix(in srgb, var(--glass-menu-tint) 92%, transparent 8%) 100%
+  );
+  box-shadow:
+    inset 0 1.5px 0 var(--glass-specular),
     inset 0 -0.5px 0 rgba(255, 255, 255, 0.18);
-  -webkit-backdrop-filter: saturate(210%) blur(40px) brightness(1.06);
-  backdrop-filter: saturate(210%) blur(40px) brightness(1.06);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+    blur(var(--glass-blur-menu)) brightness(1.08);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-menu))
+    brightness(1.08);
 }
 
 .ios-glass--control {
-  background: linear-gradient(
-    165deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.22) 50%,
-    rgba(255, 255, 255, 0.34) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  -webkit-backdrop-filter: saturate(220%) blur(32px) brightness(1.05);
-  backdrop-filter: saturate(220%) blur(32px) brightness(1.05);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+    blur(var(--glass-blur-control)) brightness(1.06);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-control))
+    brightness(1.06);
 }
 
 .ios-glass--chip {
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.52) 0%,
-    rgba(255, 255, 255, 0.28) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  -webkit-backdrop-filter: saturate(200%) blur(22px) brightness(1.04);
-  backdrop-filter: saturate(200%) blur(22px) brightness(1.04);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+    blur(var(--glass-blur-chip)) brightness(1.05);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-chip))
+    brightness(1.05);
 }
 
 .ios-glass--fill {
@@ -157,12 +255,141 @@ body {
   min-height: 100%;
 }
 
+/* Nested frosted surfaces inside glass panels */
+.glass-inset {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-inset-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: saturate(170%) blur(16px) brightness(1.04);
+  backdrop-filter: saturate(170%) blur(16px) brightness(1.04);
+}
+
+.glass-input {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-inset-bg);
+  -webkit-backdrop-filter: saturate(165%) blur(14px) brightness(1.03);
+  backdrop-filter: saturate(165%) blur(14px) brightness(1.03);
+}
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-surface,
+  .glass-surface--menu,
   .ios-glass,
   .ios-glass--control,
-  .ios-glass--chip {
-    background: rgba(255, 255, 255, 0.88);
+  .ios-glass--menu,
+  .ios-glass--chip,
+  .glass-inset,
+  .glass-input {
+    background: color-mix(in srgb, var(--glass-tint) 92%, white 8%);
   }
+
+  .glass-surface--menu,
+  .ios-glass--menu {
+    background: color-mix(in srgb, var(--glass-menu-tint) 94%, white 6%);
+  }
+}
+[data-theme="dark"] .text-zinc-900:not([class*="text-amber"]):not([class*="text-sky"]):not([class*="text-red"]) {
+  color: var(--text-strong);
+}
+[data-theme="dark"] .text-zinc-800:not([class*="text-amber"]) {
+  color: var(--text-strong);
+}
+[data-theme="dark"] .text-zinc-700:not([class*="text-amber"]) {
+  color: var(--text-body);
+}
+[data-theme="dark"] .text-zinc-600:not([class*="text-amber"]) {
+  color: var(--text-body);
+}
+[data-theme="dark"] .text-zinc-500 {
+  color: var(--text-muted);
+}
+[data-theme="dark"] .text-zinc-400 {
+  color: #90909a;
+}
+
+/* Pastel load-tint rows — always dark text (moon overrides zinc-* above). */
+.text-on-tint {
+  color: #18181b;
+}
+.text-on-tint-muted {
+  color: #52525b;
+}
+[data-theme="dark"] .text-on-tint {
+  color: #18181b;
+}
+[data-theme="dark"] .text-on-tint-muted {
+  color: #52525b;
+}
+
+[data-theme="dark"] .divide-zinc-200\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--panel-divider);
+}
+[data-theme="dark"] .border-zinc-300\/50,
+[data-theme="dark"] .border-zinc-300\/60,
+[data-theme="dark"] .border-zinc-300\/40 {
+  border-color: var(--panel-divider);
+}
+[data-theme="dark"] .bg-white\/30,
+[data-theme="dark"] .bg-white\/35,
+[data-theme="dark"] .bg-white\/40,
+[data-theme="dark"] .bg-white\/45 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .bg-\[\#f2f4f7\] {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .bg-white\/95,
+[data-theme="dark"] .bg-white {
+  background-color: var(--popover-bg);
+}
+
+[data-theme="dark"] .bg-zinc-50 {
+  background-color: var(--surface-muted);
+}
+
+[data-theme="dark"] .pdf-dialog-backdrop {
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] .legend-segment-active {
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text) !important;
+}
+
+[data-theme="dark"] .legend-segment-idle {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .toolbar-icon-btn {
+  color: var(--toolbar-icon);
+}
+
+[data-theme="dark"] .toolbar-icon-btn:hover {
+  color: var(--toolbar-icon);
+}
+
+[data-theme="dark"] .presentation-icon-idle {
+  color: var(--toolbar-icon);
+}
+
+[data-theme="dark"] .presentation-svg-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.94;
+}
+
+[data-theme="dark"] .presentation-menu-surface {
+  background-color: var(--popover-bg);
+  border-color: var(--panel-divider);
+}
+
+[data-theme="dark"] .presentation-chip-off {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .presentation-chip-off:hover {
+  background-color: var(--glass-inset-bg);
+  border-color: var(--panel-divider);
 }
 
 .duration-350 {
