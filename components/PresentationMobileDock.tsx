@@ -8,6 +8,7 @@ import {
   mobileDockBottomPortraitClass,
   mobileDockHeightCss,
   mobileLandscapeBottomClass,
+  mobileLandscapeLegendWidthClass,
   mobileLandscapeRightClass,
 } from "@/lib/layoutTokens";
 import { useMobileLandscapeDockLayout } from "@/lib/useMobileLandscapeDockLayout";
@@ -37,7 +38,7 @@ export default function PresentationMobileDock({
     <div
       className={`pointer-events-auto fixed z-40 ${
         landscapeMobile
-          ? `${mobileLandscapeRightClass} ${mobileLandscapeBottomClass} w-[min(calc(100vw-5rem),20rem)]`
+          ? `${mobileLandscapeRightClass} ${mobileLandscapeBottomClass} ${mobileLandscapeLegendWidthClass}`
           : isRight
             ? `${mobileDockBottomPortraitClass} right-2 w-[min(calc(100vw-4.25rem),20rem)]`
             : `${mobileDockBottomPortraitClass} left-1/2 w-[min(100vw-0.5rem,22.5rem)] -translate-x-1/2`

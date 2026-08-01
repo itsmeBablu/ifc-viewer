@@ -16,6 +16,7 @@ import { useAppStore } from "@/store/useAppStore";
 import {
   mobileDockHeightCss,
   mobileLandscapeBottomClass,
+  mobileLandscapeOptionsWidthClass,
   mobileLandscapeRightClass,
 } from "@/lib/layoutTokens";
 import { useMobileLandscapeDockLayout } from "@/lib/useMobileLandscapeDockLayout";
@@ -204,11 +205,17 @@ export default function MobileCornerMenu({
             role="dialog"
             aria-modal="true"
             aria-label={ifcName}
-            className="absolute bottom-0 right-0 origin-bottom-right will-change-transform"
+            className={
+              landscapeMobile
+                ? `fixed ${mobileLandscapeRightClass} ${mobileLandscapeBottomClass} ${mobileLandscapeOptionsWidthClass} origin-bottom-right will-change-transform`
+                : "absolute bottom-0 right-0 origin-bottom-right will-change-transform"
+            }
             style={{
-              width: landscapeMobile
-                ? "min(calc(100vw - 1.5rem), 24rem)"
-                : "min(calc(100vw - 1.5rem), 22rem)",
+              ...(landscapeMobile
+                ? {}
+                : {
+                    width: "min(calc(100vw - 1.5rem), 22rem)",
+                  }),
               maxHeight: maxH,
               visibility: "hidden",
             }}
