@@ -214,6 +214,7 @@ export default function HeaderActions({
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [isWideHeader, setIsWideHeader] = useState(false);
+  const [isMobileHeader, setIsMobileHeader] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -237,11 +238,19 @@ export default function HeaderActions({
   };
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const update = () => setIsWideHeader(mq.matches);
+    const mqWide = window.matchMedia("(min-width: 768px)");
+    const mqMobile = window.matchMedia("(max-width: 767px)");
+    const update = () => {
+      setIsWideHeader(mqWide.matches);
+      setIsMobileHeader(mqMobile.matches);
+    };
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    mqWide.addEventListener("change", update);
+    mqMobile.addEventListener("change", update);
+    return () => {
+      mqWide.removeEventListener("change", update);
+      mqMobile.removeEventListener("change", update);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -323,8 +332,8 @@ export default function HeaderActions({
         setPinned(false);
       }
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
   }, []);
 
   const modeOptions: { id: HeaderMode; label: string }[] = [
@@ -358,7 +367,7 @@ export default function HeaderActions({
       className="pointer-events-auto fixed top-2 left-2 z-[45] sm:top-3 md:left-4"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
-        if (!modeOpen && !profileOpen) setHovered(false);
+        if (!modeOpen && !profileOpen && !pinned) setHovered(false);
       }}
     >
       <input
@@ -547,7 +556,7 @@ export default function HeaderActions({
           >
             <div
               ref={innerRef}
-              className={`flex h-10 items-stretch pr-5 sm:h-11 ${expanded ? "w-full" : "w-max"}`}
+              className={`flex h-10 items-stretch sm:h-11 ${expanded ? "w-full" : "w-max"} ${isMobileHeader ? "pr-10" : "pr-5"}`}
             >
               {/* Logo + mode — fixed left cluster (never shifts on expand) */}
               <div className="flex shrink-0 items-center py-1 pl-3 sm:pl-3.5">
@@ -659,14 +668,18 @@ export default function HeaderActions({
 
               <button
                 type="button"
-                onClick={() => {
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
                   setPinned((v) => !v);
                   setHovered(true);
                 }}
                 aria-label={
                   expanded ? "Hide header actions" : "Show header actions"
                 }
-                className="absolute inset-y-0 right-0 z-10 flex w-5 items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
+                className={`absolute inset-y-0 right-0 z-20 flex touch-manipulation items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45 ${
+                  isMobileHeader ? "w-10" : "w-5"
+                }`}
               >
                 <svg
                   ref={chevronRef}

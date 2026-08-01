@@ -692,6 +692,7 @@ export default function ViewerApp() {
                 subtitle={activeModelLabel}
                 onLoadIfc={handleFile}
                 isLoadingModel={isLoadingModel}
+                landscapeMobile={!isDesktop && isLandscape}
               >
                 {({ detailsOpen }) => (
                   <>
@@ -712,6 +713,7 @@ export default function ViewerApp() {
             {isPresentationView && (
               <PresentationMobileDock
                 align={isLandscape ? "right" : "center"}
+                landscapeMobile={!isDesktop && isLandscape}
               />
             )}
           </>

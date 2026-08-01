@@ -28,6 +28,8 @@ type Props = {
   subtitle?: string | null;
   onLoadIfc?: (file: File) => void;
   isLoadingModel?: boolean;
+  /** Landscape phone — full-height sheet beside left toolbar. */
+  landscapeMobile?: boolean;
   children: (api: { detailsOpen: boolean }) => ReactNode;
 };
 
@@ -42,6 +44,7 @@ export default function MobileCornerMenu({
   subtitle = null,
   onLoadIfc,
   isLoadingModel = false,
+  landscapeMobile = false,
   children,
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
@@ -80,9 +83,9 @@ export default function MobileCornerMenu({
       }
       if (sheet) {
         killGsap(sheet);
-        gsap.fromTo(
+          gsap.fromTo(
           sheet,
-          { scale: 0.18, autoAlpha: 0, transformOrigin: "bottom right" },
+          { scale: 0.18, autoAlpha: 0, transformOrigin: landscapeMobile ? "top left" : "bottom right" },
           {
             scale: 1,
             autoAlpha: 1,
@@ -137,7 +140,7 @@ export default function MobileCornerMenu({
       });
     }
     setModelMenuOpen(false);
-  }, [open, mounted]);
+  }, [open, mounted, landscapeMobile]);
 
   useLayoutEffect(() => {
     if (!modelMenuOpen) return;
@@ -155,16 +158,23 @@ export default function MobileCornerMenu({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [modelMenuOpen]);
 
-  const maxH =
-    "min(calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)), 36rem)";
+  const maxH = landscapeMobile
+    ? "calc(100dvh - 3.25rem - env(safe-area-inset-top, 0px) - max(0.35rem, env(safe-area-inset-bottom, 0px)))"
+    : "min(calc(100dvh - 5.5rem - env(safe-area-inset-bottom, 0px)), 36rem)";
   const chipBox = { width: CHIP, height: CHIP };
   const ifcName = subtitle?.trim() || "—";
 
   return (
     <div
-      className="pointer-events-auto fixed right-2 z-[55]"
+      className={`pointer-events-auto fixed z-[55] ${
+        landscapeMobile
+          ? "left-[calc(3.25rem+env(safe-area-inset-left,0px))]"
+          : "right-2"
+      }`}
       style={{
-        bottom: "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
+        bottom: landscapeMobile
+          ? "max(0.35rem, env(safe-area-inset-bottom, 0px))"
+          : "calc(3.7rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
       {mounted && (
@@ -186,21 +196,34 @@ export default function MobileCornerMenu({
             role="dialog"
             aria-modal="true"
             aria-label={ifcName}
-            className="absolute bottom-0 right-0 origin-bottom-right will-change-transform"
-            style={{
-              width: "min(calc(100vw - 1.5rem), 22rem)",
-              maxHeight: maxH,
-              visibility: "hidden",
-            }}
+            className={
+              landscapeMobile
+                ? "fixed left-[calc(3.25rem+env(safe-area-inset-left,0px))] top-[calc(3.25rem+env(safe-area-inset-top,0px))] origin-top-left will-change-transform"
+                : "absolute bottom-0 right-0 origin-bottom-right will-change-transform"
+            }
+            style={
+              landscapeMobile
+                ? {
+                    width: "min(calc(100vw - 4.5rem), 24rem)",
+                    height: maxH,
+                    visibility: "hidden",
+                  }
+                : {
+                    width: "min(calc(100vw - 1.5rem), 22rem)",
+                    maxHeight: maxH,
+                    visibility: "hidden",
+                  }
+            }
           >
             <GlassPanel
               variant="panel"
               zIndex={56}
-              wrapperClassName="overflow-hidden rounded-[1.25rem]"
+              fill={landscapeMobile}
+              wrapperClassName={`overflow-hidden rounded-[1.25rem] ${landscapeMobile ? "h-full" : ""}`}
             >
               <div
-                className="flex flex-col overflow-hidden"
-                style={{ maxHeight: maxH }}
+                className={`flex flex-col overflow-hidden ${landscapeMobile ? "h-full" : ""}`}
+                style={landscapeMobile ? { height: maxH } : { maxHeight: maxH }}
               >
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/35 px-3 py-2">
                   <p className="shrink-0 text-[11px] font-medium tracking-wide text-zinc-500">
@@ -309,7 +332,9 @@ export default function MobileCornerMenu({
           aria-label={
             open ? t(uiLanguage, "closePanels") : t(uiLanguage, "showPanels")
           }
-          className="absolute bottom-0 right-0 z-20 overflow-hidden rounded-full active:scale-95"
+          className={`absolute bottom-0 z-20 overflow-hidden rounded-full active:scale-95 ${
+            landscapeMobile ? "left-0" : "right-0"
+          }`}
           style={chipBox}
         >
           <span

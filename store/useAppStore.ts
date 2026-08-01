@@ -477,9 +477,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     set({ autoSceneBackground: on });
+    const s = get();
     if (on) {
-      const s = get();
       get().setSceneBackground(getModeSkyPreset(s.dataViewMode, s.colorTheme));
+    } else {
+      get().setSceneBackground(getDefaultSceneBackground(s.colorTheme));
     }
   },
   setSliceProgress: (t) => set({ sliceProgress: clamp01(t) }),

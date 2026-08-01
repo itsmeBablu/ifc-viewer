@@ -18,6 +18,7 @@ import SearchFilterPanel from "./SearchFilterPanel";
 import Slider from "./ui/Slider";
 import SliceHeightSlider from "./SliceHeightSlider";
 import { canHover, clampPopoverCenterX } from "@/lib/canHover";
+import { isLandscapeMobile as detectLandscapeMobile } from "@/lib/layoutTokens";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { RefObject } from "react";
 
@@ -198,6 +199,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const [panel, setPanel] = useState<Panel>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMobileToolbar, setIsMobileToolbar] = useState(false);
+  const [isLandscapeMobile, setIsLandscapeMobile] = useState(false);
   const [shadePos, setShadePos] = useState({ bottom: 0, left: 0 });
   const [lightPos, setLightPos] = useState({ bottom: 0, left: 0 });
   const [savePos, setSavePos] = useState({ bottom: 0, left: 0 });
@@ -231,71 +233,111 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobileToolbar(mq.matches);
+    const update = () => {
+      setIsMobileToolbar(mq.matches);
+      setIsLandscapeMobile(detectLandscapeMobile());
+    };
     update();
     mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      mq.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
   }, []);
 
   useLayoutEffect(() => {
     if (panel !== "shade" || !shadeBtnRef.current) return;
     const update = () => {
       const r = shadeBtnRef.current!.getBoundingClientRect();
-      setShadePos({
-        bottom: window.innerHeight - r.top + 10,
-        left: r.left + r.width / 2,
-      });
+      if (detectLandscapeMobile()) {
+        setShadePos({
+          bottom: window.innerHeight - (r.top + r.height / 2),
+          left: r.right + 10,
+        });
+      } else {
+        setShadePos({
+          bottom: window.innerHeight - r.top + 10,
+          left: r.left + r.width / 2,
+        });
+      }
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [panel]);
+  }, [panel, isLandscapeMobile]);
 
   useLayoutEffect(() => {
     if (panel !== "light" || !lightBtnRef.current) return;
     const update = () => {
       const r = lightBtnRef.current!.getBoundingClientRect();
-      setLightPos({
-        bottom: window.innerHeight - r.top + 10,
-        left: r.left + r.width / 2,
-      });
+      if (detectLandscapeMobile()) {
+        setLightPos({
+          bottom: window.innerHeight - (r.top + r.height / 2),
+          left: r.right + 10,
+        });
+      } else {
+        setLightPos({
+          bottom: window.innerHeight - r.top + 10,
+          left: r.left + r.width / 2,
+        });
+      }
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [panel]);
+  }, [panel, isLandscapeMobile]);
 
   useLayoutEffect(() => {
     if (panel !== "save" || !saveBtnRef.current) return;
     const update = () => {
       const r = saveBtnRef.current!.getBoundingClientRect();
-      setSavePos({
-        bottom: window.innerHeight - r.top + 10,
-        left: r.left + r.width / 2,
-      });
+      if (detectLandscapeMobile()) {
+        setSavePos({
+          bottom: window.innerHeight - (r.top + r.height / 2),
+          left: r.right + 10,
+        });
+      } else {
+        setSavePos({
+          bottom: window.innerHeight - r.top + 10,
+          left: r.left + r.width / 2,
+        });
+      }
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [panel]);
+  }, [panel, isLandscapeMobile]);
 
   useLayoutEffect(() => {
     if (panel !== "search" || !searchBtnRef.current) return;
     const update = () => {
       const r = searchBtnRef.current!.getBoundingClientRect();
-      const mobile = window.innerWidth < 768;
+      const landscape = detectLandscapeMobile();
       const panelWidth = Math.min(340, window.innerWidth - 16);
-      setSearchPos({
-        bottom: window.innerHeight - r.top + 10,
-        left: mobile
-          ? 0
-          : clampPopoverCenterX(r.left + r.width / 2, panelWidth),
-      });
+      if (landscape) {
+        setSearchPos({
+          bottom: window.innerHeight - (r.top + r.height / 2),
+          left: r.right + 10,
+        });
+      } else if (window.innerWidth < 768) {
+        setSearchPos({
+          bottom: window.innerHeight - r.top + 10,
+          left: 0,
+        });
+      } else {
+        setSearchPos({
+          bottom: window.innerHeight - r.top + 10,
+          left: clampPopoverCenterX(r.left + r.width / 2, panelWidth),
+        });
+      }
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [panel, isMobileToolbar]);
+  }, [panel, isMobileToolbar, isLandscapeMobile]);
 
   useEffect(() => {
     if (!panel) return;
@@ -385,7 +427,10 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
   const menuHeading = "text-[var(--text-body)]";
   const menuDivider = "border-[var(--panel-divider)]";
 
-  const popoverShell = "fixed z-[80] -translate-x-1/2";
+  const popoverShell = isLandscapeMobile
+    ? "fixed z-[80] -translate-y-1/2"
+    : "fixed z-[80] -translate-x-1/2";
+  const btnWrap = isLandscapeMobile ? "shrink-0" : "flex-1 min-w-0";
 
   // Presentation uses fullscreen on the viewer root — menus must portal inside it
   const portalRoot =
@@ -632,13 +677,15 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
       <div
         ref={searchMenuRef}
         className={
-          isMobileToolbar
-            ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
-            : popoverShell
+          isLandscapeMobile
+            ? popoverShell
+            : isMobileToolbar
+              ? "fixed z-[80] left-2 right-2 w-auto max-w-[calc(100vw-1rem)]"
+              : popoverShell
         }
         style={{
           bottom: searchPos.bottom,
-          ...(isMobileToolbar ? {} : { left: searchPos.left }),
+          ...(isMobileToolbar && !isLandscapeMobile ? {} : { left: searchPos.left }),
         }}
         role="dialog"
         aria-label={t(uiLanguage, "searchFilter")}
@@ -658,14 +705,30 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
 
   return (
     <>
-      <div className="pointer-events-none fixed bottom-[max(0.65rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(100vw-1rem,36rem)] -translate-x-1/2 px-1 sm:bottom-5 sm:w-auto sm:px-0">
+      <div
+        className={
+          isLandscapeMobile
+            ? "pointer-events-none fixed left-[max(0.35rem,env(safe-area-inset-left))] top-[calc(3.25rem+env(safe-area-inset-top,0px))] bottom-[max(0.35rem,env(safe-area-inset-bottom,0px))] z-40 flex"
+            : "pointer-events-none fixed bottom-[max(0.65rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(100vw-1rem,36rem)] -translate-x-1/2 px-1 sm:bottom-5 sm:w-auto sm:px-0"
+        }
+      >
         <GlassPanel
           variant="panel"
           zIndex={40}
-          wrapperClassName="pointer-events-auto mx-auto max-w-full"
+          wrapperClassName={
+            isLandscapeMobile
+              ? "pointer-events-auto h-full"
+              : "pointer-events-auto mx-auto max-w-full"
+          }
         >
-          <div className="flex w-full max-w-full items-center gap-0 px-1 py-1 sm:gap-1 sm:px-2 sm:py-1">
-            <div className="flex-1 min-w-0">
+          <div
+            className={
+              isLandscapeMobile
+                ? "flex h-full flex-col items-center justify-center gap-0.5 px-1 py-1.5"
+                : "flex w-full max-w-full items-center gap-0 px-1 py-1 sm:gap-1 sm:px-2 sm:py-1"
+            }
+          >
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={t(uiLanguage, "fitModel")}
                 hint={t(uiLanguage, "fitModelHint")}
@@ -681,7 +744,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={t(uiLanguage, "searchFilter")}
                 hint={t(uiLanguage, "searchFilterHint")}
@@ -703,7 +766,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={t(uiLanguage, "shading")}
                 hint={t(uiLanguage, "shadingHint")}
@@ -723,7 +786,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={t(uiLanguage, "lighting")}
                 hint={t(uiLanguage, "lightingHint")}
@@ -743,7 +806,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={t(uiLanguage, "saveView")}
                 hint={t(uiLanguage, "saveViewHint")}
@@ -767,7 +830,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={
                   isFullscreen
@@ -799,9 +862,16 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
               </ToolTipWrap>
             </div>
 
-            <div className="hidden sm:block mx-0.5 h-4 w-px bg-[var(--panel-divider)]" aria-hidden />
+            <div
+              className={
+                isLandscapeMobile
+                  ? "my-0.5 h-px w-4 bg-[var(--panel-divider)]"
+                  : "hidden sm:block mx-0.5 h-4 w-px bg-[var(--panel-divider)]"
+              }
+              aria-hidden
+            />
 
-            <div className="flex-1 min-w-0">
+            <div className={btnWrap}>
               <ToolTipWrap
                 label={
                   isPresentationView
