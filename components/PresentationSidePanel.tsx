@@ -82,14 +82,21 @@ export default function PresentationSidePanel({
       );
   }, [rooms, presentationFloorId]);
 
+  /** When isolating a floor, zone totals match that floor only (like VentilationZonePanel floorId). */
+  const ventilationScopeRooms = useMemo(
+    () =>
+      presentationIsolate && presentationFloorId ? floorRooms : rooms,
+    [presentationIsolate, presentationFloorId, floorRooms, rooms],
+  );
+
   const selectedZone = useMemo(() => {
     if (!selectedVentilationZoneKey) return null;
     return (
-      groupRoomsByVentilationZone(rooms).find(
+      groupRoomsByVentilationZone(ventilationScopeRooms).find(
         (z) => summaryVentilationZoneKey(z) === selectedVentilationZoneKey,
       ) ?? null
     );
-  }, [rooms, selectedVentilationZoneKey]);
+  }, [ventilationScopeRooms, selectedVentilationZoneKey]);
 
   const selectedRoom = useMemo(
     () => rooms.find((r) => r.id === selectedRoomId) ?? null,
@@ -131,6 +138,27 @@ export default function PresentationSidePanel({
     setSelectedRoomId(null);
     setSelectedElement(null);
   };
+
+  /** Double-click: keep zone for 3D markers, focus one room in the panel. */
+  const focusVentilationRoom = (
+    roomId: string,
+    expressId: number,
+    floorId: string,
+  ) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    setSelectedVentilationZoneKey(roomVentilationZoneKey(room));
+    selectRoom(roomId, expressId, floorId);
+  };
+
+  const clearVentilationSelection = () => {
+    setSelectedVentilationZoneKey(null);
+    setSelectedRoomId(null);
+    setSelectedElement(null);
+  };
+
+  const showZoneSummary = Boolean(selectedZone && !selectedRoomId);
+  const showRoomSummary = Boolean(selectedRoom);
 
   if (!includeLegend && !presentationIsolate) {
     return null;
@@ -229,11 +257,14 @@ export default function PresentationSidePanel({
                       onDoubleClick={(e) => {
                         e.preventDefault();
                         if (ventilation) {
-                          setSelectedVentilationZoneKey(
-                            roomVentilationZoneKey(room),
+                          focusVentilationRoom(
+                            room.id,
+                            room.expressId,
+                            room.floorId,
                           );
+                        } else {
+                          selectRoom(room.id, room.expressId, room.floorId);
                         }
-                        selectRoom(room.id, room.expressId, room.floorId);
                       }}
                       className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border text-left transition-all ${
                         compact ? "px-1.5 py-0.5" : "px-2 py-1"
@@ -281,13 +312,13 @@ export default function PresentationSidePanel({
             </ul>
           )}
 
-          {ventilation && (selectedZone || selectedRoom) ? (
+          {ventilation && (showZoneSummary || showRoomSummary) ? (
             <div
               className={`shrink-0 space-y-1.5 border-t border-[var(--panel-divider)] ${
                 compact ? "pt-1.5" : "pt-2.5"
               }`}
             >
-              {selectedZone ? (
+              {showZoneSummary && selectedZone ? (
                 <div
                   className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
                     compact ? "p-2" : "p-2.5"
@@ -309,7 +340,7 @@ export default function PresentationSidePanel({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedVentilationZoneKey(null)}
+                      onClick={clearVentilationSelection}
                       className="shrink-0 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                     >
                       {t(uiLanguage, "showAllZones")}
@@ -332,15 +363,27 @@ export default function PresentationSidePanel({
                 </div>
               ) : null}
 
-              {selectedRoom ? (
+              {showRoomSummary && selectedRoom ? (
                 <div
                   className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
                     compact ? "px-2 py-1.5" : "px-2.5 py-2"
                   }`}
                 >
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                    {t(uiLanguage, "rooms")}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                      {t(uiLanguage, "rooms")}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRoomId(null);
+                        setSelectedElement(null);
+                      }}
+                      className="shrink-0 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    >
+                      {t(uiLanguage, "showAllZones")}
+                    </button>
+                  </div>
                   <p className="truncate text-[11px] font-semibold text-[var(--text-strong)]">
                     {selectedRoom.number ? `${selectedRoom.number} · ` : ""}
                     {selectedRoom.name}
