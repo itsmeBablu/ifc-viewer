@@ -46,6 +46,8 @@ export default function ViewerContextMenu({
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const colorMode = useAppStore((s) => s.colorMode);
+  const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
+  const setAutoSceneBackground = useAppStore((s) => s.setAutoSceneBackground);
   const addSavedView = useAppStore((s) => s.addSavedView);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -232,6 +234,24 @@ export default function ViewerContextMenu({
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${
                     compareBothModes ? "bg-sky-600" : "bg-zinc-300"
+                  }`}
+                />
+              </button>
+
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={autoSceneBackground}
+                className={itemCls}
+                onClick={() => {
+                  setAutoSceneBackground(!autoSceneBackground);
+                  close();
+                }}
+              >
+                <span>{t(uiLanguage, "seasonalBg")}</span>
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    autoSceneBackground ? "bg-sky-600" : "bg-zinc-300"
                   }`}
                 />
               </button>

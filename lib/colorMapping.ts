@@ -216,6 +216,20 @@ export function getPalette(id: ColorPaletteId | string | null | undefined): Colo
   return COLOR_PALETTES.standard;
 }
 
+/** Moon / night theme uses the dark palette; day theme uses the user palette. */
+export function resolveColorPalette(
+  theme: import("@/lib/themeColors").ColorTheme,
+  paletteId: ColorPaletteId,
+): ColorPaletteId {
+  if (theme === "dark") return "dark";
+  return paletteId === "dark" ? "standard" : paletteId;
+}
+
+/** Palettes the user can pick — dark is tied to moon theme. */
+export const USER_COLOR_PALETTE_IDS = COLOR_PALETTE_IDS.filter(
+  (id) => id !== "dark",
+);
+
 /** @deprecated use getPalette(id).heizlastStops — kept for callers expecting HEIZLAST_STOPS */
 export const HEIZLAST_STOPS = STANDARD_HEIZLAST;
 export const TEMPERATURE_STOPS = STANDARD_TEMP;

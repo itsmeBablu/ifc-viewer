@@ -21,7 +21,7 @@ import {
 import { exportAllPagesPdf, exportHeizlastPdf, exportPresentationPdf } from "@/lib/pdfExport";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import { useModelScene } from "./ModelSceneContext";
 import GlassPanel from "./GlassPanel";
@@ -62,7 +62,7 @@ export default function FloorsPanel({
   const colorMode = useAppStore((s) => s.colorMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const dataViewMode = useAppStore((s) => s.dataViewMode);

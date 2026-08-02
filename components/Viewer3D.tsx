@@ -36,7 +36,7 @@ import {
 } from "@/lib/presentationLayout";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import type { RenderMode, Room } from "@/lib/types";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 
 export type Viewer3DHandle = {
@@ -378,7 +378,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
+  const colorTheme = useAppStore((s) => s.colorTheme);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
@@ -1048,7 +1049,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     clipRef.current?.rebuildCaps();
     // Selection opacity/outline must win over shared-material rebuilds
     applySelectionHighlightRef.current();
-  }, [colorMode, dataViewMode, activeColorPalette, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
+  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {

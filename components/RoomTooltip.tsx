@@ -6,7 +6,7 @@ import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colo
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage } from "@/lib/i18n";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
 
 type Props = {
@@ -184,7 +184,7 @@ export default function RoomTooltip({
   anchor = null,
 }: Props) {
   const hoveredRoom = useAppStore((s) => s.hoveredRoom);
-  const palette = useAppStore((s) => s.activeColorPalette);
+  const palette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);

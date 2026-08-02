@@ -19,13 +19,14 @@ import GsapHeightAccordion from "./GsapHeightAccordion";
 import GsapPopMenu from "./GsapPopMenu";
 import GlassPanel from "./GlassPanel";
 import ThemeToggle from "./ThemeToggle";
+import SeasonalBgToggle from "./SeasonalBgToggle";
 import {
   HEADER_MODE_ICON,
   isDataViewMode,
   type HeaderMode,
 } from "@/lib/dataViewMode";
 
-type ProfileHoverId = "language" | "theme" | "en" | "de" | "es";
+type ProfileHoverId = "language" | "theme" | "seasonalBg" | "en" | "de" | "es";
 
 const menuRowIdle =
   "box-border border border-transparent transition-[background-color,border-color,box-shadow,color] duration-200";
@@ -214,7 +215,6 @@ export default function HeaderActions({
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [isWideHeader, setIsWideHeader] = useState(false);
-  const [isMobileHeader, setIsMobileHeader] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -239,17 +239,13 @@ export default function HeaderActions({
 
   useEffect(() => {
     const mqWide = window.matchMedia("(min-width: 768px)");
-    const mqMobile = window.matchMedia("(max-width: 767px)");
     const update = () => {
       setIsWideHeader(mqWide.matches);
-      setIsMobileHeader(mqMobile.matches);
     };
     update();
     mqWide.addEventListener("change", update);
-    mqMobile.addEventListener("change", update);
     return () => {
       mqWide.removeEventListener("change", update);
-      mqMobile.removeEventListener("change", update);
     };
   }, []);
 
@@ -543,6 +539,31 @@ export default function HeaderActions({
                 </div>
                 <ThemeToggle />
               </div>
+
+              <div
+                onMouseEnter={() => setProfileHoverId("seasonalBg")}
+                className={`mt-1 box-border flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-1.5 ${
+                  profileHoverId === "seasonalBg"
+                    ? menuRowSurfaceHighlight
+                    : menuRowIdle
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[var(--text-body)]">
+                    {t(uiLanguage, "seasonalBg")}
+                  </p>
+                  <p
+                    className={`mt-0.5 text-[10px] leading-snug ${
+                      profileHoverId === "seasonalBg"
+                        ? "text-amber-900/75"
+                        : "text-[var(--text-muted)]"
+                    }`}
+                  >
+                    {t(uiLanguage, "seasonalBgHint")}
+                  </p>
+                </div>
+                <SeasonalBgToggle />
+              </div>
             </div>
           </GlassPanel>
         </GsapPopMenu>
@@ -556,7 +577,7 @@ export default function HeaderActions({
           >
             <div
               ref={innerRef}
-              className={`flex h-10 items-stretch sm:h-11 ${expanded ? "w-full" : "w-max"} ${isMobileHeader ? "pr-10" : "pr-5"}`}
+              className={`flex h-10 items-stretch sm:h-11 ${expanded ? "w-full" : "w-max"} pr-5`}
             >
               {/* Logo + mode — fixed left cluster (never shifts on expand) */}
               <div className="flex shrink-0 items-center py-1 pl-3 sm:pl-3.5">
@@ -677,9 +698,7 @@ export default function HeaderActions({
                 aria-label={
                   expanded ? "Hide header actions" : "Show header actions"
                 }
-                className={`absolute inset-y-0 right-0 z-20 flex touch-manipulation items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45 ${
-                  isMobileHeader ? "w-10" : "w-5"
-                }`}
+                className="absolute inset-y-0 right-0 z-20 flex w-5 touch-manipulation items-center justify-center rounded-r-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
                 <svg
                   ref={chevronRef}

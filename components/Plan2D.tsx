@@ -10,7 +10,7 @@ import { roomPassesFilter } from "@/lib/roomFilter";
 import { frameBoundingBoxOrtho } from "@/lib/flyTo";
 import type { Room } from "@/lib/types";
 import { THEME_COLORS } from "@/lib/themeColors";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import type { DataViewMode } from "@/lib/dataViewMode";
 
@@ -60,7 +60,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const setHoveredRoom = useAppStore((s) => s.setHoveredRoom);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const roomsFromStore = useAppStore((s) => s.rooms);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);

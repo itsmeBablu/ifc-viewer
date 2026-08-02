@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { roomLoadColor, roomDensityLoad } from "@/lib/roomLoad";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import LegendBody from "./LegendBody";
 import ModelText from "./ModelText";
@@ -40,7 +40,7 @@ export default function PresentationSidePanel({
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const dataViewMode = useAppStore((s) => s.dataViewMode);

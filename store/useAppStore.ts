@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { ColorPaletteId } from "@/lib/colorMapping";
+import { resolveColorPalette } from "@/lib/colorMapping";
 import {
   DEFAULT_HEIZLAST_RANGE,
   DEFAULT_KUHLLAST_RANGE,
@@ -258,11 +259,11 @@ function initialPalette(): ColorPaletteId {
     if (
       raw === "softPastel" ||
       raw === "warmPastel" ||
-      raw === "standard" ||
-      raw === "dark"
+      raw === "standard"
     ) {
       return raw;
     }
+    if (raw === "dark") return "standard";
   } catch {
     // ignore
   }
@@ -409,14 +410,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ dataViewMode: mode });
   },
   setActiveColorPalette: (id) => {
+    const palette = id === "dark" ? "standard" : id;
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(PALETTE_KEY, id);
+        localStorage.setItem(PALETTE_KEY, palette);
       } catch {
         // ignore
       }
     }
-    set({ activeColorPalette: id });
+    set({ activeColorPalette: palette });
   },
   setHeizlastRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
@@ -657,4 +659,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 export function hydratePanelState(): void {
   useAppStore.getState().setLeftPanelOpen(readBool(LEFT_PANEL_KEY, false));
   useAppStore.getState().setRightPanelOpen(readBool(RIGHT_PANEL_KEY, false));
+}
+
+export function useEffectiveColorPalette(): ColorPaletteId {
+  return useAppStore((s) =>
+    resolveColorPalette(s.colorTheme, s.activeColorPalette),
+  );
 }

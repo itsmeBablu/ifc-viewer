@@ -8,7 +8,7 @@ import {
 import { getElementDetails } from "@/lib/ifcClient";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import { t } from "@/lib/i18n";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import type { Room } from "@/lib/types";
 import type { Viewer3DHandle } from "./Viewer3D";
 import Slider from "./ui/Slider";
@@ -43,7 +43,7 @@ export default function SearchFilterPanel({
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const activeFilter = useAppStore((s) => s.activeFilter);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);

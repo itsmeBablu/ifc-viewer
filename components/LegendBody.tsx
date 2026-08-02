@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  COLOR_PALETTE_IDS,
   COLOR_PALETTES,
   HEIZLAST_RANGE_PRESETS,
   KUHLLAST_RANGE_PRESETS,
+  USER_COLOR_PALETTE_IDS,
   heizlastGradientCss,
   kuhllastGradientCss,
+  resolveColorPalette,
   temperatureLegendStops,
   type ColorPaletteId,
 } from "@/lib/colorMapping";
@@ -63,6 +64,9 @@ export default function LegendBody({
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
   const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
+  const colorTheme = useAppStore((s) => s.colorTheme);
+  const isDarkTheme = colorTheme === "dark";
+  const effectiveColorPalette = resolveColorPalette(colorTheme, activeColorPalette);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
@@ -78,7 +82,7 @@ export default function LegendBody({
   const modeBarRef = useRef<HTMLDivElement>(null);
 
   const tempStops = temperatureLegendStops(
-    activeColorPalette,
+    effectiveColorPalette,
     temperatureRange,
   );
   const cooling = dataViewMode === "kuhllast";
@@ -131,7 +135,7 @@ export default function LegendBody({
 
   return (
     <div
-      className={`w-full min-w-0 overflow-visible text-zinc-800 ${className}`}
+      className={`w-full min-w-0 overflow-visible text-[var(--text-body)] ${className}`}
       ref={pickerRef}
     >
       <section
@@ -286,7 +290,7 @@ export default function LegendBody({
                 style={{
                   background: loadGradient(
                     "to right",
-                    activeColorPalette,
+                    effectiveColorPalette,
                     loadRange,
                   ),
                 }}
@@ -378,14 +382,19 @@ export default function LegendBody({
 
         {paletteOpen && (
           <div
-            className={`rounded-xl border border-white/50 bg-white/90 shadow-md backdrop-blur-md ${
+            className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] shadow-md backdrop-blur-md ${
               compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
             }`}
           >
-            <p className="px-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+            {isDarkTheme && (
+              <p className="px-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
+                {t(uiLanguage, "paletteNightHint")}
+              </p>
+            )}
+            <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
               {t(uiLanguage, "palette")}
             </p>
-            {COLOR_PALETTE_IDS.map((id) => {
+            {USER_COLOR_PALETTE_IDS.map((id) => {
               const pal = COLOR_PALETTES[id];
               const active = activeColorPalette === id;
               return (
@@ -400,11 +409,11 @@ export default function LegendBody({
                     compact ? "py-1" : "py-1.5"
                   } ${
                     active
-                      ? "border-zinc-500/40 bg-zinc-900/5"
-                      : "border-transparent hover:bg-zinc-900/5"
+                      ? "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"
+                      : "border-transparent hover:bg-[var(--glass-inset-bg)]"
                   }`}
                 >
-                  <p className="mb-1 text-[11px] font-semibold text-zinc-800">
+                  <p className="mb-1 text-[11px] font-semibold text-[var(--text-strong)]">
                     {pal.name}
                   </p>
                   <div

@@ -2,6 +2,7 @@ import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Floor, Room } from "@/lib/types";
 import type { Viewer3DHandle } from "@/components/Viewer3D";
 import { listVisibleFloors } from "@/lib/floorFilter";
+import { resolveColorPalette } from "@/lib/colorMapping";
 import { useAppStore } from "@/store/useAppStore";
 import type {
   FloorPdfSection,
@@ -41,7 +42,7 @@ function floorsWithRooms(floors: Floor[], rooms: Room[]): Floor[] {
 export function pdfLegendFromStore(): PdfLegendContext {
   const s = useAppStore.getState();
   return {
-    palette: s.activeColorPalette,
+    palette: resolveColorPalette(s.colorTheme, s.activeColorPalette),
     heizlastRange: s.heizlastRange,
     temperatureRange: s.temperatureRange,
   };

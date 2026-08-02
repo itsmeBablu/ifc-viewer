@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { t } from "@/lib/i18n";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import {
   GlassInset,
@@ -29,7 +29,7 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
-  const activeColorPalette = useAppStore((s) => s.activeColorPalette);
+  const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);

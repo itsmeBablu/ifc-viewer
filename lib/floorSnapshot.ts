@@ -3,6 +3,7 @@ import type { Floor, Room } from "./types";
 import {
   heizlastToColor,
   kuhllastToColor,
+  resolveColorPalette,
   temperatureToColor,
 } from "./colorMapping";
 import { THEME_COLORS } from "./themeColors";
@@ -57,6 +58,7 @@ export function renderFloorSnapshot(
     temperatureRange,
     colorTheme,
   } = useAppStore.getState();
+  const palette = resolveColorPalette(colorTheme, activeColorPalette);
 
   const snapshotColorMode = compareBothModes ? "heizlast" : colorMode;
 
@@ -64,20 +66,20 @@ export function renderFloorSnapshot(
     if (snapshotColorMode === "temperature") {
       return temperatureToColor(
         room.temperature,
-        activeColorPalette,
+        palette,
         temperatureRange,
       );
     }
     if (dataViewMode === "kuhllast") {
       return kuhllastToColor(
         room.coolLoad,
-        activeColorPalette,
+        palette,
         kuhllastRange,
       );
     }
     return heizlastToColor(
       room.heatLoad,
-      activeColorPalette,
+      palette,
       heizlastRange,
     );
   };
@@ -90,7 +92,7 @@ export function renderFloorSnapshot(
         : heizlastRange;
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
     selectedRoomId ?? "none"
-  }::view=${dataViewMode}::color=${snapshotColorMode}::theme=${colorTheme}::palette=${activeColorPalette ?? "default"}::range=${range
+  }::view=${dataViewMode}::color=${snapshotColorMode}::theme=${colorTheme}::palette=${palette}::range=${range
     .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
     .join(",")}::v8`;
   const cached = snapshotCache.get(cacheKey);
