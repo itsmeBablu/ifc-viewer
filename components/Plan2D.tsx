@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { heizlastToColor, kuhllastToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
+import { roomVentilationColorValue } from "@/lib/ventilation";
 import { canHover } from "@/lib/canHover";
 import { isRoomPickAllowed } from "@/lib/pickAllowed";
 import { roomPassesFilter } from "@/lib/roomFilter";
@@ -44,6 +45,9 @@ function roomColor(
       kuhllastRange,
       customLegendColors?.kuhllast,
     );
+  }
+  if (dataViewMode === "luftung") {
+    return luftungToColor(roomVentilationColorValue(room));
   }
   return heizlastToColor(
     room.heatLoad,

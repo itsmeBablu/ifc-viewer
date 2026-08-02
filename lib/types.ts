@@ -1,5 +1,39 @@
 import type * as THREE from "three";
 
+export type VentilationFlowRole =
+  | "supply"
+  | "extract"
+  | "overflow"
+  | "neutral";
+
+/** Solar Computer / Revit ventilation values per room. */
+export type RoomVentilation = {
+  /** Extract air volume m³/h. */
+  abluftVolume: number;
+  /** Supply air volume m³/h. */
+  zuluftVolume: number;
+  /** Overflow / transfer volume m³/h (e.g. bathroom). */
+  overflowVolume: number;
+  /** ALD room volume flow m³/h. */
+  aldVolume: number;
+  /** Ventilation heat loss (Lüftungswärmeverlust) W. */
+  ventilationHeatLoss: number;
+  /** Mechanical extract (Abluftgerät) present. */
+  hasVentSystem: boolean;
+  /** False when SC Konditionierung RLT = "keine Luftaufbereitung" (e.g. Aufzug). */
+  hasAirTreatment: boolean;
+  isSupplyRoom: boolean;
+  isExtractRoom: boolean;
+  isOverflowRoom: boolean;
+  /** Nutzungszone e.g. WG 1. */
+  zoneName: string;
+  /** Lüftungszone e.g. Erdgeschoss - WG 1. */
+  ventilationZoneName: string;
+  zoneAldVolume: number;
+  zoneNumber: number;
+  roomArt: string;
+};
+
 export type Room = {
   id: string;
   name: string;
@@ -13,6 +47,7 @@ export type Room = {
   /** Absolute Kühllast from IFC (W), if present. */
   kuhllast: number | null;
   temperature: number;
+  ventilation: RoomVentilation;
   floorId: string;
   expressId: number;
   geometry: THREE.BufferGeometry;

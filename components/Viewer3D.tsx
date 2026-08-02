@@ -9,7 +9,7 @@ import {
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
 import { animateProgress, gsapEase } from "@/lib/gsapMotion";
 import gsap from "gsap";
@@ -36,6 +36,19 @@ import {
   sortFloorsByElevation,
 } from "@/lib/presentationLayout";
 import { roomPassesFilter } from "@/lib/roomFilter";
+import {
+  roomInVentilationZone,
+  roomVentilationColorValue,
+  roomVentilationZoneKey,
+} from "@/lib/ventilation";
+import {
+  buildVentilationMarkers,
+  disposeVentilationMarkers,
+  syncVentilationMarkerPresentationOffsets,
+  syncVentilationMarkerVisibility,
+  syncVentilationMarkerZone,
+  type VentilationMarkerLayer,
+} from "@/lib/ventilationMarkers";
 import type { RenderMode, Room } from "@/lib/types";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
@@ -87,6 +100,9 @@ function roomColorHex(
       kuhllastRange,
       customLegendColors?.kuhllast,
     );
+  }
+  if (dataViewMode === "luftung") {
+    return luftungToColor(roomVentilationColorValue(room));
   }
   return heizlastToColor(
     room.heatLoad,
@@ -391,6 +407,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const wasPresentationRef = useRef(false);
   const skyTextureRef = useRef<THREE.CanvasTexture | null>(null);
   const applySelectionHighlightRef = useRef<() => void>(() => {});
+  const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
+  const lastTickRef = useRef(performance.now());
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -409,6 +427,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+  const selectedVentilationZoneKey = useAppStore(
+    (s) => s.selectedVentilationZoneKey,
+  );
+  const ventilationZoneFocusToken = useAppStore(
+    (s) => s.ventilationZoneFocusToken,
+  );
+  const roomFocusToken = useAppStore((s) => s.roomFocusToken);
+  const setSelectedVentilationZoneKey = useAppStore(
+    (s) => s.setSelectedVentilationZoneKey,
+  );
+  const requestRoomFocus = useAppStore((s) => s.requestRoomFocus);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
   const sliceProgress = useAppStore((s) => s.sliceProgress);
   const floors = useAppStore((s) => s.floors);
@@ -674,6 +703,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const tick = () => {
       controls.update();
       viewCube.syncFromCamera(camera, controls.target);
+      const now = performance.now();
+      lastTickRef.current = now;
       const sz = new THREE.Vector2();
       renderer.getSize(sz);
       renderer.setScissorTest(false);
@@ -831,6 +862,104 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellGroup, rooms, roomsFromStore]);
+
+  const markerVisibleFloorId =
+    isPresentationView && presentationIsolate && presentationFloorId
+      ? presentationFloorId
+      : !isPresentationView && selectedFloor
+        ? selectedFloor
+        : null;
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    disposeVentilationMarkers(ventilationMarkersRef.current);
+    ventilationMarkersRef.current = null;
+    const existing = scene.getObjectByName("ventilation-markers");
+    if (existing) scene.remove(existing);
+
+    if (dataViewMode !== "luftung") return;
+
+    const sourceRooms = rooms.length ? rooms : roomsFromStore;
+    const layer = buildVentilationMarkers(sourceRooms);
+    syncVentilationMarkerPresentationOffsets(layer, roomMeshById.current);
+    syncVentilationMarkerVisibility(layer, markerVisibleFloorId);
+    scene.add(layer.group);
+    ventilationMarkersRef.current = layer;
+
+    return () => {
+      disposeVentilationMarkers(ventilationMarkersRef.current);
+      ventilationMarkersRef.current = null;
+      scene.remove(layer.group);
+    };
+  }, [dataViewMode, rooms, roomsFromStore, markerVisibleFloorId]);
+
+  useEffect(() => {
+    syncVentilationMarkerPresentationOffsets(
+      ventilationMarkersRef.current,
+      roomMeshById.current,
+    );
+    syncVentilationMarkerVisibility(
+      ventilationMarkersRef.current,
+      markerVisibleFloorId,
+    );
+    syncVentilationMarkerZone(
+      ventilationMarkersRef.current,
+      rooms.length ? rooms : roomsFromStore,
+      selectedVentilationZoneKey,
+      selectedRoomId,
+      markerVisibleFloorId,
+    );
+  }, [
+    markerVisibleFloorId,
+    selectedVentilationZoneKey,
+    selectedRoomId,
+    rooms,
+    roomsFromStore,
+    isPresentationView,
+    presentationLayoutMode,
+    presentationIsolate,
+  ]);
+
+  useEffect(() => {
+    if (dataViewMode !== "luftung" || !selectedVentilationZoneKey) return;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls) return;
+
+    const sourceRooms = rooms.length ? rooms : roomsFromStore;
+    const zoneRooms = sourceRooms.filter((r) =>
+      roomInVentilationZone(r, selectedVentilationZoneKey),
+    );
+    const box = new THREE.Box3();
+    for (const room of zoneRooms) {
+      const mesh = roomMeshById.current.get(room.id);
+      if (mesh) box.expandByObject(mesh);
+    }
+    if (box.isEmpty()) return;
+    const { position, target } = frameBoundingBox(box, camera, 1.32);
+    void flyTo(camera, controls, position, target, 1150);
+  }, [
+    ventilationZoneFocusToken,
+    selectedVentilationZoneKey,
+    dataViewMode,
+    rooms,
+    roomsFromStore,
+  ]);
+
+  useEffect(() => {
+    if (!roomFocusToken || !selectedRoomId) return;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const mesh = roomMeshById.current.get(selectedRoomId);
+    if (!camera || !controls || !mesh) return;
+    mesh.visible = true;
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (box.isEmpty()) return;
+    const { position, target } = frameBoundingBox(box, camera, 1.55);
+    void flyTo(camera, controls, position, target, 900);
+  }, [roomFocusToken, selectedRoomId]);
 
   // Heizlast + Temperature compare: twin copy (temp colors) offset from primary (heizlast)
   useEffect(() => {
@@ -1417,6 +1546,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           mesh.userData.presentationOffsetX = targetX;
         }
       }
+      syncVentilationMarkerPresentationOffsets(
+        ventilationMarkersRef.current,
+        roomMeshById.current,
+      );
       return slotH;
     };
 
@@ -1547,6 +1680,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               delete mesh.userData.presentationOffsetX;
             }
           });
+          syncVentilationMarkerPresentationOffsets(
+            ventilationMarkersRef.current,
+            roomMeshById.current,
+          );
         },
         onComplete: () => {
           const saved = presentationCamRef.current;
@@ -1592,6 +1729,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const lightMode = useAppStore.getState().renderMode === "light";
       const filter = useAppStore.getState().activeFilter;
       const roomList = useAppStore.getState().rooms;
+      const viewMode = useAppStore.getState().dataViewMode;
+      const zoneKey = useAppStore.getState().selectedVentilationZoneKey;
+      const zoneFocus = viewMode === "luftung" && Boolean(zoneKey);
       const byId = new Map(roomList.map((r) => [r.id, r]));
 
       // Resolve an id that actually exists on a room mesh — otherwise a stale /
@@ -1656,6 +1796,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               mesh.userData.expressId === selectedExpress));
         const room = byId.get(id);
         const passes = !filter || !room || roomPassesFilter(room, filter);
+        const inZone =
+          !zoneFocus ||
+          !room ||
+          roomInVentilationZone(room, zoneKey);
 
         const nextOpacity = !passes
           ? 0.1
@@ -1663,7 +1807,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             ? isSel
               ? SEL_OPACITY
               : OTHER_OPACITY
-            : baseOpacity;
+            : zoneFocus && !inZone
+              ? 0.12
+              : baseOpacity;
 
         applySurfaceOpacity(mat, nextOpacity, true);
         // Selected must read fully solid (no leftover transparent flags)
@@ -1743,6 +1889,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     compareBothModes,
     presentationIsolate,
     presentationFloorId,
+    dataViewMode,
+    selectedVentilationZoneKey,
   ]);
 
   // Pointer: select only — no camera flyTo
@@ -2037,13 +2185,64 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         return;
       }
 
-      applyPickSelection(pickHit(e.clientX, e.clientY));
-      // Intentionally no flyTo — camera stays put
+      const hit = pickHit(e.clientX, e.clientY);
+      const viewMode = useAppStore.getState().dataViewMode;
+
+      if (viewMode === "luftung") {
+        if (!hit) {
+          setSelectedVentilationZoneKey(null);
+          setSelectedRoomId(null);
+          setSelectedElement(null);
+          return;
+        }
+        const { roomId } = pickIdsFromObject(hit.object);
+        const room =
+          roomId != null
+            ? (rooms.find((r) => r.id === roomId) ??
+              roomsFromStore.find((r) => r.id === roomId))
+            : undefined;
+        if (
+          roomId &&
+          room &&
+          isRoomPickAllowed(room.id, room.floorId)
+        ) {
+          setSelectedVentilationZoneKey(roomVentilationZoneKey(room));
+          setSelectedRoomId(null);
+          setSelectedElement(null);
+          setHoveredRoom(null);
+        }
+        return;
+      }
+
+      applyPickSelection(hit);
     };
 
     const onDblClick = (e: MouseEvent) => {
       e.preventDefault();
-      // Same as toolbar Fit model — frame visible geometry
+      const hit = pickHit(e.clientX, e.clientY);
+      if (hit && useAppStore.getState().dataViewMode === "luftung") {
+        const { roomId } = pickIdsFromObject(hit.object);
+        const room =
+          roomId != null
+            ? (rooms.find((r) => r.id === roomId) ??
+              roomsFromStore.find((r) => r.id === roomId))
+            : undefined;
+        if (
+          roomId &&
+          room &&
+          isRoomPickAllowed(room.id, room.floorId)
+        ) {
+          const zoneKey = roomVentilationZoneKey(room);
+          if (
+            useAppStore.getState().selectedVentilationZoneKey !== zoneKey
+          ) {
+            setSelectedVentilationZoneKey(zoneKey);
+          }
+          applyPickSelection(hit);
+          requestRoomFocus(roomId);
+          return;
+        }
+      }
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
     };
@@ -2081,6 +2280,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     setHoveredRoom,
     setSelectedRoomId,
     setSelectedElement,
+    setSelectedVentilationZoneKey,
+    requestRoomFocus,
     setLeftPanelOpen,
     setRightPanelOpen,
   ]);

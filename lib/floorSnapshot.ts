@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import type { Floor, Room } from "./types";
 import {
+  DEFAULT_LUFTUNG_RANGE,
   heizlastToColor,
   kuhllastToColor,
+  luftungToColor,
   resolveColorPalette,
   temperatureToColor,
 } from "./colorMapping";
+import { roomVentilationColorValue } from "./ventilation";
 import { THEME_COLORS } from "./themeColors";
 import { useAppStore } from "@/store/useAppStore";
 
@@ -80,6 +83,9 @@ export function renderFloorSnapshot(
         customLegendColors.kuhllast,
       );
     }
+    if (dataViewMode === "luftung") {
+      return luftungToColor(roomVentilationColorValue(room));
+    }
     return heizlastToColor(
       room.heatLoad,
       palette,
@@ -93,7 +99,9 @@ export function renderFloorSnapshot(
       ? temperatureRange
       : dataViewMode === "kuhllast"
         ? kuhllastRange
-        : heizlastRange;
+        : dataViewMode === "luftung"
+          ? DEFAULT_LUFTUNG_RANGE
+          : heizlastRange;
   const customKey = JSON.stringify(customLegendColors);
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
     selectedRoomId ?? "none"

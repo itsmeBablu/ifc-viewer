@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo } from "react";
 import { roomLoadColor, roomDensityLoad } from "@/lib/roomLoad";
+import { roomVentilationListMetrics } from "@/lib/ventilation";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import LegendBody from "./LegendBody";
 import ModelText from "./ModelText";
+import VentilationZonePanel from "./VentilationZonePanel";
 
 /** Light tint of a hex color for list row backgrounds. */
 function lightTint(hex: string, mix = 0.78): string {
@@ -40,6 +42,7 @@ export default function PresentationSidePanel({
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
+  const requestRoomFocus = useAppStore((s) => s.requestRoomFocus);
   const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
@@ -49,6 +52,7 @@ export default function PresentationSidePanel({
     dataViewMode === "kuhllast"
       ? customLegendColors.kuhllast
       : customLegendColors.heizlast;
+  const ventilation = dataViewMode === "luftung";
 
   const floorsWithRooms = useMemo(
     () => listVisibleFloors(floors, rooms),
@@ -84,7 +88,7 @@ export default function PresentationSidePanel({
   ]);
 
   const selectRoom = (roomId: string, expressId: number, floorId: string) => {
-    setSelectedRoomId(roomId);
+    requestRoomFocus(roomId);
     void import("@/lib/ifcClient").then(({ getElementDetails }) =>
       getElementDetails(expressId, floorId, roomId).then((el) => {
         if (el) setSelectedElement(el);
@@ -102,6 +106,16 @@ export default function PresentationSidePanel({
         <div className="shrink-0">
           <LegendBody paddedTop />
         </div>
+      )}
+
+      {includeLegend && ventilation && (
+        <VentilationZonePanel
+          compact={compact}
+          className="border-b border-zinc-200/60"
+          floorId={
+            presentationIsolate ? presentationFloorId : null
+          }
+        />
       )}
 
       {presentationIsolate && (
@@ -171,6 +185,9 @@ export default function PresentationSidePanel({
                 );
                 const density = roomDensityLoad(room, dataViewMode);
                 const active = room.id === selectedRoomId;
+                const ventMetrics = ventilation
+                  ? roomVentilationListMetrics(room.ventilation)
+                  : null;
                 return (
                   <li key={room.id}>
                     <button
@@ -178,8 +195,12 @@ export default function PresentationSidePanel({
                       onClick={() =>
                         selectRoom(room.id, room.expressId, room.floorId)
                       }
-                      className={`flex w-full items-center gap-2 rounded-lg border text-left transition-all ${
-                        compact ? "px-1.5 py-0.5" : "px-2 py-1.5"
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        selectRoom(room.id, room.expressId, room.floorId);
+                      }}
+                      className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border text-left transition-all ${
+                        compact ? "px-1.5 py-0.5" : "px-2 py-1"
                       } ${
                         active
                           ? "border-zinc-500/50 shadow-sm ring-1 ring-zinc-400/40"
@@ -187,20 +208,28 @@ export default function PresentationSidePanel({
                       }`}
                       style={{ backgroundColor: lightTint(hex, 0.82) }}
                     >
-                      <ModelText className="min-w-0 flex-1 truncate text-[11px] font-semibold text-on-tint">
+                      <ModelText className="min-w-0 shrink truncate text-[10px] font-semibold text-on-tint sm:max-w-[42%]">
                         {room.number ? `${room.number} · ` : ""}
                         {room.name}
                       </ModelText>
-                      <span className="flex shrink-0 items-center gap-1.5 tabular-nums text-[10px] text-on-tint-muted">
-                        <span>{density.toFixed(0)} W/m²</span>
-                        <span className="text-on-tint-muted">·</span>
-                        <span>{room.temperature.toFixed(1)} °C</span>
-                        <span
-                          className="h-2.5 w-2.5 rounded-sm border border-zinc-400/30"
-                          style={{ backgroundColor: hex }}
-                          aria-hidden
-                        />
-                      </span>
+                      {ventMetrics ? (
+                        <span className="min-w-0 flex-1 truncate text-right text-[9px] tabular-nums text-on-tint-muted">
+                          {t(uiLanguage, "abluftVolume")} {ventMetrics.abluft}
+                          {" · "}
+                          {t(uiLanguage, "zuluftVolume")} {ventMetrics.zuluft}
+                          {" · "}
+                          {ventMetrics.heatLoss}
+                        </span>
+                      ) : (
+                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-on-tint-muted">
+                          {density.toFixed(0)} W/m² · {room.temperature.toFixed(1)} °C
+                        </span>
+                      )}
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-sm border border-zinc-400/30"
+                        style={{ backgroundColor: hex }}
+                        aria-hidden
+                      />
                     </button>
                   </li>
                 );

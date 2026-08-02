@@ -42,6 +42,16 @@ export type ColorPalette = {
   temperatureStops: ColorStop[];
 };
 
+const STANDARD_LUFTUNG: ColorStop[] = [
+  { value: Number.NEGATIVE_INFINITY, color: "#DCFCE7" },
+  { value: 0, color: "#86EFAC" },
+  { value: 50, color: "#FDE047" },
+  { value: 100, color: "#FB923C" },
+  { value: 200, color: "#EF4444" },
+  { value: 300, color: "#DC2626" },
+  { value: Number.POSITIVE_INFINITY, color: "#991B1B" },
+];
+
 /** Original vivid Heizlast / temperature anchors. */
 const STANDARD_HEIZLAST: ColorStop[] = [
   { value: Number.NEGATIVE_INFINITY, color: "#87CEEB" },
@@ -248,6 +258,7 @@ export function temperatureStopsFor(paletteId?: ColorPaletteId | string): ColorS
 
 export const DEFAULT_HEIZLAST_RANGE = [0, 10, 20, 30, 40, 50];
 export const DEFAULT_KUHLLAST_RANGE = [0, 10, 20, 30, 40, 50];
+export const DEFAULT_LUFTUNG_RANGE = [0, 50, 100, 150, 200, 300, 400];
 export const DEFAULT_TEMPERATURE_RANGE = [0, 6, 15, 18, 20, 24];
 export const MIN_LEGEND_STOPS = 6;
 export const MAX_LEGEND_STOPS = 8;
@@ -481,6 +492,24 @@ export function kuhllastToColor(
   overrides?: CustomLegendColorMap,
 ): string {
   return loadToColor(value, kuhllastStopsFor(paletteId), range, overrides);
+}
+
+/**
+ * Ventilation heat loss (Lüftungswärmeverlust W) — low green → high red.
+ */
+export function luftungToColor(
+  value: number,
+  range: number[] = DEFAULT_LUFTUNG_RANGE,
+): string {
+  return loadToColor(value, STANDARD_LUFTUNG, range);
+}
+
+export function luftungGradientCss(
+  direction = "to right",
+  range: number[] = DEFAULT_LUFTUNG_RANGE,
+): string {
+  const stops = resolveStopsForRange(STANDARD_LUFTUNG, range);
+  return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 
 function loadToColor(

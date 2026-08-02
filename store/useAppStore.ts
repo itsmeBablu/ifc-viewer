@@ -173,6 +173,12 @@ type AppState = {
   presentationIsolate: boolean;
   /** Show Heizlast + Temperature together (stacked on floor, side-by-side in presentation). */
   compareBothModes: boolean;
+  /** Selected Nutzungszone in Lüftung view (zoneNumber::zoneName). */
+  selectedVentilationZoneKey: string | null;
+  /** Incremented when a ventilation zone is selected (camera fly). */
+  ventilationZoneFocusToken: number;
+  /** Incremented when UI requests camera focus on a room. */
+  roomFocusToken: number;
   /** Room filter for search/filter bar — null means no filter. */
   activeFilter: {
     minHeat?: number;
@@ -239,6 +245,8 @@ type AppState = {
     mode: import("@/lib/presentationLayout").PresentationLayoutMode,
   ) => void;
   setPresentationIsolate: (isolate: boolean) => void;
+  setSelectedVentilationZoneKey: (key: string | null) => void;
+  requestRoomFocus: (roomId: string) => void;
   setCompareBothModes: (on: boolean) => void;
   setActiveFilter: (
     filter: {
@@ -418,6 +426,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   presentationLayoutMode: "stack",
   presentationIsolate: false,
   compareBothModes: false,
+  selectedVentilationZoneKey: null,
+  ventilationZoneFocusToken: 0,
+  roomFocusToken: 0,
   activeFilter: null,
   sliceProgress: 0.9,
   isLoadingModel: false,
@@ -448,7 +459,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setFloors: (floors) => set({ floors }),
-  setRooms: (rooms) => set({ rooms }),
+  setRooms: (rooms) =>
+    set({ rooms, selectedVentilationZoneKey: null, selectedRoomId: null }),
   setSelectedFloor: (floorId) =>
     set({
       selectedFloor: floorId,
@@ -467,7 +479,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedElement: (el) => set({ selectedElement: el }),
   setColorMode: (mode) => set({ colorMode: mode }),
   setDataViewMode: (mode) => {
-    set({ dataViewMode: mode });
+    set({
+      dataViewMode: mode,
+      ...(mode !== "luftung" ? { selectedVentilationZoneKey: null } : {}),
+    });
   },
   setActiveColorPalette: (id) => {
     const palette = id === "dark" ? "standard" : id;
@@ -682,6 +697,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedElement: null,
     });
   },
+  setSelectedVentilationZoneKey: (key) =>
+    set((s) => ({
+      selectedVentilationZoneKey: key,
+      selectedRoomId: null,
+      selectedElement: null,
+      ventilationZoneFocusToken: key ? s.ventilationZoneFocusToken + 1 : s.ventilationZoneFocusToken,
+    })),
+  requestRoomFocus: (roomId) =>
+    set((s) => ({
+      selectedRoomId: roomId,
+      roomFocusToken: s.roomFocusToken + 1,
+    })),
   setCompareBothModes: (on) => set({ compareBothModes: on }),
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),

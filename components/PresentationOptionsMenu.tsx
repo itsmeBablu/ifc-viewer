@@ -17,6 +17,10 @@ import { listVisibleFloors } from "@/lib/floorFilter";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import SeasonalBgToggle from "./SeasonalBgToggle";
+import {
+  groupRoomsByVentilationZone,
+  summaryVentilationZoneKey,
+} from "@/lib/ventilation";
 
 const LAYOUT_OPTIONS: {
   id: PresentationLayoutMode;
@@ -154,6 +158,19 @@ export default function PresentationOptionsMenu({
   const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
+  const selectedVentilationZoneKey = useAppStore(
+    (s) => s.selectedVentilationZoneKey,
+  );
+  const setSelectedVentilationZoneKey = useAppStore(
+    (s) => s.setSelectedVentilationZoneKey,
+  );
+  const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+
+  const ventilationZones = groupRoomsByVentilationZone(
+    presentationIsolate && presentationFloorId
+      ? rooms.filter((r) => r.floorId === presentationFloorId)
+      : rooms,
+  );
 
   const floorsWithRooms = listVisibleFloors(floors, rooms);
   const activeLayout = resolvePresentationLayout(
@@ -333,6 +350,37 @@ export default function PresentationOptionsMenu({
           <SectionLabel compact={compact}>
             {t(uiLanguage, MODE_OPTIONS_SECTION[dataViewMode])}
           </SectionLabel>
+          {dataViewMode === "luftung" && ventilationZones.length > 0 ? (
+            <div
+              className={`overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
+                compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
+              }`}
+            >
+              <p className="text-[10px] font-semibold text-[var(--text-strong)]">
+                {t(uiLanguage, "selectVentilationZone")}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {ventilationZones.map((zone) => {
+                  const key = summaryVentilationZoneKey(zone);
+                  const on = selectedVentilationZoneKey === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setSelectedVentilationZoneKey(on ? null : key)
+                      }
+                      className={`rounded-lg px-2 py-1 text-[10px] font-semibold transition-all duration-300 ease-out ${
+                        on ? layoutChipOn : layoutChipOff
+                      }`}
+                    >
+                      {zone.zoneName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <div
             className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
               compact ? "p-1.5" : "p-2"

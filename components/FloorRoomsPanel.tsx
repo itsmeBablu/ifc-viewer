@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import { listVisibleFloors } from "@/lib/floorFilter";
+import { roomVentilationListMetrics } from "@/lib/ventilation";
 import { t } from "@/lib/i18n";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
@@ -158,26 +159,39 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
               <ul className="max-h-44 space-y-1 overflow-y-auto pr-0.5">
                 {floorRooms.map((room) => {
                   const active = room.id === selectedRoomId;
+                  const ventMetrics =
+                    dataViewMode === "luftung"
+                      ? roomVentilationListMetrics(room.ventilation)
+                      : null;
                   return (
                     <li key={room.id}>
                       <button
                         type="button"
                         onClick={() => setSelectedRoomId(room.id)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-xs transition-all duration-300 ease-out ${
+                        className={`flex w-full min-w-0 items-center gap-2 rounded-2xl px-3 py-2 text-left text-xs transition-all duration-300 ease-out ${
                           active
                             ? "bg-gradient-to-b from-white/90 to-white/60 font-semibold text-zinc-900 shadow-sm shadow-black/5 border border-white/50"
                             : "border border-transparent text-zinc-600 hover:bg-white/40"
                         }`}
                       >
-                        <ModelText className="min-w-0 truncate">
+                        <ModelText className="min-w-0 shrink truncate">
                           {room.number ? `${room.number} · ` : ""}
                           {room.name}
                         </ModelText>
-                        <span className="shrink-0 tabular-nums text-zinc-400">
-                          {(dataViewMode === "kuhllast"
-                            ? room.coolLoad
-                            : room.heatLoad
-                          ).toFixed(0)}
+                        <span className="ml-auto min-w-0 truncate text-right text-[10px] tabular-nums text-zinc-400">
+                          {ventMetrics ? (
+                            <>
+                              {t(uiLanguage, "abluftVolume")} {ventMetrics.abluft}
+                              {" · "}
+                              {t(uiLanguage, "zuluftVolume")} {ventMetrics.zuluft}
+                              {" · "}
+                              {ventMetrics.heatLoss}
+                            </>
+                          ) : dataViewMode === "kuhllast" ? (
+                            `${room.coolLoad.toFixed(0)} W/m²`
+                          ) : (
+                            `${room.heatLoad.toFixed(0)} W/m²`
+                          )}
                         </span>
                       </button>
                     </li>

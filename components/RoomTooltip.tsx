@@ -2,10 +2,17 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
-import { heizlastToColor, kuhllastToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import type { Room } from "@/lib/types";
-import { t, type UiLanguage } from "@/lib/i18n";
+import { t, type UiLanguage, type UiTextKey } from "@/lib/i18n";
+import {
+  formatFlowVolume,
+  formatHeatLoss,
+  roomFlowVolume,
+  roomVentilationColorValue,
+  ventilationFlowRole,
+} from "@/lib/ventilation";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
 
@@ -28,6 +35,7 @@ function RoomInfoBody({
   customLegendColors,
   uiLanguage,
   cooling,
+  ventilation = false,
   compact = false,
 }: {
   room: Room;
@@ -38,9 +46,13 @@ function RoomInfoBody({
   customLegendColors: CustomLegendColors;
   uiLanguage: UiLanguage;
   cooling: boolean;
+  ventilation?: boolean;
   compact?: boolean;
 }) {
-  const loadColor = cooling
+  const v = room.ventilation;
+  const loadColor = ventilation
+    ? luftungToColor(roomVentilationColorValue(room))
+    : cooling
     ? kuhllastToColor(
         room.coolLoad,
         palette,
@@ -74,8 +86,48 @@ function RoomInfoBody({
     ? `${Math.round(room.temperature)}°C`
     : "—";
 
-  const titleKey = cooling ? "normKuhllast" : "normHeizlast";
-  const loadKey = cooling ? "kuhllast" : "heizlast";
+  const titleKey: UiTextKey = ventilation
+    ? "luftungLegend"
+    : cooling
+      ? "normKuhllast"
+      : "normHeizlast";
+  const loadKey: UiTextKey = ventilation
+    ? "luftungHeatLoss"
+    : cooling
+      ? "kuhllast"
+      : "heizlast";
+
+  const roleKey: Record<
+    ReturnType<typeof ventilationFlowRole>,
+    UiTextKey
+  > = {
+    supply: "ventRoleSupply",
+    extract: "ventRoleExtract",
+    overflow: "ventRoleOverflow",
+    neutral: "ventRoleNeutral",
+  };
+
+  const metricRow = (
+    labelKey: UiTextKey,
+    value: string,
+    dotColor?: string,
+  ) => (
+    <div className="flex items-baseline justify-between gap-2 text-[10px]">
+      <span className="shrink-0 font-medium text-zinc-500">
+        {t(uiLanguage, labelKey)}
+      </span>
+      <span className="flex min-w-0 items-center gap-1 text-right font-medium text-zinc-800">
+        {dotColor ? (
+          <span
+            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: dotColor }}
+            aria-hidden
+          />
+        ) : null}
+        <span className="tabular-nums">{value}</span>
+      </span>
+    </div>
+  );
 
   const nameNumberRow = (sizeCls: string) => (
     <div className={`flex min-w-0 items-baseline gap-1 ${sizeCls}`}>
@@ -107,24 +159,37 @@ function RoomInfoBody({
         <div className="my-0.5 h-px bg-white/40" />
         {nameNumberRow("text-[11px]")}
         <div className="my-0.5 h-px bg-white/40" />
-        <div className="flex items-baseline justify-between gap-2 text-[10px]">
-          <span className="shrink-0 font-medium text-zinc-500">
-            {t(uiLanguage, loadKey)}
-          </span>
-          <span className="flex min-w-0 items-center gap-1 text-right font-medium text-zinc-800">
-            <span
-              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: loadColor }}
-              aria-hidden
-            />
-            <span className="tabular-nums">
-              {watts}
-              {density !== "—" ? (
-                <span className="font-normal text-zinc-600"> {density}</span>
-              ) : null}
-            </span>
-          </span>
-        </div>
+        {ventilation ? (
+          <div className="space-y-0.5">
+            {metricRow("abluftVolume", formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)))}
+            {metricRow("zuluftVolume", formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)))}
+            {metricRow("luftungHeatLoss", formatHeatLoss(v.ventilationHeatLoss), loadColor)}
+            {v.zoneName
+              ? metricRow("usageZone", v.zoneName)
+              : null}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-2 text-[10px]">
+              <span className="shrink-0 font-medium text-zinc-500">
+                {t(uiLanguage, loadKey)}
+              </span>
+              <span className="flex min-w-0 items-center gap-1 text-right font-medium text-zinc-800">
+                <span
+                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: loadColor }}
+                  aria-hidden
+                />
+                <span className="tabular-nums">
+                  {watts}
+                  {density !== "—" ? (
+                    <span className="font-normal text-zinc-600"> {density}</span>
+                  ) : null}
+                </span>
+              </span>
+            </div>
+          </>
+        )}
         <div className="my-0.5 h-px bg-white/40" />
         <div className="flex items-baseline justify-between gap-2 text-[10px]">
           <span className="shrink-0 font-medium text-zinc-500">
@@ -151,27 +216,52 @@ function RoomInfoBody({
       <div className="my-2 h-px bg-white/35" />
       {nameNumberRow("text-sm")}
       <div className="mt-2 space-y-1.5 text-xs">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="shrink-0 font-medium text-zinc-500">
-            {t(uiLanguage, loadKey)}
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-zinc-800">
-            <span
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: loadColor }}
-              aria-hidden
-            />
-            <span className="tabular-nums">
-              {watts}
-              {density !== "—" ? (
-                <span className="font-normal text-zinc-600">
-                  {" "}
-                  {t(uiLanguage, "withDensity")} {density}
+        {ventilation ? (
+          <>
+            {metricRow("abluftVolume", formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)))}
+            {metricRow("zuluftVolume", formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)))}
+            {metricRow("aldVolume", formatFlowVolume(v.aldVolume))}
+            {metricRow("luftungHeatLoss", formatHeatLoss(v.ventilationHeatLoss), loadColor)}
+            {v.hasVentSystem
+              ? metricRow("ventSystemPresent", "✓")
+              : null}
+            {metricRow(
+              "ventFlowType",
+              t(uiLanguage, roleKey[ventilationFlowRole(v)]),
+            )}
+            {v.zoneName ? metricRow("usageZone", v.zoneName) : null}
+            {v.ventilationZoneName
+              ? metricRow("ventilationZone", v.ventilationZoneName)
+              : null}
+            {v.zoneAldVolume > 0
+              ? metricRow("zoneAldTotal", formatFlowVolume(v.zoneAldVolume))
+              : null}
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="shrink-0 font-medium text-zinc-500">
+                {t(uiLanguage, loadKey)}
+              </span>
+              <span className="flex min-w-0 items-center gap-1.5 text-right font-medium text-zinc-800">
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: loadColor }}
+                  aria-hidden
+                />
+                <span className="tabular-nums">
+                  {watts}
+                  {density !== "—" ? (
+                    <span className="font-normal text-zinc-600">
+                      {" "}
+                      {t(uiLanguage, "withDensity")} {density}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </span>
-          </span>
-        </div>
+              </span>
+            </div>
+          </>
+        )}
         <div className="flex items-baseline justify-between gap-3">
           <span className="shrink-0 font-medium text-zinc-500">
             {t(uiLanguage, "temperature")}
@@ -244,6 +334,7 @@ export default function RoomTooltip({
   const isSelection = Boolean(roomProp);
   const compact = isMobile && isSelection;
   const cooling = dataViewMode === "kuhllast";
+  const ventilation = dataViewMode === "luftung";
 
   let targetLeft = 0;
   let targetTop = 0;
@@ -317,6 +408,7 @@ export default function RoomTooltip({
           customLegendColors={customLegendColors}
           uiLanguage={uiLanguage}
           cooling={cooling}
+          ventilation={ventilation}
           compact={compact}
         />
       </GlassPanel>

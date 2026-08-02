@@ -7,7 +7,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import * as WebIFC from "web-ifc";
-import type { Floor, LoadedModel, Room } from "./types";
+import type { Floor, LoadedModel, Room, RoomVentilation } from "./types";
+import { emptyVentilation } from "./ventilation";
 import { debugLog } from "./debugLog";
 
 /** Prefer these PSet names when looking up heat-load / temperature values. */
@@ -133,6 +134,58 @@ export const ABSOLUTE_KUHLLAST_PROP_NAMES = [
   "CoolingLoad",
 ];
 
+export const VENTILATION_HEAT_LOSS_PROP_NAMES = [
+  "SC_Raum_Lüftungswärmeverlust",
+  "SC_Raum_Lueftungswaermeverlust",
+  "Lüftungswärmeverlust",
+];
+
+export const ABLUFT_VOLUME_PROP_NAMES = [
+  "SC_Raum_Abluftvolumenstrom_12831",
+  "SC_Raum_Abluftvolumenstrom",
+  "Angegebener Abluftluftstrom",
+  "Tatsächlicher Abluftstrom",
+];
+
+export const ZULUFT_VOLUME_PROP_NAMES = [
+  "SC_Raum_Zuluftvolumenstrom_12831",
+  "SC_Raum_Zuluftvolumenstrom",
+  "Angegebener Zuluftstrom",
+  "Tatsächlicher Zuluftstrom",
+];
+
+export const OVERFLOW_VOLUME_PROP_NAMES = [
+  "SC_Raum_Überstromvolumenstrom_12831",
+  "SC_Raum_Ueberstromvolumenstrom_12831",
+];
+
+export const ALD_VOLUME_PROP_NAMES = [
+  "SC_Raum_ALDVolumenstrom",
+];
+
+export const ZONE_ALD_VOLUME_PROP_NAMES = [
+  "SC_LüftungszoneALDVolumenstrom",
+  "SC_LueftungszoneALDVolumenstrom",
+];
+
+export const VENT_SYSTEM_PROP_NAMES = [
+  "SC_Raum_LüftungssystemVorhanden",
+  "SC_Raum_LueftungssystemVorhanden",
+];
+
+export const ZONE_NAME_PROP_NAMES = [
+  "SC_Raum_Zonenname",
+];
+
+export const VENT_ZONE_NAME_PROP_NAMES = [
+  "SC_Lüftungszonenname",
+  "SC_Lueftungszonenname",
+];
+
+export const ROOM_ART_PROP_NAMES = [
+  "SC_H73KEY_RaumArt",
+];
+
 const WASM_PATH = "/wasm/";
 
 type OpenIfcHandle = { api: WebIFC.IfcAPI; modelID: number };
@@ -212,6 +265,89 @@ function readNumber(value: unknown): number | null {
     return readNumber((value as { value: unknown }).value);
   }
   return null;
+}
+
+function readBoolean(value: unknown): boolean | null {
+  if (value == null) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const s = readString(value).trim().toLowerCase();
+  if (s === "true" || s === "ja" || s === "yes" || s === "1" || s === ".t.")
+    return true;
+  if (s === "false" || s === "nein" || s === "no" || s === "0" || s === ".f.")
+    return false;
+  return null;
+}
+
+function extractExactNamedString(
+  flat: { pset: string; name: string; value: unknown }[],
+  exactNames: string[],
+): string {
+  const keys = exactNames.map((n) => compactPropKey(n));
+  for (const key of keys) {
+    for (const item of flat) {
+      if (compactPropKey(item.name) !== key) continue;
+      const s = readString(item.value).trim();
+      if (s) return s;
+    }
+  }
+  return "";
+}
+
+function extractExactNamedBoolean(
+  flat: { pset: string; name: string; value: unknown }[],
+  exactNames: string[],
+): boolean {
+  const keys = exactNames.map((n) => compactPropKey(n));
+  for (const key of keys) {
+    for (const item of flat) {
+      if (compactPropKey(item.name) !== key) continue;
+      const b = readBoolean(item.value);
+      if (b != null) return b;
+    }
+  }
+  return false;
+}
+
+function extractVentilationProps(
+  flat: { pset: string; name: string; value: unknown }[],
+): RoomVentilation {
+  const v = emptyVentilation();
+  v.abluftVolume =
+    extractExactNamedNumeric(flat, ABLUFT_VOLUME_PROP_NAMES) ?? 0;
+  v.zuluftVolume =
+    extractExactNamedNumeric(flat, ZULUFT_VOLUME_PROP_NAMES) ?? 0;
+  v.overflowVolume =
+    extractExactNamedNumeric(flat, OVERFLOW_VOLUME_PROP_NAMES) ?? 0;
+  v.aldVolume = extractExactNamedNumeric(flat, ALD_VOLUME_PROP_NAMES) ?? 0;
+  v.ventilationHeatLoss =
+    extractExactNamedNumeric(flat, VENTILATION_HEAT_LOSS_PROP_NAMES) ?? 0;
+  v.hasVentSystem = extractExactNamedBoolean(flat, VENT_SYSTEM_PROP_NAMES);
+  v.zoneName = extractExactNamedString(flat, ZONE_NAME_PROP_NAMES);
+  v.ventilationZoneName = extractExactNamedString(
+    flat,
+    VENT_ZONE_NAME_PROP_NAMES,
+  );
+  v.zoneAldVolume =
+    extractExactNamedNumeric(flat, ZONE_ALD_VOLUME_PROP_NAMES) ?? 0;
+  v.zoneNumber =
+    extractExactNamedNumeric(flat, ["SC_Raum_Zonennummer"]) ?? 0;
+  v.roomArt = extractExactNamedString(flat, ROOM_ART_PROP_NAMES);
+  v.isSupplyRoom = extractExactNamedBoolean(flat, [
+    "IBV_L47_Raum_IstZuluftraum",
+  ]);
+  v.isExtractRoom = extractExactNamedBoolean(flat, [
+    "IBV_L47_Raum_IstAbluftraum",
+  ]);
+  v.isOverflowRoom = extractExactNamedBoolean(flat, [
+    "IBV_L47_Raum_IstÜberströmmungsraum",
+    "IBV_L47_Raum_IstUeberstroemungsraum",
+  ]);
+  const rltConditioning = extractExactNamedString(flat, [
+    "SC_Raum_18599_Konditionierung_RLT",
+  ]);
+  v.hasAirTreatment = !/keine\s*luftaufbereitung/i.test(rltConditioning);
+  return v;
 }
 
 /** Match IFC property names; treat Raum_Temperatur ≈ Raumtemperatur. */
@@ -756,6 +892,7 @@ async function extractSpaceProps(
   kuhllast: number | null;
   temperature: number;
   number: string;
+  ventilation: RoomVentilation;
   propDump: string[];
 }> {
   let heatLoad = 0;
@@ -764,6 +901,7 @@ async function extractSpaceProps(
   let kuhllast: number | null = null;
   let temperature = 20;
   let number = "";
+  let ventilation = emptyVentilation();
   const propDump: string[] = [];
 
   try {
@@ -840,6 +978,8 @@ async function extractSpaceProps(
         number = readString(item.value);
       }
     }
+
+    ventilation = extractVentilationProps(flat);
   } catch {
     // Property lookup can fail on incomplete exports — keep defaults.
   }
@@ -851,6 +991,7 @@ async function extractSpaceProps(
     kuhllast,
     temperature,
     number,
+    ventilation,
     propDump,
   };
 }
@@ -1329,6 +1470,7 @@ export async function loadIfcModel(
           coolLoad: props.coolLoad,
           kuhllast: props.kuhllast,
           temperature: props.temperature,
+          ventilation: props.ventilation,
           floorId,
           expressId: spaceExpressId,
           geometry: geom,
