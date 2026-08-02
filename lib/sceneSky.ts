@@ -94,7 +94,7 @@ export function getModeSkyPreset(
   mode: DataViewMode,
   theme: ColorTheme,
 ): string {
-  if (mode === "heizlast") {
+  if (mode === "heizlast" || mode === "luftung") {
     return theme === "dark" ? "winterSkyDark" : "winterSky";
   }
   if (mode === "kuhllast") {

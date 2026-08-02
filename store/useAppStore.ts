@@ -179,6 +179,10 @@ type AppState = {
   ventilationZoneFocusToken: number;
   /** Incremented when UI requests camera focus on a room. */
   roomFocusToken: number;
+  /** Incremented when an isolated floor changes (camera fit). */
+  floorFocusToken: number;
+  /** True while the 3D context menu is open — disables orbit controls. */
+  viewerContextMenuOpen: boolean;
   /** Room filter for search/filter bar — null means no filter. */
   activeFilter: {
     minHeat?: number;
@@ -245,8 +249,10 @@ type AppState = {
     mode: import("@/lib/presentationLayout").PresentationLayoutMode,
   ) => void;
   setPresentationIsolate: (isolate: boolean) => void;
+  setPresentationFloorIsolate: (floorId: string | null) => void;
   setSelectedVentilationZoneKey: (key: string | null) => void;
   requestRoomFocus: (roomId: string) => void;
+  setViewerContextMenuOpen: (open: boolean) => void;
   setCompareBothModes: (on: boolean) => void;
   setActiveFilter: (
     filter: {
@@ -429,6 +435,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedVentilationZoneKey: null,
   ventilationZoneFocusToken: 0,
   roomFocusToken: 0,
+  floorFocusToken: 0,
+  viewerContextMenuOpen: false,
   activeFilter: null,
   sliceProgress: 0.9,
   isLoadingModel: false,
@@ -462,13 +470,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRooms: (rooms) =>
     set({ rooms, selectedVentilationZoneKey: null, selectedRoomId: null }),
   setSelectedFloor: (floorId) =>
-    set({
+    set((s) => ({
       selectedFloor: floorId,
       // Default Schnitthöhe near the top of the floor (90%)
       sliceProgress: 0.9,
       selectedRoomId: null,
       selectedElement: null,
-    }),
+      floorFocusToken: s.floorFocusToken + 1,
+    })),
   setSelectedRoomId: (roomId) =>
     set(
       roomId
@@ -697,6 +706,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedElement: null,
     });
   },
+  setPresentationFloorIsolate: (floorId) => {
+    if (!floorId) {
+      set({ presentationIsolate: false });
+      return;
+    }
+    set({
+      presentationIsolate: true,
+      presentationFloorId: floorId,
+      presentationRoomsOpen: false,
+      selectedRoomId: null,
+      selectedElement: null,
+    });
+  },
+  setViewerContextMenuOpen: (open) => set({ viewerContextMenuOpen: open }),
   setSelectedVentilationZoneKey: (key) =>
     set((s) => ({
       selectedVentilationZoneKey: key,

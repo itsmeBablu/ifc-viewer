@@ -383,13 +383,40 @@ body {
   border-color: var(--panel-divider);
 }
 
+[data-theme="dark"] .context-menu-surface {
+  background: var(--popover-bg) !important;
+  background-image: none !important;
+  border-color: var(--panel-divider);
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.14);
+}
+
+[data-theme="dark"] .context-menu-surface .ctx-toggle-off {
+  background-color: var(--glass-inset-bg);
+}
+
 [data-theme="dark"] .presentation-chip-off {
   color: var(--text-muted);
 }
 
-[data-theme="dark"] .presentation-chip-off:hover {
-  background-color: var(--glass-inset-bg);
+[data-theme="dark"] .border-zinc-200\/70,
+[data-theme="dark"] .border-zinc-200\/60 {
   border-color: var(--panel-divider);
+}
+[data-theme="dark"] .bg-white\/50,
+[data-theme="dark"] .bg-white\/55,
+[data-theme="dark"] .bg-white\/65 {
+  background-color: var(--surface-muted);
+}
+[data-theme="dark"] .bg-zinc-900\/10,
+[data-theme="dark"] .bg-zinc-900\/5 {
+  background-color: var(--glass-inset-bg);
+}
+[data-theme="dark"] .hover\:bg-zinc-900\/5:hover {
+  background-color: var(--glass-inset-bg);
+}
+[data-theme="dark"] .ring-zinc-400\/40,
+[data-theme="dark"] .ring-zinc-500\/50 {
+  --tw-ring-color: color-mix(in srgb, var(--panel-divider) 85%, transparent);
 }
 
 .duration-350 {

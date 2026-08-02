@@ -100,7 +100,7 @@ export default function VentilationZonePanel({
           <button
             type="button"
             onClick={() => setSelectedZoneKey(null)}
-            className="text-[10px] font-medium text-zinc-500 hover:text-zinc-800"
+            className="text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
           >
             {t(uiLanguage, "showAllZones")}
           </button>
@@ -120,17 +120,19 @@ export default function VentilationZonePanel({
                   compact ? "text-[10px]" : "text-[11px]"
                 } ${
                   active
-                    ? "bg-zinc-900/10 ring-1 ring-zinc-400/40"
-                    : "bg-white/45 hover:bg-white/65"
+                    ? "bg-[var(--chip-active-bg)] text-[var(--chip-active-text)] ring-1 ring-[var(--panel-divider)]"
+                    : "bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
                 }`}
               >
-                <p className="font-semibold text-zinc-800">{zone.zoneName}</p>
+                <p className="font-semibold text-[var(--text-strong)]">
+                  {zone.zoneName}
+                </p>
                 {zone.ventilationZoneName ? (
-                  <p className="truncate text-zinc-500">
+                  <p className="truncate text-[var(--text-muted)]">
                     {zone.ventilationZoneName}
                   </p>
                 ) : null}
-                <div className="mt-1 flex flex-wrap gap-x-2 tabular-nums text-zinc-600">
+                <div className="mt-1 flex flex-wrap gap-x-2 tabular-nums text-[var(--text-muted)]">
                   <span>
                     {t(uiLanguage, "abluftVolume")}:{" "}
                     {formatFlowVolume(zone.totalAbluft)}
@@ -148,14 +150,14 @@ export default function VentilationZonePanel({
 
       {selectedZone ? (
         <div
-          className={`rounded-xl border border-zinc-200/70 bg-white/50 ${
+          className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
             compact ? "space-y-1 p-2" : "space-y-1.5 p-2.5"
           }`}
         >
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             {t(uiLanguage, "zoneDetails")}
           </p>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] tabular-nums text-zinc-700">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] tabular-nums text-[var(--text-body)]">
             <span>
               {t(uiLanguage, "zoneAldTotal")}:{" "}
               {formatFlowVolume(selectedZone.zoneAldVolume)}
@@ -172,7 +174,7 @@ export default function VentilationZonePanel({
           <p className={`${heading.muted} pt-1`}>
             {t(uiLanguage, "rooms")} ({zoneRooms.length})
           </p>
-          <p className="text-[9px] text-zinc-400">
+          <p className="text-[9px] text-[var(--text-muted)]">
             {t(uiLanguage, "doubleClickRoomHint")}
           </p>
           <ul className="thin-scroll max-h-36 space-y-0.5 overflow-y-auto pr-0.5">
@@ -198,8 +200,8 @@ export default function VentilationZonePanel({
                     }}
                     className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-left transition-all ${
                       active
-                        ? "border-zinc-500/50 ring-1 ring-zinc-400/40"
-                        : "border-transparent hover:border-zinc-300/40"
+                        ? "border-[var(--panel-divider)] ring-1 ring-[var(--panel-divider)]"
+                        : "border-transparent hover:border-[var(--panel-divider)]"
                     }`}
                     style={{ backgroundColor: lightTint(hex, 0.82) }}
                   >

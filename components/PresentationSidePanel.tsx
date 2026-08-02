@@ -2,14 +2,21 @@
 
 import { useEffect, useMemo } from "react";
 import { roomLoadColor, roomDensityLoad } from "@/lib/roomLoad";
-import { roomVentilationListMetrics } from "@/lib/ventilation";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import LegendBody from "./LegendBody";
 import ModelText from "./ModelText";
-import VentilationZonePanel from "./VentilationZonePanel";
+import {
+  formatFlowVolume,
+  formatHeatLoss,
+  groupRoomsByVentilationZone,
+  roomInVentilationZone,
+  roomVentilationListMetrics,
+  roomVentilationZoneKey,
+  summaryVentilationZoneKey,
+} from "@/lib/ventilation";
 
 /** Light tint of a hex color for list row backgrounds. */
 function lightTint(hex: string, mix = 0.78): string {
@@ -41,6 +48,12 @@ export default function PresentationSidePanel({
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
+  const selectedVentilationZoneKey = useAppStore(
+    (s) => s.selectedVentilationZoneKey,
+  );
+  const setSelectedVentilationZoneKey = useAppStore(
+    (s) => s.setSelectedVentilationZoneKey,
+  );
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const requestRoomFocus = useAppStore((s) => s.requestRoomFocus);
   const activeColorPalette = useEffectiveColorPalette();
@@ -69,6 +82,20 @@ export default function PresentationSidePanel({
       );
   }, [rooms, presentationFloorId]);
 
+  const selectedZone = useMemo(() => {
+    if (!selectedVentilationZoneKey) return null;
+    return (
+      groupRoomsByVentilationZone(rooms).find(
+        (z) => summaryVentilationZoneKey(z) === selectedVentilationZoneKey,
+      ) ?? null
+    );
+  }, [rooms, selectedVentilationZoneKey]);
+
+  const selectedRoom = useMemo(
+    () => rooms.find((r) => r.id === selectedRoomId) ?? null,
+    [rooms, selectedRoomId],
+  );
+
   // Prefer Erdgeschoss, else first visible floor
   useEffect(() => {
     if (!presentationIsolate || floorsWithRooms.length === 0) return;
@@ -89,6 +116,7 @@ export default function PresentationSidePanel({
 
   const selectRoom = (roomId: string, expressId: number, floorId: string) => {
     requestRoomFocus(roomId);
+    setSelectedRoomId(roomId);
     void import("@/lib/ifcClient").then(({ getElementDetails }) =>
       getElementDetails(expressId, floorId, roomId).then((el) => {
         if (el) setSelectedElement(el);
@@ -96,26 +124,24 @@ export default function PresentationSidePanel({
     );
   };
 
+  const selectVentilationZone = (roomId: string) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    setSelectedVentilationZoneKey(roomVentilationZoneKey(room));
+    setSelectedRoomId(null);
+    setSelectedElement(null);
+  };
+
   if (!includeLegend && !presentationIsolate) {
     return null;
   }
 
   return (
-    <div className="flex flex-col text-zinc-800">
+    <div className="flex flex-col text-[var(--text-body)]">
       {includeLegend && (
         <div className="shrink-0">
           <LegendBody paddedTop />
         </div>
-      )}
-
-      {includeLegend && ventilation && (
-        <VentilationZonePanel
-          compact={compact}
-          className="border-b border-zinc-200/60"
-          floorId={
-            presentationIsolate ? presentationFloorId : null
-          }
-        />
       )}
 
       {presentationIsolate && (
@@ -131,7 +157,7 @@ export default function PresentationSidePanel({
           </p>
           <div className="glass-inset thin-scroll max-h-28 shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-xl">
             {floorsWithRooms.length === 0 ? (
-              <p className="px-2.5 py-2 text-[11px] text-zinc-400">
+              <p className="px-2.5 py-2 text-[11px] text-[var(--text-muted)]">
                 {t(uiLanguage, "noFloors")}
               </p>
             ) : (
@@ -147,12 +173,12 @@ export default function PresentationSidePanel({
                       compact ? "py-1 text-[11px]" : "py-2 text-xs"
                     } ${
                       active
-                        ? "bg-zinc-900/10 font-semibold text-zinc-900"
-                        : "text-zinc-600 hover:bg-zinc-900/5"
+                        ? "bg-[var(--chip-active-bg)] font-semibold text-[var(--chip-active-text)]"
+                        : "text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]"
                     }`}
                   >
                     <ModelText className="min-w-0 truncate">{f.name}</ModelText>
-                    <span className="tabular-nums text-[10px] text-zinc-400">
+                    <span className="tabular-nums text-[10px] text-[var(--text-muted)]">
                       {count}
                     </span>
                   </button>
@@ -165,7 +191,7 @@ export default function PresentationSidePanel({
             {t(uiLanguage, "rooms")} ({floorRooms.length})
           </p>
           {floorRooms.length === 0 ? (
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-[var(--text-muted)]">
               {t(uiLanguage, "noRoomsOnFloor")}
             </p>
           ) : (
@@ -185,6 +211,9 @@ export default function PresentationSidePanel({
                 );
                 const density = roomDensityLoad(room, dataViewMode);
                 const active = room.id === selectedRoomId;
+                const inSelectedZone =
+                  !selectedVentilationZoneKey ||
+                  roomInVentilationZone(room, selectedVentilationZoneKey);
                 const ventMetrics = ventilation
                   ? roomVentilationListMetrics(room.ventilation)
                   : null;
@@ -193,18 +222,33 @@ export default function PresentationSidePanel({
                     <button
                       type="button"
                       onClick={() =>
-                        selectRoom(room.id, room.expressId, room.floorId)
+                        ventilation
+                          ? selectVentilationZone(room.id)
+                          : selectRoom(room.id, room.expressId, room.floorId)
                       }
                       onDoubleClick={(e) => {
                         e.preventDefault();
+                        if (ventilation) {
+                          setSelectedVentilationZoneKey(
+                            roomVentilationZoneKey(room),
+                          );
+                        }
                         selectRoom(room.id, room.expressId, room.floorId);
                       }}
                       className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border text-left transition-all ${
                         compact ? "px-1.5 py-0.5" : "px-2 py-1"
                       } ${
                         active
-                          ? "border-zinc-500/50 shadow-sm ring-1 ring-zinc-400/40"
-                          : "border-transparent hover:border-zinc-300/40"
+                          ? "border-[var(--panel-divider)] shadow-sm ring-1 ring-[var(--panel-divider)]"
+                          : inSelectedZone && selectedVentilationZoneKey
+                            ? "border-[var(--panel-divider)]"
+                            : "border-transparent hover:border-[var(--panel-divider)]"
+                      } ${
+                        ventilation &&
+                        selectedVentilationZoneKey &&
+                        !inSelectedZone
+                          ? "opacity-45"
+                          : ""
                       }`}
                       style={{ backgroundColor: lightTint(hex, 0.82) }}
                     >
@@ -236,6 +280,75 @@ export default function PresentationSidePanel({
               })}
             </ul>
           )}
+
+          {ventilation && (selectedZone || selectedRoom) ? (
+            <div
+              className={`shrink-0 space-y-1.5 border-t border-[var(--panel-divider)] ${
+                compact ? "pt-1.5" : "pt-2.5"
+              }`}
+            >
+              {selectedZone ? (
+                <div
+                  className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
+                    compact ? "p-2" : "p-2.5"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                        {t(uiLanguage, "usageZone")}
+                      </p>
+                      <p className="truncate text-[11px] font-semibold text-[var(--text-strong)]">
+                        {selectedZone.zoneName}
+                      </p>
+                      {selectedZone.ventilationZoneName ? (
+                        <p className="truncate text-[10px] text-[var(--text-muted)]">
+                          {selectedZone.ventilationZoneName}
+                        </p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVentilationZoneKey(null)}
+                      className="shrink-0 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    >
+                      {t(uiLanguage, "showAllZones")}
+                    </button>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-2 text-[9px] tabular-nums text-[var(--text-body)]">
+                    <span>
+                      {t(uiLanguage, "abluftVolume")}:{" "}
+                      {formatFlowVolume(selectedZone.totalAbluft)}
+                    </span>
+                    <span>
+                      {t(uiLanguage, "zuluftVolume")}:{" "}
+                      {formatFlowVolume(selectedZone.totalZuluft)}
+                    </span>
+                    <span>
+                      {t(uiLanguage, "luftungHeatLoss")}:{" "}
+                      {formatHeatLoss(selectedZone.totalHeatLoss)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedRoom ? (
+                <div
+                  className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
+                    compact ? "px-2 py-1.5" : "px-2.5 py-2"
+                  }`}
+                >
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    {t(uiLanguage, "rooms")}
+                  </p>
+                  <p className="truncate text-[11px] font-semibold text-[var(--text-strong)]">
+                    {selectedRoom.number ? `${selectedRoom.number} · ` : ""}
+                    {selectedRoom.name}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       )}
     </div>

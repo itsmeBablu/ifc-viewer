@@ -236,7 +236,7 @@ export default function LegendBody({
                 <p
                   className={
                     compact
-                      ? "text-[11px] font-semibold tracking-wide text-zinc-800"
+                      ? "text-[11px] font-semibold tracking-wide text-[var(--text-strong)]"
                       : heading.panel
                   }
                 >
@@ -254,9 +254,6 @@ export default function LegendBody({
               </>
             )
           )
-        )}
-        {ventilation && isPresentationView && compact && (
-          <VentilationZonePanel compact className="-mx-0.5 border-b border-[var(--panel-divider)] pb-1" />
         )}
         {!compareBothModes && (
         <div
@@ -346,7 +343,7 @@ export default function LegendBody({
         {(compareBothModes || colorMode === "heizlast") && (
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
-              <p className="text-[10px] font-medium tracking-wide text-zinc-500">
+              <p className="text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
                 {t(
                   uiLanguage,
                   cooling ? "kuhllastTopLeft" : "heizlastTopLeft",
@@ -359,12 +356,12 @@ export default function LegendBody({
               onClick={ventilation ? undefined : openLoadPalette}
               aria-expanded={!ventilation && paletteOpen && paletteContext === "load"}
               disabled={ventilation}
-              className={`group relative block w-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50 ${
+              className={`group relative block w-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--panel-divider)] ${
                 ventilation ? "cursor-default" : "cursor-pointer"
               }`}
             >
               <div
-                className={`relative w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95 ${
+                className={`relative w-full overflow-hidden rounded-full border border-[var(--glass-border)] shadow-[inset_0_1px_0_var(--glass-specular),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95 ${
                   compact ? "h-3" : "h-4"
                 }`}
                 style={{
@@ -383,7 +380,7 @@ export default function LegendBody({
               </div>
             </button>
             <div
-              className={`flex items-end justify-between gap-0.5 tabular-nums text-zinc-500 ${
+              className={`flex items-end justify-between gap-0.5 tabular-nums text-[var(--text-muted)] ${
                 compact ? "text-[9px]" : "text-[10px]"
               }`}
             >

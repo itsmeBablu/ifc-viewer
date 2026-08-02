@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import * as THREE from "three";
+import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
@@ -434,6 +435,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     (s) => s.ventilationZoneFocusToken,
   );
   const roomFocusToken = useAppStore((s) => s.roomFocusToken);
+  const floorFocusToken = useAppStore((s) => s.floorFocusToken);
+  const viewerContextMenuOpen = useAppStore((s) => s.viewerContextMenuOpen);
   const setSelectedVentilationZoneKey = useAppStore(
     (s) => s.setSelectedVentilationZoneKey,
   );
@@ -656,6 +659,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI; // allow full orbit — avoids horizon clipping flicker
+    // Right-click opens the context menu — do not pan on button 2.
+    controls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: null as unknown as MOUSE,
+    };
 
     const overlays = new THREE.Group();
     overlays.name = "room-overlays";
@@ -1408,6 +1417,20 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     isPresentationView,
     compareBothModes,
   ]);
+
+  // Basic 3D: zoom to visible (isolated) floor when floor selection changes.
+  useEffect(() => {
+    if (isPresentationView || floorFocusToken === 0) return;
+    const id = requestAnimationFrame(() => fitToVisible(850));
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorFocusToken, isPresentationView]);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    controls.enabled = !viewerContextMenuOpen;
+  }, [viewerContextMenuOpen]);
 
   // Instant plane/cap height while dragging — basic view only
   useEffect(() => {
@@ -2256,7 +2279,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
     const onPointerUp = () => {
       const controls = controlsRef.current;
-      if (controls) controls.enabled = true;
+      if (controls && !useAppStore.getState().viewerContextMenuOpen) {
+        controls.enabled = true;
+      }
     };
 
     canvas.addEventListener("pointermove", onMove);
