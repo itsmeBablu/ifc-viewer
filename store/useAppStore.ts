@@ -2,7 +2,24 @@
 
 import { create } from "zustand";
 import type { ColorPaletteId } from "@/lib/colorMapping";
-import { resolveColorPalette } from "@/lib/colorMapping";
+import {
+  EMPTY_CUSTOM_LEGEND_COLORS,
+  mapAnchorColorsToRange,
+  resolveColorPalette,
+  standardTemperatureOverrides,
+  type CustomLegendColors,
+  type CustomLegendColorMap,
+  type LegendColorMode,
+} from "@/lib/colorMapping";
+import {
+  getLegendSwatchPreset,
+  getTemperatureSwatchPreset,
+  LEGEND_SWATCH_PRESETS,
+  LEGEND_TEMPERATURE_SWATCH_PRESETS,
+  swatchColorsForMode,
+  type LegendSwatchPreset,
+  type TemperatureSwatchPreset,
+} from "@/lib/legendSwatchPresets";
 import {
   DEFAULT_HEIZLAST_RANGE,
   DEFAULT_KUHLLAST_RANGE,
@@ -36,6 +53,7 @@ const THEME_KEY = "ifc-viewer:colorTheme";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
+const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
 
 export { SCENE_BACKGROUND_PRESETS } from "@/lib/sceneSky";
@@ -123,6 +141,10 @@ type AppState = {
   kuhllastRange: number[];
   /** Legend temperature stop values (6–8). */
   temperatureRange: number[];
+  /** User-edited swatch colors keyed by stop value string. */
+  customLegendColors: CustomLegendColors;
+  /** Last one-click swatch preset applied per legend mode. */
+  legendSwatchPresetId: Record<LegendColorMode, string | null>;
   renderMode: RenderMode;
   lighting: {
     /** Opacity of IfcSpace / room color overlays (0–1). */
@@ -190,6 +212,13 @@ type AppState = {
   setHeizlastRange: (values: number[]) => void;
   setKuhllastRange: (values: number[]) => void;
   setTemperatureRange: (values: number[]) => void;
+  setLegendStopColor: (
+    mode: LegendColorMode,
+    value: number,
+    color: string,
+  ) => void;
+  resetLegendColors: (mode: LegendColorMode) => void;
+  applyLegendSwatchPreset: (mode: LegendColorMode, presetId: string) => void;
   setRenderMode: (mode: RenderMode) => void;
   setLighting: (
     partial: Partial<{
@@ -270,6 +299,31 @@ function initialPalette(): ColorPaletteId {
   return "standard";
 }
 
+function persistCustomLegendColors(colors: CustomLegendColors) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CUSTOM_LEGEND_COLORS_KEY, JSON.stringify(colors));
+  } catch {
+    // ignore
+  }
+}
+
+function initialCustomLegendColors(): CustomLegendColors {
+  if (typeof window === "undefined") return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+  try {
+    const raw = localStorage.getItem(CUSTOM_LEGEND_COLORS_KEY);
+    if (!raw) return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+    const parsed = JSON.parse(raw) as Partial<CustomLegendColors>;
+    return {
+      temperature: parsed.temperature ?? {},
+      heizlast: parsed.heizlast ?? {},
+      kuhllast: parsed.kuhllast ?? {},
+    };
+  } catch {
+    return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+  }
+}
+
 function initialRange(key: string, fallback: number[]): number[] {
   if (typeof window === "undefined") return [...fallback];
   try {
@@ -341,6 +395,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   heizlastRange: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
   kuhllastRange: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
+  customLegendColors: initialCustomLegendColors(),
+  legendSwatchPresetId: {
+    temperature: null,
+    heizlast: null,
+    kuhllast: null,
+  },
   renderMode: "fullColor",
   lighting: {
     spaceTransparency: 0.75,
@@ -418,7 +478,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         // ignore
       }
     }
-    set({ activeColorPalette: palette });
+    set({ activeColorPalette: palette, customLegendColors: { ...EMPTY_CUSTOM_LEGEND_COLORS }, legendSwatchPresetId: { temperature: null, heizlast: null, kuhllast: null } });
+    persistCustomLegendColors({ ...EMPTY_CUSTOM_LEGEND_COLORS });
   },
   setHeizlastRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
@@ -437,6 +498,70 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!parsed) return;
     persistRange(TEMP_RANGE_KEY, parsed);
     set({ temperatureRange: parsed });
+  },
+  setLegendStopColor: (mode, value, color) => {
+    const key = String(value);
+    set((s) => {
+      const next: CustomLegendColors = {
+        ...s.customLegendColors,
+        [mode]: { ...s.customLegendColors[mode], [key]: color },
+      };
+      persistCustomLegendColors(next);
+      return {
+        customLegendColors: next,
+        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: null },
+      };
+    });
+  },
+  resetLegendColors: (mode) => {
+    set((s) => {
+      const next: CustomLegendColors = {
+        ...s.customLegendColors,
+        [mode]: {},
+      };
+      persistCustomLegendColors(next);
+      return {
+        customLegendColors: next,
+        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: null },
+      };
+    });
+  },
+  applyLegendSwatchPreset: (mode, presetId) => {
+    set((s) => {
+      const range =
+        mode === "temperature"
+          ? s.temperatureRange
+          : mode === "kuhllast"
+            ? s.kuhllastRange
+            : s.heizlastRange;
+
+      let overrides: CustomLegendColorMap;
+      if (mode === "temperature") {
+        const preset = getTemperatureSwatchPreset(presetId);
+        if (!preset) return s;
+        if (presetId === "temp-standard") {
+          overrides = standardTemperatureOverrides(range);
+        } else {
+          overrides = mapAnchorColorsToRange(preset.colors, range);
+        }
+      } else {
+        const preset = getLegendSwatchPreset(presetId);
+        if (!preset) return s;
+        overrides = mapAnchorColorsToRange(
+          swatchColorsForMode(preset, mode),
+          range,
+        );
+      }
+      const next: CustomLegendColors = {
+        ...s.customLegendColors,
+        [mode]: overrides,
+      };
+      persistCustomLegendColors(next);
+      return {
+        customLegendColors: next,
+        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: presetId },
+      };
+    });
   },
   setRenderMode: (mode) => set({ renderMode: mode }),
   setLighting: (partial) =>
@@ -665,4 +790,8 @@ export function useEffectiveColorPalette(): ColorPaletteId {
   return useAppStore((s) =>
     resolveColorPalette(s.colorTheme, s.activeColorPalette),
   );
+}
+
+export function useLegendColorOverrides(mode: LegendColorMode) {
+  return useAppStore((s) => s.customLegendColors[mode]);
 }

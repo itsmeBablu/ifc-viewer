@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
-import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage } from "@/lib/i18n";
@@ -25,6 +25,7 @@ function RoomInfoBody({
   heizlastRange,
   kuhllastRange,
   temperatureRange,
+  customLegendColors,
   uiLanguage,
   cooling,
   compact = false,
@@ -34,17 +35,29 @@ function RoomInfoBody({
   heizlastRange: number[];
   kuhllastRange: number[];
   temperatureRange: number[];
+  customLegendColors: CustomLegendColors;
   uiLanguage: UiLanguage;
   cooling: boolean;
   compact?: boolean;
 }) {
   const loadColor = cooling
-    ? kuhllastToColor(room.coolLoad, palette, kuhllastRange)
-    : heizlastToColor(room.heatLoad, palette, heizlastRange);
+    ? kuhllastToColor(
+        room.coolLoad,
+        palette,
+        kuhllastRange,
+        customLegendColors.kuhllast,
+      )
+    : heizlastToColor(
+        room.heatLoad,
+        palette,
+        heizlastRange,
+        customLegendColors.heizlast,
+      );
   const tempColor = temperatureToColor(
     room.temperature,
     palette,
     temperatureRange,
+    customLegendColors.temperature,
   );
   const absLoad = cooling ? room.kuhllast : room.heizlast;
   const densityVal = cooling ? room.coolLoad : room.heatLoad;
@@ -188,6 +201,7 @@ export default function RoomTooltip({
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const customLegendColors = useAppStore((s) => s.customLegendColors);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [isMobile, setIsMobile] = useState(false);
@@ -300,6 +314,7 @@ export default function RoomTooltip({
           heizlastRange={heizlastRange}
           kuhllastRange={kuhllastRange}
           temperatureRange={temperatureRange}
+          customLegendColors={customLegendColors}
           uiLanguage={uiLanguage}
           cooling={cooling}
           compact={compact}

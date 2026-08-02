@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { heizlastToColor, kuhllastToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
 import { canHover } from "@/lib/canHover";
 import { isRoomPickAllowed } from "@/lib/pickAllowed";
 import { roomPassesFilter } from "@/lib/roomFilter";
@@ -27,14 +27,30 @@ function roomColor(
   heizlastRange: number[],
   kuhllastRange: number[],
   temperatureRange: number[],
+  customLegendColors?: CustomLegendColors,
 ): string {
   if (mode === "temperature") {
-    return temperatureToColor(room.temperature, palette, temperatureRange);
+    return temperatureToColor(
+      room.temperature,
+      palette,
+      temperatureRange,
+      customLegendColors?.temperature,
+    );
   }
   if (dataViewMode === "kuhllast") {
-    return kuhllastToColor(room.coolLoad, palette, kuhllastRange);
+    return kuhllastToColor(
+      room.coolLoad,
+      palette,
+      kuhllastRange,
+      customLegendColors?.kuhllast,
+    );
   }
-  return heizlastToColor(room.heatLoad, palette, heizlastRange);
+  return heizlastToColor(
+    room.heatLoad,
+    palette,
+    heizlastRange,
+    customLegendColors?.heizlast,
+  );
 }
 
 export default function Plan2D({ onPointerMove, className }: Props) {
@@ -64,6 +80,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const customLegendColors = useAppStore((s) => s.customLegendColors);
 
   const colorTheme = useAppStore((s) => s.colorTheme);
 
@@ -240,6 +257,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
             heizlastRange,
             kuhllastRange,
             temperatureRange,
+            customLegendColors,
           ),
         ),
         transparent: true,
@@ -274,6 +292,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
           heizlastRange,
           kuhllastRange,
           temperatureRange,
+          customLegendColors,
         ),
       );
     }
@@ -286,6 +305,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     heizlastRange,
     kuhllastRange,
     temperatureRange,
+    customLegendColors,
   ]);
 
   useEffect(() => {
@@ -323,17 +343,20 @@ export default function Plan2D({ onPointerMove, className }: Props) {
                 room.temperature,
                 activeColorPalette,
                 temperatureRange,
+                customLegendColors.temperature,
               )
             : dataViewMode === "kuhllast"
               ? kuhllastToColor(
                   room.coolLoad,
                   activeColorPalette,
                   kuhllastRange,
+                  customLegendColors.kuhllast,
                 )
               : heizlastToColor(
                   room.heatLoad,
                   activeColorPalette,
                   heizlastRange,
+                  customLegendColors.heizlast,
                 );
         mat.emissive.set(new THREE.Color(sel));
       } else {
@@ -351,6 +374,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     dataViewMode,
     colorMode,
     temperatureRange,
+    customLegendColors,
   ]);
 
   useEffect(() => {

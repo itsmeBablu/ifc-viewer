@@ -2,20 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  COLOR_PALETTES,
   HEIZLAST_RANGE_PRESETS,
   KUHLLAST_RANGE_PRESETS,
-  USER_COLOR_PALETTE_IDS,
   heizlastGradientCss,
   kuhllastGradientCss,
+  legendStopsForMode,
   resolveColorPalette,
-  temperatureLegendStops,
-  type ColorPaletteId,
+  type LegendColorMode,
 } from "@/lib/colorMapping";
 import { heading } from "@/lib/designTokens";
 import { t } from "@/lib/i18n";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, useLegendColorOverrides } from "@/store/useAppStore";
 import LegendRangeInput from "./LegendRangeInput";
+import LegendPalettePanel from "./LegendPalettePanel";
 import PresentationOptionsMenu from "./PresentationOptionsMenu";
 
 type Props = {
@@ -27,6 +26,18 @@ type Props = {
   /** Presentation heating/options menu open — parent can grow the dock. */
   onPresentationMenuOpenChange?: (open: boolean) => void;
 };
+
+function toColorInputValue(hex: string): string {
+  const h = hex.replace("#", "");
+  if (h.length === 3) {
+    return `#${h
+      .split("")
+      .map((c) => c + c)
+      .join("")}`;
+  }
+  if (h.length === 6) return `#${h}`;
+  return "#888888";
+}
 
 function Chevron({ open }: { open: boolean }) {
   return (
@@ -63,10 +74,15 @@ export default function LegendBody({
   const compareBothModes = useAppStore((s) => s.compareBothModes);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useAppStore((s) => s.activeColorPalette);
-  const setActiveColorPalette = useAppStore((s) => s.setActiveColorPalette);
+  const setLegendStopColor = useAppStore((s) => s.setLegendStopColor);
+  const resetLegendColors = useAppStore((s) => s.resetLegendColors);
+  const applyLegendSwatchPreset = useAppStore((s) => s.applyLegendSwatchPreset);
+  const legendSwatchPresetId = useAppStore((s) => s.legendSwatchPresetId);
   const colorTheme = useAppStore((s) => s.colorTheme);
-  const isDarkTheme = colorTheme === "dark";
   const effectiveColorPalette = resolveColorPalette(colorTheme, activeColorPalette);
+  const tempOverrides = useLegendColorOverrides("temperature");
+  const heizlastOverrides = useLegendColorOverrides("heizlast");
+  const kuhllastOverrides = useLegendColorOverrides("kuhllast");
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
@@ -76,20 +92,46 @@ export default function LegendBody({
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteContext, setPaletteContext] = useState<"load" | "temperature">(
+    "load",
+  );
   const [rangeOpen, setRangeOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const rangeBlockRef = useRef<HTMLDivElement>(null);
   const modeBarRef = useRef<HTMLDivElement>(null);
 
-  const tempStops = temperatureLegendStops(
-    effectiveColorPalette,
-    temperatureRange,
-  );
   const cooling = dataViewMode === "kuhllast";
+  const loadKind: LegendColorMode = cooling ? "kuhllast" : "heizlast";
   const loadRange = cooling ? kuhllastRange : heizlastRange;
+  const loadOverrides = cooling ? kuhllastOverrides : heizlastOverrides;
   const loadGradient = cooling ? kuhllastGradientCss : heizlastGradientCss;
   const setLoadRange = cooling ? setKuhllastRange : setHeizlastRange;
   const loadPresets = cooling ? KUHLLAST_RANGE_PRESETS : HEIZLAST_RANGE_PRESETS;
+  const hasLoadOverrides = Object.keys(loadOverrides).length > 0;
+  const hasTempOverrides = Object.keys(tempOverrides).length > 0;
+
+  const tempStops = legendStopsForMode(
+    "temperature",
+    effectiveColorPalette,
+    temperatureRange,
+    tempOverrides,
+  );
+  const loadStops = legendStopsForMode(
+    loadKind,
+    effectiveColorPalette,
+    loadRange,
+    loadOverrides,
+  );
+
+  const openLoadPalette = () => {
+    setPaletteContext("load");
+    setPaletteOpen((v) => (paletteContext === "load" ? !v : true));
+  };
+
+  const openTempPalette = () => {
+    setPaletteContext("temperature");
+    setPaletteOpen((v) => (paletteContext === "temperature" ? !v : true));
+  };
 
   const toggleRange = (mode: "heizlast" | "temperature") => {
     if (colorMode !== mode) {
@@ -99,6 +141,10 @@ export default function LegendBody({
     }
     setRangeOpen((v) => !v);
   };
+
+  useEffect(() => {
+    setPaletteContext(colorMode === "heizlast" ? "load" : "temperature");
+  }, [colorMode]);
 
   useEffect(() => {
     if (!paletteOpen) return;
@@ -280,7 +326,8 @@ export default function LegendBody({
             <button
               type="button"
               title={t(uiLanguage, "changePalette")}
-              onClick={() => setPaletteOpen((v) => !v)}
+              onClick={openLoadPalette}
+              aria-expanded={paletteOpen && paletteContext === "load"}
               className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
               <div
@@ -292,6 +339,7 @@ export default function LegendBody({
                     "to right",
                     effectiveColorPalette,
                     loadRange,
+                    loadOverrides,
                   ),
                 }}
               >
@@ -306,9 +354,9 @@ export default function LegendBody({
                 compact ? "text-[9px]" : "text-[10px]"
               }`}
             >
-              {loadRange.map((t) => (
-                <span key={t} className="min-w-0 truncate text-center">
-                  {t}
+              {loadRange.map((v) => (
+                <span key={v} className="min-w-0 truncate text-center">
+                  {v}
                 </span>
               ))}
             </div>
@@ -321,6 +369,38 @@ export default function LegendBody({
                   presets={loadPresets}
                 />
               </div>
+            )}
+            {paletteOpen && paletteContext === "load" && (
+              <LegendPalettePanel
+                mode={loadKind}
+                uiLanguage={uiLanguage}
+                compact={compact}
+                stops={loadStops}
+                unitSuffix=""
+                activePresetId={legendSwatchPresetId[loadKind]}
+                hasOverrides={hasLoadOverrides}
+                onSelectPreset={(id) => applyLegendSwatchPreset(loadKind, id)}
+                onStopColor={(value, color) =>
+                  setLegendStopColor(loadKind, value, color)
+                }
+                onReset={() => resetLegendColors(loadKind)}
+                toColorInputValue={toColorInputValue}
+                preview={
+                  <div
+                    className={`relative w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_4px_rgba(0,0,0,0.1)] ${
+                      compact ? "h-2.5" : "h-3"
+                    }`}
+                    style={{
+                      background: loadGradient(
+                        "to right",
+                        effectiveColorPalette,
+                        loadRange,
+                        loadOverrides,
+                      ),
+                    }}
+                  />
+                }
+              />
             )}
           </div>
         )}
@@ -335,7 +415,8 @@ export default function LegendBody({
             <button
               type="button"
               title={t(uiLanguage, "changePalette")}
-              onClick={() => setPaletteOpen((v) => !v)}
+              onClick={openTempPalette}
+              aria-expanded={paletteOpen && paletteContext === "temperature"}
               className="flex w-full flex-nowrap items-center justify-between gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
             >
               {tempStops.map((s) => (
@@ -377,58 +458,38 @@ export default function LegendBody({
                 />
               </div>
             )}
-          </div>
-        )}
-
-        {paletteOpen && (
-          <div
-            className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] shadow-md backdrop-blur-md ${
-              compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
-            }`}
-          >
-            {isDarkTheme && (
-              <p className="px-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
-                {t(uiLanguage, "paletteNightHint")}
-              </p>
-            )}
-            <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-              {t(uiLanguage, "palette")}
-            </p>
-            {USER_COLOR_PALETTE_IDS.map((id) => {
-              const pal = COLOR_PALETTES[id];
-              const active = activeColorPalette === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    setActiveColorPalette(id as ColorPaletteId);
-                    setPaletteOpen(false);
-                  }}
-                  className={`w-full rounded-lg border px-2 text-left transition-colors ${
-                    compact ? "py-1" : "py-1.5"
-                  } ${
-                    active
-                      ? "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"
-                      : "border-transparent hover:bg-[var(--glass-inset-bg)]"
-                  }`}
-                >
-                  <p className="mb-1 text-[11px] font-semibold text-[var(--text-strong)]">
-                    {pal.name}
-                  </p>
+            {paletteOpen && paletteContext === "temperature" && (
+              <LegendPalettePanel
+                mode="temperature"
+                uiLanguage={uiLanguage}
+                compact={compact}
+                stops={tempStops}
+                unitSuffix="°"
+                activePresetId={legendSwatchPresetId.temperature}
+                hasOverrides={hasTempOverrides}
+                onSelectPreset={(id) => applyLegendSwatchPreset("temperature", id)}
+                onStopColor={(value, color) =>
+                  setLegendStopColor("temperature", value, color)
+                }
+                onReset={() => resetLegendColors("temperature")}
+                toColorInputValue={toColorInputValue}
+                preview={
                   <div
-                    className="h-1.5 w-full rounded-full"
-                    style={{
-                      background: loadGradient(
-                        "to right",
-                        id,
-                        loadRange,
-                      ),
-                    }}
-                  />
-                </button>
-              );
-            })}
+                    className={`flex w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_4px_rgba(0,0,0,0.1)] ${
+                      compact ? "h-2.5" : "h-3"
+                    }`}
+                  >
+                    {tempStops.map((s) => (
+                      <span
+                        key={s.value}
+                        className="min-w-0 flex-1"
+                        style={{ backgroundColor: s.color }}
+                      />
+                    ))}
+                  </div>
+                }
+              />
+            )}
           </div>
         )}
       </section>

@@ -45,6 +45,7 @@ export function pdfLegendFromStore(): PdfLegendContext {
     palette: resolveColorPalette(s.colorTheme, s.activeColorPalette),
     heizlastRange: s.heizlastRange,
     temperatureRange: s.temperatureRange,
+    customLegendColors: s.customLegendColors,
   };
 }
 

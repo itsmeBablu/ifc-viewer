@@ -44,6 +44,11 @@ export default function PresentationSidePanel({
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
+  const customLegendColors = useAppStore((s) => s.customLegendColors);
+  const loadOverrides =
+    dataViewMode === "kuhllast"
+      ? customLegendColors.kuhllast
+      : customLegendColors.heizlast;
 
   const floorsWithRooms = useMemo(
     () => listVisibleFloors(floors, rooms),
@@ -162,6 +167,7 @@ export default function PresentationSidePanel({
                   activeColorPalette,
                   heizlastRange,
                   kuhllastRange,
+                  loadOverrides,
                 );
                 const density = roomDensityLoad(room, dataViewMode);
                 const active = room.id === selectedRoomId;

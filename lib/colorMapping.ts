@@ -319,6 +319,108 @@ export function formatLegendRange(values: number[]): string {
   return values.join(", ");
 }
 
+export type LegendColorMode = "temperature" | "heizlast" | "kuhllast";
+
+export type CustomLegendColorMap = Record<string, string>;
+
+export type CustomLegendColors = Record<
+  LegendColorMode,
+  CustomLegendColorMap
+>;
+
+export const EMPTY_CUSTOM_LEGEND_COLORS: CustomLegendColors = {
+  temperature: {},
+  heizlast: {},
+  kuhllast: {},
+};
+
+/** Apply per-value hex overrides (keys are stop values as strings). */
+export function applyLegendColorOverrides(
+  stops: ColorStop[],
+  overrides?: CustomLegendColorMap,
+): ColorStop[] {
+  if (!overrides || !Object.keys(overrides).length) return stops;
+  return stops.map((s) => ({
+    ...s,
+    color: overrides[String(s.value)] ?? s.color,
+  }));
+}
+
+function loadStopsForKind(
+  kind: LegendColorMode,
+  paletteId?: ColorPaletteId | string,
+): ColorStop[] {
+  if (kind === "temperature") return temperatureStopsFor(paletteId);
+  if (kind === "kuhllast") return kuhllastStopsFor(paletteId);
+  return heizlastStopsFor(paletteId);
+}
+
+export function legendStopsForMode(
+  kind: LegendColorMode,
+  paletteId?: ColorPaletteId | string,
+  range?: number[],
+  overrides?: CustomLegendColorMap,
+): ColorStop[] {
+  const defaultRange =
+    kind === "temperature"
+      ? DEFAULT_TEMPERATURE_RANGE
+      : kind === "kuhllast"
+        ? DEFAULT_KUHLLAST_RANGE
+        : DEFAULT_HEIZLAST_RANGE;
+  const resolved = resolveStopsForRange(
+    loadStopsForKind(kind, paletteId),
+    range ?? defaultRange,
+  );
+  return applyLegendColorOverrides(resolved, overrides);
+}
+
+/** Map stop colors onto range values (1:1 when counts match, else interpolate). */
+export function mapAnchorColorsToRange(
+  anchorColors: string[],
+  range: number[],
+): CustomLegendColorMap {
+  const src =
+    anchorColors.length > 0
+      ? anchorColors
+      : ["#0050FF", "#FFFFB4", "#DC0000"];
+  const overrides: CustomLegendColorMap = {};
+  if (src.length === range.length) {
+    range.forEach((value, i) => {
+      overrides[String(value)] = src[i]!;
+    });
+    return overrides;
+  }
+  range.forEach((value, i) => {
+    overrides[String(value)] = sampleColors(
+      src,
+      i / Math.max(1, range.length - 1),
+    );
+  });
+  return overrides;
+}
+
+/** Build override map from resolved legend stops. */
+export function legendStopsToOverrides(
+  stops: ColorStop[],
+): CustomLegendColorMap {
+  return Object.fromEntries(stops.map((s) => [String(s.value), s.color]));
+}
+
+/** Default temperature colors — matches standard palette with no custom overrides. */
+export function standardTemperatureStopColors(
+  range: number[] = DEFAULT_TEMPERATURE_RANGE,
+): string[] {
+  return legendStopsForMode("temperature", "standard", range).map((s) => s.color);
+}
+
+export function standardTemperatureOverrides(
+  range: number[] = DEFAULT_TEMPERATURE_RANGE,
+): CustomLegendColorMap {
+  return legendStopsToOverrides(
+    legendStopsForMode("temperature", "standard", range),
+  );
+}
+
 function sampleColors(colors: string[], t: number): string {
   if (!colors.length) return "#888888";
   if (colors.length === 1) return colors[0];
@@ -364,8 +466,9 @@ export function heizlastToColor(
   value: number,
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_HEIZLAST_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  return loadToColor(value, heizlastStopsFor(paletteId), range);
+  return loadToColor(value, heizlastStopsFor(paletteId), range, overrides);
 }
 
 /**
@@ -375,16 +478,21 @@ export function kuhllastToColor(
   value: number,
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_KUHLLAST_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  return loadToColor(value, kuhllastStopsFor(paletteId), range);
+  return loadToColor(value, kuhllastStopsFor(paletteId), range, overrides);
 }
 
 function loadToColor(
   value: number,
   paletteStops: ColorStop[],
   range: number[],
+  overrides?: CustomLegendColorMap,
 ): string {
-  const stops = resolveStopsForRange(paletteStops, range);
+  const stops = applyLegendColorOverrides(
+    resolveStopsForRange(paletteStops, range),
+    overrides,
+  );
   if (!Number.isFinite(value) || value < stops[0].value) {
     return stops[0].color;
   }
@@ -410,8 +518,9 @@ export function heizlastGradientCss(
   direction = "to right",
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_HEIZLAST_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  const stops = resolveStopsForRange(heizlastStopsFor(paletteId), range);
+  const stops = legendStopsForMode("heizlast", paletteId, range, overrides);
   return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 
@@ -419,8 +528,9 @@ export function kuhllastGradientCss(
   direction = "to right",
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_KUHLLAST_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  const stops = resolveStopsForRange(kuhllastStopsFor(paletteId), range);
+  const stops = legendStopsForMode("kuhllast", paletteId, range, overrides);
   return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 
@@ -431,8 +541,9 @@ export function temperatureToColor(
   value: number,
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_TEMPERATURE_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  const stops = resolveStopsForRange(temperatureStopsFor(paletteId), range);
+  const stops = legendStopsForMode("temperature", paletteId, range, overrides);
   if (!Number.isFinite(value)) {
     return stops[2]?.color ?? stops[0].color;
   }
@@ -456,6 +567,7 @@ export function temperatureToColor(
 export function temperatureLegendStops(
   paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_TEMPERATURE_RANGE,
+  overrides?: CustomLegendColorMap,
 ): ColorStop[] {
-  return resolveStopsForRange(temperatureStopsFor(paletteId), range);
+  return legendStopsForMode("temperature", paletteId, range, overrides);
 }

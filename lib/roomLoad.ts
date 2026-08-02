@@ -2,6 +2,7 @@ import {
   heizlastToColor,
   kuhllastToColor,
   type ColorPaletteId,
+  type CustomLegendColorMap,
 } from "@/lib/colorMapping";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import type { Room } from "@/lib/types";
@@ -28,11 +29,12 @@ export function roomLoadColor(
   palette?: ColorPaletteId | string,
   heizlastRange?: number[],
   kuhllastRange?: number[],
+  overrides?: CustomLegendColorMap,
 ): string {
   if (dataViewMode === "kuhllast") {
-    return kuhllastToColor(room.coolLoad, palette, kuhllastRange);
+    return kuhllastToColor(room.coolLoad, palette, kuhllastRange, overrides);
   }
-  return heizlastToColor(room.heatLoad, palette, heizlastRange);
+  return heizlastToColor(room.heatLoad, palette, heizlastRange, overrides);
 }
 
 export function isCoolingView(dataViewMode: DataViewMode): boolean {

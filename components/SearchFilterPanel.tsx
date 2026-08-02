@@ -8,7 +8,7 @@ import {
 import { getElementDetails } from "@/lib/ifcClient";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import { t } from "@/lib/i18n";
-import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
+import { useAppStore, useEffectiveColorPalette, useLegendColorOverrides } from "@/store/useAppStore";
 import type { Room } from "@/lib/types";
 import type { Viewer3DHandle } from "./Viewer3D";
 import Slider from "./ui/Slider";
@@ -44,6 +44,7 @@ export default function SearchFilterPanel({
   const activeFilter = useAppStore((s) => s.activeFilter);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const activeColorPalette = useEffectiveColorPalette();
+  const tempOverrides = useLegendColorOverrides("temperature");
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
@@ -118,6 +119,7 @@ export default function SearchFilterPanel({
   const tempChips = temperatureLegendStops(
     activeColorPalette,
     temperatureRange,
+    tempOverrides,
   );
 
   /** Search selection: switch floor if needed, select room, fly camera. */
@@ -338,6 +340,7 @@ export default function SearchFilterPanel({
                           s.value,
                           activeColorPalette,
                           temperatureRange,
+                          tempOverrides,
                         ),
                       }}
                     />

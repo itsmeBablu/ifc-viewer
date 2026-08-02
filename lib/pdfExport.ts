@@ -1,10 +1,10 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import {
-  heizlastStopsFor,
-  resolveStopsForRange,
+  legendStopsForMode,
   temperatureLegendStops,
   type ColorPaletteId,
+  type CustomLegendColors,
 } from "@/lib/colorMapping";
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Room } from "@/lib/types";
@@ -13,6 +13,7 @@ export type PdfLegendContext = {
   palette: ColorPaletteId;
   heizlastRange: number[];
   temperatureRange: number[];
+  customLegendColors?: CustomLegendColors;
 };
 
 export type FloorPdfSection = {
@@ -109,9 +110,11 @@ function drawLegendTopRight(
   );
 
   if (mode === "heizlast") {
-    const stops = resolveStopsForRange(
-      heizlastStopsFor(legend.palette),
+    const stops = legendStopsForMode(
+      "heizlast",
+      legend.palette,
       legend.heizlastRange,
+      legend.customLegendColors?.heizlast,
     );
     const barY = y + 7;
     const barH = 5;
@@ -132,6 +135,7 @@ function drawLegendTopRight(
     const chips = temperatureLegendStops(
       legend.palette,
       legend.temperatureRange,
+      legend.customLegendColors?.temperature,
     );
     const chipY = y + 7;
     const chipH = 5;
@@ -214,6 +218,7 @@ function drawDualLegendsTopRight(
   const chips = temperatureLegendStops(
     legend.palette,
     legend.temperatureRange,
+    legend.customLegendColors?.temperature,
   );
   const chipY = y + 7;
   const chipH = 5;

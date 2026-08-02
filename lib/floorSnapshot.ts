@@ -57,6 +57,7 @@ export function renderFloorSnapshot(
     compareBothModes,
     temperatureRange,
     colorTheme,
+    customLegendColors,
   } = useAppStore.getState();
   const palette = resolveColorPalette(colorTheme, activeColorPalette);
 
@@ -68,6 +69,7 @@ export function renderFloorSnapshot(
         room.temperature,
         palette,
         temperatureRange,
+        customLegendColors.temperature,
       );
     }
     if (dataViewMode === "kuhllast") {
@@ -75,12 +77,14 @@ export function renderFloorSnapshot(
         room.coolLoad,
         palette,
         kuhllastRange,
+        customLegendColors.kuhllast,
       );
     }
     return heizlastToColor(
       room.heatLoad,
       palette,
       heizlastRange,
+      customLegendColors.heizlast,
     );
   };
 
@@ -90,11 +94,12 @@ export function renderFloorSnapshot(
       : dataViewMode === "kuhllast"
         ? kuhllastRange
         : heizlastRange;
+  const customKey = JSON.stringify(customLegendColors);
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${
     selectedRoomId ?? "none"
   }::view=${dataViewMode}::color=${snapshotColorMode}::theme=${colorTheme}::palette=${palette}::range=${range
     .map((v) => (Number.isFinite(v) ? v.toFixed(4) : "x"))
-    .join(",")}::v8`;
+    .join(",")}::custom=${customKey}::v9`;
   const cached = snapshotCache.get(cacheKey);
   if (cached) return cached;
 

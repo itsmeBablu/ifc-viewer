@@ -18,6 +18,7 @@ import { debugLog } from "@/lib/debugLog";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
 import { isCompactMobileViewport } from "@/lib/layoutTokens";
+import type { CustomLegendColors } from "@/lib/colorMapping";
 import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
@@ -69,14 +70,30 @@ function roomColorHex(
   temperatureRange?: number[],
   dataViewMode: DataViewMode = "heizlast",
   kuhllastRange?: number[],
+  customLegendColors?: CustomLegendColors,
 ): string {
   if (mode === "temperature") {
-    return temperatureToColor(room.temperature, palette, temperatureRange);
+    return temperatureToColor(
+      room.temperature,
+      palette,
+      temperatureRange,
+      customLegendColors?.temperature,
+    );
   }
   if (dataViewMode === "kuhllast") {
-    return kuhllastToColor(room.coolLoad, palette, kuhllastRange);
+    return kuhllastToColor(
+      room.coolLoad,
+      palette,
+      kuhllastRange,
+      customLegendColors?.kuhllast,
+    );
   }
-  return heizlastToColor(room.heatLoad, palette, heizlastRange);
+  return heizlastToColor(
+    room.heatLoad,
+    palette,
+    heizlastRange,
+    customLegendColors?.heizlast,
+  );
 }
 
 /** Per-color material templates — always return a CLONE so rooms never share GPU state. */
@@ -380,6 +397,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const activeColorPalette = useEffectiveColorPalette();
   const colorTheme = useAppStore((s) => s.colorTheme);
+  const customLegendColors = useAppStore((s) => s.customLegendColors);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
@@ -775,6 +793,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         temperatureRange,
         dataViewMode,
         kuhllastRange,
+        customLegendColors,
       );
       if (logged < 8) {
         debugLog(
@@ -857,6 +876,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           temperatureRange,
           dataViewMode,
           kuhllastRange,
+          customLegendColors,
         );
         mesh.material = materialCacheRef.current.get(hex);
         mesh.userData.colorHex = hex;
@@ -893,6 +913,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         temperatureRange,
         dataViewMode,
         kuhllastRange,
+        customLegendColors,
       );
       mesh.material = materialCacheRef.current.get(hex);
       mesh.userData.colorHex = hex;
@@ -918,6 +939,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         temperatureRange,
         dataViewMode,
         kuhllastRange,
+        customLegendColors,
       );
       const material = twinMaterialCacheRef.current.get(hex);
       const mesh = new THREE.Mesh(room.geometry, material);
@@ -1029,6 +1051,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         temperatureRange,
         dataViewMode,
         kuhllastRange,
+        customLegendColors,
       );
       const prev = mesh.material;
       mesh.material = materialCacheRef.current.get(hex);
@@ -1049,7 +1072,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     clipRef.current?.rebuildCaps();
     // Selection opacity/outline must win over shared-material rebuilds
     applySelectionHighlightRef.current();
-  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
+  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {
