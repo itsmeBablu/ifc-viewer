@@ -17,9 +17,12 @@ export const metadata: Metadata = {
   description:
     "Client-side IFC viewer for building heating load (Heizlast) and room temperature visualization",
   icons: {
-    icon: [{ url: "/ibv.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/ibv.svg", type: "image/svg+xml" },
+      { url: "/ibv.png", type: "image/png", sizes: "32x32" },
+    ],
     shortcut: [{ url: "/ibv.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/ibv.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/ibv.png", type: "image/png", sizes: "180x180" }],
   },
 };
 
@@ -43,6 +46,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="icon" href="/ibv.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/ibv.png" type="image/png" />
         {/* Blocking theme vars — must live in <head> (Next.js 16 script ordering). */}
         <script
           dangerouslySetInnerHTML={{

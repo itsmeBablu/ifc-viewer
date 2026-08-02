@@ -4,6 +4,10 @@ function canTrackSceneWork(): boolean {
   return !useAppStore.getState().isLoadingModel;
 }
 
+function showSceneBusyNow(): void {
+  useAppStore.getState().showSceneBusyNow();
+}
+
 /** Mark start of synchronous or async 3D work (ref-counted). */
 export function startSceneWork(): void {
   if (!canTrackSceneWork()) return;
@@ -15,46 +19,73 @@ export function finishSceneWork(): void {
   useAppStore.getState().endSceneBusy();
 }
 
+type PaintedWorkHandle = {
+  cancel: () => void;
+};
+
+/** Let React paint the busy overlay, then run work on a later task. */
+function schedulePaintedSceneWork(
+  run: () => void,
+  onCleanup: () => void,
+): PaintedWorkHandle {
+  let cancelled = false;
+  let frameId = 0;
+  let timeoutId = 0;
+
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    cancelAnimationFrame(frameId);
+    clearTimeout(timeoutId);
+    onCleanup();
+  };
+
+  frameId = requestAnimationFrame(() => {
+    if (cancelled) return;
+    showSceneBusyNow();
+    timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      run();
+    }, 0);
+  });
+
+  return { cancel };
+}
+
 /**
- * Wrap sync scene rebuild.
- * Defers work by two frames so the spinner can paint before blocking the main thread.
+ * Defer scene work until the busy overlay can paint (for paired start/finish).
+ * Caller must call finishSceneWork when async work completes.
  */
+export function deferPaintedSceneWork(run: () => void): () => void {
+  if (!canTrackSceneWork()) {
+    run();
+    return () => {};
+  }
+  startSceneWork();
+  const handle = schedulePaintedSceneWork(run, finishSceneWork);
+  return handle.cancel;
+}
+
+/** Wrap sync scene rebuild — shows spinner first, ends after the next frame. */
 export function runSceneWork(fn: () => void): () => void {
   if (!canTrackSceneWork()) {
     fn();
     return () => {};
   }
   startSceneWork();
-  let cancelled = false;
-  let paintId = 0;
-  let workId = 0;
   let finishId = 0;
-
-  paintId = requestAnimationFrame(() => {
-    if (cancelled) {
-      finishSceneWork();
-      return;
-    }
-    workId = requestAnimationFrame(() => {
-      if (cancelled) {
-        finishSceneWork();
-        return;
-      }
+  const handle = schedulePaintedSceneWork(
+    () => {
       try {
         fn();
       } finally {
-        finishId = requestAnimationFrame(() => {
-          if (!cancelled) finishSceneWork();
-        });
+        finishId = requestAnimationFrame(() => finishSceneWork());
       }
-    });
-  });
-
-  return () => {
-    cancelled = true;
-    cancelAnimationFrame(paintId);
-    cancelAnimationFrame(workId);
-    cancelAnimationFrame(finishId);
-    finishSceneWork();
-  };
+    },
+    () => {
+      cancelAnimationFrame(finishId);
+      finishSceneWork();
+    },
+  );
+  return handle.cancel;
 }

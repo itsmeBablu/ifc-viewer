@@ -55,6 +55,7 @@ export function renderFloorSnapshot(
     activeColorPalette,
     heizlastRange,
     kuhllastRange,
+    luftungRange,
     dataViewMode,
     colorMode,
     compareBothModes,
@@ -84,7 +85,12 @@ export function renderFloorSnapshot(
       );
     }
     if (dataViewMode === "luftung") {
-      return luftungToColor(roomVentilationColorValue(room));
+      return luftungToColor(
+        roomVentilationColorValue(room),
+        palette,
+        luftungRange,
+        customLegendColors.heizlast,
+      );
     }
     return heizlastToColor(
       room.heatLoad,
@@ -100,7 +106,7 @@ export function renderFloorSnapshot(
       : dataViewMode === "kuhllast"
         ? kuhllastRange
         : dataViewMode === "luftung"
-          ? DEFAULT_LUFTUNG_RANGE
+          ? luftungRange
           : heizlastRange;
   const customKey = JSON.stringify(customLegendColors);
   const cacheKey = `${modelKey}::${floor.id}::${size}::selected=${

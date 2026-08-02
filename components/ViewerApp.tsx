@@ -31,7 +31,7 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
-import { pickHeizlastRangeFromLoads, pickKuhllastRangeFromLoads } from "@/lib/colorMapping";
+import { DEFAULT_HEIZLAST_RANGE, DEFAULT_KUHLLAST_RANGE } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
 import GsapOverlay from "./GsapOverlay";
@@ -78,6 +78,11 @@ export default function ViewerApp() {
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+
+  useEffect(() => {
+    const label = activeModelLabel?.trim();
+    document.title = label ? `IBV Viewer - ${label}` : "IBV Viewer";
+  }, [activeModelLabel]);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
@@ -246,12 +251,8 @@ export default function ViewerApp() {
         loadedRef.current = result;
         setFloors(result.floors);
         setRooms(result.rooms);
-        setHeizlastRange(
-          pickHeizlastRangeFromLoads(result.rooms.map((r) => r.heatLoad)),
-        );
-        setKuhllastRange(
-          pickKuhllastRangeFromLoads(result.rooms.map((r) => r.coolLoad)),
-        );
+        setHeizlastRange([...DEFAULT_HEIZLAST_RANGE]);
+        setKuhllastRange([...DEFAULT_KUHLLAST_RANGE]);
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
         debugLog(

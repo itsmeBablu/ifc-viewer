@@ -16,7 +16,7 @@ import { animateProgress, gsapEase } from "@/lib/gsapMotion";
 import gsap from "gsap";
 import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
-import { finishSceneWork, runSceneWork, startSceneWork } from "@/lib/sceneWork";
+import { deferPaintedSceneWork, finishSceneWork, runSceneWork } from "@/lib/sceneWork";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
 import { isCompactMobileViewport } from "@/lib/layoutTokens";
@@ -87,6 +87,7 @@ function roomColorHex(
   dataViewMode: DataViewMode = "heizlast",
   kuhllastRange?: number[],
   customLegendColors?: CustomLegendColors,
+  luftungRange?: number[],
 ): string {
   if (mode === "temperature") {
     return temperatureToColor(
@@ -105,7 +106,12 @@ function roomColorHex(
     );
   }
   if (dataViewMode === "luftung") {
-    return luftungToColor(roomVentilationColorValue(room));
+    return luftungToColor(
+      roomVentilationColorValue(room),
+      palette,
+      luftungRange,
+      customLegendColors?.heizlast,
+    );
   }
   return heizlastToColor(
     room.heatLoad,
@@ -422,6 +428,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const customLegendColors = useAppStore((s) => s.customLegendColors);
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const renderMode = useAppStore((s) => s.renderMode);
   const lighting = useAppStore((s) => s.lighting);
@@ -837,6 +844,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         dataViewMode,
         kuhllastRange,
         customLegendColors,
+        luftungRange,
       );
       if (logged < 8) {
         debugLog(
@@ -1040,7 +1048,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       return endWork;
     }
 
-    startSceneWork();
     let workOpen = true;
     const endAsyncWork = () => {
       if (!workOpen) return;
@@ -1048,127 +1055,132 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       finishSceneWork();
     };
 
-    clearTwin();
-    twinMaterialCacheRef.current = createOverlayMaterialCache();
-    const sourceRooms = rooms.length ? rooms : roomsFromStore;
-    const byId = new Map(sourceRooms.map((r) => [r.id, r]));
+    const cancelDefer = deferPaintedSceneWork(() => {
+      clearTwin();
+      twinMaterialCacheRef.current = createOverlayMaterialCache();
+      const sourceRooms = rooms.length ? rooms : roomsFromStore;
+      const byId = new Map(sourceRooms.map((r) => [r.id, r]));
 
-    // Primary overlays → Heizlast
-    materialCacheRef.current.clear();
-    materialCacheRef.current = createOverlayMaterialCache();
-    for (const [id, mesh] of roomMeshById.current) {
-      const room = byId.get(id);
-      if (!room) continue;
-      const hex = roomColorHex(
-        room,
-        "heizlast",
-        activeColorPalette,
-        heizlastRange,
-        temperatureRange,
-        dataViewMode,
-        kuhllastRange,
-        customLegendColors,
+      // Primary overlays → Heizlast
+      materialCacheRef.current.clear();
+      materialCacheRef.current = createOverlayMaterialCache();
+      for (const [id, mesh] of roomMeshById.current) {
+        const room = byId.get(id);
+        if (!room) continue;
+        const hex = roomColorHex(
+          room,
+          "heizlast",
+          activeColorPalette,
+          heizlastRange,
+          temperatureRange,
+          dataViewMode,
+          kuhllastRange,
+          customLegendColors,
+          luftungRange,
+        );
+        mesh.material = materialCacheRef.current.get(hex);
+        mesh.userData.colorHex = hex;
+      }
+      applyRenderMode(
+        renderMode,
+        shellCloneRef.current,
+        overlays,
+        true,
+        lighting,
       );
-      mesh.material = materialCacheRef.current.get(hex);
-      mesh.userData.colorHex = hex;
-    }
-    applyRenderMode(
-      renderMode,
-      shellCloneRef.current,
-      overlays,
-      true,
-      lighting,
-    );
 
-    // Twin overlays → Temperature (same geometry)
-    const twinOverlays = new THREE.Group();
-    twinOverlays.name = "compare-overlays-temp";
-    for (const room of sourceRooms) {
-      if (!room.geometry || room.geometry.attributes.position == null) continue;
-      const hex = roomColorHex(
-        room,
-        "temperature",
-        activeColorPalette,
-        heizlastRange,
-        temperatureRange,
-        dataViewMode,
-        kuhllastRange,
-        customLegendColors,
-      );
-      const material = twinMaterialCacheRef.current.get(hex);
-      const mesh = new THREE.Mesh(room.geometry, material);
-      mesh.userData.roomId = room.id;
-      mesh.userData.floorId = room.floorId;
-      mesh.userData.expressId = room.expressId;
-      mesh.userData.kind = "room";
-      mesh.userData.colorHex = hex;
-      mesh.userData.compareTwin = true;
-      mesh.renderOrder = 2;
-      twinOverlays.add(mesh);
-      roomMeshTwinById.current.set(room.id, mesh);
-    }
-    applyRenderMode(renderMode, null, twinOverlays, true, lighting);
-    root.add(twinOverlays);
+      // Twin overlays → Temperature (same geometry)
+      const twinOverlays = new THREE.Group();
+      twinOverlays.name = "compare-overlays-temp";
+      for (const room of sourceRooms) {
+        if (!room.geometry || room.geometry.attributes.position == null) continue;
+        const hex = roomColorHex(
+          room,
+          "temperature",
+          activeColorPalette,
+          heizlastRange,
+          temperatureRange,
+          dataViewMode,
+          kuhllastRange,
+          customLegendColors,
+          luftungRange,
+        );
+        const material = twinMaterialCacheRef.current.get(hex);
+        const mesh = new THREE.Mesh(room.geometry, material);
+        mesh.userData.roomId = room.id;
+        mesh.userData.floorId = room.floorId;
+        mesh.userData.expressId = room.expressId;
+        mesh.userData.kind = "room";
+        mesh.userData.colorHex = hex;
+        mesh.userData.compareTwin = true;
+        mesh.renderOrder = 2;
+        twinOverlays.add(mesh);
+        roomMeshTwinById.current.set(room.id, mesh);
+      }
+      applyRenderMode(renderMode, null, twinOverlays, true, lighting);
+      root.add(twinOverlays);
 
-    // Twin shell (so each "object" reads as a full floor/building)
-    if (shellCloneRef.current) {
-      const shellTwin = shellCloneRef.current.clone(true);
-      shellTwin.name = "compare-shell-temp";
-      shellTwin.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          const src = obj.material as THREE.MeshStandardMaterial;
-          const mat = src.clone();
-          obj.material = mat;
-          obj.userData.compareTwin = true;
-        }
+      // Twin shell (so each "object" reads as a full floor/building)
+      if (shellCloneRef.current) {
+        const shellTwin = shellCloneRef.current.clone(true);
+        shellTwin.name = "compare-shell-temp";
+        shellTwin.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            const src = obj.material as THREE.MeshStandardMaterial;
+            const mat = src.clone();
+            obj.material = mat;
+            obj.userData.compareTwin = true;
+          }
+        });
+        root.add(shellTwin);
+        applyRenderMode(renderMode, shellTwin, null, true, lighting);
+      }
+
+      root.visible = true;
+
+      // Place twin: stacked below (floor view) or beside (presentation) — smooth slide
+      compareTweenRef.current?.kill();
+      const measure = new THREE.Box3();
+      if (overlays) {
+        overlays.updateWorldMatrix(true, true);
+        measure.expandByObject(overlays);
+      }
+      if (shellCloneRef.current) {
+        shellCloneRef.current.updateWorldMatrix(true, true);
+        measure.expandByObject(shellCloneRef.current);
+      }
+      const size = measure.isEmpty()
+        ? new THREE.Vector3(10, 4, 10)
+        : measure.getSize(new THREE.Vector3());
+
+      const endX = isPresentationView ? Math.max(size.x, size.z, 1) * 1.45 : 0;
+      const endY = isPresentationView ? 0 : -(Math.max(size.y, 1) * 1.55);
+      root.position.set(0, 0, 0);
+
+      const slideMs = 1400;
+      const fitMs = isPresentationView ? 2000 : 1600;
+      root.position.set(0, 0, 0);
+
+      const slide = { x: 0, y: 0 };
+      compareTweenRef.current = gsap.to(slide, {
+        x: endX,
+        y: endY,
+        duration: slideMs / 1000,
+        ease: gsapEase.ios,
+        onUpdate: () => {
+          root.position.set(slide.x, slide.y, 0);
+        },
+        onComplete: () => {
+          root.position.set(endX, endY, 0);
+          fitToVisible(fitMs);
+          endAsyncWork();
+        },
       });
-      root.add(shellTwin);
-      applyRenderMode(renderMode, shellTwin, null, true, lighting);
-    }
-
-    root.visible = true;
-
-    // Place twin: stacked below (floor view) or beside (presentation) — smooth slide
-    compareTweenRef.current?.kill();
-    const measure = new THREE.Box3();
-    if (overlays) {
-      overlays.updateWorldMatrix(true, true);
-      measure.expandByObject(overlays);
-    }
-    if (shellCloneRef.current) {
-      shellCloneRef.current.updateWorldMatrix(true, true);
-      measure.expandByObject(shellCloneRef.current);
-    }
-    const size = measure.isEmpty()
-      ? new THREE.Vector3(10, 4, 10)
-      : measure.getSize(new THREE.Vector3());
-
-    const endX = isPresentationView ? Math.max(size.x, size.z, 1) * 1.45 : 0;
-    const endY = isPresentationView ? 0 : -(Math.max(size.y, 1) * 1.55);
-    root.position.set(0, 0, 0);
-
-    const slideMs = 1400;
-    const fitMs = isPresentationView ? 2000 : 1600;
-    root.position.set(0, 0, 0);
-
-    const slide = { x: 0, y: 0 };
-    compareTweenRef.current = gsap.to(slide, {
-      x: endX,
-      y: endY,
-      duration: slideMs / 1000,
-      ease: gsapEase.ios,
-      onUpdate: () => {
-        root.position.set(slide.x, slide.y, 0);
-      },
-      onComplete: () => {
-        root.position.set(endX, endY, 0);
-        fitToVisible(fitMs);
-        endAsyncWork();
-      },
     });
 
     return () => {
       compareTweenRef.current?.kill();
+      cancelDefer();
       endAsyncWork();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1229,7 +1241,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       clipRef.current?.rebuildCaps();
       applySelectionHighlightRef.current();
     });
-  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
+  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, luftungRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {
@@ -1623,6 +1635,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     let presWorkOpen = false;
     let refreshTimer: number | null = null;
+    let cancelPresDefer: (() => void) | null = null;
     const endPresWork = () => {
       if (!presWorkOpen) return;
       presWorkOpen = false;
@@ -1632,7 +1645,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (isPresentationView) {
       const entering = !wasPresentationRef.current;
       wasPresentationRef.current = true;
-      startSceneWork();
       presWorkOpen = true;
 
       if (entering) {
@@ -1642,125 +1654,129 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         };
       }
 
-      clip.setOrientation("horizontal");
-      clip.clear();
-      clip.setEnabled(false);
-      clip.setCapsEnabled(false);
+      cancelPresDefer = deferPaintedSceneWork(() => {
+        clip.setOrientation("horizontal");
+        clip.clear();
+        clip.setEnabled(false);
+        clip.setCapsEnabled(false);
 
-      applyIsolateVisibility();
-
-      if (!entering) {
-        const gap = applyExplode(1);
         applyIsolateVisibility();
-        const comparing = useAppStore.getState().compareBothModes;
-        const delay = comparing ? 1600 : 50;
-        refreshTimer = window.setTimeout(() => {
-          applyExplode(1);
+
+        if (!entering) {
+          const gap = applyExplode(1);
           applyIsolateVisibility();
-          flyIso(1800);
-          endPresWork();
-        }, delay);
-        debugLog(
-          "Viewer3D",
-          `presentation refresh n=${collectAllMeshes().length} gap=${gap.toFixed(2)} layout=${presentationLayoutMode}`,
-          "ok",
-        );
-      } else {
-        let lastGap = 0;
-        let flew = false;
-        explodeTweenRef.current = animateProgress({
-          duration: 1.6,
-          ease: gsapEase.explode,
-          onUpdate: (e) => {
-            lastGap = applyExplode(e);
-            applyIsolateVisibility();
-            if (!flew && e >= 0.4) {
-              flew = true;
-              flyIso(1600);
-            }
-          },
-          onComplete: () => {
+          const comparing = useAppStore.getState().compareBothModes;
+          const delay = comparing ? 1600 : 50;
+          refreshTimer = window.setTimeout(() => {
             applyExplode(1);
             applyIsolateVisibility();
-            requestAnimationFrame(() => flyIso(1800));
-            debugLog(
-              "Viewer3D",
-              `presentation n=${collectAllMeshes().length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
-              "ok",
-            );
+            flyIso(1800);
             endPresWork();
-          },
-        });
-      }
-    } else if (wasPresentationRef.current) {
-      wasPresentationRef.current = false;
-      startSceneWork();
-      presWorkOpen = true;
-
-      clip.setOrientation("horizontal");
-      clip.clear();
-      clip.setEnabled(false);
-      clip.setCapsEnabled(false);
-
-      const startOffsets = new Map<
-        THREE.Mesh,
-        { y: number; x: number }
-      >();
-      collectFloorMeshes().forEach((arr) => {
-        for (const m of arr) {
-          startOffsets.set(m, {
-            y: (m.userData.presentationOffsetY as number) ?? 0,
-            x: (m.userData.presentationOffsetX as number) ?? 0,
+          }, delay);
+          debugLog(
+            "Viewer3D",
+            `presentation refresh n=${collectAllMeshes().length} gap=${gap.toFixed(2)} layout=${presentationLayoutMode}`,
+            "ok",
+          );
+        } else {
+          let lastGap = 0;
+          let flew = false;
+          explodeTweenRef.current = animateProgress({
+            duration: 1.6,
+            ease: gsapEase.explode,
+            onUpdate: (e) => {
+              lastGap = applyExplode(e);
+              applyIsolateVisibility();
+              if (!flew && e >= 0.4) {
+                flew = true;
+                flyIso(1600);
+              }
+            },
+            onComplete: () => {
+              applyExplode(1);
+              applyIsolateVisibility();
+              requestAnimationFrame(() => flyIso(1800));
+              debugLog(
+                "Viewer3D",
+                `presentation n=${collectAllMeshes().length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
+                "ok",
+              );
+              endPresWork();
+            },
           });
         }
       });
+    } else if (wasPresentationRef.current) {
+      wasPresentationRef.current = false;
+      presWorkOpen = true;
 
-      explodeTweenRef.current = animateProgress({
-        duration: 1.2,
-        ease: gsapEase.explode,
-        onUpdate: (e) => {
-          const t = 1 - e;
-          startOffsets.forEach((startOff, mesh) => {
-            const targetY = startOff.y * t;
-            const targetX = startOff.x * t;
-            const prevY = (mesh.userData.presentationOffsetY as number) ?? 0;
-            const prevX = (mesh.userData.presentationOffsetX as number) ?? 0;
-            mesh.position.y += targetY - prevY;
-            mesh.position.x += targetX - prevX;
-            mesh.userData.presentationOffsetY = targetY;
-            mesh.userData.presentationOffsetX = targetX;
-            if (e >= 1) {
-              delete mesh.userData.presentationOffsetY;
-              delete mesh.userData.presentationOffsetX;
-            }
-          });
-          syncVentilationMarkerPresentationOffsets(
-            ventilationMarkersRef.current,
-            roomMeshById.current,
-          );
-        },
-        onComplete: () => {
-          const saved = presentationCamRef.current;
-          if (saved) {
-            void flyTo(
-              camera,
-              controls,
-              new THREE.Vector3(...saved.position),
-              new THREE.Vector3(...saved.target),
-              1200,
-            );
-            presentationCamRef.current = null;
-          } else {
-            requestAnimationFrame(() => fitToVisible());
+      cancelPresDefer = deferPaintedSceneWork(() => {
+        clip.setOrientation("horizontal");
+        clip.clear();
+        clip.setEnabled(false);
+        clip.setCapsEnabled(false);
+
+        const startOffsets = new Map<
+          THREE.Mesh,
+          { y: number; x: number }
+        >();
+        collectFloorMeshes().forEach((arr) => {
+          for (const m of arr) {
+            startOffsets.set(m, {
+              y: (m.userData.presentationOffsetY as number) ?? 0,
+              x: (m.userData.presentationOffsetX as number) ?? 0,
+            });
           }
-          endPresWork();
-        },
+        });
+
+        explodeTweenRef.current = animateProgress({
+          duration: 1.2,
+          ease: gsapEase.explode,
+          onUpdate: (e) => {
+            const t = 1 - e;
+            startOffsets.forEach((startOff, mesh) => {
+              const targetY = startOff.y * t;
+              const targetX = startOff.x * t;
+              const prevY = (mesh.userData.presentationOffsetY as number) ?? 0;
+              const prevX = (mesh.userData.presentationOffsetX as number) ?? 0;
+              mesh.position.y += targetY - prevY;
+              mesh.position.x += targetX - prevX;
+              mesh.userData.presentationOffsetY = targetY;
+              mesh.userData.presentationOffsetX = targetX;
+              if (e >= 1) {
+                delete mesh.userData.presentationOffsetY;
+                delete mesh.userData.presentationOffsetX;
+              }
+            });
+            syncVentilationMarkerPresentationOffsets(
+              ventilationMarkersRef.current,
+              roomMeshById.current,
+            );
+          },
+          onComplete: () => {
+            const saved = presentationCamRef.current;
+            if (saved) {
+              void flyTo(
+                camera,
+                controls,
+                new THREE.Vector3(...saved.position),
+                new THREE.Vector3(...saved.target),
+                1200,
+              );
+              presentationCamRef.current = null;
+            } else {
+              requestAnimationFrame(() => fitToVisible());
+            }
+            endPresWork();
+          },
+        });
       });
     }
 
     return () => {
       explodeTweenRef.current?.kill();
       if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      cancelPresDefer?.();
       endPresWork();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

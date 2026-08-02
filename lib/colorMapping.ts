@@ -42,17 +42,6 @@ export type ColorPalette = {
   temperatureStops: ColorStop[];
 };
 
-const STANDARD_LUFTUNG: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#DCFCE7" },
-  { value: 0, color: "#86EFAC" },
-  { value: 50, color: "#FDE047" },
-  { value: 100, color: "#FB923C" },
-  { value: 200, color: "#EF4444" },
-  { value: 300, color: "#DC2626" },
-  { value: Number.POSITIVE_INFINITY, color: "#991B1B" },
-];
-
-/** Original vivid Heizlast / temperature anchors. */
 const STANDARD_HEIZLAST: ColorStop[] = [
   { value: Number.NEGATIVE_INFINITY, color: "#87CEEB" },
   { value: 0, color: "#0050FF" },
@@ -265,12 +254,19 @@ export const MAX_LEGEND_STOPS = 8;
 
 /** Built-in Heizlast / Kühllast range presets for the legend dropdown. */
 export const HEIZLAST_RANGE_PRESETS: { id: string; label: string; values: number[] }[] = [
-  { id: "fine", label: "0, 5, 15, 20, 25, 30", values: [0, 5, 15, 20, 25, 30] },
   { id: "std", label: "0, 10, 20, 30, 40, 50", values: [0, 10, 20, 30, 40, 50] },
+  { id: "fine", label: "0, 5, 15, 20, 25, 30", values: [0, 5, 15, 20, 25, 30] },
   { id: "wide", label: "0, 15, 25, 35, 45, 55", values: [0, 15, 25, 35, 45, 55] },
 ];
 
 export const KUHLLAST_RANGE_PRESETS = HEIZLAST_RANGE_PRESETS;
+
+/** Ventilation heat loss (W) — same color anchors as Heizlast, W-scale range. */
+export const LUFTUNG_RANGE_PRESETS: { id: string; label: string; values: number[] }[] = [
+  { id: "compact", label: "0, 25, 50, 100, 150, 200", values: [0, 25, 50, 100, 150, 200] },
+  { id: "std", label: "0, 50, 100, 150, 200, 300, 400", values: [0, 50, 100, 150, 200, 300, 400] },
+  { id: "wide", label: "0, 100, 200, 300, 400, 500, 600", values: [0, 100, 200, 300, 400, 500, 600] },
+];
 
 /**
  * Pick the tightest load preset that covers the model's W/m² values.
@@ -495,20 +491,24 @@ export function kuhllastToColor(
 }
 
 /**
- * Ventilation heat loss (Lüftungswärmeverlust W) — low green → high red.
+ * Ventilation heat loss (Lüftungswärmeverlust W) — uses Heizlast palette / presets.
  */
 export function luftungToColor(
   value: number,
+  paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_LUFTUNG_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  return loadToColor(value, STANDARD_LUFTUNG, range);
+  return loadToColor(value, heizlastStopsFor(paletteId), range, overrides);
 }
 
 export function luftungGradientCss(
   direction = "to right",
+  paletteId?: ColorPaletteId | string,
   range: number[] = DEFAULT_LUFTUNG_RANGE,
+  overrides?: CustomLegendColorMap,
 ): string {
-  const stops = resolveStopsForRange(STANDARD_LUFTUNG, range);
+  const stops = legendStopsForMode("heizlast", paletteId, range, overrides);
   return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 

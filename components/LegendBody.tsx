@@ -2,15 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  DEFAULT_LUFTUNG_RANGE,
   HEIZLAST_RANGE_PRESETS,
   KUHLLAST_RANGE_PRESETS,
+  LUFTUNG_RANGE_PRESETS,
   heizlastGradientCss,
   kuhllastGradientCss,
   luftungGradientCss,
   legendStopsForMode,
   resolveColorPalette,
-  resolveStopsForRange,
   type LegendColorMode,
 } from "@/lib/colorMapping";
 import { heading } from "@/lib/designTokens";
@@ -89,9 +88,11 @@ export default function LegendBody({
   const kuhllastOverrides = useLegendColorOverrides("kuhllast");
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
+  const setLuftungRange = useAppStore((s) => s.setLuftungRange);
   const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
@@ -108,7 +109,7 @@ export default function LegendBody({
   const ventilation = dataViewMode === "luftung";
   const loadKind: LegendColorMode = cooling ? "kuhllast" : "heizlast";
   const loadRange = ventilation
-    ? DEFAULT_LUFTUNG_RANGE
+    ? luftungRange
     : cooling
       ? kuhllastRange
       : heizlastRange;
@@ -120,12 +121,21 @@ export default function LegendBody({
     overrides?: typeof loadOverrides,
   ) =>
     ventilation
-      ? luftungGradientCss(direction, DEFAULT_LUFTUNG_RANGE)
+      ? luftungGradientCss(direction, paletteId, range, overrides)
       : cooling
         ? kuhllastGradientCss(direction, paletteId, range, overrides)
         : heizlastGradientCss(direction, paletteId, range, overrides);
-  const setLoadRange = cooling ? setKuhllastRange : setHeizlastRange;
-  const loadPresets = cooling ? KUHLLAST_RANGE_PRESETS : HEIZLAST_RANGE_PRESETS;
+  const setLoadRange = ventilation
+    ? setLuftungRange
+    : cooling
+      ? setKuhllastRange
+      : setHeizlastRange;
+  const loadPresets = ventilation
+    ? LUFTUNG_RANGE_PRESETS
+    : cooling
+      ? KUHLLAST_RANGE_PRESETS
+      : HEIZLAST_RANGE_PRESETS;
+  const loadUnitHint = ventilation ? "W" : "W/m²";
   const loadLabelKey = ventilation
     ? "luftungHeatLoss"
     : cooling
@@ -140,24 +150,12 @@ export default function LegendBody({
     temperatureRange,
     tempOverrides,
   );
-  const loadStops = ventilation
-    ? resolveStopsForRange(
-        [
-          { value: 0, color: "#86EFAC" },
-          { value: 50, color: "#FDE047" },
-          { value: 100, color: "#FB923C" },
-          { value: 200, color: "#EF4444" },
-          { value: 300, color: "#DC2626" },
-          { value: 400, color: "#991B1B" },
-        ],
-        DEFAULT_LUFTUNG_RANGE,
-      )
-    : legendStopsForMode(
-        loadKind,
-        effectiveColorPalette,
-        loadRange,
-        loadOverrides,
-      );
+  const loadStops = legendStopsForMode(
+    loadKind,
+    effectiveColorPalette,
+    loadRange,
+    loadOverrides,
+  );
 
   const openLoadPalette = () => {
     setPaletteContext("load");
@@ -352,13 +350,10 @@ export default function LegendBody({
             )}
             <button
               type="button"
-              title={ventilation ? t(uiLanguage, "luftungHeatLoss") : t(uiLanguage, "changePalette")}
-              onClick={ventilation ? undefined : openLoadPalette}
-              aria-expanded={!ventilation && paletteOpen && paletteContext === "load"}
-              disabled={ventilation}
-              className={`group relative block w-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--panel-divider)] ${
-                ventilation ? "cursor-default" : "cursor-pointer"
-              }`}
+              title={t(uiLanguage, "changePalette")}
+              onClick={openLoadPalette}
+              aria-expanded={paletteOpen && paletteContext === "load"}
+              className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--panel-divider)]"
             >
               <div
                 className={`relative w-full overflow-hidden rounded-full border border-[var(--glass-border)] shadow-[inset_0_1px_0_var(--glass-specular),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95 ${
@@ -390,17 +385,17 @@ export default function LegendBody({
                 </span>
               ))}
             </div>
-            {!compareBothModes && rangeOpen && colorMode === "heizlast" && !ventilation && (
+            {!compareBothModes && rangeOpen && colorMode === "heizlast" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
                   values={loadRange}
                   onCommit={setLoadRange}
-                  unitHint="W/m²"
+                  unitHint={loadUnitHint}
                   presets={loadPresets}
                 />
               </div>
             )}
-            {!ventilation && paletteOpen && paletteContext === "load" && (
+            {paletteOpen && paletteContext === "load" && (
               <LegendPalettePanel
                 mode={loadKind}
                 uiLanguage={uiLanguage}

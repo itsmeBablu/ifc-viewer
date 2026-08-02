@@ -42,7 +42,12 @@ export function roomLoadColor(
   luftungRange?: number[],
 ): string {
   if (dataViewMode === "luftung") {
-    return luftungToColor(roomVentilationColorValue(room), luftungRange);
+    return luftungToColor(
+      roomVentilationColorValue(room),
+      palette,
+      luftungRange,
+      overrides,
+    );
   }
   if (dataViewMode === "kuhllast") {
     return kuhllastToColor(room.coolLoad, palette, kuhllastRange, overrides);

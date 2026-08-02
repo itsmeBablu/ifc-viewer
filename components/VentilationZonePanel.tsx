@@ -49,11 +49,9 @@ export default function VentilationZonePanel({
   const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const luftungRange = useAppStore((s) => s.luftungRange);
   const customLegendColors = useAppStore((s) => s.customLegendColors);
-  const loadOverrides =
-    dataViewMode === "kuhllast"
-      ? customLegendColors.kuhllast
-      : customLegendColors.heizlast;
+  const loadOverrides = customLegendColors.heizlast;
 
   const scopedRooms = useMemo(
     () => (floorId ? rooms.filter((r) => r.floorId === floorId) : rooms),
@@ -186,6 +184,7 @@ export default function VentilationZonePanel({
                 heizlastRange,
                 kuhllastRange,
                 loadOverrides,
+                luftungRange,
               );
               const active = room.id === selectedRoomId;
               const metrics = roomVentilationListMetrics(room.ventilation);

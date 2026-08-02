@@ -23,6 +23,7 @@ import {
 import {
   DEFAULT_HEIZLAST_RANGE,
   DEFAULT_KUHLLAST_RANGE,
+  DEFAULT_LUFTUNG_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
   parseLegendRange,
 } from "@/lib/colorMapping";
@@ -50,8 +51,9 @@ const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
 const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
 const THEME_KEY = "ifc-viewer:colorTheme";
-const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange";
+const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
+const LUFTUNG_RANGE_KEY = "ifc-viewer:luftungRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
 const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
@@ -139,6 +141,8 @@ type AppState = {
   heizlastRange: number[];
   /** Legend Kühllast stop values (6–8). */
   kuhllastRange: number[];
+  /** Legend Lüftung heat-loss stop values (6–8). */
+  luftungRange: number[];
   /** Legend temperature stop values (6–8). */
   temperatureRange: number[];
   /** User-edited swatch colors keyed by stop value string. */
@@ -224,6 +228,7 @@ type AppState = {
   setActiveColorPalette: (id: ColorPaletteId) => void;
   setHeizlastRange: (values: number[]) => void;
   setKuhllastRange: (values: number[]) => void;
+  setLuftungRange: (values: number[]) => void;
   setTemperatureRange: (values: number[]) => void;
   setLegendStopColor: (
     mode: LegendColorMode,
@@ -259,6 +264,7 @@ type AppState = {
   setCompareBothModes: (on: boolean) => void;
   beginSceneBusy: () => void;
   endSceneBusy: () => void;
+  showSceneBusyNow: () => void;
   setActiveFilter: (
     filter: {
       minHeat?: number;
@@ -399,6 +405,9 @@ function initialTheme(): import("@/lib/themeColors").ColorTheme {
 }
 
 let sceneWorkDepth = 0;
+/** Only show spinner if work lasts longer than this (avoids flash on quick updates). */
+const SCENE_BUSY_SHOW_DELAY_MS = 200;
+let sceneBusyShowTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useAppStore = create<AppState>((set, get) => ({
   activeModelId: null,
@@ -415,6 +424,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeColorPalette: initialPalette(),
   heizlastRange: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
   kuhllastRange: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
+  luftungRange: initialRange(LUFTUNG_RANGE_KEY, DEFAULT_LUFTUNG_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   customLegendColors: initialCustomLegendColors(),
   legendSwatchPresetId: {
@@ -534,6 +544,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistRange(KUHLLAST_RANGE_KEY, parsed);
     set({ kuhllastRange: parsed });
   },
+  setLuftungRange: (values) => {
+    const parsed = parseLegendRange(values.join(","));
+    if (!parsed) return;
+    persistRange(LUFTUNG_RANGE_KEY, parsed);
+    set({ luftungRange: parsed });
+  },
   setTemperatureRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
     if (!parsed) return;
@@ -574,7 +590,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? s.temperatureRange
           : mode === "kuhllast"
             ? s.kuhllastRange
-            : s.heizlastRange;
+            : s.dataViewMode === "luftung"
+              ? s.luftungRange
+              : s.heizlastRange;
 
       let overrides: CustomLegendColorMap;
       if (mode === "temperature") {
@@ -762,20 +780,43 @@ export const useAppStore = create<AppState>((set, get) => ({
   beginSceneBusy: () => {
     if (get().isLoadingModel) return;
     sceneWorkDepth += 1;
-    if (sceneWorkDepth === 1) {
-      set({ sceneBusy: true, sceneBusySince: Date.now() });
-    }
+    if (sceneWorkDepth !== 1 || sceneBusyShowTimer) return;
+    sceneBusyShowTimer = setTimeout(() => {
+      sceneBusyShowTimer = null;
+      if (sceneWorkDepth > 0) {
+        set({ sceneBusy: true, sceneBusySince: Date.now() });
+      }
+    }, SCENE_BUSY_SHOW_DELAY_MS);
   },
   endSceneBusy: () => {
     if (sceneWorkDepth <= 0) return;
     sceneWorkDepth -= 1;
     if (sceneWorkDepth > 0) return;
+    if (sceneBusyShowTimer) {
+      clearTimeout(sceneBusyShowTimer);
+      sceneBusyShowTimer = null;
+      return;
+    }
     set({ sceneBusy: false, sceneBusySince: null });
+  },
+  showSceneBusyNow: () => {
+    if (get().isLoadingModel) return;
+    if (sceneBusyShowTimer) {
+      clearTimeout(sceneBusyShowTimer);
+      sceneBusyShowTimer = null;
+    }
+    if (sceneWorkDepth > 0) {
+      set({ sceneBusy: true, sceneBusySince: Date.now() });
+    }
   },
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => {
     if (loading) {
       sceneWorkDepth = 0;
+      if (sceneBusyShowTimer) {
+        clearTimeout(sceneBusyShowTimer);
+        sceneBusyShowTimer = null;
+      }
       set({ sceneBusy: false, sceneBusySince: null });
     }
     set({ isLoadingModel: loading });

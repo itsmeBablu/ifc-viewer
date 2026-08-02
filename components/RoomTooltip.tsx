@@ -31,6 +31,7 @@ function RoomInfoBody({
   palette,
   heizlastRange,
   kuhllastRange,
+  luftungRange,
   temperatureRange,
   customLegendColors,
   uiLanguage,
@@ -42,6 +43,7 @@ function RoomInfoBody({
   palette: string;
   heizlastRange: number[];
   kuhllastRange: number[];
+  luftungRange: number[];
   temperatureRange: number[];
   customLegendColors: CustomLegendColors;
   uiLanguage: UiLanguage;
@@ -51,7 +53,12 @@ function RoomInfoBody({
 }) {
   const v = room.ventilation;
   const loadColor = ventilation
-    ? luftungToColor(roomVentilationColorValue(room))
+    ? luftungToColor(
+        roomVentilationColorValue(room),
+        palette,
+        luftungRange,
+        customLegendColors.heizlast,
+      )
     : cooling
     ? kuhllastToColor(
         room.coolLoad,
@@ -290,6 +297,7 @@ export default function RoomTooltip({
   const palette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const customLegendColors = useAppStore((s) => s.customLegendColors);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
@@ -404,6 +412,7 @@ export default function RoomTooltip({
           palette={palette}
           heizlastRange={heizlastRange}
           kuhllastRange={kuhllastRange}
+          luftungRange={luftungRange}
           temperatureRange={temperatureRange}
           customLegendColors={customLegendColors}
           uiLanguage={uiLanguage}
