@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import gsap from "gsap";
 import Image from "next/image";
 import { MdOutlineAccountCircle } from "react-icons/md";
-import { leftPanelWidthPx } from "@/lib/layoutTokens";
+import { headerCollapsedMinWidthPx, leftPanelWidthPx } from "@/lib/layoutTokens";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -215,6 +215,7 @@ export default function HeaderActions({
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [isWideHeader, setIsWideHeader] = useState(false);
+  const [logoReady, setLogoReady] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -228,13 +229,14 @@ export default function HeaderActions({
   const showActions = expanded;
 
   const measureCollapsedWidth = () => {
+    const min = headerCollapsedMinWidthPx();
     const inner = innerRef.current;
-    if (!inner) return leftPanelWidthPx() * 0.35;
+    if (!inner) return min;
     const prev = inner.style.width;
     inner.style.width = "auto";
     const w = inner.scrollWidth;
     inner.style.width = prev;
-    return w;
+    return Math.max(w, min);
   };
 
   useEffect(() => {
@@ -247,6 +249,11 @@ export default function HeaderActions({
     return () => {
       mqWide.removeEventListener("change", update);
     };
+  }, []);
+
+  useEffect(() => {
+    const img = innerRef.current?.querySelector("img");
+    if (img?.complete) setLogoReady(true);
   }, []);
 
   useLayoutEffect(() => {
@@ -289,7 +296,7 @@ export default function HeaderActions({
         );
       }
     }
-  }, [expanded, showMode, showActions, isWideHeader, modeOpen, profileOpen, hasModel]);
+  }, [expanded, showMode, showActions, isWideHeader, modeOpen, profileOpen, hasModel, logoReady]);
 
   useEffect(() => {
     const onResize = () => {
@@ -333,9 +340,9 @@ export default function HeaderActions({
   }, []);
 
   const modeOptions: { id: HeaderMode; label: string }[] = [
-    { id: "heizlast", label: t(uiLanguage, "appTitle") },
-    { id: "luftung", label: t(uiLanguage, "optionsLuft") },
-    { id: "kuhllast", label: t(uiLanguage, "optionsCool") },
+    { id: "heizlast", label: t(uiLanguage, "heating") },
+    { id: "luftung", label: t(uiLanguage, "ventilation") },
+    { id: "kuhllast", label: t(uiLanguage, "cooling") },
     { id: "editor", label: t(uiLanguage, "tool") },
   ];
 
@@ -569,7 +576,15 @@ export default function HeaderActions({
         </GsapPopMenu>
 
         {/* One glass: logo + mode + Data/Profile + arrow — shell width animates via GSAP */}
-        <div ref={shellRef} className="overflow-hidden rounded-3xl">
+        <div
+          ref={shellRef}
+          className="overflow-hidden rounded-3xl"
+          style={
+            expanded
+              ? undefined
+              : { minWidth: headerCollapsedMinWidthPx() }
+          }
+        >
           <GlassPanel
             variant="panel"
             zIndex={45}
@@ -584,10 +599,11 @@ export default function HeaderActions({
                 <Image
                   src="/ibv_logo.svg"
                   alt="IBV logo"
-                  width={32}
+                  width={132}
                   height={32}
-                  className="h-6 w-auto shrink-0 object-contain sm:h-7"
+                  className="h-6 w-auto max-w-none shrink-0 object-contain sm:h-7"
                   priority
+                  onLoad={() => setLogoReady(true)}
                 />
 
                 {showMode && (
@@ -601,12 +617,12 @@ export default function HeaderActions({
                         mode === "editor"
                           ? t(uiLanguage, "tool")
                           : mode === "luftung"
-                            ? t(uiLanguage, "optionsLuft")
+                            ? t(uiLanguage, "ventilation")
                             : mode === "kuhllast"
-                              ? t(uiLanguage, "optionsCool")
+                              ? t(uiLanguage, "cooling")
                               : t(uiLanguage, "heating")
                       }
-                      hint={t(uiLanguage, "viewHint")}
+                      hint={t(uiLanguage, "viewHintWithTool")}
                     >
                       <button
                         type="button"
@@ -623,9 +639,9 @@ export default function HeaderActions({
                           mode === "editor"
                             ? t(uiLanguage, "tool")
                             : mode === "luftung"
-                              ? t(uiLanguage, "optionsLuft")
+                              ? t(uiLanguage, "ventilation")
                               : mode === "kuhllast"
-                                ? t(uiLanguage, "optionsCool")
+                                ? t(uiLanguage, "cooling")
                                 : t(uiLanguage, "heating")
                         }
                         className={modeOpen ? roundActive : roundIdle}

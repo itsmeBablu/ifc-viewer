@@ -1,3 +1,17 @@
+/** IBV wordmark aspect (ibv_logo.svg viewBox). */
+const IBV_LOGO_ASPECT = 309.85333 / 72.639999;
+
+/** Minimum collapsed header shell width — logo + padding + expand chevron. */
+export function headerCollapsedMinWidthPx(
+  viewportWidth = typeof window !== "undefined" ? window.innerWidth : 375,
+): number {
+  const sm = viewportWidth >= 640;
+  const logoH = sm ? 28 : 24;
+  const padL = sm ? 14 : 12;
+  const chevron = 20;
+  return Math.ceil(padL + logoH * IBV_LOGO_ASPECT + chevron);
+}
+
 /** Left panel / header width — matches ViewerApp left aside Tailwind breakpoints. */
 export function leftPanelWidthPx(viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1280): number {
   if (viewportWidth >= 1024) return Math.min(360, viewportWidth - 32);

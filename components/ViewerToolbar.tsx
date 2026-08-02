@@ -490,12 +490,15 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
         />
 
         <div className={`mt-1 border-t pt-1.5 ${menuDivider}`}>
-          <div className="mb-1 flex items-center justify-between gap-2 px-1">
-            <p className={`text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}>
+          <div className="mb-1 flex min-w-0 items-center justify-between gap-2 px-1">
+            <p
+              className={`min-w-0 flex-1 truncate text-[10px] font-semibold tracking-wide uppercase ${menuHeading}`}
+              title={t(uiLanguage, "bg3d")}
+            >
               {t(uiLanguage, "bg3d")}
             </p>
-            <label className="flex shrink-0 items-center gap-1.5">
-              <span className="text-[10px] font-medium text-[var(--text-body)]">
+            <label className="flex max-w-[52%] shrink-0 items-center gap-1.5">
+              <span className="truncate text-[10px] font-medium text-[var(--text-body)]">
                 {t(uiLanguage, "seasonalBg")}
               </span>
               <SeasonalBgToggle />
