@@ -1,6 +1,5 @@
 "use client";
 
-import GsapOverlay from "./GsapOverlay";
 import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -11,11 +10,10 @@ export default function SceneBusyOverlay() {
   const isSceneBusy = useAppStore((s) => s.sceneBusy);
   const isLoadingModel = useAppStore((s) => s.isLoadingModel);
 
+  if (!isSceneBusy || isLoadingModel) return null;
+
   return (
-    <GsapOverlay
-      show={isSceneBusy && !isLoadingModel}
-      className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center p-4"
-    >
+    <div className="pointer-events-none fixed inset-0 z-[25] flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-[var(--background)]/20 backdrop-blur-[2px]"
         aria-hidden
@@ -26,6 +24,6 @@ export default function SceneBusyOverlay() {
           {t(uiLanguage, "working")}
         </p>
       </div>
-    </GsapOverlay>
+    </div>
   );
 }

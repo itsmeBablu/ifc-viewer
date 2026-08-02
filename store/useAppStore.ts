@@ -398,9 +398,6 @@ function initialTheme(): import("@/lib/themeColors").ColorTheme {
   return "light";
 }
 
-const SCENE_BUSY_SHOW_DELAY_MS = 120;
-let sceneBusyHideTimer: ReturnType<typeof setTimeout> | null = null;
-let sceneBusyShowTimer: ReturnType<typeof setTimeout> | null = null;
 let sceneWorkDepth = 0;
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -765,46 +762,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   beginSceneBusy: () => {
     if (get().isLoadingModel) return;
     sceneWorkDepth += 1;
-    if (sceneWorkDepth !== 1) return;
-    if (sceneBusyHideTimer) {
-      clearTimeout(sceneBusyHideTimer);
-      sceneBusyHideTimer = null;
+    if (sceneWorkDepth === 1) {
+      set({ sceneBusy: true, sceneBusySince: Date.now() });
     }
-    if (sceneBusyShowTimer) clearTimeout(sceneBusyShowTimer);
-    sceneBusyShowTimer = setTimeout(() => {
-      sceneBusyShowTimer = null;
-      if (sceneWorkDepth > 0) {
-        set({ sceneBusy: true, sceneBusySince: Date.now() });
-      }
-    }, SCENE_BUSY_SHOW_DELAY_MS);
   },
   endSceneBusy: () => {
     if (sceneWorkDepth <= 0) return;
     sceneWorkDepth -= 1;
     if (sceneWorkDepth > 0) return;
-    if (sceneBusyShowTimer) {
-      clearTimeout(sceneBusyShowTimer);
-      sceneBusyShowTimer = null;
-      return;
-    }
-    if (sceneBusyHideTimer) {
-      clearTimeout(sceneBusyHideTimer);
-      sceneBusyHideTimer = null;
-    }
     set({ sceneBusy: false, sceneBusySince: null });
   },
   setActiveFilter: (filter) => set({ activeFilter: filter }),
   setIsLoadingModel: (loading) => {
     if (loading) {
       sceneWorkDepth = 0;
-      if (sceneBusyShowTimer) {
-        clearTimeout(sceneBusyShowTimer);
-        sceneBusyShowTimer = null;
-      }
-      if (sceneBusyHideTimer) {
-        clearTimeout(sceneBusyHideTimer);
-        sceneBusyHideTimer = null;
-      }
       set({ sceneBusy: false, sceneBusySince: null });
     }
     set({ isLoadingModel: loading });

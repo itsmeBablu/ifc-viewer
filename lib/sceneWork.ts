@@ -15,7 +15,10 @@ export function finishSceneWork(): void {
   useAppStore.getState().endSceneBusy();
 }
 
-/** Wrap sync scene rebuild — ends after the next frame is painted. Returns cleanup. */
+/**
+ * Wrap sync scene rebuild.
+ * Defers work by two frames so the spinner can paint before blocking the main thread.
+ */
 export function runSceneWork(fn: () => void): () => void {
   if (!canTrackSceneWork()) {
     fn();
@@ -23,15 +26,35 @@ export function runSceneWork(fn: () => void): () => void {
   }
   startSceneWork();
   let cancelled = false;
-  try {
-    fn();
-  } finally {
-    requestAnimationFrame(() => {
-      if (!cancelled) finishSceneWork();
+  let paintId = 0;
+  let workId = 0;
+  let finishId = 0;
+
+  paintId = requestAnimationFrame(() => {
+    if (cancelled) {
+      finishSceneWork();
+      return;
+    }
+    workId = requestAnimationFrame(() => {
+      if (cancelled) {
+        finishSceneWork();
+        return;
+      }
+      try {
+        fn();
+      } finally {
+        finishId = requestAnimationFrame(() => {
+          if (!cancelled) finishSceneWork();
+        });
+      }
     });
-  }
+  });
+
   return () => {
     cancelled = true;
+    cancelAnimationFrame(paintId);
+    cancelAnimationFrame(workId);
+    cancelAnimationFrame(finishId);
     finishSceneWork();
   };
 }
