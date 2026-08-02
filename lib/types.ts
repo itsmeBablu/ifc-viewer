@@ -32,6 +32,8 @@ export type RoomVentilation = {
   zoneAldVolume: number;
   zoneNumber: number;
   roomArt: string;
+  /** Count of Abluft outlets (SC_Raum_Abluftauslässe) — local extract device. */
+  abluftOutlets: number;
 };
 
 export type Room = {

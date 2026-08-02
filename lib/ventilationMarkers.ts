@@ -6,15 +6,17 @@ import {
   roomHasExtractFan,
   roomInVentilationZone,
   roomShowsVentilationFlowMarkers,
+  roomShowsZuluftMarkers,
   roomSuppliesZoneZuluft,
   roomVentilationZoneKey,
-  ventilationFlowRole,
+  roomIsOverflowTransfer,
 } from "./ventilation";
 
 const ARROW_COUNT = 3;
 const STANDARD_ARROW_LEN = 0.88;
 const STANDARD_TRAVEL = 0.42;
 const OUTSIDE_PAD = 0.32;
+const INTERIOR_SUPPLY_PAD = 0.07;
 const EXTERIOR_AIR_GAP = 0.28;
 const EXTERIOR_RAY_MAX = 18;
 const EXTERIOR_RAY_STEP = 0.1;
@@ -39,6 +41,11 @@ export type VentilationMarkerLayer = {
 type ExteriorWall = {
   direction: THREE.Vector3;
   wallDistance: number;
+};
+
+type SupplyWallResult = ExteriorWall & {
+  /** Facade inlet vs air from an upstream room in the same zone. */
+  source: "exterior" | "interior";
 };
 
 type FaceBucket = {
@@ -428,10 +435,27 @@ function pickExteriorWall(
   };
 }
 
+function roomHasClearExteriorFacade(
+  room: Room,
+  floorRooms: Room[],
+  floorCentroid: THREE.Vector3 | undefined,
+): boolean {
+  if (!roomSuppliesZoneZuluft(room) || !room.geometry) return false;
+  const center = roomCenter(room.geometry);
+  const exterior = pickExteriorWall(room, floorRooms, floorCentroid);
+  return wallProbesClear(
+    center,
+    exterior.direction,
+    exterior.wallDistance,
+    room.geometry,
+    room.id,
+    floorRooms,
+  );
+}
+
 /**
  * Zuluft through a door / wall shared with the zone's supply room.
- * Prefer a direct neighbour with Zuluft; otherwise trace back through
- * corridor/hall rooms to the nearest upstream supply room in the zone.
+ * Prefer facade (window) rooms, then corridor transfer rooms for bathrooms.
  */
 function sharesInteriorWall(a: Room, b: Room): boolean {
   if (!a.geometry || !b.geometry) return false;
@@ -492,21 +516,39 @@ function pickBestSupplyWallAmong(
 function pickInteriorZoneSupplyWall(
   room: Room,
   zonePeers: Room[],
+  floorRooms: Room[],
+  floorCentroid: THREE.Vector3 | undefined,
 ): ExteriorWall | null {
   const adjacent = zonePeers.filter((peer) => sharesInteriorWall(room, peer));
   if (!adjacent.length) return null;
+
+  // Bathroom / WC — green arrows from corridor (Flur, Diele) in same zone.
+  if (roomHasExtractFan(room)) {
+    const commons = adjacent.filter(roomIsOverflowTransfer);
+    const fromCommon = pickBestSupplyWallAmong(room, commons);
+    if (fromCommon) return fromCommon;
+  }
+
+  // Direct neighbour with exterior facade (bedroom with window).
+  const facadeNeighbors = adjacent.filter((peer) =>
+    roomHasClearExteriorFacade(peer, floorRooms, floorCentroid),
+  );
+  if (facadeNeighbors.length) {
+    return pickBestSupplyWallAmong(room, facadeNeighbors);
+  }
 
   const directSupply = adjacent.filter(roomSuppliesZoneZuluft);
   if (directSupply.length) {
     return pickBestSupplyWallAmong(room, directSupply);
   }
 
-  // Corridor / hall: air enters from the nearest upstream Zuluft room in the zone.
+  // BFS: trace through zone to upstream facade supply or corridor.
   const visited = new Set<string>([room.id]);
   let frontier: { node: Room; entryWall: Room }[] = adjacent.map((peer) => ({
     node: peer,
     entryWall: peer,
   }));
+  let fallbackWall: ExteriorWall | null = null;
 
   while (frontier.length) {
     const next: typeof frontier = [];
@@ -514,8 +556,16 @@ function pickInteriorZoneSupplyWall(
       if (visited.has(node.id)) continue;
       visited.add(node.id);
 
-      if (roomSuppliesZoneZuluft(node)) {
+      if (roomHasClearExteriorFacade(node, floorRooms, floorCentroid)) {
         return wallTowardPeer(room, entryWall);
+      }
+
+      if (roomHasExtractFan(room) && roomIsOverflowTransfer(node)) {
+        return wallTowardPeer(room, entryWall);
+      }
+
+      if (roomSuppliesZoneZuluft(node) && !fallbackWall) {
+        fallbackWall = wallTowardPeer(room, entryWall);
       }
 
       for (const peer of zonePeers) {
@@ -528,19 +578,45 @@ function pickInteriorZoneSupplyWall(
     frontier = next;
   }
 
-  return null;
+  return fallbackWall;
 }
 
 /** Exterior facade when open air is reachable; otherwise same-zone interior wall. */
-function pickSupplyWall(
+function resolveSupplyWall(
   room: Room,
   floorRooms: Room[],
   floorCentroid: THREE.Vector3 | undefined,
-): ExteriorWall {
-  const geometry = room.geometry;
-  const center = roomCenter(geometry);
-  const exterior = pickExteriorWall(room, floorRooms, floorCentroid);
+): SupplyWallResult | null {
+  if (!roomShowsZuluftMarkers(room)) return null;
 
+  const geometry = room.geometry;
+  if (!geometry) return null;
+  const center = roomCenter(geometry);
+  const zoneKey = roomVentilationZoneKey(room);
+  const zonePeers = floorRooms.filter(
+    (r) => r.id !== room.id && roomInVentilationZone(r, zoneKey),
+  );
+
+  const hasFacade = roomHasClearExteriorFacade(room, floorRooms, floorCentroid);
+  const needsInterior =
+    roomHasExtractFan(room) ||
+    roomIsOverflowTransfer(room) ||
+    !hasFacade;
+
+  if (needsInterior) {
+    const interior = pickInteriorZoneSupplyWall(
+      room,
+      zonePeers,
+      floorRooms,
+      floorCentroid,
+    );
+    if (interior) {
+      return { ...interior, source: "interior" };
+    }
+    if (!hasFacade) return null;
+  }
+
+  const exterior = pickExteriorWall(room, floorRooms, floorCentroid);
   if (
     wallProbesClear(
       center,
@@ -551,17 +627,20 @@ function pickSupplyWall(
       floorRooms,
     )
   ) {
-    return exterior;
+    return { ...exterior, source: "exterior" };
   }
 
-  const zoneKey = roomVentilationZoneKey(room);
-  const zonePeers = floorRooms.filter(
-    (r) => r.id !== room.id && roomInVentilationZone(r, zoneKey),
+  const interior = pickInteriorZoneSupplyWall(
+    room,
+    zonePeers,
+    floorRooms,
+    floorCentroid,
   );
-  const interior = pickInteriorZoneSupplyWall(room, zonePeers);
-  if (interior) return interior;
+  if (interior) {
+    return { ...interior, source: "interior" };
+  }
 
-  return exterior;
+  return { ...exterior, source: "exterior" };
 }
 
 function makeArrow(
@@ -628,25 +707,29 @@ function animateFlowPosition(
   });
 }
 
-/** Zuluft: three equal arrows outside the inlet wall, animating inward. */
-function makeSupplyFromOutsideCluster(
+/** Zuluft: three equal arrows animating inward — facade or shared interior wall. */
+function makeSupplyFlowCluster(
   flowOutward: THREE.Vector3,
-  outsideDistance: number,
+  wallDistance: number,
   y: number,
+  source: "exterior" | "interior",
 ): FlowCluster {
   const root = new THREE.Group();
   const tweens: gsap.core.Tween[] = [];
   const out = flowOutward.clone().normalize();
   const lateral = new THREE.Vector3(-out.z, 0, out.x);
   const spread = STANDARD_ARROW_LEN * 0.38;
-  const anchor = out.clone().multiplyScalar(outsideDistance);
+  const pad = source === "exterior" ? OUTSIDE_PAD : INTERIOR_SUPPLY_PAD;
+  const travel =
+    source === "exterior" ? STANDARD_TRAVEL : STANDARD_TRAVEL * 0.55;
+  const anchor = out.clone().multiplyScalar(wallDistance + pad);
   anchor.y = y;
 
   for (let i = 0; i < ARROW_COUNT; i++) {
     const arrow = makeArrow(0x22c55e, out.clone().negate(), STANDARD_ARROW_LEN);
     const lat = lateral.clone().multiplyScalar((i - 1) * spread);
     const base = anchor.clone().add(lat);
-    arrow.position.copy(base).add(out.clone().multiplyScalar(STANDARD_TRAVEL));
+    arrow.position.copy(base).add(out.clone().multiplyScalar(travel));
     root.add(arrow);
 
     tweens.push(
@@ -654,7 +737,7 @@ function makeSupplyFromOutsideCluster(
         arrow,
         base,
         out,
-        STANDARD_TRAVEL,
+        travel,
         1,
         0,
         FLOW_DURATION + i * 0.05,
@@ -881,7 +964,6 @@ export function buildVentilationMarkers(rooms: Room[]): VentilationMarkerLayer {
     if (!room.geometry?.attributes?.position) continue;
     if (!roomShowsVentilationFlowMarkers(room)) continue;
 
-    const role = ventilationFlowRole(room.ventilation);
     const hasFan = roomHasExtractFan(room);
     const v = room.ventilation;
 
@@ -889,7 +971,7 @@ export function buildVentilationMarkers(rooms: Room[]): VentilationMarkerLayer {
     const size = roomSize(room.geometry);
     const floorRooms = byFloor.get(room.floorId) ?? [];
     const floorCentroid = floorCentroids.get(room.floorId);
-    const supplyWall = pickSupplyWall(room, floorRooms, floorCentroid);
+    const supplyWall = resolveSupplyWall(room, floorRooms, floorCentroid);
 
     const markerRoot = new THREE.Group();
     markerRoot.position.copy(center);
@@ -897,25 +979,20 @@ export function buildVentilationMarkers(rooms: Room[]): VentilationMarkerLayer {
     markerRoot.userData.floorId = room.floorId;
     markerRoot.userData.baseCenter = center.clone();
 
-    const outsideDistance = supplyWall.wallDistance + OUTSIDE_PAD;
     const yMid = size.y * 0.24;
     const yTop = size.y * 0.42;
     const entryTweens: gsap.core.Tween[] = [];
 
-    const isOverflow =
-      role === "overflow" ||
-      (v.overflowVolume > 0 && !v.hasVentSystem && v.abluftVolume <= 0);
-    const hasSupply =
-      !isOverflow && (v.zuluftVolume > 0 || v.aldVolume > 0);
-    const hasExtract =
-      !isOverflow &&
-      (v.abluftVolume > 0 || (hasFan && v.overflowVolume > 0));
+    const isOverflow = roomIsOverflowTransfer(room);
+    const hasSupply = roomShowsZuluftMarkers(room) && supplyWall;
+    const hasExtract = hasFan && !isOverflow;
 
-    if (hasSupply) {
-      const supply = makeSupplyFromOutsideCluster(
+    if (hasSupply && supplyWall) {
+      const supply = makeSupplyFlowCluster(
         supplyWall.direction,
-        outsideDistance,
+        supplyWall.wallDistance,
         yMid,
+        supplyWall.source,
       );
       markerRoot.add(supply.root);
       entryTweens.push(...supply.tweens);

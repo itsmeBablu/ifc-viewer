@@ -35,6 +35,9 @@ import { pickHeizlastRangeFromLoads, pickKuhllastRangeFromLoads } from "@/lib/co
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
 import GsapOverlay from "./GsapOverlay";
+import SceneBusyOverlay from "./SceneBusyOverlay";
+import SceneBusyCursor from "./SceneBusyCursor";
+import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import ThemeTransition from "./ThemeTransition";
 import ThemeHydration from "./ThemeHydration";
 import { canHover } from "@/lib/canHover";
@@ -54,11 +57,11 @@ export default function ViewerApp() {
   const rightChevronRef = useRef<SVGSVGElement>(null);
   const leftPanelReady = useRef(false);
   const progressBarRef = useRef<HTMLDivElement>(null);
-  const loadSpinnerRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef<LoadedModel | null>(null);
   const loadSourceRef = useRef<LoadSource | null>(null);
   const [shellGroup, setShellGroup] = useState<Group | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [pointerOverViewer, setPointerOverViewer] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
@@ -132,21 +135,6 @@ export default function ViewerApp() {
       ease: gsapEase.ios,
     });
   }, [loadProgress]);
-
-  useLayoutEffect(() => {
-    const spinner = loadSpinnerRef.current;
-    if (!spinner || !isLoadingModel) return;
-    const tween = gsap.to(spinner, {
-      rotation: 360,
-      duration: 0.9,
-      ease: "none",
-      repeat: -1,
-    });
-    return () => {
-      tween.kill();
-      gsap.set(spinner, { rotation: 0 });
-    };
-  }, [isLoadingModel]);
 
   useLayoutEffect(() => {
     if (!isDesktop) return;
@@ -383,6 +371,11 @@ export default function ViewerApp() {
 
   const handlePointerMove = useCallback((x: number, y: number) => {
     setPointer({ x, y });
+    setPointerOverViewer(true);
+  }, []);
+
+  const handlePointerLeaveViewer = useCallback(() => {
+    setPointerOverViewer(false);
   }, []);
 
   const hasModel = rooms.length > 0 || Boolean(shellGroup);
@@ -416,9 +409,17 @@ export default function ViewerApp() {
           <Viewer3D
             ref={viewerRef}
             onPointerMove={handlePointerMove}
+            onPointerLeave={handlePointerLeaveViewer}
             className="h-full w-full"
           />
         </div>
+
+        <SceneBusyOverlay />
+        <SceneBusyCursor
+          x={pointer.x}
+          y={pointer.y}
+          active={pointerOverViewer}
+        />
 
         <GsapOverlay
           show={isDraggingIfc && !isLoadingModel}
@@ -451,9 +452,9 @@ export default function ViewerApp() {
           >
             <div className="p-6">
               <div className="mb-3 flex items-center gap-3">
-                <div
-                  ref={loadSpinnerRef}
-                  className="h-7 w-7 rounded-2xl border-2 border-amber-200/50 border-t-amber-500"
+                <LiquidGlassSpinner
+                  size="md"
+                  srLabel={t(uiLanguage, "loadingModel")}
                 />
                 <p className="text-sm font-semibold tracking-wide text-zinc-800">
                   {t(uiLanguage, "loadingModel")}

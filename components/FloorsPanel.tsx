@@ -19,6 +19,7 @@ import {
   pdfLegendFromStore,
 } from "@/lib/pdfCapture";
 import { exportAllPagesPdf, exportHeizlastPdf, exportPresentationPdf } from "@/lib/pdfExport";
+import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
@@ -1071,7 +1072,7 @@ export default function FloorsPanel({
                     >
                       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                         {pdfExporting ? (
-                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-800/30 border-t-amber-900" />
+                          <LiquidGlassSpinner size="xs" srLabel={t(uiLanguage, "exporting")} />
                         ) : (
                           <PiFilePdfThin className="h-5 w-5" />
                         )}

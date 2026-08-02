@@ -191,6 +191,9 @@ type AppState = {
   } | null;
   sliceProgress: number;
   isLoadingModel: boolean;
+  /** True while 3D scene recolors / rebuilds after mode changes. */
+  sceneBusy: boolean;
+  sceneBusySince: number | null;
   loadError: string | null;
   loadProgress: number;
   loadMessage: string;
@@ -254,6 +257,8 @@ type AppState = {
   requestRoomFocus: (roomId: string) => void;
   setViewerContextMenuOpen: (open: boolean) => void;
   setCompareBothModes: (on: boolean) => void;
+  beginSceneBusy: () => void;
+  endSceneBusy: () => void;
   setActiveFilter: (
     filter: {
       minHeat?: number;
@@ -393,6 +398,11 @@ function initialTheme(): import("@/lib/themeColors").ColorTheme {
   return "light";
 }
 
+const SCENE_BUSY_SHOW_DELAY_MS = 120;
+let sceneBusyHideTimer: ReturnType<typeof setTimeout> | null = null;
+let sceneBusyShowTimer: ReturnType<typeof setTimeout> | null = null;
+let sceneWorkDepth = 0;
+
 export const useAppStore = create<AppState>((set, get) => ({
   activeModelId: null,
   activeModelLabel: null,
@@ -440,6 +450,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeFilter: null,
   sliceProgress: 0.9,
   isLoadingModel: false,
+  sceneBusy: false,
+  sceneBusySince: null,
   loadError: null,
   loadProgress: 0,
   loadMessage: "",
@@ -469,15 +481,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFloors: (floors) => set({ floors }),
   setRooms: (rooms) =>
     set({ rooms, selectedVentilationZoneKey: null, selectedRoomId: null }),
-  setSelectedFloor: (floorId) =>
-    set((s) => ({
+  setSelectedFloor: (floorId) => {
+    const s = get();
+    if (floorId === s.selectedFloor) return;
+    set({
       selectedFloor: floorId,
       // Default Schnitthöhe near the top of the floor (90%)
       sliceProgress: 0.9,
       selectedRoomId: null,
       selectedElement: null,
       floorFocusToken: s.floorFocusToken + 1,
-    })),
+    });
+  },
   setSelectedRoomId: (roomId) =>
     set(
       roomId
@@ -486,8 +501,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   setHoveredRoom: (room) => set({ hoveredRoom: room }),
   setSelectedElement: (el) => set({ selectedElement: el }),
-  setColorMode: (mode) => set({ colorMode: mode }),
+  setColorMode: (mode) => {
+    if (mode === get().colorMode) return;
+    set({ colorMode: mode });
+  },
   setDataViewMode: (mode) => {
+    if (mode === get().dataViewMode) return;
     set({
       dataViewMode: mode,
       ...(mode !== "luftung" ? { selectedVentilationZoneKey: null } : {}),
@@ -495,6 +514,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setActiveColorPalette: (id) => {
     const palette = id === "dark" ? "standard" : id;
+    if (palette === get().activeColorPalette) return;
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(PALETTE_KEY, palette);
@@ -668,12 +688,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
   },
-  setPresentationFloorId: (floorId) =>
+  setPresentationFloorId: (floorId) => {
+    if (floorId === get().presentationFloorId) return;
     set({
       presentationFloorId: floorId,
       selectedRoomId: null,
       selectedElement: null,
-    }),
+    });
+  },
   setPresentationRoomsOpen: (open) => {
     if (!open) {
       set({
@@ -685,8 +707,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ presentationRoomsOpen: true });
     }
   },
-  setPresentationLayoutMode: (mode) => set({ presentationLayoutMode: mode }),
+  setPresentationLayoutMode: (mode) => {
+    if (mode === get().presentationLayoutMode) return;
+    set({ presentationLayoutMode: mode });
+  },
   setPresentationIsolate: (isolate) => {
+    if (isolate === get().presentationIsolate) return;
     if (!isolate) {
       set({ presentationIsolate: false });
       return;
@@ -732,9 +758,57 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedRoomId: roomId,
       roomFocusToken: s.roomFocusToken + 1,
     })),
-  setCompareBothModes: (on) => set({ compareBothModes: on }),
+  setCompareBothModes: (on) => {
+    if (on === get().compareBothModes) return;
+    set({ compareBothModes: on });
+  },
+  beginSceneBusy: () => {
+    if (get().isLoadingModel) return;
+    sceneWorkDepth += 1;
+    if (sceneWorkDepth !== 1) return;
+    if (sceneBusyHideTimer) {
+      clearTimeout(sceneBusyHideTimer);
+      sceneBusyHideTimer = null;
+    }
+    if (sceneBusyShowTimer) clearTimeout(sceneBusyShowTimer);
+    sceneBusyShowTimer = setTimeout(() => {
+      sceneBusyShowTimer = null;
+      if (sceneWorkDepth > 0) {
+        set({ sceneBusy: true, sceneBusySince: Date.now() });
+      }
+    }, SCENE_BUSY_SHOW_DELAY_MS);
+  },
+  endSceneBusy: () => {
+    if (sceneWorkDepth <= 0) return;
+    sceneWorkDepth -= 1;
+    if (sceneWorkDepth > 0) return;
+    if (sceneBusyShowTimer) {
+      clearTimeout(sceneBusyShowTimer);
+      sceneBusyShowTimer = null;
+      return;
+    }
+    if (sceneBusyHideTimer) {
+      clearTimeout(sceneBusyHideTimer);
+      sceneBusyHideTimer = null;
+    }
+    set({ sceneBusy: false, sceneBusySince: null });
+  },
   setActiveFilter: (filter) => set({ activeFilter: filter }),
-  setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),
+  setIsLoadingModel: (loading) => {
+    if (loading) {
+      sceneWorkDepth = 0;
+      if (sceneBusyShowTimer) {
+        clearTimeout(sceneBusyShowTimer);
+        sceneBusyShowTimer = null;
+      }
+      if (sceneBusyHideTimer) {
+        clearTimeout(sceneBusyHideTimer);
+        sceneBusyHideTimer = null;
+      }
+      set({ sceneBusy: false, sceneBusySince: null });
+    }
+    set({ isLoadingModel: loading });
+  },
   setLoadError: (error) => set({ loadError: error }),
   setLoadProgress: (progress, message) =>
     set({

@@ -186,6 +186,11 @@ export const ROOM_ART_PROP_NAMES = [
   "SC_H73KEY_RaumArt",
 ];
 
+export const ABLUFT_OUTLETS_PROP_NAMES = [
+  "SC_Raum_Abluftauslässe",
+  "SC_Raum_Abluftauslaesse",
+];
+
 const WASM_PATH = "/wasm/";
 
 type OpenIfcHandle = { api: WebIFC.IfcAPI; modelID: number };
@@ -333,6 +338,8 @@ function extractVentilationProps(
   v.zoneNumber =
     extractExactNamedNumeric(flat, ["SC_Raum_Zonennummer"]) ?? 0;
   v.roomArt = extractExactNamedString(flat, ROOM_ART_PROP_NAMES);
+  v.abluftOutlets =
+    extractExactNamedNumeric(flat, ABLUFT_OUTLETS_PROP_NAMES) ?? 0;
   v.isSupplyRoom = extractExactNamedBoolean(flat, [
     "IBV_L47_Raum_IstZuluftraum",
   ]);

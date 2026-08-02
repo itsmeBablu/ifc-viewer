@@ -445,6 +445,128 @@ body {
   }
 }
 
+/* Temperature-gradient liquid-glass spinner */
+.liquid-glass-spinner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.liquid-glass-spinner--stacked {
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.liquid-glass-spinner[data-size="xs"] {
+  width: 1rem;
+  height: 1rem;
+}
+.liquid-glass-spinner[data-size="sm"] {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.liquid-glass-spinner[data-size="md"] {
+  width: 2rem;
+  height: 2rem;
+}
+.liquid-glass-spinner[data-size="lg"] {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+.liquid-glass-spinner__orbit {
+  position: absolute;
+  inset: 0;
+  animation: liquid-glass-spin 1.05s linear infinite;
+}
+.liquid-glass-spinner--hollow .liquid-glass-spinner__ring {
+  box-shadow:
+    0 0 14px rgba(255, 140, 0, 0.16),
+    inset 0 0 6px rgba(255, 255, 255, 0.12);
+}
+.liquid-glass-spinner__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -90deg,
+    #0050ff 0deg,
+    #1f8a70 65deg,
+    #4caf50 130deg,
+    #ffdc00 195deg,
+    #ff8c00 260deg,
+    #dc0000 310deg,
+    #0050ff 360deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--lg-spin-thickness, 3px)),
+    #000 calc(100% - 1px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--lg-spin-thickness, 3px)),
+    #000 calc(100% - 1px)
+  );
+  box-shadow:
+    0 0 16px rgba(255, 140, 0, 0.2),
+    inset 0 0 8px rgba(255, 255, 255, 0.25);
+}
+.liquid-glass-spinner[data-size="xs"] .liquid-glass-spinner__ring {
+  --lg-spin-thickness: 2px;
+}
+.liquid-glass-spinner[data-size="sm"] .liquid-glass-spinner__ring {
+  --lg-spin-thickness: 2px;
+}
+.liquid-glass-spinner[data-size="md"] .liquid-glass-spinner__ring {
+  --lg-spin-thickness: 3px;
+}
+.liquid-glass-spinner[data-size="lg"] .liquid-glass-spinner__ring {
+  --lg-spin-thickness: 4px;
+}
+.liquid-glass-spinner__glass {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 56%;
+  height: 56%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.32) 48%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.92),
+    0 2px 10px rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(6px);
+}
+[data-theme="dark"] .liquid-glass-spinner__glass {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 12px rgba(0, 0, 0, 0.28);
+}
+.liquid-glass-spinner__label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--text-muted);
+}
+@keyframes liquid-glass-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Thin scrollbars app-wide */
 * {
   scrollbar-width: thin;

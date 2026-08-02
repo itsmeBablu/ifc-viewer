@@ -227,7 +227,7 @@ function RoomInfoBody({
               : null}
             {metricRow(
               "ventFlowType",
-              t(uiLanguage, roleKey[ventilationFlowRole(v)]),
+              t(uiLanguage, roleKey[ventilationFlowRole(room)]),
             )}
             {v.zoneName ? metricRow("usageZone", v.zoneName) : null}
             {v.ventilationZoneName

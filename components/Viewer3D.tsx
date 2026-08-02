@@ -16,6 +16,7 @@ import { animateProgress, gsapEase } from "@/lib/gsapMotion";
 import gsap from "gsap";
 import { getElementDetails } from "@/lib/ifcClient";
 import { debugLog } from "@/lib/debugLog";
+import { finishSceneWork, runSceneWork, startSceneWork } from "@/lib/sceneWork";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
 import { isCompactMobileViewport } from "@/lib/layoutTokens";
@@ -73,6 +74,7 @@ export type Viewer3DHandle = {
 
 type Props = {
   onPointerMove?: (x: number, y: number) => void;
+  onPointerLeave?: () => void;
   className?: string;
 };
 
@@ -375,7 +377,7 @@ function applyRenderMode(
 }
 
 const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
-  { onPointerMove, className },
+  { onPointerMove, onPointerLeave, className },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -414,6 +416,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
+  const isLoadingModel = useAppStore((s) => s.isLoadingModel);
   const activeColorPalette = useEffectiveColorPalette();
   const colorTheme = useAppStore((s) => s.colorTheme);
   const customLegendColors = useAppStore((s) => s.customLegendColors);
@@ -891,16 +894,20 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (dataViewMode !== "luftung") return;
 
     const sourceRooms = rooms.length ? rooms : roomsFromStore;
-    const layer = buildVentilationMarkers(sourceRooms);
-    syncVentilationMarkerPresentationOffsets(layer, roomMeshById.current);
-    syncVentilationMarkerVisibility(layer, markerVisibleFloorId);
-    scene.add(layer.group);
-    ventilationMarkersRef.current = layer;
+    const endWork = runSceneWork(() => {
+      const layer = buildVentilationMarkers(sourceRooms);
+      syncVentilationMarkerPresentationOffsets(layer, roomMeshById.current);
+      syncVentilationMarkerVisibility(layer, markerVisibleFloorId);
+      scene.add(layer.group);
+      ventilationMarkersRef.current = layer;
+    });
 
     return () => {
+      endWork();
       disposeVentilationMarkers(ventilationMarkersRef.current);
       ventilationMarkersRef.current = null;
-      scene.remove(layer.group);
+      const markers = scene.getObjectByName("ventilation-markers");
+      if (markers) scene.remove(markers);
     };
   }, [dataViewMode, rooms, roomsFromStore, markerVisibleFloorId]);
 
@@ -997,40 +1004,49 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     if (!compareBothModes) {
       compareTweenRef.current?.kill();
-      clearTwin();
-      // Restore primary colors to active colorMode
-      const sourceRooms = rooms.length ? rooms : roomsFromStore;
-      const byId = new Map(sourceRooms.map((r) => [r.id, r]));
-      materialCacheRef.current.clear();
-      materialCacheRef.current = createOverlayMaterialCache();
-      for (const [id, mesh] of roomMeshById.current) {
-        const room = byId.get(id);
-        if (!room) continue;
-        const hex = roomColorHex(
-          room,
-          colorMode,
-          activeColorPalette,
-          heizlastRange,
-          temperatureRange,
-          dataViewMode,
-          kuhllastRange,
-          customLegendColors,
+      const endWork = runSceneWork(() => {
+        clearTwin();
+        const sourceRooms = rooms.length ? rooms : roomsFromStore;
+        const byId = new Map(sourceRooms.map((r) => [r.id, r]));
+        materialCacheRef.current.clear();
+        materialCacheRef.current = createOverlayMaterialCache();
+        for (const [id, mesh] of roomMeshById.current) {
+          const room = byId.get(id);
+          if (!room) continue;
+          const hex = roomColorHex(
+            room,
+            colorMode,
+            activeColorPalette,
+            heizlastRange,
+            temperatureRange,
+            dataViewMode,
+            kuhllastRange,
+            customLegendColors,
+          );
+          mesh.material = materialCacheRef.current.get(hex);
+          mesh.userData.colorHex = hex;
+        }
+        applyRenderMode(
+          renderMode,
+          shellCloneRef.current,
+          overlays,
+          true,
+          lighting,
         );
-        mesh.material = materialCacheRef.current.get(hex);
-        mesh.userData.colorHex = hex;
-      }
-      applyRenderMode(
-        renderMode,
-        shellCloneRef.current,
-        overlays,
-        true,
-        lighting,
-      );
+      });
       if (useAppStore.getState().isPresentationView) {
         requestAnimationFrame(() => fitToVisible(1800));
       }
-      return;
+      return endWork;
     }
+
+    startSceneWork();
+    let workOpen = true;
+    const endAsyncWork = () => {
+      if (!workOpen) return;
+      workOpen = false;
+      finishSceneWork();
+    };
 
     clearTwin();
     twinMaterialCacheRef.current = createOverlayMaterialCache();
@@ -1147,11 +1163,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       onComplete: () => {
         root.position.set(endX, endY, 0);
         fitToVisible(fitMs);
+        endAsyncWork();
       },
     });
 
     return () => {
       compareTweenRef.current?.kill();
+      endAsyncWork();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1173,43 +1191,44 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   // Rebuild overlay materials when colorMode changes (skipped logic when compare owns colors)
   useEffect(() => {
     if (compareBothModes) return;
-    const sourceRooms = rooms.length ? rooms : roomsFromStore;
-    const byId = new Map(sourceRooms.map((r) => [r.id, r]));
-    materialCacheRef.current.clear();
-    materialCacheRef.current = createOverlayMaterialCache();
+    return runSceneWork(() => {
+      const sourceRooms = rooms.length ? rooms : roomsFromStore;
+      const byId = new Map(sourceRooms.map((r) => [r.id, r]));
+      materialCacheRef.current.clear();
+      materialCacheRef.current = createOverlayMaterialCache();
 
-    for (const [id, mesh] of roomMeshById.current) {
-      const room = byId.get(id);
-      if (!room) continue;
-      const hex = roomColorHex(
-        room,
-        colorMode,
-        activeColorPalette,
-        heizlastRange,
-        temperatureRange,
-        dataViewMode,
-        kuhllastRange,
-        customLegendColors,
-      );
-      const prev = mesh.material;
-      mesh.material = materialCacheRef.current.get(hex);
-      mesh.userData.colorHex = hex;
-      if (prev && prev !== mesh.material) {
-        if (Array.isArray(prev)) prev.forEach((m) => m.dispose());
-        else prev.dispose();
+      for (const [id, mesh] of roomMeshById.current) {
+        const room = byId.get(id);
+        if (!room) continue;
+        const hex = roomColorHex(
+          room,
+          colorMode,
+          activeColorPalette,
+          heizlastRange,
+          temperatureRange,
+          dataViewMode,
+          kuhllastRange,
+          customLegendColors,
+        );
+        const prev = mesh.material;
+        mesh.material = materialCacheRef.current.get(hex);
+        mesh.userData.colorHex = hex;
+        if (prev && prev !== mesh.material) {
+          if (Array.isArray(prev)) prev.forEach((m) => m.dispose());
+          else prev.dispose();
+        }
       }
-    }
-    applyRenderMode(
-      renderMode,
-      shellCloneRef.current,
-      overlaysRef.current,
-      true,
-      lighting,
-    );
-    clipRef.current?.rebindMaterials();
-    clipRef.current?.rebuildCaps();
-    // Selection opacity/outline must win over shared-material rebuilds
-    applySelectionHighlightRef.current();
+      applyRenderMode(
+        renderMode,
+        shellCloneRef.current,
+        overlaysRef.current,
+        true,
+        lighting,
+      );
+      clipRef.current?.rebindMaterials();
+      clipRef.current?.rebuildCaps();
+      applySelectionHighlightRef.current();
+    });
   }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
@@ -1302,104 +1321,104 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   // Single slice path (basic view only) — skipped in Presentation / compare
   useEffect(() => {
-    const clip = clipRef.current;
+    return runSceneWork(() => {
+      const clip = clipRef.current;
 
-    if (isPresentationView || compareBothModes) {
-      if (compareBothModes && clip) {
+      if (isPresentationView || compareBothModes) {
+        if (compareBothModes && clip) {
+          clip.clear();
+          clip.setEnabled(false);
+          clip.setCapsEnabled(false);
+        }
+        if (compareBothModes && !isPresentationView) {
+          const applyFloorVisibility = (obj: THREE.Object3D) => {
+            const floorId = obj.userData.floorId as string | undefined;
+            if (!floorId) {
+              obj.visible = true;
+              return;
+            }
+            obj.visible = selectedFloor == null || floorId === selectedFloor;
+          };
+          shellCloneRef.current?.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+          });
+          overlaysRef.current?.children.forEach((child) =>
+            applyFloorVisibility(child),
+          );
+          compareRootRef.current?.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+          });
+        }
+        return;
+      }
+
+      const applyFloorVisibility = (obj: THREE.Object3D) => {
+        const floorId = obj.userData.floorId as string | undefined;
+        if (!floorId) {
+          obj.visible = true;
+          return;
+        }
+        obj.visible = selectedFloor == null || floorId === selectedFloor;
+      };
+
+      shellCloneRef.current?.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+      });
+      overlaysRef.current?.children.forEach((child) =>
+        applyFloorVisibility(child),
+      );
+      compareRootRef.current?.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+      });
+
+      if (!clip) return;
+
+      clip.setOrientation("horizontal");
+
+      if (!selectedFloor) {
         clip.clear();
         clip.setEnabled(false);
         clip.setCapsEnabled(false);
-      }
-      // Still apply floor visibility for compare in basic view
-      if (compareBothModes && !isPresentationView) {
-        const applyFloorVisibility = (obj: THREE.Object3D) => {
-          const floorId = obj.userData.floorId as string | undefined;
-          if (!floorId) {
-            obj.visible = true;
-            return;
-          }
-          obj.visible = selectedFloor == null || floorId === selectedFloor;
-        };
-        shellCloneRef.current?.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
-        });
-        overlaysRef.current?.children.forEach((child) =>
-          applyFloorVisibility(child),
-        );
-        compareRootRef.current?.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
-        });
-      }
-      return;
-    }
-
-    const applyFloorVisibility = (obj: THREE.Object3D) => {
-      const floorId = obj.userData.floorId as string | undefined;
-      if (!floorId) {
-        obj.visible = true;
         return;
       }
-      obj.visible = selectedFloor == null || floorId === selectedFloor;
-    };
 
-    shellCloneRef.current?.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
+      const floorMeshes: THREE.Mesh[] = [];
+      shellCloneRef.current?.traverse((o) => {
+        if (isShellMesh(o) && o.userData.floorId === selectedFloor) {
+          floorMeshes.push(o);
+        }
+      });
+      overlaysRef.current?.traverse((o) => {
+        if (isOverlayRoomMesh(o) && o.userData.floorId === selectedFloor) {
+          floorMeshes.push(o);
+        }
+      });
+
+      for (const m of floorMeshes) m.visible = true;
+
+      const bounds = floorWorldYBounds(selectedFloor, [
+        shellCloneRef.current,
+        overlaysRef.current,
+      ]);
+      const t = useAppStore.getState().sliceProgress;
+      const heightY = bounds
+        ? bounds.yMin + t * Math.max(0.05, bounds.yMax - bounds.yMin)
+        : 0;
+
+      clip.setHeight(heightY);
+      clip.setMeshes(floorMeshes);
+      clip.setEnabled(true);
+      clip.setCapsEnabled(true);
+      clip.rebuildCaps();
+      clip.setHeight(heightY);
+      applySelectionHighlightRef.current();
+
+      debugLog(
+        "Viewer3D",
+        `rebuildSliceCaps floor=${selectedFloor} n=${floorMeshes.length} y=${heightY.toFixed(2)}`,
+        floorMeshes.length ? "ok" : "warn",
+      );
     });
-    overlaysRef.current?.children.forEach((child) => applyFloorVisibility(child));
-    compareRootRef.current?.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) applyFloorVisibility(obj);
-    });
-
-    if (!clip) return;
-
-    clip.setOrientation("horizontal");
-
-    if (!selectedFloor) {
-      clip.clear();
-      clip.setEnabled(false);
-      clip.setCapsEnabled(false);
-      return;
-    }
-
-    const floorMeshes: THREE.Mesh[] = [];
-    // Shell first, rooms last. Cap stencil/fill are interleaved per mesh in ClipSlice.
-    shellCloneRef.current?.traverse((o) => {
-      if (isShellMesh(o) && o.userData.floorId === selectedFloor) {
-        floorMeshes.push(o);
-      }
-    });
-    overlaysRef.current?.traverse((o) => {
-      if (isOverlayRoomMesh(o) && o.userData.floorId === selectedFloor) {
-        floorMeshes.push(o);
-      }
-    });
-
-    for (const m of floorMeshes) m.visible = true;
-
-    const bounds = floorWorldYBounds(selectedFloor, [
-      shellCloneRef.current,
-      overlaysRef.current,
-    ]);
-    const t = useAppStore.getState().sliceProgress;
-    const heightY = bounds
-      ? bounds.yMin + t * Math.max(0.05, bounds.yMax - bounds.yMin)
-      : 0;
-
-    clip.setHeight(heightY);
-    clip.setMeshes(floorMeshes);
-    clip.setEnabled(true);
-    clip.setCapsEnabled(true);
-    clip.rebuildCaps();
-    clip.setHeight(heightY);
-    // Restore pick highlight after clip rebind (setMeshes resets planes)
-    applySelectionHighlightRef.current();
-
-    debugLog(
-      "Viewer3D",
-      `rebuildSliceCaps floor=${selectedFloor} n=${floorMeshes.length} y=${heightY.toFixed(2)}`,
-      floorMeshes.length ? "ok" : "warn",
-    );
-
     // Keep camera pose when switching floors — user can Fit model manually.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1599,13 +1618,22 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const flyIso = (durationMs = 2000) => {
-      // Frame exploded floors (+ compare twin if visible) to fit the screen
       fitToVisible(durationMs);
+    };
+
+    let presWorkOpen = false;
+    let refreshTimer: number | null = null;
+    const endPresWork = () => {
+      if (!presWorkOpen) return;
+      presWorkOpen = false;
+      finishSceneWork();
     };
 
     if (isPresentationView) {
       const entering = !wasPresentationRef.current;
       wasPresentationRef.current = true;
+      startSceneWork();
+      presWorkOpen = true;
 
       if (entering) {
         presentationCamRef.current = {
@@ -1624,48 +1652,51 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       if (!entering) {
         const gap = applyExplode(1);
         applyIsolateVisibility();
-        // If Heizlast+Temp is sliding in, wait for that then fit both; otherwise fit now.
         const comparing = useAppStore.getState().compareBothModes;
         const delay = comparing ? 1600 : 50;
-        window.setTimeout(() => {
+        refreshTimer = window.setTimeout(() => {
           applyExplode(1);
           applyIsolateVisibility();
           flyIso(1800);
+          endPresWork();
         }, delay);
         debugLog(
           "Viewer3D",
           `presentation refresh n=${collectAllMeshes().length} gap=${gap.toFixed(2)} layout=${presentationLayoutMode}`,
           "ok",
         );
-        return;
+      } else {
+        let lastGap = 0;
+        let flew = false;
+        explodeTweenRef.current = animateProgress({
+          duration: 1.6,
+          ease: gsapEase.explode,
+          onUpdate: (e) => {
+            lastGap = applyExplode(e);
+            applyIsolateVisibility();
+            if (!flew && e >= 0.4) {
+              flew = true;
+              flyIso(1600);
+            }
+          },
+          onComplete: () => {
+            applyExplode(1);
+            applyIsolateVisibility();
+            requestAnimationFrame(() => flyIso(1800));
+            debugLog(
+              "Viewer3D",
+              `presentation n=${collectAllMeshes().length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
+              "ok",
+            );
+            endPresWork();
+          },
+        });
       }
-
-      let lastGap = 0;
-      let flew = false;
-      explodeTweenRef.current = animateProgress({
-        duration: 1.6,
-        ease: gsapEase.explode,
-        onUpdate: (e) => {
-          lastGap = applyExplode(e);
-          applyIsolateVisibility();
-          if (!flew && e >= 0.4) {
-            flew = true;
-            flyIso(1600);
-          }
-        },
-        onComplete: () => {
-          applyExplode(1);
-          applyIsolateVisibility();
-          requestAnimationFrame(() => flyIso(1800));
-          debugLog(
-            "Viewer3D",
-            `presentation n=${collectAllMeshes().length} gap=${lastGap.toFixed(2)} layout=${presentationLayoutMode}`,
-            "ok",
-          );
-        },
-      });
     } else if (wasPresentationRef.current) {
       wasPresentationRef.current = false;
+      startSceneWork();
+      presWorkOpen = true;
+
       clip.setOrientation("horizontal");
       clip.clear();
       clip.setEnabled(false);
@@ -1722,12 +1753,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           } else {
             requestAnimationFrame(() => fitToVisible());
           }
+          endPresWork();
         },
       });
     }
 
     return () => {
       explodeTweenRef.current?.kill();
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      endPresWork();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2192,6 +2226,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       viewCubeRef.current?.clearHover();
       setHoveredRoom(null);
       canvas.style.cursor = "default";
+      onPointerLeave?.();
     };
 
     const onClick = (e: PointerEvent) => {
@@ -2300,6 +2335,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
   }, [
     onPointerMove,
+    onPointerLeave,
     rooms,
     roomsFromStore,
     setHoveredRoom,
