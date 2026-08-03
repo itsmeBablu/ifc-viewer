@@ -23,3 +23,14 @@ export const HEADER_MODE_ICON: Record<HeaderMode, string> = {
 export function isDataViewMode(m: string): m is DataViewMode {
   return m === "heizlast" || m === "luftung" || m === "kuhllast";
 }
+
+/** Heizlast/Kühllast + Temperature dual view — not used in Lüftung. */
+export function supportsCompareBothModes(mode: DataViewMode): boolean {
+  return mode !== "luftung";
+}
+
+export function compareBothModesLabelKey(
+  mode: DataViewMode,
+): "heizlastPlusTemp" | "kuhllastPlusTemp" {
+  return mode === "kuhllast" ? "kuhllastPlusTemp" : "heizlastPlusTemp";
+}

@@ -7,6 +7,8 @@ import { IoOptionsOutline } from "react-icons/io5";
 import {
   DATA_VIEW_ICON,
   DATA_VIEW_MODES,
+  compareBothModesLabelKey,
+  supportsCompareBothModes,
   type DataViewMode,
 } from "@/lib/dataViewMode";
 import {
@@ -369,30 +371,32 @@ export default function PresentationOptionsMenu({
               </div>
             </div>
           ) : null}
-          <div
-            className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
-              compact ? "p-1.5" : "p-2"
-            } ${compareBothModes ? activeRow : idleRow}`}
-          >
-            <p className="text-[11px] font-semibold text-[var(--text-strong)]">
-              {t(uiLanguage, "heizlastPlusTemp")}
-            </p>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={compareBothModes}
-              onClick={() => setCompareBothModes(!compareBothModes)}
-              className={`${switchTrack} ${
-                compareBothModes ? "bg-amber-500" : "bg-zinc-300/80"
-              }`}
+          {supportsCompareBothModes(dataViewMode) ? (
+            <div
+              className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
+                compact ? "p-1.5" : "p-2"
+              } ${compareBothModes ? activeRow : idleRow}`}
             >
-              <span
-                className={`${switchKnob} ${
-                  compareBothModes ? "translate-x-4" : "translate-x-0"
+              <p className="text-[11px] font-semibold text-[var(--text-strong)]">
+                {t(uiLanguage, compareBothModesLabelKey(dataViewMode))}
+              </p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={compareBothModes}
+                onClick={() => setCompareBothModes(!compareBothModes)}
+                className={`${switchTrack} ${
+                  compareBothModes ? "bg-amber-500" : "bg-zinc-300/80"
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span
+                  className={`${switchKnob} ${
+                    compareBothModes ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     );

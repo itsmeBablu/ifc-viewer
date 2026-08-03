@@ -517,6 +517,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       dataViewMode: mode,
       ...(mode !== "luftung" ? { selectedVentilationZoneKey: null } : {}),
+      ...(mode === "luftung" ? { compareBothModes: false } : {}),
     });
   },
   setActiveColorPalette: (id) => {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { MdKeyboardArrowRight } from "react-icons/md";
+import { compareBothModesLabelKey, supportsCompareBothModes } from "@/lib/dataViewMode";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
@@ -59,6 +60,7 @@ export default function ViewerContextMenu({
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
   const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
+  const dataViewMode = useAppStore((s) => s.dataViewMode);
   const floors = useAppStore((s) => s.floors);
   const rooms = useAppStore((s) => s.rooms);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -274,23 +276,27 @@ export default function ViewerContextMenu({
         >
           <div className={ctxMenuSurface}>
             <div className="min-w-[210px] p-1.5">
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={compareBothModes}
-                className={itemCls()}
-                onClick={() => {
-                  setCompareBothModes(!compareBothModes);
-                  close();
-                }}
-              >
-                <span>{t(uiLanguage, "heizlastPlusTemp")}</span>
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    compareBothModes ? ctxToggleOn : ctxToggleOff
-                  }`}
-                />
-              </button>
+              {supportsCompareBothModes(dataViewMode) ? (
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={compareBothModes}
+                  className={itemCls()}
+                  onClick={() => {
+                    setCompareBothModes(!compareBothModes);
+                    close();
+                  }}
+                >
+                  <span>
+                    {t(uiLanguage, compareBothModesLabelKey(dataViewMode))}
+                  </span>
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      compareBothModes ? ctxToggleOn : ctxToggleOff
+                    }`}
+                  />
+                </button>
+              ) : null}
 
               <button
                 type="button"
