@@ -77,6 +77,14 @@ export default function VentilationZonePanel({
     [scopedRooms, floors],
   );
 
+  /** When a zone is selected, show only that one row (not the full floor list). */
+  const displayZones = useMemo(() => {
+    if (!selectedZoneKey) return zones;
+    return zones.filter(
+      (z) => summaryVentilationZoneKey(z) === selectedZoneKey,
+    );
+  }, [zones, selectedZoneKey]);
+
   const selectedZone = zones.find(
     (z) => summaryVentilationZoneKey(z) === selectedZoneKey,
   );
@@ -117,7 +125,7 @@ export default function VentilationZonePanel({
         <span className="flex min-w-0 items-center gap-1.5">
           <p className={heading.muted}>{t(uiLanguage, "usageZone")}</p>
           <span className="text-[9px] tabular-nums text-[var(--text-muted)]">
-            ({zones.length})
+            ({displayZones.length})
           </span>
         </span>
         <span className="flex items-center gap-1.5">
@@ -182,7 +190,7 @@ export default function VentilationZonePanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {zones.map((zone, i) => {
+                  {displayZones.map((zone, i) => {
                     const key = summaryVentilationZoneKey(zone);
                     const active = key === selectedZoneKey;
                     return (

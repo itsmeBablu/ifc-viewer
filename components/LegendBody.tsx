@@ -97,6 +97,7 @@ export default function LegendBody({
   const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
+  const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteContext, setPaletteContext] = useState<"load" | "temperature">(
     "load",
@@ -492,7 +493,7 @@ export default function LegendBody({
           </div>
         )}
 
-        {ventilation ? (
+        {ventilation && !(isPresentationView && presentationIsolate) ? (
           <VentilationZonePanel
             compact={compact}
             className="border-t border-[var(--panel-divider)] pt-1.5"

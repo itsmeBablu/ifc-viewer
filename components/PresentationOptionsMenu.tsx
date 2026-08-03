@@ -172,6 +172,12 @@ export default function PresentationOptionsMenu({
       : rooms,
     floors,
   );
+  const zoneChips =
+    presentationIsolate && selectedVentilationZoneKey
+      ? ventilationZones.filter(
+          (z) => summaryVentilationZoneKey(z) === selectedVentilationZoneKey,
+        )
+      : ventilationZones;
 
   const floorsWithRooms = listVisibleFloors(floors, rooms);
   const activeLayout = resolvePresentationLayout(
@@ -347,11 +353,22 @@ export default function PresentationOptionsMenu({
                 compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
               }`}
             >
-              <p className="text-[10px] font-semibold text-[var(--text-strong)]">
-                {t(uiLanguage, "selectVentilationZone")}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold text-[var(--text-strong)]">
+                  {t(uiLanguage, "selectVentilationZone")}
+                </p>
+                {presentationIsolate && selectedVentilationZoneKey ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVentilationZoneKey(null)}
+                    className="text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                  >
+                    {t(uiLanguage, "showAllZones")}
+                  </button>
+                ) : null}
+              </div>
               <div className="flex flex-wrap gap-1">
-                {ventilationZones.map((zone) => {
+                {zoneChips.map((zone) => {
                   const key = summaryVentilationZoneKey(zone);
                   const on = selectedVentilationZoneKey === key;
                   return (
