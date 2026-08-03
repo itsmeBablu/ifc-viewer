@@ -50,7 +50,9 @@ export default function PresentationSidePanel({
   const loadOverrides =
     dataViewMode === "kuhllast"
       ? customLegendColors.kuhllast
-      : customLegendColors.heizlast;
+      : dataViewMode === "luftung"
+        ? customLegendColors.luftung
+        : customLegendColors.heizlast;
   const ventilation = dataViewMode === "luftung";
 
   const floorsWithRooms = useMemo(

@@ -326,7 +326,11 @@ export function formatLegendRange(values: number[]): string {
   return values.join(", ");
 }
 
-export type LegendColorMode = "temperature" | "heizlast" | "kuhllast";
+export type LegendColorMode =
+  | "temperature"
+  | "heizlast"
+  | "kuhllast"
+  | "luftung";
 
 export type CustomLegendColorMap = Record<string, string>;
 
@@ -339,6 +343,7 @@ export const EMPTY_CUSTOM_LEGEND_COLORS: CustomLegendColors = {
   temperature: {},
   heizlast: {},
   kuhllast: {},
+  luftung: {},
 };
 
 /** Apply per-value hex overrides (keys are stop values as strings). */
@@ -359,6 +364,7 @@ function loadStopsForKind(
 ): ColorStop[] {
   if (kind === "temperature") return temperatureStopsFor(paletteId);
   if (kind === "kuhllast") return kuhllastStopsFor(paletteId);
+  // Heizlast + Lüftung share the heat-load palette stop shapes.
   return heizlastStopsFor(paletteId);
 }
 
@@ -373,7 +379,9 @@ export function legendStopsForMode(
       ? DEFAULT_TEMPERATURE_RANGE
       : kind === "kuhllast"
         ? DEFAULT_KUHLLAST_RANGE
-        : DEFAULT_HEIZLAST_RANGE;
+        : kind === "luftung"
+          ? DEFAULT_LUFTUNG_RANGE
+          : DEFAULT_HEIZLAST_RANGE;
   const resolved = resolveStopsForRange(
     loadStopsForKind(kind, paletteId),
     range ?? defaultRange,
@@ -508,7 +516,7 @@ export function luftungGradientCss(
   range: number[] = DEFAULT_LUFTUNG_RANGE,
   overrides?: CustomLegendColorMap,
 ): string {
-  const stops = legendStopsForMode("heizlast", paletteId, range, overrides);
+  const stops = legendStopsForMode("luftung", paletteId, range, overrides);
   return `linear-gradient(${direction}, ${stops.map((s) => s.color).join(", ")})`;
 }
 

@@ -54,8 +54,8 @@ const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
 const LUFTUNG_RANGE_KEY = "ifc-viewer:luftungRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
-const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors:v2";
-const LEGEND_SWATCH_PRESET_KEY = "ifc-viewer:legendSwatchPresetId";
+const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors:v3";
+const LEGEND_SWATCH_PRESET_KEY = "ifc-viewer:legendSwatchPresetId:v2";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
 
 export { SCENE_BACKGROUND_PRESETS } from "@/lib/sceneSky";
@@ -351,6 +351,7 @@ function customLegendIsEmpty(colors: CustomLegendColors): boolean {
   return (
     Object.keys(colors.heizlast).length === 0 &&
     Object.keys(colors.kuhllast).length === 0 &&
+    Object.keys(colors.luftung).length === 0 &&
     Object.keys(colors.temperature).length === 0
   );
 }
@@ -359,15 +360,17 @@ function initialCustomLegendColors(): CustomLegendColors {
   const defaults = buildThermalClassicLegendColors({
     heizlast: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
     kuhllast: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
+    luftung: initialRange(LUFTUNG_RANGE_KEY, DEFAULT_LUFTUNG_RANGE),
     temperature: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   });
   if (typeof window === "undefined") return defaults;
   try {
-    // No Schnellpalette choice yet → always Thermal Classic for heat / cool / temp.
+    // No Schnellpalette choice yet → Thermal Classic for heat / cool / vent / temp.
     if (!localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)) return defaults;
 
     const raw =
       localStorage.getItem(CUSTOM_LEGEND_COLORS_KEY) ??
+      localStorage.getItem("ifc-viewer:customLegendColors:v2") ??
       localStorage.getItem("ifc-viewer:customLegendColors");
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<CustomLegendColors>;
@@ -375,28 +378,30 @@ function initialCustomLegendColors(): CustomLegendColors {
       temperature: parsed.temperature ?? {},
       heizlast: parsed.heizlast ?? {},
       kuhllast: parsed.kuhllast ?? {},
+      luftung: parsed.luftung ?? {},
     };
     if (customLegendIsEmpty(merged)) return defaults;
 
     const presetIds = JSON.parse(
       localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)!,
     ) as Partial<Record<LegendColorMode, string | null>>;
+
+    const pick = (
+      mode: LegendColorMode,
+      stored: CustomLegendColorMap,
+    ): CustomLegendColorMap =>
+      (presetIds[mode] ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
+      DEFAULT_LEGEND_SWATCH_PRESET_ID
+        ? defaults[mode]
+        : Object.keys(stored).length
+          ? stored
+          : defaults[mode];
+
     return {
-      heizlast:
-        (presetIds.heizlast ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
-        DEFAULT_LEGEND_SWATCH_PRESET_ID
-          ? defaults.heizlast
-          : merged.heizlast,
-      kuhllast:
-        (presetIds.kuhllast ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
-        DEFAULT_LEGEND_SWATCH_PRESET_ID
-          ? defaults.kuhllast
-          : merged.kuhllast,
-      temperature:
-        (presetIds.temperature ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
-        DEFAULT_LEGEND_SWATCH_PRESET_ID
-          ? defaults.temperature
-          : merged.temperature,
+      heizlast: pick("heizlast", merged.heizlast),
+      kuhllast: pick("kuhllast", merged.kuhllast),
+      luftung: pick("luftung", merged.luftung),
+      temperature: pick("temperature", merged.temperature),
     };
   } catch {
     return defaults;
@@ -407,7 +412,9 @@ function initialLegendSwatchPresetIds(): Record<LegendColorMode, string | null> 
   const defaults = { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
   if (typeof window === "undefined") return defaults;
   try {
-    const raw = localStorage.getItem(LEGEND_SWATCH_PRESET_KEY);
+    const raw =
+      localStorage.getItem(LEGEND_SWATCH_PRESET_KEY) ??
+      localStorage.getItem("ifc-viewer:legendSwatchPresetId");
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<
       Record<LegendColorMode, string | null>
@@ -421,6 +428,8 @@ function initialLegendSwatchPresetIds(): Record<LegendColorMode, string | null> 
         parsed.heizlast === undefined ? defaults.heizlast : parsed.heizlast,
       kuhllast:
         parsed.kuhllast === undefined ? defaults.kuhllast : parsed.kuhllast,
+      luftung:
+        parsed.luftung === undefined ? defaults.luftung : parsed.luftung,
     };
   } catch {
     return defaults;
@@ -619,6 +628,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const classic = buildThermalClassicLegendColors({
       heizlast: s.heizlastRange,
       kuhllast: s.kuhllastRange,
+      luftung: s.luftungRange,
       temperature: s.temperatureRange,
     });
     const presetIds = { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
@@ -651,8 +661,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!parsed) return;
     persistRange(LUFTUNG_RANGE_KEY, parsed);
     set({ luftungRange: parsed });
-    const presetId = get().legendSwatchPresetId.heizlast;
-    if (presetId) get().applyLegendSwatchPreset("heizlast", presetId);
+    const presetId = get().legendSwatchPresetId.luftung;
+    if (presetId) get().applyLegendSwatchPreset("luftung", presetId);
   },
   setTemperatureRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
@@ -683,6 +693,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const classic = buildThermalClassicLegendColors({
       heizlast: s.heizlastRange,
       kuhllast: s.kuhllastRange,
+      luftung: s.luftungRange,
       temperature: s.temperatureRange,
     });
     set((state) => {
@@ -709,7 +720,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? s.temperatureRange
           : mode === "kuhllast"
             ? s.kuhllastRange
-            : s.dataViewMode === "luftung"
+            : mode === "luftung"
               ? s.luftungRange
               : s.heizlastRange;
 

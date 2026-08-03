@@ -57,7 +57,7 @@ function RoomInfoBody({
         roomVentilationColorValue(room),
         palette,
         luftungRange,
-        customLegendColors.heizlast,
+        customLegendColors.luftung,
       )
     : cooling
     ? kuhllastToColor(

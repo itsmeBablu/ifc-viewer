@@ -86,6 +86,7 @@ export default function LegendBody({
   const tempOverrides = useLegendColorOverrides("temperature");
   const heizlastOverrides = useLegendColorOverrides("heizlast");
   const kuhllastOverrides = useLegendColorOverrides("kuhllast");
+  const luftungOverrides = useLegendColorOverrides("luftung");
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const luftungRange = useAppStore((s) => s.luftungRange);
@@ -107,13 +108,21 @@ export default function LegendBody({
 
   const cooling = dataViewMode === "kuhllast";
   const ventilation = dataViewMode === "luftung";
-  const loadKind: LegendColorMode = cooling ? "kuhllast" : "heizlast";
+  const loadKind: LegendColorMode = cooling
+    ? "kuhllast"
+    : ventilation
+      ? "luftung"
+      : "heizlast";
   const loadRange = ventilation
     ? luftungRange
     : cooling
       ? kuhllastRange
       : heizlastRange;
-  const loadOverrides = cooling ? kuhllastOverrides : heizlastOverrides;
+  const loadOverrides = cooling
+    ? kuhllastOverrides
+    : ventilation
+      ? luftungOverrides
+      : heizlastOverrides;
   const loadGradient = (
     direction = "to right",
     paletteId?: string,

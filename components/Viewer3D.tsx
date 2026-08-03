@@ -110,7 +110,7 @@ function roomColorHex(
       roomVentilationColorValue(room),
       palette,
       luftungRange,
-      customLegendColors?.heizlast,
+      customLegendColors?.luftung,
     );
   }
   return heizlastToColor(

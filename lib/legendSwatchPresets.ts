@@ -1,10 +1,12 @@
 import {
   DEFAULT_HEIZLAST_RANGE,
   DEFAULT_KUHLLAST_RANGE,
+  DEFAULT_LUFTUNG_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
   mapAnchorColorsToRange,
   standardTemperatureStopColors,
   type CustomLegendColors,
+  type LegendColorMode,
 } from "./colorMapping";
 
 /** Default temperature chip colors (standard palette, default range). */
@@ -125,10 +127,11 @@ export function getTemperatureSwatchPreset(
 
 export function swatchColorsForMode(
   preset: LegendSwatchPreset,
-  mode: "heizlast" | "kuhllast" | "temperature",
+  mode: LegendColorMode,
 ): string[] {
   if (mode === "kuhllast") return preset.coolColors;
   if (mode === "temperature") return preset.tempColors;
+  // Heizlast + Lüftung use the heat gradient anchors.
   return preset.heatColors;
 }
 
@@ -136,11 +139,12 @@ export function swatchColorsForMode(
 export function buildThermalClassicLegendColors(ranges?: {
   heizlast?: number[];
   kuhllast?: number[];
+  luftung?: number[];
   temperature?: number[];
 }): CustomLegendColors {
   const preset = getLegendSwatchPreset(DEFAULT_LEGEND_SWATCH_PRESET_ID);
   if (!preset) {
-    return { temperature: {}, heizlast: {}, kuhllast: {} };
+    return { temperature: {}, heizlast: {}, kuhllast: {}, luftung: {} };
   }
   return {
     heizlast: mapAnchorColorsToRange(
@@ -151,6 +155,10 @@ export function buildThermalClassicLegendColors(ranges?: {
       preset.coolColors,
       ranges?.kuhllast ?? DEFAULT_KUHLLAST_RANGE,
     ),
+    luftung: mapAnchorColorsToRange(
+      preset.heatColors,
+      ranges?.luftung ?? DEFAULT_LUFTUNG_RANGE,
+    ),
     temperature: mapAnchorColorsToRange(
       preset.tempColors,
       ranges?.temperature ?? DEFAULT_TEMPERATURE_RANGE,
@@ -159,10 +167,11 @@ export function buildThermalClassicLegendColors(ranges?: {
 }
 
 export const DEFAULT_THERMAL_CLASSIC_PRESET_IDS: Record<
-  "temperature" | "heizlast" | "kuhllast",
+  LegendColorMode,
   string | null
 > = {
   heizlast: DEFAULT_LEGEND_SWATCH_PRESET_ID,
   kuhllast: DEFAULT_LEGEND_SWATCH_PRESET_ID,
+  luftung: DEFAULT_LEGEND_SWATCH_PRESET_ID,
   temperature: DEFAULT_LEGEND_SWATCH_PRESET_ID,
 };

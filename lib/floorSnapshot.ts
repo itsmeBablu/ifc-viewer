@@ -89,7 +89,7 @@ export function renderFloorSnapshot(
         roomVentilationColorValue(room),
         palette,
         luftungRange,
-        customLegendColors.heizlast,
+        customLegendColors.luftung,
       );
     }
     return heizlastToColor(
