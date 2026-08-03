@@ -170,6 +170,7 @@ export default function PresentationOptionsMenu({
     presentationIsolate && presentationFloorId
       ? rooms.filter((r) => r.floorId === presentationFloorId)
       : rooms,
+    floors,
   );
 
   const floorsWithRooms = listVisibleFloors(floors, rooms);
@@ -364,7 +365,7 @@ export default function PresentationOptionsMenu({
                         on ? layoutChipOn : layoutChipOff
                       }`}
                     >
-                      {zone.zoneName}
+                      {zone.floorAbbrev} · {zone.zoneName}
                     </button>
                   );
                 })}

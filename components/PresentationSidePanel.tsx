@@ -8,15 +8,7 @@ import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
 import LegendBody from "./LegendBody";
 import ModelText from "./ModelText";
-import {
-  formatFlowVolume,
-  formatHeatLoss,
-  groupRoomsByVentilationZone,
-  roomInVentilationZone,
-  roomVentilationListMetrics,
-  roomVentilationZoneKey,
-  summaryVentilationZoneKey,
-} from "@/lib/ventilation";
+import VentilationZonePanel from "./VentilationZonePanel";
 
 /** Light tint of a hex color for list row backgrounds. */
 function lightTint(hex: string, mix = 0.78): string {
@@ -31,7 +23,7 @@ function lightTint(hex: string, mix = 0.78): string {
 
 /**
  * Presentation right panel: Legend (+ more menu).
- * When isolate is on: floor list + rooms for the selected floor.
+ * When isolate is on: floor list + rooms (or Nutzungszone table in Lüftung).
  */
 export default function PresentationSidePanel({
   includeLegend = true,
@@ -48,12 +40,6 @@ export default function PresentationSidePanel({
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
-  const selectedVentilationZoneKey = useAppStore(
-    (s) => s.selectedVentilationZoneKey,
-  );
-  const setSelectedVentilationZoneKey = useAppStore(
-    (s) => s.setSelectedVentilationZoneKey,
-  );
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const requestRoomFocus = useAppStore((s) => s.requestRoomFocus);
   const activeColorPalette = useEffectiveColorPalette();
@@ -82,27 +68,6 @@ export default function PresentationSidePanel({
       );
   }, [rooms, presentationFloorId]);
 
-  /** When isolating a floor, zone totals match that floor only (like VentilationZonePanel floorId). */
-  const ventilationScopeRooms = useMemo(
-    () =>
-      presentationIsolate && presentationFloorId ? floorRooms : rooms,
-    [presentationIsolate, presentationFloorId, floorRooms, rooms],
-  );
-
-  const selectedZone = useMemo(() => {
-    if (!selectedVentilationZoneKey) return null;
-    return (
-      groupRoomsByVentilationZone(ventilationScopeRooms).find(
-        (z) => summaryVentilationZoneKey(z) === selectedVentilationZoneKey,
-      ) ?? null
-    );
-  }, [ventilationScopeRooms, selectedVentilationZoneKey]);
-
-  const selectedRoom = useMemo(
-    () => rooms.find((r) => r.id === selectedRoomId) ?? null,
-    [rooms, selectedRoomId],
-  );
-
   // Prefer Erdgeschoss, else first visible floor
   useEffect(() => {
     if (!presentationIsolate || floorsWithRooms.length === 0) return;
@@ -130,35 +95,6 @@ export default function PresentationSidePanel({
       }),
     );
   };
-
-  const selectVentilationZone = (roomId: string) => {
-    const room = rooms.find((r) => r.id === roomId);
-    if (!room) return;
-    setSelectedVentilationZoneKey(roomVentilationZoneKey(room));
-    setSelectedRoomId(null);
-    setSelectedElement(null);
-  };
-
-  /** Double-click: keep zone for 3D markers, focus one room in the panel. */
-  const focusVentilationRoom = (
-    roomId: string,
-    expressId: number,
-    floorId: string,
-  ) => {
-    const room = rooms.find((r) => r.id === roomId);
-    if (!room) return;
-    setSelectedVentilationZoneKey(roomVentilationZoneKey(room));
-    selectRoom(roomId, expressId, floorId);
-  };
-
-  const clearVentilationSelection = () => {
-    setSelectedVentilationZoneKey(null);
-    setSelectedRoomId(null);
-    setSelectedElement(null);
-  };
-
-  const showZoneSummary = Boolean(selectedZone && !selectedRoomId);
-  const showRoomSummary = Boolean(selectedRoom);
 
   if (!includeLegend && !presentationIsolate) {
     return null;
@@ -215,183 +151,79 @@ export default function PresentationSidePanel({
             )}
           </div>
 
-          <p className={`${heading.muted} shrink-0`}>
-            {t(uiLanguage, "rooms")} ({floorRooms.length})
-          </p>
-          {floorRooms.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)]">
-              {t(uiLanguage, "noRoomsOnFloor")}
-            </p>
+          {ventilation ? (
+            <VentilationZonePanel
+              compact={compact}
+              floorId={presentationFloorId}
+              className="shrink-0"
+            />
           ) : (
-            <ul
-              className={`thin-scroll space-y-0.5 overflow-y-auto overscroll-contain pr-0.5 pb-1 ${
-                compact ? "max-h-40" : "max-h-52"
-              }`}
-            >
-              {floorRooms.map((room) => {
-                const hex = roomLoadColor(
-                  room,
-                  dataViewMode,
-                  activeColorPalette,
-                  heizlastRange,
-                  kuhllastRange,
-                  loadOverrides,
-                );
-                const density = roomDensityLoad(room, dataViewMode);
-                const active = room.id === selectedRoomId;
-                const inSelectedZone =
-                  !selectedVentilationZoneKey ||
-                  roomInVentilationZone(room, selectedVentilationZoneKey);
-                const ventMetrics = ventilation
-                  ? roomVentilationListMetrics(room.ventilation)
-                  : null;
-                return (
-                  <li key={room.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        ventilation
-                          ? selectVentilationZone(room.id)
-                          : selectRoom(room.id, room.expressId, room.floorId)
-                      }
-                      onDoubleClick={(e) => {
-                        e.preventDefault();
-                        if (ventilation) {
-                          focusVentilationRoom(
-                            room.id,
-                            room.expressId,
-                            room.floorId,
-                          );
-                        } else {
-                          selectRoom(room.id, room.expressId, room.floorId);
-                        }
-                      }}
-                      className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border text-left transition-all ${
-                        compact ? "px-1.5 py-0.5" : "px-2 py-1"
-                      } ${
-                        active
-                          ? "border-[var(--panel-divider)] shadow-sm ring-1 ring-[var(--panel-divider)]"
-                          : inSelectedZone && selectedVentilationZoneKey
-                            ? "border-[var(--panel-divider)]"
-                            : "border-transparent hover:border-[var(--panel-divider)]"
-                      } ${
-                        ventilation &&
-                        selectedVentilationZoneKey &&
-                        !inSelectedZone
-                          ? "opacity-45"
-                          : ""
-                      }`}
-                      style={{ backgroundColor: lightTint(hex, 0.82) }}
-                    >
-                      <ModelText className="min-w-0 shrink truncate text-[10px] font-semibold text-on-tint sm:max-w-[42%]">
-                        {room.number ? `${room.number} · ` : ""}
-                        {room.name}
-                      </ModelText>
-                      {ventMetrics ? (
-                        <span className="min-w-0 flex-1 truncate text-right text-[9px] tabular-nums text-on-tint-muted">
-                          {t(uiLanguage, "abluftVolume")} {ventMetrics.abluft}
-                          {" · "}
-                          {t(uiLanguage, "zuluftVolume")} {ventMetrics.zuluft}
-                          {" · "}
-                          {ventMetrics.heatLoss}
-                        </span>
-                      ) : (
-                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-on-tint-muted">
-                          {density.toFixed(0)} W/m² · {room.temperature.toFixed(1)} °C
-                        </span>
-                      )}
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-sm border border-zinc-400/30"
-                        style={{ backgroundColor: hex }}
-                        aria-hidden
-                      />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <p className={`${heading.muted} shrink-0`}>
+                {t(uiLanguage, "rooms")} ({floorRooms.length})
+              </p>
+              {floorRooms.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t(uiLanguage, "noRoomsOnFloor")}
+                </p>
+              ) : (
+                <ul
+                  className={`thin-scroll space-y-0.5 overflow-y-auto overscroll-contain pr-0.5 pb-1 ${
+                    compact ? "max-h-40" : "max-h-52"
+                  }`}
+                >
+                  {floorRooms.map((room) => {
+                    const hex = roomLoadColor(
+                      room,
+                      dataViewMode,
+                      activeColorPalette,
+                      heizlastRange,
+                      kuhllastRange,
+                      loadOverrides,
+                    );
+                    const density = roomDensityLoad(room, dataViewMode);
+                    const active = room.id === selectedRoomId;
+                    return (
+                      <li key={room.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            selectRoom(room.id, room.expressId, room.floorId)
+                          }
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            selectRoom(room.id, room.expressId, room.floorId);
+                          }}
+                          className={`flex w-full min-w-0 items-center gap-1.5 rounded-lg border text-left transition-all ${
+                            compact ? "px-1.5 py-0.5" : "px-2 py-1"
+                          } ${
+                            active
+                              ? "border-[var(--panel-divider)] shadow-sm ring-1 ring-[var(--panel-divider)]"
+                              : "border-transparent hover:border-[var(--panel-divider)]"
+                          }`}
+                          style={{ backgroundColor: lightTint(hex, 0.82) }}
+                        >
+                          <ModelText className="min-w-0 shrink truncate text-[10px] font-semibold text-on-tint sm:max-w-[42%]">
+                            {room.number ? `${room.number} · ` : ""}
+                            {room.name}
+                          </ModelText>
+                          <span className="ml-auto shrink-0 text-[9px] tabular-nums text-on-tint-muted">
+                            {density.toFixed(0)} W/m² ·{" "}
+                            {room.temperature.toFixed(1)} °C
+                          </span>
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-sm border border-zinc-400/30"
+                            style={{ backgroundColor: hex }}
+                            aria-hidden
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
           )}
-
-          {ventilation && (showZoneSummary || showRoomSummary) ? (
-            <div
-              className={`shrink-0 space-y-1.5 border-t border-[var(--panel-divider)] ${
-                compact ? "pt-1.5" : "pt-2.5"
-              }`}
-            >
-              {showZoneSummary && selectedZone ? (
-                <div
-                  className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)] ${
-                    compact ? "p-2" : "p-2.5"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                        {t(uiLanguage, "usageZone")}
-                      </p>
-                      <p className="truncate text-[11px] font-semibold text-[var(--text-strong)]">
-                        {selectedZone.zoneName}
-                      </p>
-                      {selectedZone.ventilationZoneName ? (
-                        <p className="truncate text-[10px] text-[var(--text-muted)]">
-                          {selectedZone.ventilationZoneName}
-                        </p>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearVentilationSelection}
-                      className="shrink-0 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                    >
-                      {t(uiLanguage, "showAllZones")}
-                    </button>
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-2 text-[9px] tabular-nums text-[var(--text-body)]">
-                    <span>
-                      {t(uiLanguage, "abluftVolume")}:{" "}
-                      {formatFlowVolume(selectedZone.totalAbluft)}
-                    </span>
-                    <span>
-                      {t(uiLanguage, "zuluftVolume")}:{" "}
-                      {formatFlowVolume(selectedZone.totalZuluft)}
-                    </span>
-                    <span>
-                      {t(uiLanguage, "luftungHeatLoss")}:{" "}
-                      {formatHeatLoss(selectedZone.totalHeatLoss)}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-
-              {showRoomSummary && selectedRoom ? (
-                <div
-                  className={`rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
-                    compact ? "px-2 py-1.5" : "px-2.5 py-2"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                      {t(uiLanguage, "rooms")}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedRoomId(null);
-                        setSelectedElement(null);
-                      }}
-                      className="shrink-0 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                    >
-                      {t(uiLanguage, "showAllZones")}
-                    </button>
-                  </div>
-                  <p className="truncate text-[11px] font-semibold text-[var(--text-strong)]">
-                    {selectedRoom.number ? `${selectedRoom.number} · ` : ""}
-                    {selectedRoom.name}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </section>
       )}
     </div>

@@ -244,12 +244,7 @@ export default function LegendBody({
             />
           ) : (
             !compact && (
-              <>
-                <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
-                {ventilation ? (
-                  <VentilationZonePanel className="-mx-1 border-b border-[var(--panel-divider)] pb-2" />
-                ) : null}
-              </>
+              <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
             )
           )
         )}
@@ -517,6 +512,13 @@ export default function LegendBody({
             )}
           </div>
         )}
+
+        {ventilation ? (
+          <VentilationZonePanel
+            compact={compact}
+            className="border-t border-[var(--panel-divider)] pt-1.5"
+          />
+        ) : null}
       </section>
     </div>
   );

@@ -79,6 +79,8 @@ export default function ViewerContextMenu({
   const colorMode = useAppStore((s) => s.colorMode);
   const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
   const setAutoSceneBackground = useAppStore((s) => s.setAutoSceneBackground);
+  const autoFocusSelection = useAppStore((s) => s.autoFocusSelection);
+  const setAutoFocusSelection = useAppStore((s) => s.setAutoFocusSelection);
   const addSavedView = useAppStore((s) => s.addSavedView);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -312,6 +314,24 @@ export default function ViewerContextMenu({
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${
                     autoSceneBackground ? ctxToggleOn : ctxToggleOff
+                  }`}
+                />
+              </button>
+
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={autoFocusSelection}
+                className={itemCls()}
+                onClick={() => {
+                  setAutoFocusSelection(!autoFocusSelection);
+                  close();
+                }}
+              >
+                <span>{t(uiLanguage, "autoFocus")}</span>
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    autoFocusSelection ? ctxToggleOn : ctxToggleOff
                   }`}
                 />
               </button>

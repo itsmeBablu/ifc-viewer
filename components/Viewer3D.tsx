@@ -948,6 +948,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   useEffect(() => {
     if (dataViewMode !== "luftung" || !selectedVentilationZoneKey) return;
+    if (!useAppStore.getState().autoFocusSelection) return;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
@@ -2096,7 +2097,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
 
       if (roomId) {
-        setSelectedRoomId(roomId);
+        if (useAppStore.getState().autoFocusSelection) {
+          useAppStore.getState().requestRoomFocus(roomId);
+        } else {
+          setSelectedRoomId(roomId);
+        }
         setHoveredRoom(null);
       } else setSelectedRoomId(null);
 

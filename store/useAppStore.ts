@@ -50,6 +50,7 @@ const RIGHT_PANEL_KEY = "ifc-viewer:rightPanelOpen";
 const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
 const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
+const AUTO_FOCUS_KEY = "ifc-viewer:autoFocusSelection";
 const THEME_KEY = "ifc-viewer:colorTheme";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
@@ -163,6 +164,8 @@ type AppState = {
   sceneBackground: string;
   /** When true, sky follows heating/cooling mode (+ day/night). Default off. */
   autoSceneBackground: boolean;
+  /** When true, selecting a room/zone flies the camera (like Lüftung focus). Default off. */
+  autoFocusSelection: boolean;
   /** Presentation (exploded) vs basic imported view. */
   isPresentationView: boolean;
   /** selectedFloor restored when leaving presentation. */
@@ -177,7 +180,7 @@ type AppState = {
   presentationIsolate: boolean;
   /** Show Heizlast + Temperature together (stacked on floor, side-by-side in presentation). */
   compareBothModes: boolean;
-  /** Selected Nutzungszone in Lüftung view (zoneNumber::zoneName). */
+  /** Selected Nutzungszone in Lüftung view (floorId::zoneNumber::zoneName). */
   selectedVentilationZoneKey: string | null;
   /** Incremented when a ventilation zone is selected (camera fly). */
   ventilationZoneFocusToken: number;
@@ -249,6 +252,7 @@ type AppState = {
   ) => void;
   setSceneBackground: (value: string, options?: { persist?: boolean }) => void;
   setAutoSceneBackground: (on: boolean) => void;
+  setAutoFocusSelection: (on: boolean) => void;
   setSliceProgress: (t: number) => void;
   setPresentationView: (active: boolean) => void;
   setPresentationFloorId: (floorId: string | null) => void;
@@ -393,6 +397,16 @@ function initialAutoSceneBackground(): boolean {
   return false;
 }
 
+function initialAutoFocusSelection(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(AUTO_FOCUS_KEY) === "1";
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 function initialTheme(): import("@/lib/themeColors").ColorTheme {
   if (typeof window === "undefined") return "light";
   try {
@@ -442,6 +456,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   sceneBackground: initialBackground(),
   autoSceneBackground: initialAutoSceneBackground(),
+  autoFocusSelection: initialAutoFocusSelection(),
   isPresentationView: false,
   presentationPrevFloor: null,
   presentationFloorId: null,
@@ -667,6 +682,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().setSceneBackground(getDefaultSceneBackground(s.colorTheme));
     }
   },
+  setAutoFocusSelection: (on) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(AUTO_FOCUS_KEY, on ? "1" : "0");
+      } catch {
+        // ignore
+      }
+    }
+    set({ autoFocusSelection: on });
+  },
   setSliceProgress: (t) => set({ sliceProgress: clamp01(t) }),
   setPresentationView: (active) => {
     const s = get();
@@ -767,7 +792,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedVentilationZoneKey: key,
       selectedRoomId: null,
       selectedElement: null,
-      ventilationZoneFocusToken: key ? s.ventilationZoneFocusToken + 1 : s.ventilationZoneFocusToken,
+      // Camera fly only when Auto focus is on (same behavior as Heizlast/Cooling).
+      ventilationZoneFocusToken:
+        key && s.autoFocusSelection
+          ? s.ventilationZoneFocusToken + 1
+          : s.ventilationZoneFocusToken,
     })),
   requestRoomFocus: (roomId) =>
     set((s) => ({

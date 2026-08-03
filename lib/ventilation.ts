@@ -1,6 +1,11 @@
-import type { Room, RoomVentilation, VentilationFlowRole } from "./types";
+import type { Floor, Room, RoomVentilation, VentilationFlowRole } from "./types";
 
 export type VentilationZoneSummary = {
+  /** Storey this Nutzungszone belongs to (WG1 on EG ≠ WG1 on 1.OG). */
+  floorId: string;
+  floorName: string;
+  /** Short label: EG, 03. OG, -01. UG, DG. */
+  floorAbbrev: string;
   zoneName: string;
   ventilationZoneName: string;
   zoneNumber: number;
@@ -194,18 +199,78 @@ export function roomHasVentilationMarkers(room: Room): boolean {
   return roomShowsVentilationFlowMarkers(room);
 }
 
-const zoneKey = (room: Room) =>
+const zoneNameFallback = (room: Room) =>
   room.ventilation.zoneName.trim() ||
   room.ventilation.ventilationZoneName.trim() ||
   "—";
 
+/**
+ * Short German storey labels for compact tables:
+ * Erdgeschoss → EG, 3. Obergeschoss → 03. OG, -1 Untergeschoss → -01. UG, Dachgeschoss → DG.
+ */
+export function abbreviateFloorName(name: string): string {
+  const n = name.trim().replace(/\s+/g, " ");
+  if (!n) return "—";
+  if (/dachgeschoss|\bdg\b|attic|roof\s*floor/i.test(n)) return "DG";
+  if (/erdgeschoss|\beg\b|ground\s*floor|parterre/i.test(n)) return "EG";
+
+  const padFloor = (num: number, suffix: "OG" | "UG") => {
+    const abs = Math.abs(num);
+    const padded = String(abs).padStart(2, "0");
+    return num < 0 || suffix === "UG"
+      ? `-${padded}. ${suffix}`
+      : `${padded}. ${suffix}`;
+  };
+
+  const ugBefore = n.match(/(-?\d+)\s*[.\-]?\s*(?:untergeschoss|\bug\b)/i);
+  if (ugBefore) {
+    let num = parseInt(ugBefore[1], 10);
+    if (num > 0) num = -num;
+    return padFloor(num, "UG");
+  }
+  const ugAfter = n.match(/(?:untergeschoss|\bug\b)\s*[.\-]?\s*(-?\d+)/i);
+  if (ugAfter) {
+    let num = parseInt(ugAfter[1], 10);
+    if (num > 0) num = -num;
+    return padFloor(num, "UG");
+  }
+  if (/untergeschoss|\bug\b|basement|keller/i.test(n)) return "UG";
+
+  const ogBefore = n.match(/(\d+)\s*[.\-]?\s*(?:obergeschoss|\bog\b|etage|stockwerk)/i);
+  if (ogBefore) return padFloor(parseInt(ogBefore[1], 10), "OG");
+  const ogAfter = n.match(/(?:obergeschoss|\bog\b)\s*[.\-]?\s*(\d+)/i);
+  if (ogAfter) return padFloor(parseInt(ogAfter[1], 10), "OG");
+  if (/obergeschoss|\bog\b/i.test(n)) return "OG";
+
+  return n.length > 12 ? `${n.slice(0, 11)}…` : n;
+}
+
+/** Display label for a Nutzungszone (WG 1, or padded zone number). */
+export function ventilationZoneDisplayName(zone: {
+  zoneName: string;
+  zoneNumber: number;
+}): string {
+  const name = zone.zoneName.trim();
+  if (name && name !== "—") return name;
+  if (zone.zoneNumber !== 0) {
+    const n = zone.zoneNumber;
+    if (n < 0) return String(n);
+    return String(Math.abs(n)).padStart(5, "0");
+  }
+  return "—";
+}
+
+/**
+ * Unique key per floor + zone — WG1 on EG is distinct from WG1 on 1.OG.
+ * Format: floorId::zoneNumber::zoneName
+ */
 export function roomVentilationZoneKey(room: Room): string {
-  const name = room.ventilation.zoneName.trim() || zoneKey(room);
-  return `${room.ventilation.zoneNumber}::${name}`;
+  const name = room.ventilation.zoneName.trim() || zoneNameFallback(room);
+  return `${room.floorId}::${room.ventilation.zoneNumber}::${name}`;
 }
 
 export function summaryVentilationZoneKey(zone: VentilationZoneSummary): string {
-  return `${zone.zoneNumber}::${zone.zoneName}`;
+  return `${zone.floorId}::${zone.zoneNumber}::${zone.zoneName}`;
 }
 
 export function roomInVentilationZone(
@@ -216,18 +281,25 @@ export function roomInVentilationZone(
   return roomVentilationZoneKey(room) === zoneKey;
 }
 
-/** Group rooms by Nutzungszone / Lüftungszone (apartment / office unit). */
+/** Group rooms by floor + Nutzungszone / Lüftungszone. */
 export function groupRoomsByVentilationZone(
   rooms: Room[],
+  floors: Floor[] = [],
 ): VentilationZoneSummary[] {
+  const floorById = new Map(floors.map((f) => [f.id, f]));
   const map = new Map<string, VentilationZoneSummary>();
 
   for (const room of rooms) {
-    const key = zoneKey(room);
+    const key = roomVentilationZoneKey(room);
     let entry = map.get(key);
     if (!entry) {
+      const floor = floorById.get(room.floorId);
+      const floorName = floor?.name ?? "";
       entry = {
-        zoneName: room.ventilation.zoneName || key,
+        floorId: room.floorId,
+        floorName,
+        floorAbbrev: abbreviateFloorName(floorName),
+        zoneName: room.ventilation.zoneName || zoneNameFallback(room),
         ventilationZoneName: room.ventilation.ventilationZoneName,
         zoneNumber: room.ventilation.zoneNumber,
         zoneAldVolume: room.ventilation.zoneAldVolume,
@@ -253,18 +325,33 @@ export function groupRoomsByVentilationZone(
     if (!entry.zoneAldVolume && room.ventilation.zoneAldVolume > 0) {
       entry.zoneAldVolume = room.ventilation.zoneAldVolume;
     }
+    if (!entry.ventilationZoneName && room.ventilation.ventilationZoneName) {
+      entry.ventilationZoneName = room.ventilation.ventilationZoneName;
+    }
   }
 
-  return [...map.values()].sort(
-    (a, b) =>
+  return [...map.values()].sort((a, b) => {
+    const ea = floorById.get(a.floorId)?.elevation ?? 0;
+    const eb = floorById.get(b.floorId)?.elevation ?? 0;
+    return (
+      ea - eb ||
       a.zoneNumber - b.zoneNumber ||
-      a.zoneName.localeCompare(b.zoneName),
-  );
+      a.zoneName.localeCompare(b.zoneName)
+    );
+  });
 }
 
 export function formatFlowVolume(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "—";
   return `${value.toFixed(1).replace(".", ",")} m³/h`;
+}
+
+/** Compact number for table cells (unit in column header). */
+export function formatFlowVolumeCompact(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  const rounded = Math.round(value * 10) / 10;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(1).replace(".", ",");
 }
 
 export function formatHeatLoss(value: number): string {
