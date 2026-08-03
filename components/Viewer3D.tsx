@@ -1962,6 +1962,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const canvas = rendererRef.current?.domElement;
     if (!canvas) return;
 
+    /** Skip room pick when this click ends an orbit/pan drag. */
+    const DRAG_PX = 6;
+    let pointerDownX = 0;
+    let pointerDownY = 0;
+    let suppressNextClick = false;
+
     const pickHit = (clientX: number, clientY: number) => {
       const camera = cameraRef.current;
       if (!camera) return null;
@@ -2201,6 +2207,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const onMove = (e: PointerEvent) => {
+      if ((e.buttons & 1) === 1 && !suppressNextClick) {
+        const dx = e.clientX - pointerDownX;
+        const dy = e.clientY - pointerDownY;
+        if (dx * dx + dy * dy >= DRAG_PX * DRAG_PX) {
+          suppressNextClick = true;
+        }
+      }
       onPointerMove?.(e.clientX, e.clientY);
       const cube = viewCubeRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
@@ -2241,6 +2254,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const onClick = (e: PointerEvent) => {
+      // Orbit / pan release lands as a click — do not change room selection.
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
       const cube = viewCubeRef.current;
       const camera = cameraRef.current;
       const controls = controlsRef.current;
@@ -2319,6 +2337,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const onPointerDown = (e: PointerEvent) => {
+      if (e.button === 0) {
+        pointerDownX = e.clientX;
+        pointerDownY = e.clientY;
+        suppressNextClick = false;
+      }
       const cube = viewCubeRef.current;
       const controls = controlsRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas) && controls) {
