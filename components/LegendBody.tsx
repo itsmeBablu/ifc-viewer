@@ -405,21 +405,6 @@ export default function LegendBody({
                 }
                 onReset={() => resetLegendColors(loadKind)}
                 toColorInputValue={toColorInputValue}
-                preview={
-                  <div
-                    className={`relative w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_4px_rgba(0,0,0,0.1)] ${
-                      compact ? "h-2.5" : "h-3"
-                    }`}
-                    style={{
-                      background: loadGradient(
-                        "to right",
-                        effectiveColorPalette,
-                        loadRange,
-                        loadOverrides,
-                      ),
-                    }}
-                  />
-                }
               />
             )}
           </div>
@@ -493,21 +478,6 @@ export default function LegendBody({
                 }
                 onReset={() => resetLegendColors("temperature")}
                 toColorInputValue={toColorInputValue}
-                preview={
-                  <div
-                    className={`flex w-full overflow-hidden rounded-full border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_4px_rgba(0,0,0,0.1)] ${
-                      compact ? "h-2.5" : "h-3"
-                    }`}
-                  >
-                    {tempStops.map((s) => (
-                      <span
-                        key={s.value}
-                        className="min-w-0 flex-1"
-                        style={{ backgroundColor: s.color }}
-                      />
-                    ))}
-                  </div>
-                }
               />
             )}
           </div>

@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import type { ColorPaletteId } from "@/lib/colorMapping";
 import {
-  EMPTY_CUSTOM_LEGEND_COLORS,
   mapAnchorColorsToRange,
   resolveColorPalette,
   standardTemperatureOverrides,
@@ -14,11 +13,10 @@ import {
 import {
   getLegendSwatchPreset,
   getTemperatureSwatchPreset,
-  LEGEND_SWATCH_PRESETS,
-  LEGEND_TEMPERATURE_SWATCH_PRESETS,
+  buildThermalClassicLegendColors,
+  DEFAULT_LEGEND_SWATCH_PRESET_ID,
+  DEFAULT_THERMAL_CLASSIC_PRESET_IDS,
   swatchColorsForMode,
-  type LegendSwatchPreset,
-  type TemperatureSwatchPreset,
 } from "@/lib/legendSwatchPresets";
 import {
   DEFAULT_HEIZLAST_RANGE,
@@ -56,7 +54,8 @@ const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
 const LUFTUNG_RANGE_KEY = "ifc-viewer:luftungRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
-const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors";
+const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors:v2";
+const LEGEND_SWATCH_PRESET_KEY = "ifc-viewer:legendSwatchPresetId";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
 
 export { SCENE_BACKGROUND_PRESETS } from "@/lib/sceneSky";
@@ -337,19 +336,94 @@ function persistCustomLegendColors(colors: CustomLegendColors) {
   }
 }
 
-function initialCustomLegendColors(): CustomLegendColors {
-  if (typeof window === "undefined") return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+function persistLegendSwatchPresetIds(
+  ids: Record<LegendColorMode, string | null>,
+) {
+  if (typeof window === "undefined") return;
   try {
-    const raw = localStorage.getItem(CUSTOM_LEGEND_COLORS_KEY);
-    if (!raw) return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+    localStorage.setItem(LEGEND_SWATCH_PRESET_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
+function customLegendIsEmpty(colors: CustomLegendColors): boolean {
+  return (
+    Object.keys(colors.heizlast).length === 0 &&
+    Object.keys(colors.kuhllast).length === 0 &&
+    Object.keys(colors.temperature).length === 0
+  );
+}
+
+function initialCustomLegendColors(): CustomLegendColors {
+  const defaults = buildThermalClassicLegendColors({
+    heizlast: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
+    kuhllast: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
+    temperature: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
+  });
+  if (typeof window === "undefined") return defaults;
+  try {
+    // No Schnellpalette choice yet → always Thermal Classic for heat / cool / temp.
+    if (!localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)) return defaults;
+
+    const raw =
+      localStorage.getItem(CUSTOM_LEGEND_COLORS_KEY) ??
+      localStorage.getItem("ifc-viewer:customLegendColors");
+    if (!raw) return defaults;
     const parsed = JSON.parse(raw) as Partial<CustomLegendColors>;
-    return {
+    const merged: CustomLegendColors = {
       temperature: parsed.temperature ?? {},
       heizlast: parsed.heizlast ?? {},
       kuhllast: parsed.kuhllast ?? {},
     };
+    if (customLegendIsEmpty(merged)) return defaults;
+
+    const presetIds = JSON.parse(
+      localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)!,
+    ) as Partial<Record<LegendColorMode, string | null>>;
+    return {
+      heizlast:
+        (presetIds.heizlast ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
+        DEFAULT_LEGEND_SWATCH_PRESET_ID
+          ? defaults.heizlast
+          : merged.heizlast,
+      kuhllast:
+        (presetIds.kuhllast ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
+        DEFAULT_LEGEND_SWATCH_PRESET_ID
+          ? defaults.kuhllast
+          : merged.kuhllast,
+      temperature:
+        (presetIds.temperature ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
+        DEFAULT_LEGEND_SWATCH_PRESET_ID
+          ? defaults.temperature
+          : merged.temperature,
+    };
   } catch {
-    return { ...EMPTY_CUSTOM_LEGEND_COLORS };
+    return defaults;
+  }
+}
+
+function initialLegendSwatchPresetIds(): Record<LegendColorMode, string | null> {
+  const defaults = { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = localStorage.getItem(LEGEND_SWATCH_PRESET_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as Partial<
+      Record<LegendColorMode, string | null>
+    >;
+    return {
+      temperature:
+        parsed.temperature === undefined
+          ? defaults.temperature
+          : parsed.temperature,
+      heizlast:
+        parsed.heizlast === undefined ? defaults.heizlast : parsed.heizlast,
+      kuhllast:
+        parsed.kuhllast === undefined ? defaults.kuhllast : parsed.kuhllast,
+    };
+  } catch {
+    return defaults;
   }
 }
 
@@ -441,11 +515,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   luftungRange: initialRange(LUFTUNG_RANGE_KEY, DEFAULT_LUFTUNG_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   customLegendColors: initialCustomLegendColors(),
-  legendSwatchPresetId: {
-    temperature: null,
-    heizlast: null,
-    kuhllast: null,
-  },
+  legendSwatchPresetId: initialLegendSwatchPresetIds(),
   renderMode: "fullColor",
   lighting: {
     spaceTransparency: 0.75,
@@ -545,32 +615,52 @@ export const useAppStore = create<AppState>((set, get) => ({
         // ignore
       }
     }
-    set({ activeColorPalette: palette, customLegendColors: { ...EMPTY_CUSTOM_LEGEND_COLORS }, legendSwatchPresetId: { temperature: null, heizlast: null, kuhllast: null } });
-    persistCustomLegendColors({ ...EMPTY_CUSTOM_LEGEND_COLORS });
+    const s = get();
+    const classic = buildThermalClassicLegendColors({
+      heizlast: s.heizlastRange,
+      kuhllast: s.kuhllastRange,
+      temperature: s.temperatureRange,
+    });
+    const presetIds = { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
+    set({
+      activeColorPalette: palette,
+      customLegendColors: classic,
+      legendSwatchPresetId: presetIds,
+    });
+    persistCustomLegendColors(classic);
+    persistLegendSwatchPresetIds(presetIds);
   },
   setHeizlastRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
     if (!parsed) return;
     persistRange(HEIZLAST_RANGE_KEY, parsed);
     set({ heizlastRange: parsed });
+    const presetId = get().legendSwatchPresetId.heizlast;
+    if (presetId) get().applyLegendSwatchPreset("heizlast", presetId);
   },
   setKuhllastRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
     if (!parsed) return;
     persistRange(KUHLLAST_RANGE_KEY, parsed);
     set({ kuhllastRange: parsed });
+    const presetId = get().legendSwatchPresetId.kuhllast;
+    if (presetId) get().applyLegendSwatchPreset("kuhllast", presetId);
   },
   setLuftungRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
     if (!parsed) return;
     persistRange(LUFTUNG_RANGE_KEY, parsed);
     set({ luftungRange: parsed });
+    const presetId = get().legendSwatchPresetId.heizlast;
+    if (presetId) get().applyLegendSwatchPreset("heizlast", presetId);
   },
   setTemperatureRange: (values) => {
     const parsed = parseLegendRange(values.join(","));
     if (!parsed) return;
     persistRange(TEMP_RANGE_KEY, parsed);
     set({ temperatureRange: parsed });
+    const presetId = get().legendSwatchPresetId.temperature;
+    if (presetId) get().applyLegendSwatchPreset("temperature", presetId);
   },
   setLegendStopColor: (mode, value, color) => {
     const key = String(value);
@@ -579,23 +669,36 @@ export const useAppStore = create<AppState>((set, get) => ({
         ...s.customLegendColors,
         [mode]: { ...s.customLegendColors[mode], [key]: color },
       };
+      const nextIds = { ...s.legendSwatchPresetId, [mode]: null };
       persistCustomLegendColors(next);
+      persistLegendSwatchPresetIds(nextIds);
       return {
         customLegendColors: next,
-        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: null },
+        legendSwatchPresetId: nextIds,
       };
     });
   },
   resetLegendColors: (mode) => {
-    set((s) => {
+    const s = get();
+    const classic = buildThermalClassicLegendColors({
+      heizlast: s.heizlastRange,
+      kuhllast: s.kuhllastRange,
+      temperature: s.temperatureRange,
+    });
+    set((state) => {
       const next: CustomLegendColors = {
-        ...s.customLegendColors,
-        [mode]: {},
+        ...state.customLegendColors,
+        [mode]: classic[mode],
+      };
+      const nextIds = {
+        ...state.legendSwatchPresetId,
+        [mode]: DEFAULT_LEGEND_SWATCH_PRESET_ID,
       };
       persistCustomLegendColors(next);
+      persistLegendSwatchPresetIds(nextIds);
       return {
         customLegendColors: next,
-        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: null },
+        legendSwatchPresetId: nextIds,
       };
     });
   },
@@ -612,12 +715,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       let overrides: CustomLegendColorMap;
       if (mode === "temperature") {
-        const preset = getTemperatureSwatchPreset(presetId);
-        if (!preset) return s;
-        if (presetId === "temp-standard") {
-          overrides = standardTemperatureOverrides(range);
+        const heatPreset = getLegendSwatchPreset(presetId);
+        if (heatPreset) {
+          overrides = mapAnchorColorsToRange(heatPreset.tempColors, range);
         } else {
-          overrides = mapAnchorColorsToRange(preset.colors, range);
+          const preset = getTemperatureSwatchPreset(presetId);
+          if (!preset) return s;
+          if (presetId === "temp-standard") {
+            overrides = standardTemperatureOverrides(range);
+          } else {
+            overrides = mapAnchorColorsToRange(preset.colors, range);
+          }
         }
       } else {
         const preset = getLegendSwatchPreset(presetId);
@@ -631,10 +739,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         ...s.customLegendColors,
         [mode]: overrides,
       };
+      const nextIds = { ...s.legendSwatchPresetId, [mode]: presetId };
       persistCustomLegendColors(next);
+      persistLegendSwatchPresetIds(nextIds);
       return {
         customLegendColors: next,
-        legendSwatchPresetId: { ...s.legendSwatchPresetId, [mode]: presetId },
+        legendSwatchPresetId: nextIds,
       };
     });
   },

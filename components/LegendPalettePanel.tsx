@@ -22,7 +22,7 @@ type Props = {
   toColorInputValue: (hex: string) => string;
 };
 
-/** Shared popup: preview + 6 quick palettes + per-stop color editors. */
+/** Shared popup: 6 quick palettes + per-stop color editors. */
 export default function LegendPalettePanel({
   mode,
   uiLanguage,
@@ -43,8 +43,8 @@ export default function LegendPalettePanel({
         compact ? "space-y-1 p-1.5" : "space-y-1.5 p-2"
       }`}
     >
-      {preview}
-      <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+      {preview ? preview : null}
+      <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
         {t(uiLanguage, "swatchPresets")}
       </p>
       <LegendSwatchPresetGrid
@@ -53,7 +53,7 @@ export default function LegendPalettePanel({
         activePresetId={activePresetId}
         onSelect={onSelectPreset}
       />
-      <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+      <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
         {t(uiLanguage, "editSwatchColors")}
       </p>
       <div className="flex flex-nowrap items-end justify-between gap-0.5">

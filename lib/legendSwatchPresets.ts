@@ -1,12 +1,19 @@
 import {
+  DEFAULT_HEIZLAST_RANGE,
+  DEFAULT_KUHLLAST_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
+  mapAnchorColorsToRange,
   standardTemperatureStopColors,
+  type CustomLegendColors,
 } from "./colorMapping";
 
 /** Default temperature chip colors (standard palette, default range). */
 export const DEFAULT_TEMPERATURE_SWATCH_COLORS = standardTemperatureStopColors(
   DEFAULT_TEMPERATURE_RANGE,
 );
+
+/** Default Schnellpalette for legend gradients (Heizlast / Kühllast / Lüftung). */
+export const DEFAULT_LEGEND_SWATCH_PRESET_ID = "thermal-classic";
 
 /** One-click Adobe-style swatch themes for legend stops. */
 export type LegendSwatchPreset = {
@@ -124,3 +131,38 @@ export function swatchColorsForMode(
   if (mode === "temperature") return preset.tempColors;
   return preset.heatColors;
 }
+
+/** Thermal Classic mapped onto the given (or default) stop ranges. */
+export function buildThermalClassicLegendColors(ranges?: {
+  heizlast?: number[];
+  kuhllast?: number[];
+  temperature?: number[];
+}): CustomLegendColors {
+  const preset = getLegendSwatchPreset(DEFAULT_LEGEND_SWATCH_PRESET_ID);
+  if (!preset) {
+    return { temperature: {}, heizlast: {}, kuhllast: {} };
+  }
+  return {
+    heizlast: mapAnchorColorsToRange(
+      preset.heatColors,
+      ranges?.heizlast ?? DEFAULT_HEIZLAST_RANGE,
+    ),
+    kuhllast: mapAnchorColorsToRange(
+      preset.coolColors,
+      ranges?.kuhllast ?? DEFAULT_KUHLLAST_RANGE,
+    ),
+    temperature: mapAnchorColorsToRange(
+      preset.tempColors,
+      ranges?.temperature ?? DEFAULT_TEMPERATURE_RANGE,
+    ),
+  };
+}
+
+export const DEFAULT_THERMAL_CLASSIC_PRESET_IDS: Record<
+  "temperature" | "heizlast" | "kuhllast",
+  string | null
+> = {
+  heizlast: DEFAULT_LEGEND_SWATCH_PRESET_ID,
+  kuhllast: DEFAULT_LEGEND_SWATCH_PRESET_ID,
+  temperature: DEFAULT_LEGEND_SWATCH_PRESET_ID,
+};

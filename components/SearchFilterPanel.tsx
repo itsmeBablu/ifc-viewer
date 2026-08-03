@@ -50,7 +50,12 @@ export default function SearchFilterPanel({
   const setSelectedElement = useAppStore((s) => s.setSelectedElement);
   const setActiveFilter = useAppStore((s) => s.setActiveFilter);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const colorTheme = useAppStore((s) => s.colorTheme);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
+  const isDark = colorTheme === "dark";
+  const yellowGlossBtn = isDark
+    ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.42)] backdrop-blur-md"
+    : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
 
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");
@@ -363,7 +368,7 @@ export default function SearchFilterPanel({
             <button
               type="button"
               onClick={resetFilter}
-              className="w-full shrink-0 rounded-xl bg-[var(--text-strong)] px-2.5 py-2 text-[11px] font-medium text-[var(--background)] md:w-auto md:py-1.5"
+              className={`w-full shrink-0 rounded-xl px-2.5 py-2 text-[11px] font-semibold transition hover:brightness-105 active:scale-[0.98] md:w-auto md:py-1.5 ${yellowGlossBtn}`}
             >
               {t(uiLanguage, "resetFilter")}
             </button>

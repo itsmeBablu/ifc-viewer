@@ -619,7 +619,7 @@ export default function ViewerToolbar({ viewerRef, targetRef }: Props) {
           type="button"
           disabled={!viewName.trim() || !activeModelId}
           onClick={commitSaveView}
-          className="w-full rounded-xl bg-[var(--text-strong)] px-2 py-1.5 text-xs font-medium text-[var(--background)] disabled:opacity-40"
+          className={`w-full rounded-xl px-2 py-1.5 text-xs font-semibold transition hover:brightness-105 active:scale-[0.98] disabled:opacity-40 ${yellowGloss}`}
         >
           {t(uiLanguage, "save")}
         </button>
