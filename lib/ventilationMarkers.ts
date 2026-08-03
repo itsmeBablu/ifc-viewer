@@ -778,44 +778,114 @@ function makeUpwardFlowCluster(yBase: number, spanX: number): FlowCluster {
   return { root, tweens };
 }
 
+/**
+ * Überstrom — blue circular arrows showing air circulating inside the room.
+ * Tangential arrows on a ring spin continuously around the room center.
+ */
 function makeOverflowSwirl(radius: number, y: number): FlowCluster {
   const root = new THREE.Group();
   root.position.y = y;
   const tweens: gsap.core.Tween[] = [];
 
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0x3b82f6,
+  const r = Math.max(0.28, radius);
+  const arrowLen = Math.min(r * 0.72, STANDARD_ARROW_LEN * 0.95);
+  const color = 0x3b82f6;
+  const arrowCount = 5;
+
+  // Soft path ring — air circulation track
+  const ringMat = new THREE.MeshStandardMaterial({
+    color,
     emissive: 0x2563eb,
-    emissiveIntensity: 0.38,
+    emissiveIntensity: 0.45,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.55,
     side: THREE.DoubleSide,
+    depthWrite: false,
   });
-
-  const outer = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, radius * 0.075, 10, 40),
-    mat,
+  const track = new THREE.Mesh(
+    new THREE.TorusGeometry(r, r * 0.045, 8, 48),
+    ringMat,
   );
-  outer.rotation.x = Math.PI / 2;
-  root.add(outer);
+  track.rotation.x = Math.PI / 2;
+  root.add(track);
 
-  const inner = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.52, radius * 0.045, 8, 28),
-    mat.clone(),
-  );
-  inner.rotation.x = Math.PI / 2;
-  root.add(inner);
+  // Spinning carrier for tangential arrows
+  const carrier = new THREE.Group();
+  root.add(carrier);
 
+  for (let i = 0; i < arrowCount; i++) {
+    const angle = (i / arrowCount) * Math.PI * 2;
+    // Position on circle (XZ plane)
+    const px = Math.cos(angle) * r;
+    const pz = Math.sin(angle) * r;
+    // Tangent direction (counter-clockwise circulation)
+    const tx = -Math.sin(angle);
+    const tz = Math.cos(angle);
+    const tangent = new THREE.Vector3(tx, 0, tz);
+
+    const arrow = makeArrow(color, tangent, arrowLen);
+    arrow.position.set(px, 0, pz);
+    // Nudge arrow so shaft sits on the ring, tip leads the flow
+    arrow.position.add(tangent.clone().multiplyScalar(-arrowLen * 0.35));
+    carrier.add(arrow);
+
+    // Subtle pulse so each arrow feels like moving air
+    const lineMat = arrow.line.material as THREE.LineBasicMaterial;
+    const coneMat = arrow.cone.material as THREE.MeshBasicMaterial;
+    const pulse = { o: 0.55 + (i % 3) * 0.12 };
+    tweens.push(
+      gsap.to(pulse, {
+        o: 0.95,
+        duration: 0.9 + i * 0.08,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+        delay: i * 0.12,
+        onUpdate: () => {
+          lineMat.opacity = pulse.o;
+          coneMat.opacity = pulse.o;
+        },
+      }),
+    );
+  }
+
+  // Continuous in-room rotation (air circulating itself)
   tweens.push(
-    gsap.to(outer.rotation, {
-      z: Math.PI * 2,
-      duration: 2.8,
+    gsap.to(carrier.rotation, {
+      y: Math.PI * 2,
+      duration: 3.2,
       repeat: -1,
       ease: "none",
     }),
-    gsap.to(inner.rotation, {
+    gsap.to(track.rotation, {
       z: -Math.PI * 2,
-      duration: 2,
+      duration: 4.6,
+      repeat: -1,
+      ease: "none",
+    }),
+  );
+
+  // Inner counter-spin accents — second smaller ring of short arrows
+  const inner = new THREE.Group();
+  root.add(inner);
+  const innerR = r * 0.48;
+  const innerLen = arrowLen * 0.55;
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2 + Math.PI / 6;
+    const px = Math.cos(angle) * innerR;
+    const pz = Math.sin(angle) * innerR;
+    const tx = -Math.sin(angle);
+    const tz = Math.cos(angle);
+    const tangent = new THREE.Vector3(tx, 0, tz);
+    const arrow = makeArrow(0x60a5fa, tangent, innerLen);
+    arrow.position.set(px, 0.02, pz);
+    arrow.position.add(tangent.clone().multiplyScalar(-innerLen * 0.35));
+    inner.add(arrow);
+  }
+  tweens.push(
+    gsap.to(inner.rotation, {
+      y: -Math.PI * 2,
+      duration: 2.4,
       repeat: -1,
       ease: "none",
     }),
@@ -1008,7 +1078,7 @@ export function buildVentilationMarkers(rooms: Room[]): VentilationMarkerLayer {
     }
 
     if (isOverflow) {
-      const swirlRadius = Math.min(size.x, size.z) * 0.18 + 0.12;
+      const swirlRadius = Math.min(size.x, size.z) * 0.22 + 0.18;
       const swirl = makeOverflowSwirl(swirlRadius, yMid);
       markerRoot.add(swirl.root);
       entryTweens.push(...swirl.tweens);
