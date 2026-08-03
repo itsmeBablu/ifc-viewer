@@ -5,13 +5,18 @@ import {
   temperatureLegendStops,
   type ColorPaletteId,
   type CustomLegendColors,
+  type LegendColorMode,
 } from "@/lib/colorMapping";
+import type { DataViewMode } from "@/lib/dataViewMode";
+import { supportsCompareBothModes } from "@/lib/dataViewMode";
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Room } from "@/lib/types";
 
 export type PdfLegendContext = {
   palette: ColorPaletteId;
   heizlastRange: number[];
+  kuhllastRange?: number[];
+  luftungRange?: number[];
   temperatureRange: number[];
   customLegendColors?: CustomLegendColors;
 };
@@ -19,13 +24,18 @@ export type PdfLegendContext = {
 export type FloorPdfSection = {
   floorName: string;
   rooms: Room[];
-  /** Single capture: Heizlast on top, Temperature below. */
+  /** Capture: dual load+temp when compare, else single load. */
   dualImage: string | null;
 };
 
 export type PresentationPdfImages = {
-  /** Single capture: Heizlast left, Temperature right (side-by-side). */
   dualImage: string | null;
+};
+
+export type PdfModeSection = {
+  mode: DataViewMode;
+  floors: FloorPdfSection[];
+  presentation: PresentationPdfImages;
 };
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -82,56 +92,71 @@ function addViewportImage(
   doc.text("3D viewport could not be captured", x + 4, y + 14);
 }
 
-/** Compact legend in the top-right of an image area. */
+function loadLegendMode(mode: DataViewMode): LegendColorMode {
+  if (mode === "kuhllast") return "kuhllast";
+  if (mode === "luftung") return "luftung";
+  return "heizlast";
+}
+
+function loadLegendTitle(mode: DataViewMode): string {
+  if (mode === "kuhllast") return "Kühllast W/m²";
+  if (mode === "luftung") return "Lüftungswärmeverlust W";
+  return "Heizlast W/m²";
+}
+
+function loadRangeFor(
+  mode: DataViewMode,
+  legend: PdfLegendContext,
+): number[] {
+  if (mode === "kuhllast") return legend.kuhllastRange ?? legend.heizlastRange;
+  if (mode === "luftung") return legend.luftungRange ?? legend.heizlastRange;
+  return legend.heizlastRange;
+}
+
+function floorPageSubtitle(mode: DataViewMode): string {
+  if (mode === "kuhllast") return "Kühllast (top) + Temperature (bottom)";
+  if (mode === "luftung") return "Lüftungswärmeverlust";
+  return "Heizlast (top) + Temperature (bottom)";
+}
+
+function presentationSubtitle(mode: DataViewMode): string {
+  if (mode === "kuhllast") {
+    return "Presentation — Kühllast | Temperature (side by side)";
+  }
+  if (mode === "luftung") return "Presentation — Lüftung";
+  return "Presentation — Heizlast | Temperature (side by side)";
+}
+
+/** Compact load or temperature legend in the top-right of an image area. */
 function drawLegendTopRight(
   doc: jsPDF,
   imgX: number,
   imgY: number,
   imgW: number,
-  mode: ColorMode,
+  kind: "temperature" | DataViewMode,
   legend: PdfLegendContext,
+  offsetY = 0,
 ) {
   const boxW = Math.min(78, imgW * 0.32);
   const pad = 3;
   const x = imgX + imgW - boxW - 4;
-  const y = imgY + 4;
+  const y = imgY + 4 + offsetY;
+  const isTemp = kind === "temperature";
 
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(x, y, boxW, mode === "heizlast" ? 22 : 24, 1.5, 1.5, "F");
+  doc.roundedRect(x, y, boxW, isTemp ? 24 : 22, 1.5, 1.5, "F");
   doc.setDrawColor(220);
-  doc.roundedRect(x, y, boxW, mode === "heizlast" ? 22 : 24, 1.5, 1.5, "S");
+  doc.roundedRect(x, y, boxW, isTemp ? 24 : 22, 1.5, 1.5, "S");
 
   doc.setFontSize(7);
   doc.setTextColor(40);
   doc.text(
-    mode === "heizlast" ? "Heizlast W/m²" : "Temperature °C",
+    isTemp ? "Temperature °C" : loadLegendTitle(kind),
     x + pad,
     y + 4.5,
   );
 
-  if (mode === "heizlast") {
-    const stops = legendStopsForMode(
-      "heizlast",
-      legend.palette,
-      legend.heizlastRange,
-      legend.customLegendColors?.heizlast,
-    );
-    const barY = y + 7;
-    const barH = 5;
-    const barW = boxW - pad * 2;
-    const segW = barW / Math.max(1, stops.length);
-    for (let i = 0; i < stops.length; i++) {
-      const [r, g, b] = hexToRgb(stops[i].color);
-      doc.setFillColor(r, g, b);
-      doc.rect(x + pad + i * segW, barY, segW + 0.1, barH, "F");
-    }
-    doc.setFontSize(5.5);
-    doc.setTextColor(70);
-    doc.text(String(stops[0]?.value ?? ""), x + pad, barY + barH + 3.5);
-    doc.text(String(stops[stops.length - 1]?.value ?? ""), x + boxW - pad, barY + barH + 3.5, {
-      align: "right",
-    });
-  } else {
+  if (isTemp) {
     const chips = temperatureLegendStops(
       legend.palette,
       legend.temperatureRange,
@@ -154,6 +179,47 @@ function drawLegendTopRight(
         align: "center",
       });
     });
+    return;
+  }
+
+  const legendMode = loadLegendMode(kind);
+  const stops = legendStopsForMode(
+    legendMode,
+    legend.palette,
+    loadRangeFor(kind, legend),
+    legend.customLegendColors?.[legendMode],
+  );
+  const barY = y + 7;
+  const barH = 5;
+  const barW = boxW - pad * 2;
+  const segW = barW / Math.max(1, stops.length);
+  for (let i = 0; i < stops.length; i++) {
+    const [r, g, b] = hexToRgb(stops[i].color);
+    doc.setFillColor(r, g, b);
+    doc.rect(x + pad + i * segW, barY, segW + 0.1, barH, "F");
+  }
+  doc.setFontSize(5.5);
+  doc.setTextColor(70);
+  doc.text(String(stops[0]?.value ?? ""), x + pad, barY + barH + 3.5);
+  doc.text(
+    String(stops[stops.length - 1]?.value ?? ""),
+    x + boxW - pad,
+    barY + barH + 3.5,
+    { align: "right" },
+  );
+}
+
+function drawModeLegendsTopRight(
+  doc: jsPDF,
+  imgX: number,
+  imgY: number,
+  imgW: number,
+  mode: DataViewMode,
+  legend: PdfLegendContext,
+) {
+  drawLegendTopRight(doc, imgX, imgY, imgW, mode, legend, 0);
+  if (supportsCompareBothModes(mode)) {
+    drawLegendTopRight(doc, imgX, imgY, imgW, "temperature", legend, 27);
   }
 }
 
@@ -162,81 +228,76 @@ function drawRoomTable(
   rooms: Room[],
   startY: number,
   margin: number,
+  mode: DataViewMode,
 ) {
-  const body = rooms.map((r) => [
-    r.name || "—",
-    r.number || "—",
-    Number.isFinite(r.heatLoad) ? r.heatLoad.toFixed(1) : "—",
-    r.heizlast != null && Number.isFinite(r.heizlast)
-      ? String(Math.round(r.heizlast))
-      : "—",
-    Number.isFinite(r.temperature) ? String(Math.round(r.temperature)) : "—",
-  ]);
+  let head: string[];
+  let body: string[][];
+
+  if (mode === "kuhllast") {
+    head = [
+      "Name",
+      "Number",
+      "Kühllast (W/m²)",
+      "Kühllast (W)",
+      "Temperature (°C)",
+    ];
+    body = rooms.map((r) => [
+      r.name || "—",
+      r.number || "—",
+      Number.isFinite(r.coolLoad) ? r.coolLoad.toFixed(1) : "—",
+      r.kuhllast != null && Number.isFinite(r.kuhllast)
+        ? String(Math.round(r.kuhllast))
+        : "—",
+      Number.isFinite(r.temperature) ? String(Math.round(r.temperature)) : "—",
+    ]);
+  } else if (mode === "luftung") {
+    head = [
+      "Name",
+      "Number",
+      "Abluft (m³/h)",
+      "Zuluft (m³/h)",
+      "Wärmeverlust (W)",
+    ];
+    body = rooms.map((r) => [
+      r.name || "—",
+      r.number || "—",
+      Number.isFinite(r.ventilation.abluftVolume)
+        ? String(Math.round(r.ventilation.abluftVolume))
+        : "—",
+      Number.isFinite(r.ventilation.zuluftVolume)
+        ? String(Math.round(r.ventilation.zuluftVolume))
+        : "—",
+      Number.isFinite(r.ventilation.ventilationHeatLoss)
+        ? String(Math.round(r.ventilation.ventilationHeatLoss))
+        : "—",
+    ]);
+  } else {
+    head = [
+      "Name",
+      "Number",
+      "Heizlast (W/m²)",
+      "Heizlast (W)",
+      "Temperature (°C)",
+    ];
+    body = rooms.map((r) => [
+      r.name || "—",
+      r.number || "—",
+      Number.isFinite(r.heatLoad) ? r.heatLoad.toFixed(1) : "—",
+      r.heizlast != null && Number.isFinite(r.heizlast)
+        ? String(Math.round(r.heizlast))
+        : "—",
+      Number.isFinite(r.temperature) ? String(Math.round(r.temperature)) : "—",
+    ]);
+  }
 
   autoTable(doc, {
     startY,
-    head: [
-      [
-        "Name",
-        "Number",
-        "Heizlast (W/m²)",
-        "Heizlast (W)",
-        "Temperature (°C)",
-      ],
-    ],
-    body: body.length
-      ? body
-      : [["—", "—", "—", "—", "—"]],
+    head: [head],
+    body: body.length ? body : [head.map(() => "—")],
     margin: { left: margin, right: margin },
     styles: { fontSize: 7.5, cellPadding: 1.2 },
     headStyles: { fillColor: [40, 40, 48], textColor: 255 },
     alternateRowStyles: { fillColor: [245, 246, 248] },
-  });
-}
-
-function drawDualLegendsTopRight(
-  doc: jsPDF,
-  imgX: number,
-  imgY: number,
-  imgW: number,
-  legend: PdfLegendContext,
-) {
-  const boxW = Math.min(72, imgW * 0.28);
-  const gap = 3;
-  // Heizlast legend (upper)
-  drawLegendTopRight(doc, imgX, imgY, imgW, "heizlast", legend);
-  // Temperature legend just below the first box
-  const x = imgX + imgW - boxW - 4;
-  const y = imgY + 4 + 24 + gap;
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(x, y, boxW, 24, 1.5, 1.5, "F");
-  doc.setDrawColor(220);
-  doc.roundedRect(x, y, boxW, 24, 1.5, 1.5, "S");
-  doc.setFontSize(7);
-  doc.setTextColor(40);
-  doc.text("Temperature °C", x + 3, y + 4.5);
-  const chips = temperatureLegendStops(
-    legend.palette,
-    legend.temperatureRange,
-    legend.customLegendColors?.temperature,
-  );
-  const chipY = y + 7;
-  const chipH = 5;
-  const pad = 3;
-  const cgap = 1.2;
-  const chipW =
-    (boxW - pad * 2 - cgap * Math.max(0, chips.length - 1)) /
-    Math.max(1, chips.length);
-  chips.forEach((s, i) => {
-    const cx = x + pad + i * (chipW + cgap);
-    const [r, g, b] = hexToRgb(s.color);
-    doc.setFillColor(r, g, b);
-    doc.roundedRect(cx, chipY, chipW, chipH, 0.6, 0.6, "F");
-    doc.setFontSize(5);
-    doc.setTextColor(40);
-    doc.text(`${s.value}°`, cx + chipW / 2, chipY + chipH + 3.2, {
-      align: "center",
-    });
   });
 }
 
@@ -250,6 +311,7 @@ function drawFloorDualPage(
     rooms: Room[];
     legend: PdfLegendContext;
     dateStr: string;
+    mode: DataViewMode;
   },
 ) {
   if (!opts.isFirst) doc.addPage([297, 210], "landscape");
@@ -265,7 +327,7 @@ function drawFloorDualPage(
   doc.setFontSize(10);
   doc.setTextColor(50);
   doc.text(
-    `${opts.floorName} — Heizlast (top) + Temperature (bottom)`,
+    `${opts.floorName} — ${floorPageSubtitle(opts.mode)}`,
     margin,
     margin + 9,
   );
@@ -282,12 +344,12 @@ function drawFloorDualPage(
   const imgW = contentW;
 
   addViewportImage(doc, opts.image, margin, imgY, imgW, imgH);
-  drawDualLegendsTopRight(doc, margin, imgY, imgW, opts.legend);
+  drawModeLegendsTopRight(doc, margin, imgY, imgW, opts.mode, opts.legend);
 
   doc.setFontSize(9);
   doc.setTextColor(40);
   doc.text(`Rooms — ${opts.floorName}`, margin, imgY + imgH + 6);
-  drawRoomTable(doc, opts.rooms, imgY + imgH + 8, margin);
+  drawRoomTable(doc, opts.rooms, imgY + imgH + 8, margin, opts.mode);
 }
 
 function drawPresentationDualPage(
@@ -299,6 +361,7 @@ function drawPresentationDualPage(
     legend: PdfLegendContext;
     dateStr: string;
     format: PageFormat;
+    mode: DataViewMode;
   },
 ) {
   const [w, h] = pageSizeMm(opts.format);
@@ -314,11 +377,7 @@ function drawPresentationDualPage(
   doc.text(opts.modelName, margin, margin + 2);
   doc.setFontSize(10);
   doc.setTextColor(50);
-  doc.text(
-    "Presentation (stack) — Heizlast | Temperature (side by side)",
-    margin,
-    margin + 9,
-  );
+  doc.text(presentationSubtitle(opts.mode), margin, margin + 9);
   doc.setFontSize(8);
   doc.setTextColor(120);
   doc.text(
@@ -333,17 +392,16 @@ function drawPresentationDualPage(
   const imgH = pageH - imgY - margin;
   const imgW = contentW;
   addViewportImage(doc, opts.image, margin, imgY, imgW, imgH);
-  drawDualLegendsTopRight(doc, margin, imgY, imgW, opts.legend);
+  drawModeLegendsTopRight(doc, margin, imgY, imgW, opts.mode, opts.legend);
 }
 
 /**
- * Full building report (A4): each floor × Heizlast + Temperature (+ rooms),
- * then presentation stack Heizlast + Temperature. File: {name}_allpages.pdf
+ * Full building report (A4): for each selected mode — floors + presentation.
+ * File: {name}_allpages.pdf
  */
 export function exportAllPagesPdf(input: {
   modelName: string;
-  floors: FloorPdfSection[];
-  presentation: PresentationPdfImages;
+  sections: PdfModeSection[];
   legend: PdfLegendContext;
 }): void {
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -355,39 +413,42 @@ export function exportAllPagesPdf(input: {
   });
 
   let first = true;
-  for (const floor of input.floors) {
-    drawFloorDualPage(doc, {
+  for (const section of input.sections) {
+    for (const floor of section.floors) {
+      drawFloorDualPage(doc, {
+        isFirst: first,
+        modelName: title,
+        floorName: floor.floorName,
+        image: floor.dualImage,
+        rooms: floor.rooms,
+        legend: input.legend,
+        dateStr,
+        mode: section.mode,
+      });
+      first = false;
+    }
+    drawPresentationDualPage(doc, {
       isFirst: first,
       modelName: title,
-      floorName: floor.floorName,
-      image: floor.dualImage,
-      rooms: floor.rooms,
+      image: section.presentation.dualImage,
       legend: input.legend,
       dateStr,
+      format: "a4",
+      mode: section.mode,
     });
     first = false;
   }
-
-  drawPresentationDualPage(doc, {
-    isFirst: first,
-    modelName: title,
-    image: input.presentation.dualImage,
-    legend: input.legend,
-    dateStr,
-    format: "a4",
-  });
 
   const base = sanitizeFilePart(title.replace(/\.ifc$/i, ""));
   doc.save(`${base}_allpages.pdf`);
 }
 
 /**
- * Presentation-only PDF (stack, all floors): Heizlast | Temperature side-by-side
- * at the chosen paper size, high-quality image.
+ * Presentation-only PDF for each selected mode at the chosen paper size.
  */
 export function exportPresentationPdf(input: {
   modelName: string;
-  presentation: PresentationPdfImages;
+  sections: Array<{ mode: DataViewMode; presentation: PresentationPdfImages }>;
   legend: PdfLegendContext;
   pageFormat: PageFormat;
 }): void {
@@ -402,13 +463,16 @@ export function exportPresentationPdf(input: {
     format: [w, h],
   });
 
-  drawPresentationDualPage(doc, {
-    isFirst: true,
-    modelName: title,
-    image: input.presentation.dualImage,
-    legend: input.legend,
-    dateStr,
-    format,
+  input.sections.forEach((section, i) => {
+    drawPresentationDualPage(doc, {
+      isFirst: i === 0,
+      modelName: title,
+      image: section.presentation.dualImage,
+      legend: input.legend,
+      dateStr,
+      format,
+      mode: section.mode,
+    });
   });
 
   const base = sanitizeFilePart(title.replace(/\.ifc$/i, ""));
@@ -435,7 +499,6 @@ export type PdfExportInput = {
 };
 
 export function exportHeizlastPdf(input: PdfExportInput): void {
-  // Bridge: treat as presentation-style clean pages + optional first table
   const format = input.pageFormat ?? "a4";
   const legend: PdfLegendContext = {
     palette: input.palette,
@@ -480,17 +543,17 @@ export function exportHeizlastPdf(input: PdfExportInput): void {
       pageW - margin * 2,
       imgH,
     );
+    const legendKind: DataViewMode | "temperature" =
+      input.colorMode === "temperature" ? "temperature" : "heizlast";
     drawLegendTopRight(
       doc,
       margin,
       imgY,
       pageW - margin * 2,
-      input.colorMode,
+      legendKind,
       legend,
     );
   });
 
-  doc.save(
-    `${sanitizeFilePart(title)}-heizlast-report-${dateStr}.pdf`,
-  );
+  doc.save(`${sanitizeFilePart(title)}-saved-views-${dateStr}.pdf`);
 }

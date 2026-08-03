@@ -199,9 +199,11 @@ const dict = {
     kuhllast: "Kühllast",
     withDensity: "mit",
     allPagesDesc:
-      "Jede Ebene: Heizlast (oben) + Temperatur (unten) in einem Bild mit beiden Legenden und Raumtabelle. Dann Präsentationsstapel nebeneinander. Datei:",
+      "Markieren Sie Heizen, Lüftung und/oder Kühlen. Für jede Auswahl: alle Ebenen + Präsentation. Datei:",
     presentationDesc:
-      "Stapellayout, alle Ebenen — Heizlast und Temperatur nebeneinander auf einer Seite. Hohe Qualität. Papierformat wählen:",
+      "Aktuelle Präsentationsansicht (oder Stapel). Modi oben wählen, dann Papierformat:",
+    pdfSelectModes: "Modi für diesen Download",
+    pdfExportFailed: "PDF-Export fehlgeschlagen",
     starting: "Starte…",
     buildingPdf: "PDF wird erstellt…",
     capturingSaved: "Gespeicherte Ansichten werden erfasst…",
@@ -432,9 +434,11 @@ const dict = {
     kuhllast: "Cooling load",
     withDensity: "at",
     allPagesDesc:
-      "Each floor: heating load (top) + temperature (bottom) in one image with both legends, plus room table. Then presentation stack side-by-side. File:",
+      "Tick Heating, Ventilation and/or Cooling. For each selection: all floors + presentation. File:",
     presentationDesc:
-      "Stack layout, all floors — heating load and temperature side by side on one page. High quality. Choose paper size:",
+      "Current presentation view (or stack). Choose modes above, then paper size:",
+    pdfSelectModes: "Modes for this download",
+    pdfExportFailed: "PDF export failed",
     starting: "Starting…",
     buildingPdf: "Building PDF…",
     capturingSaved: "Capturing saved views…",
@@ -664,9 +668,11 @@ const dict = {
     kuhllast: "Carga de refrigeración",
     withDensity: "con",
     allPagesDesc:
-      "Cada planta: carga térmica (arriba) + temperatura (abajo) en una imagen con ambas leyendas y tabla. Luego presentación lado a lado. Archivo:",
+      "Marca Calefacción, Ventilación y/o Refrigeración. Por cada selección: todas las plantas + presentación. Archivo:",
     presentationDesc:
-      "Diseño apilado, todas las plantas — carga térmica y temperatura lado a lado. Alta calidad. Elige tamaño:",
+      "Vista de presentación actual (o apilada). Elige modos arriba, luego tamaño:",
+    pdfSelectModes: "Modos para esta descarga",
+    pdfExportFailed: "Error al exportar PDF",
     starting: "Iniciando…",
     buildingPdf: "Creando PDF…",
     capturingSaved: "Capturando vistas guardadas…",

@@ -27,14 +27,21 @@ export const gsapDuration = {
 } as const;
 
 let activeFlyTween: gsap.core.Tween | null = null;
+type FlyDone = () => void;
+const flyDoneByTween = new WeakMap<gsap.core.Tween, FlyDone>();
 
 export function killGsap(target: gsap.TweenTarget) {
   gsap.killTweensOf(target);
 }
 
+/** Kill active camera fly and resolve any waiter so awaits cannot hang. */
 export function killFlyTween() {
-  activeFlyTween?.kill();
+  const tween = activeFlyTween;
+  if (!tween) return;
   activeFlyTween = null;
+  const done = flyDoneByTween.get(tween);
+  tween.kill();
+  done?.();
 }
 
 export function animateProgress(options: {
@@ -149,14 +156,14 @@ export function animateSidebarContent(el: Element, visible: boolean) {
 }
 
 export function trackFlyTween(tween: gsap.core.Tween) {
-  activeFlyTween?.kill();
+  if (activeFlyTween && activeFlyTween !== tween) {
+    const prev = activeFlyTween;
+    activeFlyTween = null;
+    const prevDone = flyDoneByTween.get(prev);
+    prev.kill();
+    prevDone?.();
+  }
   activeFlyTween = tween;
-  tween.eventCallback("onComplete", () => {
-    if (activeFlyTween === tween) activeFlyTween = null;
-  });
-  tween.eventCallback("onInterrupt", () => {
-    if (activeFlyTween === tween) activeFlyTween = null;
-  });
 }
 
 export function flyToProgress(
@@ -165,14 +172,24 @@ export function flyToProgress(
   onComplete?: () => void,
 ): gsap.core.Tween {
   killFlyTween();
+  let settled = false;
+  let tween: gsap.core.Tween;
+  const done = () => {
+    if (settled) return;
+    settled = true;
+    if (activeFlyTween === tween) activeFlyTween = null;
+    onComplete?.();
+  };
   const state = { t: 0 };
-  const tween = gsap.to(state, {
+  tween = gsap.to(state, {
     t: 1,
-    duration: durationMs / 1000,
+    duration: Math.max(0.001, durationMs / 1000),
     ease: gsapEase.camera,
     onUpdate: () => onUpdate(state.t),
-    onComplete,
+    onComplete: done,
+    onInterrupt: done,
   });
+  flyDoneByTween.set(tween, done);
   trackFlyTween(tween);
   return tween;
 }

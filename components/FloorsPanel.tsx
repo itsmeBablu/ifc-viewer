@@ -23,13 +23,65 @@ import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
-import { t } from "@/lib/i18n";
+import { t, type UiLanguage } from "@/lib/i18n";
 import { useModelScene } from "./ModelSceneContext";
 import GlassPanel from "./GlassPanel";
 import ModelText from "./ModelText";
 import type { Viewer3DHandle } from "./Viewer3D";
 import type { Floor, Room } from "@/lib/types";
 import type { PageFormat } from "@/lib/presentationLayout";
+import type { DataViewMode } from "@/lib/dataViewMode";
+import { DATA_VIEW_MODES } from "@/lib/dataViewMode";
+
+type PdfModeSelection = Record<DataViewMode, boolean>;
+
+const DEFAULT_PDF_MODES: PdfModeSelection = {
+  heizlast: true,
+  luftung: false,
+  kuhllast: false,
+};
+
+function selectedModes(sel: PdfModeSelection): DataViewMode[] {
+  return DATA_VIEW_MODES.filter((m) => sel[m]);
+}
+
+function PdfModeChecks({
+  value,
+  onChange,
+  disabled,
+  uiLanguage,
+}: {
+  value: PdfModeSelection;
+  onChange: (next: PdfModeSelection) => void;
+  disabled?: boolean;
+  uiLanguage: UiLanguage;
+}) {
+  const items: { mode: DataViewMode; labelKey: "heating" | "ventilation" | "cooling" }[] = [
+    { mode: "heizlast", labelKey: "heating" },
+    { mode: "luftung", labelKey: "ventilation" },
+    { mode: "kuhllast", labelKey: "cooling" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {items.map(({ mode, labelKey }) => (
+        <label
+          key={mode}
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-body)]"
+        >
+          <input
+            type="checkbox"
+            disabled={disabled}
+            checked={value[mode]}
+            onChange={(e) =>
+              onChange({ ...value, [mode]: e.target.checked })
+            }
+          />
+          <span>{t(uiLanguage, labelKey)}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
@@ -104,10 +156,17 @@ export default function FloorsPanel({
   };
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfExportKind, setPdfExportKind] = useState<
+    null | "all" | "presentation" | "saved"
+  >(null);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfProgress, setPdfProgress] = useState("");
   const [pdfPageFormat, setPdfPageFormat] = useState<PageFormat>("a3");
   const [pdfSavedSelection, setPdfSavedSelection] = useState<string[]>([]);
+  const [pdfAllModes, setPdfAllModes] =
+    useState<PdfModeSelection>(DEFAULT_PDF_MODES);
+  const [pdfPresentationModes, setPdfPresentationModes] =
+    useState<PdfModeSelection>(DEFAULT_PDF_MODES);
   /** Lock portal host while open — must not track fullscreenElement live (export exits FS). */
   const pdfPortalHostRef = useRef<HTMLElement | null>(null);
 
@@ -364,47 +423,74 @@ export default function FloorsPanel({
   };
 
   const exportAllPages = async () => {
-    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
+    const modes = selectedModes(pdfAllModes);
+    if (
+      pdfExporting ||
+      !viewerRef.current ||
+      rooms.length === 0 ||
+      modes.length === 0
+    ) {
+      return;
+    }
     setPdfExporting(true);
+    setPdfExportKind("all");
     setPdfProgress(t(uiLanguage, "starting"));
     try {
       const assets = await captureAllPagesAssets(viewerRef.current, {
         scale: 2.5,
         onProgress: setPdfProgress,
+        modes,
       });
       setPdfProgress(t(uiLanguage, "buildingPdf"));
       exportAllPagesPdf({
         modelName: modelNameForPdf(),
-        floors: assets.floors,
-        presentation: assets.presentation,
+        sections: assets.sections,
         legend: pdfLegendFromStore(),
       });
       dismissPdfPopup();
+    } catch (err) {
+      console.error(err);
+      setPdfProgress(t(uiLanguage, "pdfExportFailed"));
     } finally {
       setPdfExporting(false);
+      setPdfExportKind(null);
       setPdfProgress("");
     }
   };
 
   const exportPresentationOnly = async () => {
-    if (pdfExporting || !viewerRef.current || rooms.length === 0) return;
+    const modes = selectedModes(pdfPresentationModes);
+    if (
+      pdfExporting ||
+      !viewerRef.current ||
+      rooms.length === 0 ||
+      modes.length === 0
+    ) {
+      return;
+    }
     setPdfExporting(true);
+    setPdfExportKind("presentation");
     setPdfProgress(t(uiLanguage, "starting"));
     try {
-      const presentation = await capturePresentationAssets(viewerRef.current, {
+      const captured = await capturePresentationAssets(viewerRef.current, {
         scale: 3,
         onProgress: setPdfProgress,
+        modes,
       });
       setPdfProgress(t(uiLanguage, "buildingPdf"));
       exportPresentationPdf({
         modelName: modelNameForPdf(),
-        presentation,
+        sections: captured.sections,
         legend: pdfLegendFromStore(),
         pageFormat: pdfPageFormat,
       });
       dismissPdfPopup();
+    } catch (err) {
+      console.error(err);
+      setPdfProgress(t(uiLanguage, "pdfExportFailed"));
     } finally {
       setPdfExporting(false);
+      setPdfExportKind(null);
       setPdfProgress("");
     }
   };
@@ -422,6 +508,7 @@ export default function FloorsPanel({
     if (selected.length === 0) return;
 
     setPdfExporting(true);
+    setPdfExportKind("saved");
     setPdfProgress(t(uiLanguage, "capturingSaved"));
     const restore = {
       isPresentationView: useAppStore.getState().isPresentationView,
@@ -461,8 +548,12 @@ export default function FloorsPanel({
         temperatureRange,
       });
       dismissPdfPopup();
+    } catch (err) {
+      console.error(err);
+      setPdfProgress(t(uiLanguage, "pdfExportFailed"));
     } finally {
       setPdfExporting(false);
+      setPdfExportKind(null);
       setPdfProgress("");
       const s = useAppStore.getState();
       if (s.isPresentationView !== restore.isPresentationView) {
@@ -473,11 +564,15 @@ export default function FloorsPanel({
       setPresentationFloorId(restore.presentationFloorId);
       setSelectedFloor(restore.selectedFloor);
       await waitMs(200);
-      await viewerRef.current?.flyToPose(
-        restore.pose.position,
-        restore.pose.target,
-        1,
-      );
+      try {
+        await viewerRef.current?.flyToPose(
+          restore.pose.position,
+          restore.pose.target,
+          1,
+        );
+      } catch {
+        // ignore restore fly errors
+      }
     }
   };
 
@@ -1059,6 +1154,15 @@ export default function FloorsPanel({
                       {t(uiLanguage, "allPages")}
                     </p>
                     <p className="text-[10px] leading-snug text-[var(--text-muted)]">
+                      {t(uiLanguage, "pdfSelectModes")}
+                    </p>
+                    <PdfModeChecks
+                      value={pdfAllModes}
+                      onChange={setPdfAllModes}
+                      disabled={pdfExporting}
+                      uiLanguage={uiLanguage}
+                    />
+                    <p className="text-[10px] leading-snug text-[var(--text-muted)]">
                       {t(uiLanguage, "allPagesDesc")}{" "}
                       <span className="font-medium text-[var(--text-body)]">
                         {modelLabel.replace(/\.ifc$/i, "")}_allpages.pdf
@@ -1066,19 +1170,23 @@ export default function FloorsPanel({
                     </p>
                     <button
                       type="button"
-                      disabled={pdfExporting || rooms.length === 0}
+                      disabled={
+                        pdfExporting ||
+                        rooms.length === 0 ||
+                        selectedModes(pdfAllModes).length === 0
+                      }
                       onClick={() => void exportAllPages()}
                       className={`${yellowGlossBtn} mt-0.5 h-10 w-full justify-center gap-2 rounded-xl px-3 text-sm disabled:opacity-40`}
                     >
                       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-                        {pdfExporting ? (
+                        {pdfExportKind === "all" ? (
                           <LiquidGlassSpinner size="xs" srLabel={t(uiLanguage, "exporting")} />
                         ) : (
                           <PiFilePdfThin className="h-5 w-5" />
                         )}
                       </span>
                       <span>
-                        {pdfExporting
+                        {pdfExportKind === "all"
                           ? t(uiLanguage, "exporting")
                           : t(uiLanguage, "downloadAllPages")}
                       </span>
@@ -1089,6 +1197,15 @@ export default function FloorsPanel({
                     <p className="text-xs font-semibold text-[var(--text-strong)]">
                       {t(uiLanguage, "presentationViews")}
                     </p>
+                    <p className="text-[10px] leading-snug text-[var(--text-muted)]">
+                      {t(uiLanguage, "pdfSelectModes")}
+                    </p>
+                    <PdfModeChecks
+                      value={pdfPresentationModes}
+                      onChange={setPdfPresentationModes}
+                      disabled={pdfExporting}
+                      uiLanguage={uiLanguage}
+                    />
                     <p className="text-[10px] leading-snug text-[var(--text-muted)]">
                       {t(uiLanguage, "presentationDesc")}
                     </p>
@@ -1111,13 +1228,26 @@ export default function FloorsPanel({
                     </div>
                     <button
                       type="button"
-                      disabled={pdfExporting || rooms.length === 0}
+                      disabled={
+                        pdfExporting ||
+                        rooms.length === 0 ||
+                        selectedModes(pdfPresentationModes).length === 0
+                      }
                       onClick={() => void exportPresentationOnly()}
-                      className={`${yellowGlossBtn} h-10 w-full justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
+                      className={`${yellowGlossBtn} h-10 w-full justify-center gap-2 rounded-xl px-3 text-sm disabled:opacity-40`}
                     >
-                      <PiFilePdfThin className="h-5 w-5" />
-                      {t(uiLanguage, "downloadPresentation")} (
-                      {pdfPageFormat.toUpperCase()})
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                        {pdfExportKind === "presentation" ? (
+                          <LiquidGlassSpinner size="xs" srLabel={t(uiLanguage, "exporting")} />
+                        ) : (
+                          <PiFilePdfThin className="h-5 w-5" />
+                        )}
+                      </span>
+                      <span>
+                        {pdfExportKind === "presentation"
+                          ? t(uiLanguage, "exporting")
+                          : `${t(uiLanguage, "downloadPresentation")} (${pdfPageFormat.toUpperCase()})`}
+                      </span>
                     </button>
                   </div>
 
@@ -1164,10 +1294,20 @@ export default function FloorsPanel({
                         pdfSavedSelection.length === 0
                       }
                       onClick={() => void exportSavedViewsOnly()}
-                      className={`${yellowGlossBtn} h-10 w-full justify-center rounded-xl px-3 text-sm disabled:opacity-40`}
+                      className={`${yellowGlossBtn} h-10 w-full justify-center gap-2 rounded-xl px-3 text-sm disabled:opacity-40`}
                     >
-                      <PiFilePdfThin className="h-5 w-5" />
-                      {t(uiLanguage, "downloadSavedViews")}
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                        {pdfExportKind === "saved" ? (
+                          <LiquidGlassSpinner size="xs" srLabel={t(uiLanguage, "exporting")} />
+                        ) : (
+                          <PiFilePdfThin className="h-5 w-5" />
+                        )}
+                      </span>
+                      <span>
+                        {pdfExportKind === "saved"
+                          ? t(uiLanguage, "exporting")
+                          : t(uiLanguage, "downloadSavedViews")}
+                      </span>
                     </button>
                   </div>
 

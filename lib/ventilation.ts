@@ -60,18 +60,37 @@ const EXTRACT_DEVICE_ROOM_ARTS = new Set(["204", "205", "206"]);
 /** Corridors / halls — Überströmung transfer, not mechanical extract. */
 const OVERFLOW_TRANSFER_ROOM_ARTS = new Set(["201"]);
 
+/** Normalize IFC RaumArt ("204", "204.0", "204 Bad") to a digit code. */
+export function normalizeRoomArt(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  const m = s.match(/^(\d+)/);
+  if (m) return String(parseInt(m[1]!, 10));
+  return s;
+}
+
+/**
+ * Bad / WC / Dusche — local Abluftgerät rooms (by RaumArt or name).
+ * "keine Luftaufbereitung" still allows a local fan.
+ */
+export function roomIsWetExtractRoom(room: Room): boolean {
+  const art = normalizeRoomArt(room.ventilation.roomArt);
+  if (EXTRACT_DEVICE_ROOM_ARTS.has(art)) return true;
+  const label = `${room.name} ${room.number}`.toLowerCase();
+  return /\b(bad|badezimmer|bath|bathroom|wc|dusche|toilet|toilette|waschraum|nasszelle)\b/i.test(
+    label,
+  );
+}
+
 /** Flur / corridor — Überströmung only, no Abluftgerät or red extract arrows. */
 export function roomIsOverflowTransfer(room: Room): boolean {
   const v = room.ventilation;
+  const art = normalizeRoomArt(v.roomArt);
   if (v.isExtractRoom || v.abluftOutlets > 0) return false;
-  if (
-    EXTRACT_DEVICE_ROOM_ARTS.has(v.roomArt.trim()) &&
-    v.hasVentSystem
-  ) {
-    return false;
-  }
+  // Bathrooms are never overflow-only — they get a ceiling Abluftgerät.
+  if (roomIsWetExtractRoom(room)) return false;
   if (v.isOverflowRoom) return v.overflowVolume >= MIN_VENT_FLOW_M3H;
-  if (OVERFLOW_TRANSFER_ROOM_ARTS.has(v.roomArt.trim())) {
+  if (OVERFLOW_TRANSFER_ROOM_ARTS.has(art)) {
     return v.overflowVolume >= MIN_VENT_FLOW_M3H;
   }
   if (
@@ -102,24 +121,32 @@ export function ventilationFlowRole(room: Room): VentilationFlowRole {
  */
 export function roomHasExtractFan(room: Room): boolean {
   const v = room.ventilation;
-  if (NON_VENTILATED_ROOM_ARTS.has(v.roomArt.trim())) return false;
-  if (roomIsOverflowTransfer(room)) return false;
-  if (v.isExtractRoom) return v.hasVentSystem || v.abluftOutlets > 0;
-  if (v.abluftOutlets > 0) return true;
-  // Bad / WC — local Abluftgerät; "keine Luftaufbereitung" only means no central RLT.
-  if (EXTRACT_DEVICE_ROOM_ARTS.has(v.roomArt.trim())) {
+  const art = normalizeRoomArt(v.roomArt);
+  if (NON_VENTILATED_ROOM_ARTS.has(art)) return false;
+
+  const hasExtractFlow =
+    v.abluftVolume >= MIN_VENT_FLOW_M3H ||
+    v.overflowVolume >= MIN_VENT_FLOW_M3H;
+
+  // Bad / WC — local Abluftgerät; do not require hasVentSystem when flow exists.
+  // Bathrooms often store extract as Überstrom + IstAbluftraum without outlets count.
+  if (roomIsWetExtractRoom(room)) {
     return (
-      v.hasVentSystem &&
-      (v.abluftVolume >= MIN_VENT_FLOW_M3H ||
-        v.overflowVolume >= MIN_VENT_FLOW_M3H)
+      v.hasVentSystem ||
+      v.abluftOutlets > 0 ||
+      v.isExtractRoom ||
+      hasExtractFlow
     );
   }
+
+  if (roomIsOverflowTransfer(room)) return false;
+  if (v.isExtractRoom) {
+    return v.hasVentSystem || v.abluftOutlets > 0 || hasExtractFlow;
+  }
+  if (v.abluftOutlets > 0) return true;
+  // Central RLT rooms only — "keine Luftaufbereitung" skips non-wet rooms.
   if (!v.hasAirTreatment) return false;
-  return (
-    v.hasVentSystem &&
-    (v.abluftVolume >= MIN_VENT_FLOW_M3H ||
-      v.overflowVolume >= MIN_VENT_FLOW_M3H)
-  );
+  return v.hasVentSystem && hasExtractFlow;
 }
 
 /** Duct Abluft without a local fan unit — upward arrows only. */
@@ -131,7 +158,7 @@ export function roomHasDuctExtractOnly(room: Room): boolean {
 /** True when the room should show 3D flow markers (not heat-loss-only). */
 export function roomShowsVentilationFlowMarkers(room: Room): boolean {
   const v = room.ventilation;
-  if (NON_VENTILATED_ROOM_ARTS.has(v.roomArt.trim())) return false;
+  if (NON_VENTILATED_ROOM_ARTS.has(normalizeRoomArt(v.roomArt))) return false;
 
   if (roomHasExtractFan(room)) return true;
   if (v.abluftVolume >= MIN_VENT_FLOW_M3H || v.zuluftVolume >= MIN_VENT_FLOW_M3H) return true;
@@ -165,7 +192,7 @@ export function roomIsExtractOnly(room: Room): boolean {
 /** Green Zuluft arrows — facade inlets, interior transfer (Flur, Bad), downstream rooms. */
 export function roomShowsZuluftMarkers(room: Room): boolean {
   const v = room.ventilation;
-  if (NON_VENTILATED_ROOM_ARTS.has(v.roomArt.trim())) return false;
+  if (NON_VENTILATED_ROOM_ARTS.has(normalizeRoomArt(v.roomArt))) return false;
 
   if (v.zuluftVolume >= MIN_VENT_FLOW_M3H || v.aldVolume >= MIN_VENT_FLOW_M3H) {
     return true;
