@@ -89,8 +89,11 @@ export default function PresentationSidePanel({
   ]);
 
   const selectRoom = (roomId: string, expressId: number, floorId: string) => {
-    requestRoomFocus(roomId);
-    setSelectedRoomId(roomId);
+    if (useAppStore.getState().autoFocusSelection) {
+      requestRoomFocus(roomId);
+    } else {
+      setSelectedRoomId(roomId);
+    }
     void import("@/lib/ifcClient").then(({ getElementDetails }) =>
       getElementDetails(expressId, floorId, roomId).then((el) => {
         if (el) setSelectedElement(el);

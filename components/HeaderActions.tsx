@@ -11,7 +11,11 @@ import { createPortal } from "react-dom";
 import gsap from "gsap";
 import Image from "next/image";
 import { MdOutlineAccountCircle } from "react-icons/md";
-import { headerCollapsedMinWidthPx, leftPanelWidthPx } from "@/lib/layoutTokens";
+import {
+  headerCollapsedMinWidthPx,
+  isCompactMobileViewport,
+  leftPanelWidthPx,
+} from "@/lib/layoutTokens";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -214,7 +218,13 @@ export default function HeaderActions({
   );
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [isWideHeader, setIsWideHeader] = useState(false);
+  const [isWideHeader, setIsWideHeader] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
+  );
+  /** Phone only — desktop / iPad keep the header open (no hover auto-close). */
+  const [isMobileHeader, setIsMobileHeader] = useState(
+    () => typeof window !== "undefined" && isCompactMobileViewport(),
+  );
   const [logoReady, setLogoReady] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -224,7 +234,8 @@ export default function HeaderActions({
   const iconsRef = useRef<HTMLDivElement>(null);
   const headerReady = useRef(false);
 
-  const expanded = pinned || hovered || modeOpen || profileOpen;
+  const expanded =
+    !isMobileHeader || pinned || hovered || modeOpen || profileOpen;
   const showMode = isWideHeader || expanded;
   const showActions = expanded;
 
@@ -243,11 +254,14 @@ export default function HeaderActions({
     const mqWide = window.matchMedia("(min-width: 768px)");
     const update = () => {
       setIsWideHeader(mqWide.matches);
+      setIsMobileHeader(isCompactMobileViewport());
     };
     update();
     mqWide.addEventListener("change", update);
+    window.addEventListener("resize", update);
     return () => {
       mqWide.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
     };
   }, []);
 
@@ -331,8 +345,11 @@ export default function HeaderActions({
         setLanguageExpanded(false);
         setModeHoverId(null);
         setProfileHoverId(null);
-        setHovered(false);
-        setPinned(false);
+        // Auto-collapse header only on mobile; desktop/iPad stay open.
+        if (isCompactMobileViewport()) {
+          setHovered(false);
+          setPinned(false);
+        }
       }
     };
     document.addEventListener("click", onDoc);
@@ -363,14 +380,36 @@ export default function HeaderActions({
     : `${sideBtn} border border-transparent text-[var(--toolbar-icon)] hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
   const sideActive = `${sideBtn} ${yellowGloss}`;
 
+  const showIconLabels = !isMobileHeader;
+  const iconStack = "flex flex-col items-center justify-center gap-0.5";
+  const iconCaption =
+    "max-w-[4.75rem] truncate text-center text-[8px] font-semibold leading-none tracking-wide text-[var(--text-muted)] whitespace-nowrap";
+  const modeLabel =
+    mode === "editor"
+      ? t(uiLanguage, "tool")
+      : mode === "luftung"
+        ? t(uiLanguage, "ventilation")
+        : mode === "kuhllast"
+          ? t(uiLanguage, "cooling")
+          : t(uiLanguage, "heating");
+
   return (
     <div
       ref={rootRef}
       data-app-header-actions
       className="pointer-events-auto fixed top-2 left-2 z-[45] sm:top-3 md:left-4"
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => {
+        if (isMobileHeader) setHovered(true);
+      }}
       onMouseLeave={() => {
-        if (!modeOpen && !profileOpen && !pinned) setHovered(false);
+        if (
+          isMobileHeader &&
+          !modeOpen &&
+          !profileOpen &&
+          !pinned
+        ) {
+          setHovered(false);
+        }
       }}
     >
       <input
@@ -592,10 +631,18 @@ export default function HeaderActions({
           >
             <div
               ref={innerRef}
-              className={`flex h-10 items-stretch sm:h-11 ${expanded ? "w-full" : "w-max"} pr-5`}
+              className={`flex items-stretch ${
+                showIconLabels ? "h-[3.35rem]" : "h-10 sm:h-11"
+              } ${expanded ? "w-full" : "w-max"} ${
+                isMobileHeader ? "pr-5" : "pr-3 sm:pr-3.5"
+              }`}
             >
               {/* Logo + mode — fixed left cluster (never shifts on expand) */}
-              <div className="flex shrink-0 items-center py-1 pl-3 sm:pl-3.5">
+              <div
+                className={`flex shrink-0 items-center pl-3 sm:pl-3.5 ${
+                  showIconLabels ? "py-0.5" : "py-1"
+                }`}
+              >
                 <Image
                   src="/ibv_logo.svg"
                   alt="IBV logo"
@@ -609,19 +656,13 @@ export default function HeaderActions({
                 {showMode && (
                   <>
                     <span
-                      className="mx-2.5 h-5 w-px shrink-0 self-center bg-amber-400/80 sm:mx-3 sm:h-6"
+                      className={`mx-2.5 w-px shrink-0 self-center bg-amber-400/80 sm:mx-3 ${
+                        showIconLabels ? "h-7" : "h-5 sm:h-6"
+                      }`}
                       aria-hidden
                     />
                     <HeaderTip
-                      label={
-                        mode === "editor"
-                          ? t(uiLanguage, "tool")
-                          : mode === "luftung"
-                            ? t(uiLanguage, "ventilation")
-                            : mode === "kuhllast"
-                              ? t(uiLanguage, "cooling")
-                              : t(uiLanguage, "heating")
-                      }
+                      label={modeLabel}
                       hint={t(uiLanguage, "viewHintWithTool")}
                     >
                       <button
@@ -635,18 +676,25 @@ export default function HeaderActions({
                           setHovered(true);
                         }}
                         aria-expanded={modeOpen}
-                        aria-label={
-                          mode === "editor"
-                            ? t(uiLanguage, "tool")
-                            : mode === "luftung"
-                              ? t(uiLanguage, "ventilation")
-                              : mode === "kuhllast"
-                                ? t(uiLanguage, "cooling")
-                                : t(uiLanguage, "heating")
+                        aria-label={modeLabel}
+                        className={
+                          showIconLabels
+                            ? iconStack
+                            : modeOpen
+                              ? roundActive
+                              : roundIdle
                         }
-                        className={modeOpen ? roundActive : roundIdle}
                       >
-                        <ModeIcon mode={mode} />
+                        {showIconLabels ? (
+                          <>
+                            <span className={modeOpen ? roundActive : roundIdle}>
+                              <ModeIcon mode={mode} />
+                            </span>
+                            <span className={iconCaption}>{modeLabel}</span>
+                          </>
+                        ) : (
+                          <ModeIcon mode={mode} />
+                        )}
                       </button>
                     </HeaderTip>
                   </>
@@ -656,7 +704,9 @@ export default function HeaderActions({
               {showActions && (
                 <div
                   ref={iconsRef}
-                  className="flex min-w-0 flex-1 items-center justify-evenly px-2 py-1 sm:px-3"
+                  className={`flex min-w-0 flex-1 items-center justify-evenly px-2 sm:px-3 ${
+                    showIconLabels ? "py-0.5" : "py-1"
+                  }`}
                 >
                     <HeaderTip
                       label={t(uiLanguage, "data")}
@@ -672,9 +722,26 @@ export default function HeaderActions({
                           fileInputRef.current?.click();
                         }}
                         aria-label={t(uiLanguage, "loadIfc")}
-                        className={`${hasModel ? sideActive : sideIdle} disabled:opacity-45`}
+                        className={`${
+                          showIconLabels
+                            ? iconStack
+                            : hasModel
+                              ? sideActive
+                              : sideIdle
+                        } disabled:opacity-45`}
                       >
-                        <UploadIcon />
+                        {showIconLabels ? (
+                          <>
+                            <span className={hasModel ? sideActive : sideIdle}>
+                              <UploadIcon />
+                            </span>
+                            <span className={iconCaption}>
+                              {t(uiLanguage, "ifcUpload")}
+                            </span>
+                          </>
+                        ) : (
+                          <UploadIcon />
+                        )}
                       </button>
                     </HeaderTip>
 
@@ -695,14 +762,34 @@ export default function HeaderActions({
                         }}
                         aria-expanded={profileOpen}
                         aria-label={t(uiLanguage, "profile")}
-                        className={profileOpen ? sideActive : sideIdle}
+                        className={
+                          showIconLabels
+                            ? iconStack
+                            : profileOpen
+                              ? sideActive
+                              : sideIdle
+                        }
                       >
-                        <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
+                        {showIconLabels ? (
+                          <>
+                            <span
+                              className={profileOpen ? sideActive : sideIdle}
+                            >
+                              <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
+                            </span>
+                            <span className={iconCaption}>
+                              {t(uiLanguage, "profile")}
+                            </span>
+                          </>
+                        ) : (
+                          <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
+                        )}
                       </button>
                     </HeaderTip>
                 </div>
               )}
 
+              {isMobileHeader && (
               <button
                 type="button"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -731,6 +818,7 @@ export default function HeaderActions({
                   <path d="m15 6-6 6 6 6" />
                 </svg>
               </button>
+              )}
             </div>
           </GlassPanel>
         </div>

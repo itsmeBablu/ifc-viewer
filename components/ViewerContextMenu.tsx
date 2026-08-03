@@ -132,18 +132,68 @@ export default function ViewerContextMenu({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+
+    const drag = {
+      active: false,
+      moved: false,
+      x: 0,
+      y: 0,
+      t: 0,
+    };
+    const MOVE_PX = 6;
+    const HOLD_MS = 220;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 2) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || !(target instanceof HTMLCanvasElement)) return;
+      drag.active = true;
+      drag.moved = false;
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      drag.t = Date.now();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!drag.active || drag.moved) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (dx * dx + dy * dy >= MOVE_PX * MOVE_PX) drag.moved = true;
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.button !== 2) return;
+      if (Date.now() - drag.t >= HOLD_MS) drag.moved = true;
+      drag.active = false;
+    };
+
     const onCtx = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target || !(target instanceof HTMLCanvasElement)) return;
       e.preventDefault();
+      // Hold / drag → OrbitControls pan only; no menu.
+      if (drag.moved || Date.now() - drag.t >= HOLD_MS) {
+        drag.moved = false;
+        return;
+      }
+      drag.moved = false;
       setViewerContextMenuOpen(true);
       setSidePanel(null);
       setViewName(defaultSaveViewName());
       setPageFormat("a4");
       setMenu({ x: e.clientX, y: e.clientY });
     };
+
+    root.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
     root.addEventListener("contextmenu", onCtx);
-    return () => root.removeEventListener("contextmenu", onCtx);
+    return () => {
+      root.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      root.removeEventListener("contextmenu", onCtx);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rootRef,

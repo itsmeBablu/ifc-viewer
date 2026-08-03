@@ -27,6 +27,7 @@ import {
 } from "@/lib/colorMapping";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import type { DataViewMode } from "@/lib/dataViewMode";
+import { roomVentilationZoneKey } from "@/lib/ventilation";
 import {
   DEFAULT_SCENE_BG,
   getDefaultSceneBackground,
@@ -165,6 +166,8 @@ type AppState = {
   autoSceneBackground: boolean;
   /** When true, selecting a room/zone flies the camera (like Lüftung focus). Default off. */
   autoFocusSelection: boolean;
+  /** True while PDF capture is running — hide chrome that must not appear in captures. */
+  pdfCaptureActive: boolean;
   /** Presentation (exploded) vs basic imported view. */
   isPresentationView: boolean;
   /** selectedFloor restored when leaving presentation. */
@@ -252,6 +255,7 @@ type AppState = {
   setSceneBackground: (value: string, options?: { persist?: boolean }) => void;
   setAutoSceneBackground: (on: boolean) => void;
   setAutoFocusSelection: (on: boolean) => void;
+  setPdfCaptureActive: (on: boolean) => void;
   setSliceProgress: (t: number) => void;
   setPresentationView: (active: boolean) => void;
   setPresentationFloorId: (floorId: string | null) => void;
@@ -536,6 +540,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sceneBackground: initialBackground(),
   autoSceneBackground: initialAutoSceneBackground(),
   autoFocusSelection: initialAutoFocusSelection(),
+  pdfCaptureActive: false,
   isPresentationView: false,
   presentationPrevFloor: null,
   presentationFloorId: null,
@@ -608,11 +613,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setDataViewMode: (mode) => {
     if (mode === get().dataViewMode) return;
+    const s = get();
+    const room = s.selectedRoomId
+      ? s.rooms.find((r) => r.id === s.selectedRoomId)
+      : null;
+    const nextZone =
+      mode === "luftung" && room ? roomVentilationZoneKey(room) : null;
     set({
       dataViewMode: mode,
-      ...(mode !== "luftung" ? { selectedVentilationZoneKey: null } : {}),
+      selectedVentilationZoneKey: mode === "luftung" ? nextZone : null,
       ...(mode === "luftung" ? { compareBothModes: false } : {}),
     });
+    // Autofocus preference persists across modes — re-apply to current selection.
+    if (!s.autoFocusSelection) return;
+    if (mode === "luftung" && nextZone) {
+      set((st) => ({
+        ventilationZoneFocusToken: st.ventilationZoneFocusToken + 1,
+        selectedRoomId: s.selectedRoomId,
+      }));
+    } else if (s.selectedRoomId) {
+      get().requestRoomFocus(s.selectedRoomId);
+    }
   },
   setActiveColorPalette: (id) => {
     const palette = id === "dark" ? "standard" : id;
@@ -812,7 +833,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     set({ autoFocusSelection: on });
+    if (!on) return;
+    const s = get();
+    if (s.dataViewMode === "luftung" && s.selectedVentilationZoneKey) {
+      set((st) => ({
+        ventilationZoneFocusToken: st.ventilationZoneFocusToken + 1,
+      }));
+    } else if (s.selectedRoomId) {
+      get().requestRoomFocus(s.selectedRoomId);
+    }
   },
+  setPdfCaptureActive: (on) => set({ pdfCaptureActive: on }),
   setSliceProgress: (t) => set({ sliceProgress: clamp01(t) }),
   setPresentationView: (active) => {
     const s = get();
@@ -922,7 +953,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   requestRoomFocus: (roomId) =>
     set((s) => ({
       selectedRoomId: roomId,
-      roomFocusToken: s.roomFocusToken + 1,
+      // Camera fly only when Autofocus is on — selection still updates either way.
+      roomFocusToken: s.autoFocusSelection
+        ? s.roomFocusToken + 1
+        : s.roomFocusToken,
     })),
   setCompareBothModes: (on) => {
     if (on === get().compareBothModes) return;

@@ -102,7 +102,11 @@ export default function VentilationZonePanel({
   if (dataViewMode !== "luftung" || zones.length === 0) return null;
 
   const focusRoom = (room: Room) => {
-    requestRoomFocus(room.id);
+    if (useAppStore.getState().autoFocusSelection) {
+      requestRoomFocus(room.id);
+    } else {
+      useAppStore.getState().setSelectedRoomId(room.id);
+    }
     void import("@/lib/ifcClient").then(({ getElementDetails }) =>
       getElementDetails(room.expressId, room.floorId, room.id).then((el) => {
         if (el) setSelectedElement(el);

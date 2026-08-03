@@ -23,6 +23,7 @@ export function emptyVentilation(): RoomVentilation {
     zuluftVolume: 0,
     overflowVolume: 0,
     aldVolume: 0,
+    hasAld: false,
     ventilationHeatLoss: 0,
     hasVentSystem: false,
     hasAirTreatment: true,
@@ -50,6 +51,33 @@ export function roomFlowVolume(v: RoomVentilation): number {
 
 /** Minimum m³/h — ignore tiny numeric noise from IFC exports. */
 export const MIN_VENT_FLOW_M3H = 0.5;
+
+/**
+ * ALD inlets often export fractional flows (e.g. 0.4 m³/h) below the general
+ * vent minimum — still real supply air.
+ */
+export const MIN_ALD_FLOW_M3H = 0.05;
+
+/** True when the room has an ALD / outdoor-air inlet worth showing as Zuluft. */
+export function roomHasAldSupply(v: RoomVentilation): boolean {
+  return v.hasAld || v.aldVolume >= MIN_ALD_FLOW_M3H;
+}
+
+/** Lüftung 3D / presentation flow colors. */
+export const VENT_FLOW_COLORS = {
+  /** Abluft — yellow. */
+  abluft: 0xfacc15,
+  /** Zuluft — red. */
+  zuluft: 0xef4444,
+  /** Überstrom — green. */
+  uberstrom: 0x22c55e,
+} as const;
+
+export const VENT_FLOW_HEX = {
+  abluft: "#facc15",
+  zuluft: "#ef4444",
+  uberstrom: "#22c55e",
+} as const;
 
 /** Solar Computer RaumArt codes without duct/fan flow markers. */
 const NON_VENTILATED_ROOM_ARTS = new Set(["200"]);
@@ -82,7 +110,7 @@ export function roomIsWetExtractRoom(room: Room): boolean {
   );
 }
 
-/** Flur / corridor — Überströmung only, no Abluftgerät or red extract arrows. */
+/** Flur / corridor — Überströmung only, no Abluftgerät or yellow extract arrows. */
 export function roomIsOverflowTransfer(room: Room): boolean {
   const v = room.ventilation;
   const art = normalizeRoomArt(v.roomArt);
@@ -108,7 +136,11 @@ export function ventilationFlowRole(room: Room): VentilationFlowRole {
   if (roomHasExtractFan(room)) return "extract";
   if (roomIsOverflowTransfer(room)) return "overflow";
   if (v.isExtractRoom || v.abluftVolume >= MIN_VENT_FLOW_M3H) return "extract";
-  if (v.isSupplyRoom || v.zuluftVolume >= MIN_VENT_FLOW_M3H || v.aldVolume >= MIN_VENT_FLOW_M3H) {
+  if (
+    v.isSupplyRoom ||
+    v.zuluftVolume >= MIN_VENT_FLOW_M3H ||
+    roomHasAldSupply(v)
+  ) {
     return "supply";
   }
   if (v.isOverflowRoom || v.overflowVolume >= MIN_VENT_FLOW_M3H) return "overflow";
@@ -162,7 +194,7 @@ export function roomShowsVentilationFlowMarkers(room: Room): boolean {
 
   if (roomHasExtractFan(room)) return true;
   if (v.abluftVolume >= MIN_VENT_FLOW_M3H || v.zuluftVolume >= MIN_VENT_FLOW_M3H) return true;
-  if (v.aldVolume >= MIN_VENT_FLOW_M3H || v.overflowVolume >= MIN_VENT_FLOW_M3H) return true;
+  if (roomHasAldSupply(v) || v.overflowVolume >= MIN_VENT_FLOW_M3H) return true;
   return false;
 }
 
@@ -172,7 +204,7 @@ export function roomSuppliesZoneZuluft(room: Room): boolean {
   return (
     v.isSupplyRoom ||
     v.zuluftVolume >= MIN_VENT_FLOW_M3H ||
-    v.aldVolume >= MIN_VENT_FLOW_M3H
+    roomHasAldSupply(v)
   );
 }
 
@@ -185,7 +217,7 @@ export function roomIsExtractOnly(room: Room): boolean {
   return (
     v.abluftVolume >= MIN_VENT_FLOW_M3H &&
     v.zuluftVolume < MIN_VENT_FLOW_M3H &&
-    v.aldVolume < MIN_VENT_FLOW_M3H
+    !roomHasAldSupply(v)
   );
 }
 
@@ -194,7 +226,7 @@ export function roomShowsZuluftMarkers(room: Room): boolean {
   const v = room.ventilation;
   if (NON_VENTILATED_ROOM_ARTS.has(normalizeRoomArt(v.roomArt))) return false;
 
-  if (v.zuluftVolume >= MIN_VENT_FLOW_M3H || v.aldVolume >= MIN_VENT_FLOW_M3H) {
+  if (v.zuluftVolume >= MIN_VENT_FLOW_M3H || roomHasAldSupply(v)) {
     return true;
   }
   // Bad / WC — receives transfer air from corridor / zone neighbours.

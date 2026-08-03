@@ -510,6 +510,7 @@ export default function FloorsPanel({
     setPdfExporting(true);
     setPdfExportKind("saved");
     setPdfProgress(t(uiLanguage, "capturingSaved"));
+    useAppStore.getState().setPdfCaptureActive(true);
     const restore = {
       isPresentationView: useAppStore.getState().isPresentationView,
       presentationIsolate,
@@ -555,6 +556,7 @@ export default function FloorsPanel({
       setPdfExporting(false);
       setPdfExportKind(null);
       setPdfProgress("");
+      useAppStore.getState().setPdfCaptureActive(false);
       const s = useAppStore.getState();
       if (s.isPresentationView !== restore.isPresentationView) {
         setPresentationView(restore.isPresentationView);

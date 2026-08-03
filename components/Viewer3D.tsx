@@ -673,7 +673,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     controls.mouseButtons = {
       LEFT: MOUSE.ROTATE,
       MIDDLE: MOUSE.DOLLY,
-      RIGHT: null as unknown as MOUSE,
+      // Right-drag pans; short right-click opens context menu (see ViewerContextMenu).
+      RIGHT: MOUSE.PAN,
     };
 
     const overlays = new THREE.Group();
@@ -974,17 +975,21 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   ]);
 
   useEffect(() => {
-    if (!roomFocusToken || !selectedRoomId) return;
+    if (!roomFocusToken) return;
+    if (!useAppStore.getState().autoFocusSelection) return;
+    const roomId = useAppStore.getState().selectedRoomId;
+    if (!roomId) return;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
-    const mesh = roomMeshById.current.get(selectedRoomId);
+    const mesh = roomMeshById.current.get(roomId);
     if (!camera || !controls || !mesh) return;
     mesh.visible = true;
     const box = new THREE.Box3().setFromObject(mesh);
     if (box.isEmpty()) return;
     const { position, target } = frameBoundingBox(box, camera, 1.55);
     void flyTo(camera, controls, position, target, 900);
-  }, [roomFocusToken, selectedRoomId]);
+    // Only react to focus requests — not every selectedRoomId change.
+  }, [roomFocusToken]);
 
   // Heizlast + Temperature compare: twin copy (temp colors) offset from primary (heizlast)
   useEffect(() => {
@@ -1784,7 +1789,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const byId = new Map(roomList.map((r) => [r.id, r]));
 
       // Resolve an id that actually exists on a room mesh — otherwise a stale /
-      // mismatched selectedRoomId would fade every room to 20% with no highlight.
+      // mismatched selectedRoomId would fade every room to 10% with no highlight.
       let resolvedId: string | null = selectedRoom;
       const meshHas = (id: string | null | undefined) =>
         Boolean(id && roomMeshById.current.has(id));
@@ -1826,8 +1831,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
 
       const hasRoomSelection = Boolean(resolvedId);
-      const SEL_OPACITY = 1;
-      const OTHER_OPACITY = 0.2;
+      const SEL_OPACITY = 0.8;
+      const OTHER_OPACITY = 0.1;
+      const OTHER_GRAY = 0xa8aeb8;
+      const colorAmt = useAppStore.getState().lighting.color ?? 1;
 
       const styleRoomMesh = (id: string, mesh: THREE.Mesh) => {
         clearSelectionOutlines(mesh);
@@ -1861,20 +1868,32 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               : baseOpacity;
 
         applySurfaceOpacity(mat, nextOpacity, true);
-        // Selected must read fully solid (no leftover transparent flags)
-        if (isSel && passes && hasRoomSelection) {
-          mat.opacity = 1;
-          mat.transparent = false;
-          mat.depthWrite = true;
-          mat.alphaTest = 0;
-        }
 
         const baseHex =
           (mesh.userData.colorHex as string | undefined) ??
           (mesh.userData.baseColorHex as string | undefined) ??
           `#${mat.color.getHexString()}`;
 
-        if (!lightMode) {
+        if (hasRoomSelection && passes) {
+          // Selected keeps load color; others go gray (all shading / Modell options).
+          if (isSel) {
+            mat.color.set(baseHex);
+            mat.emissive.set(baseHex);
+            mat.emissiveIntensity = lightMode ? 0.4 : 0.55;
+          } else {
+            mat.color.setHex(OTHER_GRAY);
+            mat.emissive.setHex(0x000000);
+            mat.emissiveIntensity = 0;
+          }
+        } else if (lightMode) {
+          const c = new THREE.Color(baseHex).lerp(
+            new THREE.Color(0xd0d4dc),
+            1 - colorAmt,
+          );
+          mat.color.copy(c);
+          mat.emissive.copy(c);
+          mat.emissiveIntensity = 0.35 * colorAmt;
+        } else {
           mat.color.set(baseHex);
           mat.emissive.setHex(0x000000);
           mat.emissiveIntensity = 0;
@@ -1882,10 +1901,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
         if (isSel && passes) {
           attachColorOutline(mesh, baseHex);
-          if (!lightMode) {
-            mat.emissive.set(baseHex);
-            mat.emissiveIntensity = 0.55;
-          }
           mesh.renderOrder = 8;
         } else {
           mesh.renderOrder = 2;
@@ -2293,7 +2308,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             setSelectedVentilationZoneKey(zoneKey);
           }
           applyPickSelection(hit);
-          requestRoomFocus(roomId);
+          if (useAppStore.getState().autoFocusSelection) {
+            requestRoomFocus(roomId);
+          }
           return;
         }
       }

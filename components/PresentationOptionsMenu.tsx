@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import GsapHeightAccordion from "./GsapHeightAccordion";
 import { IoOptionsOutline } from "react-icons/io5";
+import { MdPushPin } from "react-icons/md";
 import {
   DATA_VIEW_ICON,
   DATA_VIEW_MODES,
@@ -143,6 +144,8 @@ export default function PresentationOptionsMenu({
 }: Props) {
   const [menu, setMenu] = useState<MenuKind | null>(null);
   const [panel, setPanel] = useState<MenuKind>("view");
+  const [optionsPinned, setOptionsPinned] = useState(false);
+  const [optionsHover, setOptionsHover] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const uiLanguage = useAppStore((s) => s.uiLanguage);
@@ -158,6 +161,8 @@ export default function PresentationOptionsMenu({
   const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
+  const autoFocusSelection = useAppStore((s) => s.autoFocusSelection);
+  const setAutoFocusSelection = useAppStore((s) => s.setAutoFocusSelection);
   const selectedVentilationZoneKey = useAppStore(
     (s) => s.selectedVentilationZoneKey,
   );
@@ -187,23 +192,37 @@ export default function PresentationOptionsMenu({
 
   const setMenuOpen = (next: MenuKind | null) => {
     if (next) setPanel(next);
+    if (next !== "options") setOptionsPinned(false);
     setMenu(next);
-    onMenuOpenChange?.(next !== null);
+    onMenuOpenChange?.(next !== null || optionsPinned);
   };
 
   const toggleMenu = (kind: MenuKind) => {
-    setMenuOpen(menu === kind ? null : kind);
+    if (menu === kind) {
+      if (kind === "options" && optionsPinned) {
+        setOptionsPinned(false);
+        setMenuOpen(null);
+        return;
+      }
+      setMenuOpen(null);
+      return;
+    }
+    setMenuOpen(kind);
   };
 
   useEffect(() => {
     if (!menu) return;
     const onDoc = (e: PointerEvent) => {
+      if (optionsPinned && menu === "options") return;
       const target = e.target as Node;
       if (rootRef.current?.contains(target)) return;
       setMenuOpen(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(null);
+      if (e.key === "Escape") {
+        setOptionsPinned(false);
+        setMenuOpen(null);
+      }
     };
     const id = window.setTimeout(() => {
       document.addEventListener("pointerdown", onDoc);
@@ -215,7 +234,12 @@ export default function PresentationOptionsMenu({
       document.removeEventListener("keydown", onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu]);
+  }, [menu, optionsPinned]);
+
+  useEffect(() => {
+    onMenuOpenChange?.(menu !== null || optionsPinned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menu, optionsPinned]);
 
   const switchTrack =
     "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-300 ease-out";
@@ -226,16 +250,47 @@ export default function PresentationOptionsMenu({
   const iconSize = compact ? "h-4 w-4" : "h-5 w-5";
 
   const viewOpen = menu === "view";
-  const optionsOpen = menu === "options";
-  const open = menu !== null;
+  const optionsOpen = menu === "options" || (optionsPinned && panel === "options");
+  const open = menu !== null || optionsPinned;
+
+  const autofocusToggle = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={autoFocusSelection}
+      title={t(uiLanguage, "autoFocusHint")}
+      aria-label={t(uiLanguage, "autoFocus")}
+      onClick={() => setAutoFocusSelection(!autoFocusSelection)}
+      className={`pdf-capture-hide flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 transition-colors ${
+        autoFocusSelection
+          ? "border-amber-300/80 bg-amber-200/70 text-amber-950"
+          : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
+      }`}
+    >
+      <span
+        className={`relative h-3.5 w-6 shrink-0 rounded-full transition-colors ${
+          autoFocusSelection ? "bg-amber-500" : "bg-zinc-300/80"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-2.5 w-2.5 rounded-full bg-white shadow transition-transform ${
+            autoFocusSelection ? "translate-x-2.5" : "translate-x-0"
+          }`}
+        />
+      </span>
+      <span className="text-[9px] font-semibold tracking-wide whitespace-nowrap">
+        {t(uiLanguage, "autoFocus")}
+      </span>
+    </button>
+  );
 
   const viewMenuClass = compact
-    ? "presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-0.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
-    : "presentation-menu-surface isolate overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
+    ? "presentation-menu-surface isolate w-full overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-0.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+    : "presentation-menu-surface isolate w-full overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
 
   const optionsMenuClass = compact
-    ? "presentation-menu-surface isolate space-y-1.5 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
-    : "presentation-menu-surface isolate space-y-2 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
+    ? "presentation-menu-surface isolate w-full space-y-1.5 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]"
+    : "presentation-menu-surface isolate w-full space-y-2 overflow-hidden rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 [box-shadow:0_6px_20px_-6px_rgba(0,0,0,0.14)]";
 
   const viewModeChips = (
     <ViewModeChips
@@ -422,8 +477,9 @@ export default function PresentationOptionsMenu({
   return (
     <div ref={rootRef} className="w-full">
       <div className={`flex items-center justify-between ${compact ? "gap-1" : "gap-2"}`}>
-        <div className="min-w-0 flex-1">{title}</div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="min-w-0">{title}</div>
+        <div className="pdf-capture-hide flex shrink-0 items-center gap-1">
+          {autofocusToggle}
           <button
             type="button"
             aria-expanded={viewOpen}
@@ -444,23 +500,65 @@ export default function PresentationOptionsMenu({
               aria-hidden
             />
           </button>
-          <button
-            type="button"
-            aria-expanded={optionsOpen}
-            aria-haspopup="menu"
-            aria-label={t(uiLanguage, "moreOptions")}
-            onClick={() => toggleMenu("options")}
-            className={`flex items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 ${iconBtn} ${
-              optionsOpen ? optionsBtnOpen : optionsBtnIdle
-            }`}
+          <div
+            className="relative shrink-0 overflow-visible"
+            onMouseEnter={() => setOptionsHover(true)}
+            onMouseLeave={() => setOptionsHover(false)}
           >
-            <IoOptionsOutline className={`${iconSize} text-current`} aria-hidden />
-          </button>
+            <button
+              type="button"
+              aria-expanded={optionsOpen}
+              aria-haspopup="menu"
+              aria-label={t(uiLanguage, "moreOptions")}
+              onClick={() => toggleMenu("options")}
+              className={`flex items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 ${iconBtn} ${
+                optionsOpen || optionsPinned ? optionsBtnOpen : optionsBtnIdle
+              }`}
+            >
+              <IoOptionsOutline className={`${iconSize} text-current`} aria-hidden />
+            </button>
+            <button
+              type="button"
+              tabIndex={optionsHover || optionsPinned ? 0 : -1}
+              title={
+                optionsPinned
+                  ? t(uiLanguage, "unpinOptions")
+                  : t(uiLanguage, "pinOptions")
+              }
+              aria-pressed={optionsPinned}
+              aria-label={
+                optionsPinned
+                  ? t(uiLanguage, "unpinOptions")
+                  : t(uiLanguage, "pinOptions")
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                const next = !optionsPinned;
+                setOptionsPinned(next);
+                if (next) {
+                  setPanel("options");
+                  setMenu("options");
+                  onMenuOpenChange?.(true);
+                }
+              }}
+              className={`absolute -top-0.5 -right-0.5 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full border shadow-sm transition-[opacity,color,background,border-color] duration-150 ${
+                optionsHover || optionsPinned
+                  ? "opacity-100"
+                  : "pointer-events-none opacity-0"
+              } ${
+                optionsPinned
+                  ? "border-amber-400 bg-amber-300 text-amber-950"
+                  : "border-[var(--panel-divider)] bg-[var(--popover-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              }`}
+            >
+              <MdPushPin className="h-2 w-2" aria-hidden />
+            </button>
+          </div>
         </div>
       </div>
 
       <GsapHeightAccordion
-        open={open}
+        open={open && (menu === panel || (optionsPinned && panel === "options"))}
         contentKey={panel}
         innerClassName={compact ? "px-0.5 pb-0.5 pt-1" : "px-1 pb-1.5 pt-2"}
       >

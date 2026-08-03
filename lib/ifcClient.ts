@@ -325,6 +325,9 @@ function extractVentilationProps(
   v.overflowVolume =
     extractExactNamedNumeric(flat, OVERFLOW_VOLUME_PROP_NAMES) ?? 0;
   v.aldVolume = extractExactNamedNumeric(flat, ALD_VOLUME_PROP_NAMES) ?? 0;
+  v.hasAld = extractExactNamedBoolean(flat, [
+    "SC_Raum_ALDVorhanden",
+  ]);
   v.ventilationHeatLoss =
     extractExactNamedNumeric(flat, VENTILATION_HEAT_LOSS_PROP_NAMES) ?? 0;
   v.hasVentSystem = extractExactNamedBoolean(flat, VENT_SYSTEM_PROP_NAMES);

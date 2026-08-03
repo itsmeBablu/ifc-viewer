@@ -16,6 +16,8 @@ export type RoomVentilation = {
   overflowVolume: number;
   /** ALD room volume flow m³/h. */
   aldVolume: number;
+  /** SC_Raum_ALDVorhanden — outdoor air inlet present. */
+  hasAld: boolean;
   /** Ventilation heat loss (Lüftungswärmeverlust) W. */
   ventilationHeatLoss: number;
   /** Mechanical extract (Abluftgerät) present. */

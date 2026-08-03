@@ -127,9 +127,8 @@ export default function SearchFilterPanel({
     tempOverrides,
   );
 
-  /** Search selection: switch floor if needed, select room, fly camera. */
+  /** Search selection: switch floor if needed, select room; fly only with Autofocus. */
   const handleSearchSelect = async (room: Room) => {
-    // Search is an explicit "jump to room" — unlike click-select which never zooms.
     if (selectedFloor != null && room.floorId !== selectedFloor) {
       setSelectedFloor(room.floorId);
     }
@@ -138,7 +137,9 @@ export default function SearchFilterPanel({
     const el = await getElementDetails(room.expressId, room.floorId, room.id);
     if (el) setSelectedElement(el);
 
-    await viewerRef.current?.flyToRoom?.(room.id);
+    if (useAppStore.getState().autoFocusSelection) {
+      await viewerRef.current?.flyToRoom?.(room.id);
+    }
 
     setQuery("");
     onClose();

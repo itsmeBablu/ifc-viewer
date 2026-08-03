@@ -78,11 +78,17 @@ export default function ViewerApp() {
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const pdfCaptureActive = useAppStore((s) => s.pdfCaptureActive);
 
   useEffect(() => {
     const label = activeModelLabel?.trim();
     document.title = label ? `IBV Viewer - ${label}` : "IBV Viewer";
   }, [activeModelLabel]);
+
+  useEffect(() => {
+    document.body.classList.toggle("pdf-capturing", pdfCaptureActive);
+    return () => document.body.classList.remove("pdf-capturing");
+  }, [pdfCaptureActive]);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
@@ -565,11 +571,12 @@ export default function ViewerApp() {
           loadDisabled={isLoadingModel}
         />
 
-        {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing) */}
+        {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing).
+            Desktop: bottom-aligned above toolbar; top cleared for taller labeled header. */}
         {isDesktop && (
           <aside
             ref={leftAsideRef}
-            className={`fixed top-14 bottom-16 z-[35] flex w-[min(300px,calc(100vw-1.5rem))] flex-col sm:top-16 sm:bottom-[4.5rem] md:left-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] left-2 ${
+            className={`fixed top-auto bottom-16 z-[35] flex h-[calc(100dvh-9.25rem)] max-h-[calc(100dvh-9.25rem)] w-[min(300px,calc(100vw-1.5rem))] flex-col sm:bottom-[4.5rem] sm:h-[calc(100dvh-9.5rem)] sm:max-h-[calc(100dvh-9.5rem)] md:left-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] left-2 ${
               isPresentationView ? "pointer-events-none" : ""
             }`}
             aria-hidden={isPresentationView}

@@ -7,10 +7,12 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  * Bump `revision` whenever size/margins change so Viewer3D remounts the instance.
  */
 export const VIEW_CUBE_LAYOUT = {
-  revision: 17,
-  size: 104,
-  marginTop: 64,
-  marginRight: 18,
+  revision: 20,
+  /** 10% larger than 101px. */
+  size: 111,
+  /** Equal top / right inset (CSS px). */
+  marginTop: 16,
+  marginRight: 16,
 } as const;
 
 type ZoneKind = "face" | "edge" | "corner";
@@ -24,7 +26,7 @@ type ZoneUserData = {
 
 type HitMesh = THREE.Mesh;
 
-const FACE_PX = 256;
+const FACE_PX = 512;
 const HALF = 0.5;
 const BAND = 0.34;
 
@@ -168,20 +170,25 @@ function paintFace(
   ctx.lineTo(s, s - inset);
   ctx.stroke();
 
-  ctx.font = "700 34px 'Segoe UI', system-ui, sans-serif";
+  // Crisp, high-contrast labels (FRONT / TOP / …)
+  const fontPx = Math.round(s * 0.168);
+  ctx.font = `800 ${fontPx}px "Segoe UI", system-ui, -apple-system, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  if (hover) {
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = "rgba(226,232,240,0.9)";
-    ctx.strokeText(label, s / 2, s / 2);
-    ctx.fillStyle = "#0f172a"; // slate-900
-  } else {
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
-    ctx.strokeText(label, s / 2, s / 2);
-    ctx.fillStyle = "#334155";
-  }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  // Soft halo then dark fill so letters stay sharp on glass faces
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(6, Math.round(s * 0.028));
+  ctx.strokeStyle = hover
+    ? "rgba(241,245,249,0.95)"
+    : "rgba(255,255,255,0.92)";
+  ctx.strokeText(label, s / 2, s / 2);
+  ctx.lineWidth = Math.max(2, Math.round(s * 0.01));
+  ctx.strokeStyle = hover ? "rgba(15,23,42,0.35)" : "rgba(15,23,42,0.22)";
+  ctx.strokeText(label, s / 2, s / 2);
+  ctx.fillStyle = "#0f172a";
   ctx.fillText(label, s / 2, s / 2);
 }
 
@@ -189,10 +196,16 @@ function makeFaceTexture(label: string, hover = false) {
   const canvas = document.createElement("canvas");
   canvas.width = FACE_PX;
   canvas.height = FACE_PX;
-  paintFace(canvas.getContext("2d")!, label, hover);
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  paintFace(ctx, label, hover);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   return tex;
 }

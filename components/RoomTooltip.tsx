@@ -12,6 +12,7 @@ import {
   roomFlowVolume,
   roomVentilationColorValue,
   ventilationFlowRole,
+  VENT_FLOW_HEX,
 } from "@/lib/ventilation";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
@@ -114,6 +115,16 @@ function RoomInfoBody({
     neutral: "ventRoleNeutral",
   };
 
+  const roleHex: Record<
+    ReturnType<typeof ventilationFlowRole>,
+    string | undefined
+  > = {
+    supply: VENT_FLOW_HEX.zuluft,
+    extract: VENT_FLOW_HEX.abluft,
+    overflow: VENT_FLOW_HEX.uberstrom,
+    neutral: undefined,
+  };
+
   const metricRow = (
     labelKey: UiTextKey,
     value: string,
@@ -168,8 +179,16 @@ function RoomInfoBody({
         <div className="my-0.5 h-px bg-white/40" />
         {ventilation ? (
           <div className="space-y-0.5">
-            {metricRow("abluftVolume", formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)))}
-            {metricRow("zuluftVolume", formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)))}
+            {metricRow(
+              "abluftVolume",
+              formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)),
+              VENT_FLOW_HEX.abluft,
+            )}
+            {metricRow(
+              "zuluftVolume",
+              formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)),
+              VENT_FLOW_HEX.zuluft,
+            )}
             {metricRow("luftungHeatLoss", formatHeatLoss(v.ventilationHeatLoss), loadColor)}
             {v.zoneName
               ? metricRow("usageZone", v.zoneName)
@@ -225,8 +244,16 @@ function RoomInfoBody({
       <div className="mt-2 space-y-1.5 text-xs">
         {ventilation ? (
           <>
-            {metricRow("abluftVolume", formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)))}
-            {metricRow("zuluftVolume", formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)))}
+            {metricRow(
+              "abluftVolume",
+              formatFlowVolume(Math.max(v.abluftVolume, v.overflowVolume)),
+              VENT_FLOW_HEX.abluft,
+            )}
+            {metricRow(
+              "zuluftVolume",
+              formatFlowVolume(Math.max(v.zuluftVolume, v.aldVolume)),
+              VENT_FLOW_HEX.zuluft,
+            )}
             {metricRow("aldVolume", formatFlowVolume(v.aldVolume))}
             {metricRow("luftungHeatLoss", formatHeatLoss(v.ventilationHeatLoss), loadColor)}
             {v.hasVentSystem
@@ -235,6 +262,7 @@ function RoomInfoBody({
             {metricRow(
               "ventFlowType",
               t(uiLanguage, roleKey[ventilationFlowRole(room)]),
+              roleHex[ventilationFlowRole(room)],
             )}
             {v.zoneName ? metricRow("usageZone", v.zoneName) : null}
             {v.ventilationZoneName

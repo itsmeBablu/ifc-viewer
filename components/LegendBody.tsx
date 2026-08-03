@@ -98,6 +98,8 @@ export default function LegendBody({
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
+  const autoFocusSelection = useAppStore((s) => s.autoFocusSelection);
+  const setAutoFocusSelection = useAppStore((s) => s.setAutoFocusSelection);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteContext, setPaletteContext] = useState<"load" | "temperature">(
     "load",
@@ -254,7 +256,37 @@ export default function LegendBody({
             />
           ) : (
             !compact && (
-              <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className={heading.panel}>{t(uiLanguage, "legend")}</p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoFocusSelection}
+                  title={t(uiLanguage, "autoFocusHint")}
+                  aria-label={t(uiLanguage, "autoFocus")}
+                  onClick={() => setAutoFocusSelection(!autoFocusSelection)}
+                  className={`pdf-capture-hide flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 transition-colors ${
+                    autoFocusSelection
+                      ? "border-amber-300/80 bg-amber-200/70 text-amber-950"
+                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
+                  }`}
+                >
+                  <span
+                    className={`relative h-3.5 w-6 shrink-0 rounded-full transition-colors ${
+                      autoFocusSelection ? "bg-amber-500" : "bg-zinc-300/80"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-2.5 w-2.5 rounded-full bg-white shadow transition-transform ${
+                        autoFocusSelection ? "translate-x-2.5" : "translate-x-0"
+                      }`}
+                    />
+                  </span>
+                  <span className="text-[9px] font-semibold tracking-wide whitespace-nowrap">
+                    {t(uiLanguage, "autoFocus")}
+                  </span>
+                </button>
+              </div>
             )
           )
         )}

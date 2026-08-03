@@ -150,6 +150,7 @@ export async function captureAllPagesAssets(
   const floors = floorsWithRooms(store.floors, store.rooms);
   const sections: PdfModeSection[] = [];
 
+  useAppStore.getState().setPdfCaptureActive(true);
   try {
     if (store.isPresentationView) {
       setPresentationView(false);
@@ -204,6 +205,7 @@ export async function captureAllPagesAssets(
 
     return { sections };
   } finally {
+    useAppStore.getState().setPdfCaptureActive(false);
     const s = useAppStore.getState();
     setCompareBothModes(restore.compareBothModes);
     setDataViewMode(restore.dataViewMode);
@@ -271,6 +273,7 @@ export async function capturePresentationAssets(
     presentation: PresentationPdfImages;
   }> = [];
 
+  useAppStore.getState().setPdfCaptureActive(true);
   try {
     for (const mode of modes) {
       report(`${MODE_LABEL[mode]} — presentation…`);
@@ -309,6 +312,7 @@ export async function capturePresentationAssets(
 
     return { sections };
   } finally {
+    useAppStore.getState().setPdfCaptureActive(false);
     setCompareBothModes(restore.compareBothModes);
     setDataViewMode(restore.dataViewMode);
     const s = useAppStore.getState();

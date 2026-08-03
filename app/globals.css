@@ -619,3 +619,17 @@ body {
 *::-webkit-scrollbar-thumb:hover {
   background: rgba(82, 82, 91, 0.5);
 }
+
+/* Hidden during PDF capture / browser print (legend chrome, mode icons, autofocus). */
+body.pdf-capturing .pdf-capture-hide {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+@media print {
+  .pdf-capture-hide {
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}

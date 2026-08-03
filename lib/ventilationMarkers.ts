@@ -10,10 +10,12 @@ import {
   roomSuppliesZoneZuluft,
   roomVentilationZoneKey,
   roomIsOverflowTransfer,
+  VENT_FLOW_COLORS,
 } from "./ventilation";
 
 const ARROW_COUNT = 3;
 const STANDARD_ARROW_LEN = 0.88;
+const ABLUFT_ARROW_LEN = 1.05;
 const STANDARD_TRAVEL = 0.42;
 const OUTSIDE_PAD = 0.32;
 const INTERIOR_SUPPLY_PAD = 0.07;
@@ -647,24 +649,55 @@ function makeArrow(
   color: number,
   direction: THREE.Vector3,
   length: number,
+  opts?: { thick?: boolean },
 ): THREE.ArrowHelper {
+  const thick = opts?.thick === true;
   const dir = direction.clone().normalize();
+  const headLen = length * (thick ? 0.48 : 0.32);
+  const headWidth = length * (thick ? 0.4 : 0.19);
   const arrow = new THREE.ArrowHelper(
     dir,
     new THREE.Vector3(0, 0, 0),
     length,
     color,
-    length * 0.32,
-    length * 0.19,
+    headLen,
+    headWidth,
   );
   arrow.line.material = new THREE.LineBasicMaterial({
     color,
     transparent: true,
-    opacity: 0.95,
+    opacity: thick ? 1 : 0.95,
     depthTest: true,
   });
-  (arrow.cone.material as THREE.MeshBasicMaterial).transparent = true;
-  (arrow.cone.material as THREE.MeshBasicMaterial).opacity = 0.92;
+  const coneMat = arrow.cone.material as THREE.MeshBasicMaterial;
+  coneMat.transparent = true;
+  coneMat.opacity = thick ? 1 : 0.92;
+  if (thick) {
+    // Extra shaft cylinder — LineBasicMaterial width is ignored in WebGL.
+    const shaftLen = Math.max(0.08, length - headLen * 0.85);
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        length * 0.07,
+        length * 0.07,
+        shaftLen,
+        10,
+      ),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.98,
+        depthTest: true,
+      }),
+    );
+    shaft.position.copy(dir.clone().multiplyScalar(shaftLen * 0.5));
+    const quat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir,
+    );
+    shaft.setRotationFromQuaternion(quat);
+    arrow.add(shaft);
+    arrow.userData.thickShaft = shaft;
+  }
   return arrow;
 }
 
@@ -726,7 +759,11 @@ function makeSupplyFlowCluster(
   anchor.y = y;
 
   for (let i = 0; i < ARROW_COUNT; i++) {
-    const arrow = makeArrow(0x22c55e, out.clone().negate(), STANDARD_ARROW_LEN);
+    const arrow = makeArrow(
+      VENT_FLOW_COLORS.zuluft,
+      out.clone().negate(),
+      STANDARD_ARROW_LEN,
+    );
     const lat = lateral.clone().multiplyScalar((i - 1) * spread);
     const base = anchor.clone().add(lat);
     arrow.position.copy(base).add(out.clone().multiplyScalar(travel));
@@ -756,7 +793,7 @@ function makeUpwardFlowCluster(yBase: number, spanX: number): FlowCluster {
   const spread = Math.min(spanX * 0.2, STANDARD_ARROW_LEN * 0.42);
 
   for (let i = 0; i < ARROW_COUNT; i++) {
-    const arrow = makeArrow(0xef4444, up, STANDARD_ARROW_LEN);
+    const arrow = makeArrow(VENT_FLOW_COLORS.abluft, up, ABLUFT_ARROW_LEN);
     const base = new THREE.Vector3((i - 1) * spread, yBase, 0);
     arrow.position.copy(base);
     root.add(arrow);
@@ -789,14 +826,14 @@ function makeOverflowSwirl(radius: number, y: number): FlowCluster {
 
   const r = Math.max(0.28, radius);
   const arrowLen = Math.min(r * 0.72, STANDARD_ARROW_LEN * 0.95);
-  const color = 0x3b82f6;
+  const color = VENT_FLOW_COLORS.uberstrom;
   const arrowCount = 5;
 
   // Soft path ring — air circulation track
   const ringMat = new THREE.MeshStandardMaterial({
     color,
-    emissive: 0x2563eb,
-    emissiveIntensity: 0.45,
+    emissive: VENT_FLOW_COLORS.uberstrom,
+    emissiveIntensity: 0.35,
     transparent: true,
     opacity: 0.55,
     side: THREE.DoubleSide,
@@ -877,7 +914,7 @@ function makeOverflowSwirl(radius: number, y: number): FlowCluster {
     const tx = -Math.sin(angle);
     const tz = Math.cos(angle);
     const tangent = new THREE.Vector3(tx, 0, tz);
-    const arrow = makeArrow(0x60a5fa, tangent, innerLen);
+    const arrow = makeArrow(VENT_FLOW_COLORS.uberstrom, tangent, innerLen);
     arrow.position.set(px, 0.02, pz);
     arrow.position.add(tangent.clone().multiplyScalar(-innerLen * 0.35));
     inner.add(arrow);
