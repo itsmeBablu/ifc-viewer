@@ -16,7 +16,6 @@ import {
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
-import SeasonalBgToggle from "./SeasonalBgToggle";
 import {
   groupRoomsByVentilationZone,
   summaryVentilationZoneKey,
@@ -155,7 +154,6 @@ export default function PresentationOptionsMenu({
   const setPresentationIsolate = useAppStore((s) => s.setPresentationIsolate);
   const compareBothModes = useAppStore((s) => s.compareBothModes);
   const setCompareBothModes = useAppStore((s) => s.setCompareBothModes);
-  const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
   const selectedVentilationZoneKey = useAppStore(
@@ -334,16 +332,6 @@ export default function PresentationOptionsMenu({
             </button>
           </div>
 
-          <div
-            className={`flex items-center justify-between gap-2 overflow-hidden rounded-xl transition-all duration-300 ease-out ${
-              compact ? "p-1.5" : "p-2"
-            } ${autoSceneBackground ? activeRow : idleRow}`}
-          >
-            <p className="text-[11px] font-semibold text-[var(--text-strong)]">
-              {t(uiLanguage, "seasonalBg")}
-            </p>
-            <SeasonalBgToggle />
-          </div>
         </div>
 
         <div className="space-y-1">

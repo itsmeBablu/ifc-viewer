@@ -30,7 +30,11 @@ export default function LiquidGlassSpinner({
       <div className="liquid-glass-spinner__orbit" aria-hidden>
         <div className="liquid-glass-spinner__ring" />
       </div>
-      {!hollow ? <div className="liquid-glass-spinner__glass" aria-hidden /> : null}
+      {hollow ? (
+        <div className="liquid-glass-spinner__core" aria-hidden />
+      ) : (
+        <div className="liquid-glass-spinner__glass" aria-hidden />
+      )}
       {label ? (
         <p className="liquid-glass-spinner__label">{label}</p>
       ) : null}
