@@ -90,3 +90,23 @@ public/wasm/                    web-ifc WASM binaries
 | `npm run build`| Production build         |
 | `npm run start`| Serve production build   |
 | `npm run lint` | ESLint                   |
+
+## Codebase memory (MCP)
+
+This repo uses [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) (CBM) to give coding agents (Claude Code, Codex, etc.) a structural knowledge graph of the codebase instead of file-by-file grep/read exploration.
+
+**Setup (one-time per machine):**
+
+```bash
+./scripts/setup-codebase-memory-mcp.sh
+```
+
+This downloads the signed CBM binary from the official installer (`install.sh` from the repo above), auto-configures any detected coding agent's MCP entry, enables `auto_index`/`auto_watch`, and indexes this repo. Restart your coding agent afterwards.
+
+Once set up, the agent re-indexes/refreshes automatically at the start of each MCP session (git-based change detection via the background watcher) — no manual re-index needed day to day.
+
+The compressed graph at `.codebase-memory/graph.db.zst` is committed so teammates can bootstrap from it instead of a full re-index on first clone. To rebuild it manually:
+
+```bash
+codebase-memory-mcp cli index_repository --repo-path "$PWD" --persistence true
+```
