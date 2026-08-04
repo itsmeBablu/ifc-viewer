@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import LegendSwatchPresetGrid from "./LegendSwatchPresetGrid";
+import HoverTip from "./HoverTip";
 import { t, type UiLanguage } from "@/lib/i18n";
 import type { ColorStop } from "@/lib/colorMapping";
 import type { LegendColorMode } from "@/lib/colorMapping";
@@ -44,15 +45,24 @@ export default function LegendPalettePanel({
       }`}
     >
       {preview ? preview : null}
-      <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
-        {t(uiLanguage, "swatchPresets")}
-      </p>
-      <LegendSwatchPresetGrid
-        mode={mode}
-        compact={compact}
-        activePresetId={activePresetId}
-        onSelect={onSelectPreset}
-      />
+      <HoverTip
+        label={t(uiLanguage, "swatchPresets")}
+        hint={t(uiLanguage, "swatchPresetHint")}
+        placement="below"
+        className="block w-full"
+      >
+        <div>
+          <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
+            {t(uiLanguage, "swatchPresets")}
+          </p>
+          <LegendSwatchPresetGrid
+            mode={mode}
+            compact={compact}
+            activePresetId={activePresetId}
+            onSelect={onSelectPreset}
+          />
+        </div>
+      </HoverTip>
       <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
         {t(uiLanguage, "editSwatchColors")}
       </p>

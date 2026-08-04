@@ -31,9 +31,6 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
-import {
-  legendRangesFromRooms,
-} from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
 import { LEGEND_SWATCH_PRESETS } from "@/lib/legendSwatchPresets";
@@ -100,10 +97,6 @@ export default function ViewerApp() {
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
   const setRooms = useAppStore((s) => s.setRooms);
-  const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
-  const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
-  const setLuftungRange = useAppStore((s) => s.setLuftungRange);
-  const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const setIsLoadingModel = useAppStore((s) => s.setIsLoadingModel);
   const setLoadError = useAppStore((s) => s.setLoadError);
   const setLoadProgress = useAppStore((s) => s.setLoadProgress);
@@ -266,19 +259,9 @@ export default function ViewerApp() {
         loadedRef.current = result;
         setFloors(result.floors);
         setRooms(result.rooms);
-        // Scale legend stops to this IFC (e.g. 72 W/m² → 0…75; insert missing °C).
-        const legend = legendRangesFromRooms(result.rooms);
-        setHeizlastRange(legend.heizlast);
-        setKuhllastRange(legend.kuhllast);
-        setLuftungRange(legend.luftung);
-        setTemperatureRange(legend.temperature);
-        useAppStore.getState().setCoolingTemperatureRange(legend.coolingTemperature);
-        // Always map colors to Schnellpalette #1 after ranges update.
-        const store = useAppStore.getState();
-        store.applyLegendSwatchPreset("heizlast", "thermal-classic");
-        store.applyLegendSwatchPreset("kuhllast", "thermal-classic");
-        store.applyLegendSwatchPreset("luftung", "thermal-classic");
-        store.applyLegendSwatchPreset("temperature", "thermal-classic");
+        // Auto-fit load + temperature legends to this IFC (dense where rooms
+        // sit; reserve end color for ≤~10% outliers) and map Thermal Classic.
+        useAppStore.getState().fitLegendToRooms(result.rooms);
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
         debugLog(
@@ -305,10 +288,6 @@ export default function ViewerApp() {
       setLoadError,
       setLoadProgress,
       setRooms,
-      setHeizlastRange,
-      setKuhllastRange,
-      setLuftungRange,
-      setTemperatureRange,
     ],
   );
 

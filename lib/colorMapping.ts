@@ -42,16 +42,16 @@ export type ColorPalette = {
   temperatureStops: ColorStop[];
 };
 
+/** Thermal Classic standard — mid blue → thick blue → gold → orange → red → brown. */
 const STANDARD_HEIZLAST: ColorStop[] = [
   { value: Number.NEGATIVE_INFINITY, color: "#87CEEB" },
-  { value: 0, color: "#0050FF" },
+  { value: 0, color: "#3D7EFF" },
   { value: 10, color: "#0050FF" },
-  { value: 20, color: "#FFFFB4" },
-  { value: 25, color: "#FFDC00" },
-  { value: 30, color: "#FFDC00" },
-  { value: 40, color: "#FF8C00" },
-  { value: 50, color: "#DC0000" },
-  { value: Number.POSITIVE_INFINITY, color: "#7A3300" },
+  { value: 20, color: "#FFDC00" },
+  { value: 30, color: "#FF8C00" },
+  { value: 40, color: "#DC0000" },
+  { value: 50, color: "#7A3300" },
+  { value: Number.POSITIVE_INFINITY, color: "#4A1F00" },
 ];
 
 /** Summer cooling — vivid sky → cobalt (readable on glass rooms in 3D). */
@@ -75,13 +75,12 @@ const STANDARD_TEMP: ColorStop[] = [
   { value: 24, color: "#E8590C" },
 ];
 
-/** Soft cool pastels — muted blues / mint / butter / peach / rose. */
+/** Soft pastels — light blue → soft blue → butter → peach → rose. */
 const SOFT_HEIZLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#C5E8F5" },
-  { value: 0, color: "#8BB8E8" },
+  { value: Number.NEGATIVE_INFINITY, color: "#E4F4FB" },
+  { value: 0, color: "#C5E8F5" },
   { value: 10, color: "#8BB8E8" },
   { value: 20, color: "#F5F0C8" },
-  { value: 25, color: "#E8D98A" },
   { value: 30, color: "#E8D98A" },
   { value: 40, color: "#E8B089" },
   { value: 50, color: "#D98989" },
@@ -142,16 +141,15 @@ const WARM_TEMP: ColorStop[] = [
   { value: 24, color: "#E89078" },
 ];
 
-/** Dark night palette — deep blues / amber / ember. */
+/** Dark night — soft blue → amber → ember (warm mids early). */
 const DARK_HEIZLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#1A2740" },
-  { value: 0, color: "#2E4A7A" },
-  { value: 10, color: "#3A5F9E" },
-  { value: 20, color: "#6B7A4A" },
-  { value: 25, color: "#B8922E" },
-  { value: 30, color: "#D4A017" },
-  { value: 40, color: "#C45C1A" },
-  { value: 50, color: "#A82828" },
+  { value: Number.NEGATIVE_INFINITY, color: "#2A3A55" },
+  { value: 0, color: "#3A5F9E" },
+  { value: 10, color: "#B8922E" },
+  { value: 20, color: "#D4A017" },
+  { value: 30, color: "#C45C1A" },
+  { value: 40, color: "#A82828" },
+  { value: 50, color: "#8B1A1A" },
   { value: Number.POSITIVE_INFINITY, color: "#5C1818" },
 ];
 
@@ -298,6 +296,12 @@ export function niceCeil(value: number, step: number): number {
   return Math.ceil(value / step) * step;
 }
 
+/** Round to nearest step (for distribution-based interior stops). */
+export function niceRound(value: number, step: number): number {
+  if (!Number.isFinite(value) || step <= 0) return 0;
+  return Math.round(value / step) * step;
+}
+
 /** Evenly spaced 0…top stops (6 by default). */
 export function buildEvenLegendRange(
   top: number,
@@ -317,6 +321,208 @@ export function buildEvenLegendRange(
     return buildEvenLegendRange(safeTop, MIN_LEGEND_STOPS);
   }
   return sorted;
+}
+
+/**
+ * Place legend stops where rooms actually sit (quantiles), not only evenly.
+ * Always keeps 0 and `top`. Falls back to even spacing when too few samples.
+ *
+ * When `denseBand` is set, most interior stops sit between the bulk P10–P90
+ * so a cluster (e.g. 20–40 W/m²) gets most of the color contrast.
+ */
+export function buildDistributionLegendRange(
+  loads: number[],
+  top: number,
+  stopCount = 6,
+  step = 5,
+  opts?: { minStops?: number; denseBand?: boolean },
+): number[] {
+  const minStops = opts?.minStops ?? MIN_LEGEND_STOPS;
+  const n = Math.max(
+    minStops,
+    Math.min(MAX_LEGEND_STOPS, Math.round(stopCount)),
+  );
+  const safeTop = Math.max(step, niceCeil(top, step));
+  const vals = loads
+    .filter((v) => Number.isFinite(v) && v >= 0 && v <= safeTop * 1.001)
+    .sort((a, b) => a - b);
+
+  if (vals.length < 3) {
+    return buildEvenLegendRange(safeTop, Math.max(n, MIN_LEGEND_STOPS));
+  }
+
+  const stops = new Set<number>([0, safeTop]);
+  const interior = Math.max(0, n - 2);
+
+  if (opts?.denseBand && interior > 0) {
+    // Pack contrast into the band where most rooms sit (central ~80%).
+    const loIdx = Math.min(
+      vals.length - 1,
+      Math.max(0, Math.floor((vals.length - 1) * 0.1)),
+    );
+    const hiIdx = Math.min(
+      vals.length - 1,
+      Math.max(loIdx, Math.floor((vals.length - 1) * 0.9)),
+    );
+    let bandLo = niceRound(vals[loIdx]!, step);
+    let bandHi = niceRound(vals[hiIdx]!, step);
+    // Keep an interior edge under the bulk ceiling when P90 sits on `top`.
+    if (bandHi >= safeTop && safeTop > step) {
+      const below = vals
+        .map((v) => niceRound(v, step))
+        .filter((v) => v < safeTop);
+      if (below.length) bandHi = below[below.length - 1]!;
+    }
+    bandLo = Math.max(0, Math.min(safeTop, bandLo));
+    bandHi = Math.max(0, Math.min(safeTop, bandHi));
+    if (bandHi > bandLo) {
+      stops.add(bandLo);
+      stops.add(bandHi);
+      const midSlots = Math.max(0, interior - 2);
+      for (let i = 1; i <= midSlots; i++) {
+        const t = i / (midSlots + 1);
+        const idx = Math.min(
+          vals.length - 1,
+          Math.max(loIdx, Math.round(loIdx + t * (hiIdx - loIdx))),
+        );
+        const fromRoom = niceRound(vals[idx]!, step);
+        const target = niceRound(bandLo + (bandHi - bandLo) * t, step);
+        const blended = niceRound(target * 0.35 + fromRoom * 0.65, step);
+        stops.add(Math.max(0, Math.min(safeTop, blended)));
+      }
+    } else {
+      for (let i = 1; i <= interior; i++) {
+        const t = i / (interior + 1);
+        const idx = Math.min(
+          vals.length - 1,
+          Math.max(0, Math.ceil(vals.length * t) - 1),
+        );
+        stops.add(
+          Math.max(0, Math.min(safeTop, niceRound(vals[idx]!, step))),
+        );
+      }
+    }
+  } else {
+    for (let i = 1; i <= interior; i++) {
+      const t = i / (interior + 1);
+      const idx = Math.min(
+        vals.length - 1,
+        Math.max(0, Math.ceil(vals.length * t) - 1),
+      );
+      const rounded = niceRound(vals[idx]!, step);
+      stops.add(Math.max(0, Math.min(safeTop, rounded)));
+    }
+  }
+
+  let sorted = [...stops].sort((a, b) => a - b);
+
+  // Fill largest gaps; with denseBand skip the empty 0→first-room stretch.
+  while (sorted.length < n) {
+    let bestI = -1;
+    let bestGap = -1;
+    const gapStart = opts?.denseBand && sorted[0] === 0 ? 1 : 0;
+    for (let i = gapStart; i < sorted.length - 1; i++) {
+      const gap = sorted[i + 1]! - sorted[i]!;
+      if (gap > bestGap) {
+        bestGap = gap;
+        bestI = i;
+      }
+    }
+    if (bestI < 0 || bestGap <= step) break;
+    const mid = niceRound((sorted[bestI]! + sorted[bestI + 1]!) / 2, step);
+    if (mid <= sorted[bestI]! || mid >= sorted[bestI + 1]!) break;
+    stops.add(mid);
+    sorted = [...stops].sort((a, b) => a - b);
+  }
+
+  if (sorted.length < minStops) {
+    return buildEvenLegendRange(safeTop, Math.max(n, MIN_LEGEND_STOPS));
+  }
+  if (sorted.length <= n) return sorted;
+  return thinLegendStops(sorted, n, new Set([0, safeTop]));
+}
+
+/** Thin a sorted stop list to `n` while keeping required anchors. */
+function thinLegendStops(
+  sorted: number[],
+  n: number,
+  keep: Set<number>,
+): number[] {
+  if (sorted.length <= n) return sorted;
+  const required = sorted.filter((v) => keep.has(v));
+  const optional = sorted.filter((v) => !keep.has(v));
+  const slots = Math.max(0, n - required.length);
+  if (slots <= 0) {
+    return [...new Set([sorted[0]!, ...required, sorted[sorted.length - 1]!])]
+      .sort((a, b) => a - b)
+      .slice(0, n);
+  }
+  const picked: number[] = [];
+  for (let i = 0; i < slots && optional.length; i++) {
+    const idx = Math.round((i * (optional.length - 1)) / Math.max(1, slots - 1));
+    picked.push(optional[Math.min(optional.length - 1, idx)]!);
+  }
+  return [...new Set([...required, ...picked])].sort((a, b) => a - b);
+}
+
+/**
+ * Heizlast / Lüftung auto range from room samples.
+ *
+ * Always packs color stops into where most rooms sit (dense band).
+ * When ≤~10% of rooms spike above the bulk, reserves the last stop/color
+ * for those outliers (e.g. …, 50, 80).
+ */
+export function pickAdaptivePositiveLoadRange(
+  loads: number[],
+  opts: { minTop: number; step: number; stopCount: number },
+  emptyDefault: number[],
+): number[] {
+  const vals = loads.filter((v) => Number.isFinite(v) && v >= 0);
+  if (!vals.length) return [...emptyDefault];
+
+  const scale = analyzeLoadScale(vals, {
+    minTop: opts.minTop,
+    step: opts.step,
+  });
+  const n = Math.max(
+    MIN_LEGEND_STOPS,
+    Math.min(MAX_LEGEND_STOPS, opts.stopCount),
+  );
+
+  // Adaptive end-stop when a small share of rooms spike (~≤10%).
+  const maxSparse = Math.max(1, Math.ceil(vals.length * 0.1));
+  const fewOutliers =
+    scale.absoluteTop > scale.typicalTop &&
+    scale.outlierCount >= 1 &&
+    scale.outlierCount <= maxSparse;
+
+  if (fewOutliers) {
+    const bulkCount = n - 1;
+    const bulk = buildDistributionLegendRange(
+      vals,
+      scale.typicalTop,
+      bulkCount,
+      opts.step,
+      { minStops: Math.max(3, bulkCount), denseBand: true },
+    );
+    const merged = [
+      ...new Set([
+        ...bulk.filter((v) => v < scale.absoluteTop),
+        scale.typicalTop,
+        scale.absoluteTop,
+      ]),
+    ].sort((a, b) => a - b);
+    return thinLegendStops(
+      merged,
+      n,
+      new Set([0, scale.typicalTop, scale.absoluteTop]),
+    );
+  }
+
+  // Always fit stops to where rooms sit (e.g. denser colors in 20–40 W/m²).
+  return buildDistributionLegendRange(vals, scale.typicalTop, n, opts.step, {
+    denseBand: true,
+  });
 }
 
 const HEAT_TOP_LADDER = [
@@ -365,10 +571,13 @@ export function buildLoadRangePresetsFromLoads(
     if (t > 0 && !tops.includes(t)) tops.push(t);
   }
   const presets = buildPresetsForTops(tops.sort((a, b) => a - b));
-  // Put recommended scale first and tag it.
-  const typical = buildEvenLegendRange(scale.typicalTop, 6);
+  const typical = pickAdaptivePositiveLoadRange(
+    loads,
+    { minTop: 50, step: 5, stopCount: 6 },
+    DEFAULT_HEIZLAST_RANGE,
+  );
   const withoutDup = presets.filter(
-    (p) => p.values[p.values.length - 1] !== scale.typicalTop,
+    (p) => p.values.join(",") !== typical.join(","),
   );
   return [
     {
@@ -420,9 +629,13 @@ export function buildLuftungRangePresetsFromLosses(
     tops.sort((a, b) => a - b),
     stopCount,
   );
-  const typical = buildEvenLegendRange(scale.typicalTop, stopCount);
+  const typical = pickAdaptivePositiveLoadRange(
+    losses,
+    { minTop: 200, step: 50, stopCount },
+    DEFAULT_LUFTUNG_RANGE,
+  );
   const withoutDup = presets.filter(
-    (p) => p.values[p.values.length - 1] !== scale.typicalTop,
+    (p) => p.values.join(",") !== typical.join(","),
   );
   return [
     {
@@ -437,9 +650,9 @@ export function buildLuftungRangePresetsFromLosses(
 /**
  * Choose a legend ceiling from room counts, not only the absolute max.
  *
- * If a few rooms spike (e.g. 2× 100 W/m² while most stay ≤60), scale to the
- * bulk (~P90) so mid-range rooms keep color contrast. Sparse outliers still
- * map to the top legend color. When many rooms sit near the max, stretch to max.
+ * If a small share of rooms spike (≤10%, e.g. 1 of ~15 at 80 W/m² while most
+ * stay ≤50), typicalTop stays on the bulk so mid-band rooms keep color contrast,
+ * and absoluteTop holds the peak for a reserved end color. Otherwise stretch to max.
  */
 export function analyzeLoadScale(
   loads: number[],
@@ -468,28 +681,34 @@ export function analyzeLoadScale(
   const absoluteMax = vals[n - 1]!;
   const absoluteTop = Math.max(minTop, niceCeil(absoluteMax, step));
 
-  // Value that covers ~90% of rooms (count-based, not just index guess).
-  const coverIdx = Math.min(n - 1, Math.max(0, Math.ceil(n * percentile) - 1));
-  const pIdx = Math.min(n - 1, Math.floor((n - 1) * percentile));
-  const bulkRaw = Math.max(vals[coverIdx]!, vals[pIdx]!);
+  // Peel a high cluster when it is a small share of rooms and clearly above the rest.
+  let peakStart = n - 1;
+  const peak = absoluteMax;
+  while (peakStart > 0 && vals[peakStart - 1]! >= peak * 0.92) {
+    peakStart -= 1;
+  }
+  const peakCount = n - peakStart;
+  const belowPeak = peakStart > 0 ? vals[peakStart - 1]! : 0;
+  // ~≤10% of rooms (ceil so small IFCs still allow 1–2 hot rooms).
+  const maxSparse = Math.max(1, Math.ceil(n * 0.1));
+  const sparsePeak =
+    peakCount >= 1 &&
+    peakCount <= maxSparse &&
+    peakStart > 0 &&
+    peak > belowPeak * 1.15 &&
+    peak - belowPeak >= step * 0.5;
 
-  // Rooms clearly above the bulk band.
-  const bulkGate = bulkRaw * 1.08;
-  const outlierCount = vals.filter((v) => v > bulkGate).length;
-  const outlierShare = outlierCount / n;
-  const sparseOutliers =
-    outlierCount > 0 && (outlierCount <= 2 || outlierShare <= 0.08);
+  const bulkVals = sparsePeak ? vals.slice(0, peakStart) : vals;
+  const outlierCount = sparsePeak ? peakCount : 0;
+  const bN = bulkVals.length;
+  const pIdx = Math.min(bN - 1, Math.max(0, Math.floor((bN - 1) * percentile)));
+  const bulkRaw = bulkVals[pIdx] ?? absoluteMax;
 
   let typicalRaw: number;
-  if (absoluteMax <= bulkRaw * 1.15) {
-    // Peak is close to bulk — use full max.
+  if (!sparsePeak || absoluteMax <= bulkRaw * 1.15) {
     typicalRaw = absoluteMax;
-  } else if (sparseOutliers) {
-    // A few hot rooms: keep mid-band contrast (20–60 stays readable).
-    typicalRaw = bulkRaw;
   } else {
-    // Many high rooms: stretch toward absolute max.
-    typicalRaw = absoluteMax;
+    typicalRaw = bulkRaw;
   }
 
   const typicalTop = Math.max(minTop, niceCeil(typicalRaw, step));
@@ -497,14 +716,16 @@ export function analyzeLoadScale(
 }
 
 /**
- * Pick Heizlast / Kühllast range from room W/m² values (outlier-aware).
- * Example: most ≤60, two rooms at 100 → [0, 12, 24, 36, 48, 60].
+ * Pick Heizlast range from room W/m² values.
+ * Even scale by default; if ≤10% of rooms are outliers, densify colors in the
+ * bulk band and reserve the last stop for those rooms.
  */
 export function pickHeizlastRangeFromLoads(heatLoads: number[]): number[] {
-  const vals = heatLoads.filter((v) => Number.isFinite(v) && v >= 0);
-  if (!vals.length) return [...DEFAULT_HEIZLAST_RANGE];
-  const { typicalTop } = analyzeLoadScale(vals, { minTop: 50, step: 5 });
-  return buildEvenLegendRange(typicalTop, 6);
+  return pickAdaptivePositiveLoadRange(
+    heatLoads,
+    { minTop: 50, step: 5, stopCount: 6 },
+    DEFAULT_HEIZLAST_RANGE,
+  );
 }
 
 /** Solar Computer: keep signed cooling range 0 → −top. */
@@ -519,87 +740,127 @@ export function pickKuhllastRangeFromLoads(coolLoads: number[]): number[] {
   return buildEvenLegendRange(typicalTop, 6).map((v) => -v);
 }
 
-/** Pick Lüftung Wärmeverlust (W) range from room losses (outlier-aware). */
+/** Pick Lüftung Wärmeverlust (W) range — same even/adaptive rules as Heizlast. */
 export function pickLuftungRangeFromLosses(losses: number[]): number[] {
   const vals = losses.filter((v) => Number.isFinite(v) && v >= 0);
-  if (!vals.length) return [...DEFAULT_LUFTUNG_RANGE];
-  const { typicalTop } = analyzeLoadScale(vals, { minTop: 200, step: 50 });
-  return buildEvenLegendRange(typicalTop, typicalTop >= 400 ? 7 : 6);
+  const scale = analyzeLoadScale(vals, { minTop: 200, step: 50 });
+  const stopCount = scale.typicalTop >= 400 || scale.absoluteTop >= 400 ? 7 : 6;
+  return pickAdaptivePositiveLoadRange(
+    losses,
+    { minTop: 200, step: 50, stopCount },
+    DEFAULT_LUFTUNG_RANGE,
+  );
 }
 
 /**
- * Merge room temperatures into the legend in sorted order
- * (e.g. 12°C sits between 6° and 15°).
+ * Auto °C legend from room temperatures (upload / project fit).
+ * Packs stops where temps cluster; reserves the top stop when ≤~10% of rooms
+ * are clearly hotter than the bulk. Does not force default 0/6/15 anchors.
+ */
+export function pickTemperatureRangeFromRooms(
+  roomTemps: number[],
+  emptyDefault: number[] = DEFAULT_TEMPERATURE_RANGE,
+): number[] {
+  const vals = roomTemps
+    .filter((t) => Number.isFinite(t))
+    .map((t) => Math.round(t))
+    .sort((a, b) => a - b);
+  if (!vals.length) return [...emptyDefault];
+
+  const n = MIN_LEGEND_STOPS;
+  const total = vals.length;
+  const peak = vals[total - 1]!;
+  let peakStart = total - 1;
+  while (peakStart > 0 && vals[peakStart - 1]! >= peak - 1) {
+    peakStart -= 1;
+  }
+  const peakCount = total - peakStart;
+  const maxSparse = Math.max(1, Math.ceil(total * 0.1));
+  const belowPeak = peakStart > 0 ? vals[peakStart - 1]! : peak;
+  const sparseHot =
+    peakCount >= 1 &&
+    peakCount <= maxSparse &&
+    peakStart > 0 &&
+    peak - belowPeak >= 2;
+
+  const bulk = sparseHot ? vals.slice(0, peakStart) : vals;
+  const bulkSlots = sparseHot ? n - 1 : n;
+  const stops = new Set<number>();
+
+  if (bulk.length === 1) {
+    const t = bulk[0]!;
+    const half = Math.floor((bulkSlots - 1) / 2);
+    for (let i = 0; i < bulkSlots; i++) stops.add(t - half + i);
+  } else {
+    for (let i = 0; i < bulkSlots; i++) {
+      const t = bulkSlots === 1 ? 0 : i / (bulkSlots - 1);
+      // Bias interior samples toward the dense central band (P10–P90).
+      const lo = 0.1;
+      const hi = 0.9;
+      const u = lo + (hi - lo) * t;
+      const idx = Math.min(
+        bulk.length - 1,
+        Math.max(0, Math.round(u * (bulk.length - 1))),
+      );
+      // Always pin first/last bulk slots to true bulk min/max.
+      if (i === 0) stops.add(bulk[0]!);
+      else if (i === bulkSlots - 1) stops.add(bulk[bulk.length - 1]!);
+      else stops.add(bulk[idx]!);
+    }
+  }
+
+  if (sparseHot) stops.add(peak);
+
+  let sorted = [...stops].sort((a, b) => a - b);
+
+  while (sorted.length < n) {
+    let bestI = 0;
+    let bestGap = -1;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gap = sorted[i + 1]! - sorted[i]!;
+      if (gap > bestGap) {
+        bestGap = gap;
+        bestI = i;
+      }
+    }
+    if (bestGap <= 1) {
+      sorted = [sorted[0]! - 1, ...sorted, sorted[sorted.length - 1]! + 1];
+      sorted = [...new Set(sorted)].sort((a, b) => a - b);
+      if (sorted.length >= n) break;
+      continue;
+    }
+    const mid = Math.round((sorted[bestI]! + sorted[bestI + 1]!) / 2);
+    if (mid <= sorted[bestI]! || mid >= sorted[bestI + 1]!) break;
+    sorted = [...new Set([...sorted, mid])].sort((a, b) => a - b);
+  }
+
+  if (sorted.length > n) {
+    const keep = new Set<number>([
+      sorted[0]!,
+      sorted[sorted.length - 1]!,
+      ...(sparseHot ? [peak, bulk[bulk.length - 1]!] : []),
+    ]);
+    return thinLegendStops(sorted, n, keep);
+  }
+  return sorted;
+}
+
+/**
+ * Project-fitted °C legend from room temperatures (same as pickTemperatureRangeFromRooms).
+ * `base` is only used when there are no valid room samples.
  */
 export function mergeTemperatureRangeFromRooms(
   roomTemps: number[],
   base: number[] = DEFAULT_TEMPERATURE_RANGE,
 ): number[] {
-  const roomStops = roomTemps
-    .filter((t) => Number.isFinite(t))
-    .map((t) => Math.round(t));
-  const merged = [...new Set([...base, ...roomStops])].sort((a, b) => a - b);
-  if (merged.length === 0) return [...DEFAULT_TEMPERATURE_RANGE];
-
-  if (merged.length <= MAX_LEGEND_STOPS) {
-    if (merged.length >= MIN_LEGEND_STOPS) return merged;
-    // Pad with default base stops until minimum.
-    const padded = [...merged];
-    for (const b of base) {
-      if (padded.length >= MIN_LEGEND_STOPS) break;
-      if (!padded.includes(b)) {
-        padded.push(b);
-        padded.sort((a, c) => a - c);
-      }
-    }
-    return padded.length >= MIN_LEGEND_STOPS
-      ? padded
-      : buildEvenLegendRange(Math.max(24, ...padded), MIN_LEGEND_STOPS);
-  }
-
-  // Too many stops: keep every unique room temp + 0 + extremes, then fill.
-  const roomSet = new Set(roomStops);
-  const must = merged.filter(
-    (v, i, arr) =>
-      v === 0 ||
-      roomSet.has(v) ||
-      i === 0 ||
-      i === arr.length - 1,
-  );
-  const uniqMust = [...new Set(must)].sort((a, b) => a - b);
-  if (uniqMust.length <= MAX_LEGEND_STOPS) {
-    const filled = [...uniqMust];
-    for (const b of base) {
-      if (filled.length >= MAX_LEGEND_STOPS) break;
-      if (!filled.includes(b)) {
-        filled.push(b);
-        filled.sort((a, c) => a - c);
-      }
-    }
-    return filled;
-  }
-
-  // Sample room temps evenly while keeping min/max.
-  const first = uniqMust[0]!;
-  const last = uniqMust[uniqMust.length - 1]!;
-  const mid = uniqMust.slice(1, -1);
-  const keep = MAX_LEGEND_STOPS - 2;
-  const sampled: number[] = [first];
-  if (keep > 0 && mid.length) {
-    for (let i = 0; i < keep; i++) {
-      const idx = Math.round((i * (mid.length - 1)) / Math.max(1, keep - 1));
-      sampled.push(mid[Math.min(mid.length - 1, idx)]!);
-    }
-  }
-  sampled.push(last);
-  return [...new Set(sampled)].sort((a, b) => a - b);
+  return pickTemperatureRangeFromRooms(roomTemps, base);
 }
 
-/** Temperature presets: standard + project-merged (when different). */
+/** Temperature presets: standard + project-fitted auto (when different). */
 export function buildTemperatureRangePresets(
   roomTemps: number[],
 ): LegendRangePreset[] {
-  const project = mergeTemperatureRangeFromRooms(roomTemps);
+  const project = pickTemperatureRangeFromRooms(roomTemps);
   const presets: LegendRangePreset[] = [
     {
       id: "std",
@@ -611,9 +872,9 @@ export function buildTemperatureRangePresets(
     project.length === DEFAULT_TEMPERATURE_RANGE.length &&
     project.every((v, i) => v === DEFAULT_TEMPERATURE_RANGE[i]);
   if (!same) {
-    presets.push({
-      id: "project",
-      label: project.join(", "),
+    presets.unshift({
+      id: "typical",
+      label: `${project.join(", ")} · auto`,
       values: project,
     });
   }
@@ -638,7 +899,7 @@ export function buildTemperatureRangePresets(
   return presets;
 }
 
-/** Derive all legend ranges from loaded IFC rooms. */
+/** Derive all legend ranges from loaded IFC rooms (auto-fit on upload). */
 export function legendRangesFromRooms(
   rooms: {
     heatLoad: number;
@@ -663,10 +924,11 @@ export function legendRangesFromRooms(
     luftung: pickLuftungRangeFromLosses(
       rooms.map((r) => r.ventilation?.ventilationHeatLoss ?? 0),
     ),
-    temperature: mergeTemperatureRangeFromRooms(
+    temperature: pickTemperatureRangeFromRooms(
       rooms.map((r) => r.temperature),
+      DEFAULT_TEMPERATURE_RANGE,
     ),
-    coolingTemperature: mergeTemperatureRangeFromRooms(
+    coolingTemperature: pickTemperatureRangeFromRooms(
       coolTemps,
       DEFAULT_COOLING_TEMPERATURE_RANGE,
     ),
@@ -781,7 +1043,7 @@ export function mapAnchorColorsToRange(
   const src =
     anchorColors.length > 0
       ? anchorColors
-      : ["#0050FF", "#FFFFB4", "#DC0000"];
+      : ["#3D7EFF", "#0050FF", "#FFDC00", "#FF8C00", "#DC0000", "#7A3300"];
   const overrides: CustomLegendColorMap = {};
   if (src.length === range.length) {
     range.forEach((value, i) => {
@@ -793,6 +1055,34 @@ export function mapAnchorColorsToRange(
     overrides[String(value)] = sampleColors(
       src,
       i / Math.max(1, range.length - 1),
+    );
+  });
+  return overrides;
+}
+
+/**
+ * Heizlast / Lüftung color mapping — Thermal Classic / heat ramp.
+ */
+export function mapHeatAnchorColorsToRange(
+  anchorColors: string[],
+  range: number[],
+): CustomLegendColorMap {
+  const src =
+    anchorColors.length > 0
+      ? anchorColors
+      : ["#3D7EFF", "#0050FF", "#FFDC00", "#FF8C00", "#DC0000", "#7A3300"];
+  const overrides: CustomLegendColorMap = {};
+  if (src.length === range.length) {
+    range.forEach((value, i) => {
+      overrides[String(value)] = src[i]!;
+    });
+    return overrides;
+  }
+  const ease = (t: number) => Math.pow(Math.max(0, Math.min(1, t)), 1.0);
+  range.forEach((value, i) => {
+    overrides[String(value)] = sampleColors(
+      src,
+      ease(i / Math.max(1, range.length - 1)),
     );
   });
   return overrides;
@@ -847,7 +1137,9 @@ export function resolveStopsForRange(
   for (const c of colors) {
     if (unique[unique.length - 1] !== c) unique.push(c);
   }
-  const src = unique.length ? unique : ["#0050FF", "#FFFFB4", "#DC0000"];
+  const src = unique.length
+    ? unique
+    : ["#3D7EFF", "#0050FF", "#FFDC00", "#FF8C00", "#DC0000", "#7A3300"];
   return values.map((value, i) => ({
     value,
     color: sampleColors(src, i / Math.max(1, values.length - 1)),

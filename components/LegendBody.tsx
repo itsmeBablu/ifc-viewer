@@ -19,6 +19,7 @@ import {
 import { heading } from "@/lib/designTokens";
 import { t } from "@/lib/i18n";
 import { useAppStore, useLegendColorOverrides } from "@/store/useAppStore";
+import HoverTip from "./HoverTip";
 import LegendRangeInput from "./LegendRangeInput";
 import LegendPalettePanel from "./LegendPalettePanel";
 import PresentationOptionsMenu from "./PresentationOptionsMenu";
@@ -330,7 +331,7 @@ export default function LegendBody({
             )
           )
         )}
-        {!compareBothModes && !ventilation && (
+        {!compareBothModes && (
         <div
           ref={modeBarRef}
           className={`legend-mode-bar flex rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
@@ -415,7 +416,7 @@ export default function LegendBody({
         </div>
         )}
 
-        {(compareBothModes || colorMode === "heizlast" || ventilation) && (
+        {(compareBothModes || colorMode === "heizlast") && (
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
@@ -425,30 +426,19 @@ export default function LegendBody({
                 )}
               </p>
             )}
-            {ventilation && !compareBothModes && (
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
-                  {t(uiLanguage, loadLabelKey)}
-                </p>
-                <button
-                  type="button"
-                  title={t(uiLanguage, "legendRangePreset")}
-                  onClick={() => setRangeOpen((v) => !v)}
-                  aria-expanded={rangeOpen}
-                  className="flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]"
-                >
-                  {t(uiLanguage, "legendRangePreset")}
-                  <Chevron open={rangeOpen} />
-                </button>
-              </div>
-            )}
-            <button
-              type="button"
-              title={t(uiLanguage, "changePalette")}
-              onClick={openLoadPalette}
-              aria-expanded={paletteOpen && paletteContext === "load"}
-              className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--panel-divider)]"
+            <HoverTip
+              label={t(uiLanguage, "changePalette")}
+              hint={t(uiLanguage, "changePaletteHint")}
+              placement="below"
+              className="block w-full"
             >
+              <button
+                type="button"
+                onClick={openLoadPalette}
+                aria-expanded={paletteOpen && paletteContext === "load"}
+                aria-label={t(uiLanguage, "changePalette")}
+                className="group relative block w-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--panel-divider)]"
+              >
               <div
                 className={`relative w-full overflow-hidden rounded-full border border-[var(--glass-border)] shadow-[inset_0_1px_0_var(--glass-specular),0_2px_8px_rgba(0,0,0,0.12)] transition-opacity group-hover:opacity-95 ${
                   compact ? "h-3" : "h-4"
@@ -467,7 +457,8 @@ export default function LegendBody({
                   aria-hidden
                 />
               </div>
-            </button>
+              </button>
+            </HoverTip>
             <div
               className={`flex items-end justify-between gap-0.5 tabular-nums text-[var(--text-muted)] ${
                 compact ? "text-[9px]" : "text-[10px]"
@@ -479,9 +470,7 @@ export default function LegendBody({
                 </span>
               ))}
             </div>
-            {!compareBothModes &&
-              rangeOpen &&
-              (colorMode === "heizlast" || ventilation) && (
+            {!compareBothModes && rangeOpen && colorMode === "heizlast" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
                   values={loadRange}
@@ -511,20 +500,26 @@ export default function LegendBody({
           </div>
         )}
 
-        {(compareBothModes || colorMode === "temperature") && !ventilation && (
+        {(compareBothModes || colorMode === "temperature") && (
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-zinc-500">
                 {t(uiLanguage, "tempBottomRight")}
               </p>
             )}
-            <button
-              type="button"
-              title={t(uiLanguage, "changePalette")}
-              onClick={openTempPalette}
-              aria-expanded={paletteOpen && paletteContext === "temperature"}
-              className="flex w-full flex-nowrap items-center justify-between gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+            <HoverTip
+              label={t(uiLanguage, "changePalette")}
+              hint={t(uiLanguage, "changePaletteHint")}
+              placement="below"
+              className="block w-full"
             >
+              <button
+                type="button"
+                onClick={openTempPalette}
+                aria-expanded={paletteOpen && paletteContext === "temperature"}
+                aria-label={t(uiLanguage, "changePalette")}
+                className="flex w-full flex-nowrap items-center justify-between gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+              >
               {tempStops.map((s) => (
                 <div
                   key={s.value}
@@ -554,7 +549,8 @@ export default function LegendBody({
                   </span>
                 </div>
               ))}
-            </button>
+              </button>
+            </HoverTip>
             {!compareBothModes && rangeOpen && colorMode === "temperature" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput

@@ -1,10 +1,11 @@
 import {
+  mapAnchorColorsToRange,
+  mapHeatAnchorColorsToRange,
+  standardTemperatureStopColors,
   DEFAULT_HEIZLAST_RANGE,
   DEFAULT_KUHLLAST_RANGE,
   DEFAULT_LUFTUNG_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
-  mapAnchorColorsToRange,
-  standardTemperatureStopColors,
   type CustomLegendColors,
   type LegendColorMode,
 } from "./colorMapping";
@@ -34,7 +35,15 @@ export const LEGEND_SWATCH_PRESETS: LegendSwatchPreset[] = [
   {
     id: "thermal-classic",
     name: "Thermal Classic",
-    heatColors: ["#0066CC", "#3399FF", "#99CCFF", "#FFFF99", "#FF9933", "#CC0000"],
+    // Mid blue → thick blue → gold → orange → red → brown-red.
+    heatColors: [
+      "#3D7EFF",
+      "#0050FF",
+      "#FFDC00",
+      "#FF8C00",
+      "#DC0000",
+      "#7A3300",
+    ],
     coolColors: ["#90CAF9", "#42A5F5", "#1E88E5", "#1565C0", "#0D47A1", "#002171"],
     tempColors: ["#1B4965", "#5FA8D3", "#CAE9FF", "#FFD166", "#F77F00", "#D62828"],
   },
@@ -55,7 +64,7 @@ export const LEGEND_SWATCH_PRESETS: LegendSwatchPreset[] = [
   {
     id: "arctic-flame",
     name: "Arctic Flame",
-    heatColors: ["#03045E", "#0077B6", "#00B4D8", "#FFD166", "#F77F00", "#D62828"],
+    heatColors: ["#90E0EF", "#48CAE4", "#FFE566", "#FFD166", "#F77F00", "#D62828"],
     coolColors: ["#F1FAEE", "#A8DADC", "#457B9D", "#1D3557", "#6A4C93", "#4A148C"],
     tempColors: ["#03071E", "#370617", "#6A040F", "#F48C06", "#FFBA08", "#E85D04"],
   },
@@ -147,7 +156,7 @@ export function buildThermalClassicLegendColors(ranges?: {
     return { temperature: {}, heizlast: {}, kuhllast: {}, luftung: {} };
   }
   return {
-    heizlast: mapAnchorColorsToRange(
+    heizlast: mapHeatAnchorColorsToRange(
       preset.heatColors,
       ranges?.heizlast ?? DEFAULT_HEIZLAST_RANGE,
     ),
@@ -155,7 +164,7 @@ export function buildThermalClassicLegendColors(ranges?: {
       preset.coolColors,
       ranges?.kuhllast ?? DEFAULT_KUHLLAST_RANGE,
     ),
-    luftung: mapAnchorColorsToRange(
+    luftung: mapHeatAnchorColorsToRange(
       preset.heatColors,
       ranges?.luftung ?? DEFAULT_LUFTUNG_RANGE,
     ),

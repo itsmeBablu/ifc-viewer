@@ -72,20 +72,20 @@ export function renderFloorSnapshot(
   const snapshotColorMode = compareBothModes ? "heizlast" : colorMode;
 
   const roomPlanColor = (room: Room): string => {
-    if (dataViewMode === "luftung") {
-      return luftungToColor(
-        roomVentilationColorValue(room),
-        palette,
-        luftungRange,
-        customLegendColors.luftung,
-      );
-    }
     if (snapshotColorMode === "temperature") {
       return temperatureToColor(
         roomTemperatureForView(room, dataViewMode),
         palette,
         activeTempRange,
         customLegendColors.temperature,
+      );
+    }
+    if (dataViewMode === "luftung") {
+      return luftungToColor(
+        roomVentilationColorValue(room),
+        palette,
+        luftungRange,
+        customLegendColors.luftung,
       );
     }
     if (dataViewMode === "kuhllast") {
