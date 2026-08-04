@@ -31,7 +31,9 @@ import GlassPanel from "./GlassPanel";
 import { GlassButton, IconAlert } from "./ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
-import { DEFAULT_HEIZLAST_RANGE, DEFAULT_KUHLLAST_RANGE } from "@/lib/colorMapping";
+import {
+  legendRangesFromRooms,
+} from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
 import GsapOverlay from "./GsapOverlay";
@@ -95,6 +97,8 @@ export default function ViewerApp() {
   const setRooms = useAppStore((s) => s.setRooms);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
+  const setLuftungRange = useAppStore((s) => s.setLuftungRange);
+  const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const setIsLoadingModel = useAppStore((s) => s.setIsLoadingModel);
   const setLoadError = useAppStore((s) => s.setLoadError);
   const setLoadProgress = useAppStore((s) => s.setLoadProgress);
@@ -257,8 +261,12 @@ export default function ViewerApp() {
         loadedRef.current = result;
         setFloors(result.floors);
         setRooms(result.rooms);
-        setHeizlastRange([...DEFAULT_HEIZLAST_RANGE]);
-        setKuhllastRange([...DEFAULT_KUHLLAST_RANGE]);
+        // Scale legend stops to this IFC (e.g. 72 W/m² → 0…75; insert missing °C).
+        const legend = legendRangesFromRooms(result.rooms);
+        setHeizlastRange(legend.heizlast);
+        setKuhllastRange(legend.kuhllast);
+        setLuftungRange(legend.luftung);
+        setTemperatureRange(legend.temperature);
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
         debugLog(
@@ -287,6 +295,8 @@ export default function ViewerApp() {
       setRooms,
       setHeizlastRange,
       setKuhllastRange,
+      setLuftungRange,
+      setTemperatureRange,
     ],
   );
 

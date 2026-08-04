@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   HEIZLAST_RANGE_PRESETS,
   KUHLLAST_RANGE_PRESETS,
   LUFTUNG_RANGE_PRESETS,
+  buildLoadRangePresetsFromLoads,
+  buildLuftungRangePresetsFromLosses,
+  buildTemperatureRangePresets,
   heizlastGradientCss,
   kuhllastGradientCss,
   luftungGradientCss,
@@ -90,6 +93,7 @@ export default function LegendBody({
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const luftungRange = useAppStore((s) => s.luftungRange);
+  const rooms = useAppStore((s) => s.rooms);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
@@ -142,11 +146,27 @@ export default function LegendBody({
     : cooling
       ? setKuhllastRange
       : setHeizlastRange;
-  const loadPresets = ventilation
-    ? LUFTUNG_RANGE_PRESETS
-    : cooling
-      ? KUHLLAST_RANGE_PRESETS
-      : HEIZLAST_RANGE_PRESETS;
+  const loadPresets = useMemo(() => {
+    if (!rooms.length) {
+      return ventilation
+        ? LUFTUNG_RANGE_PRESETS
+        : cooling
+          ? KUHLLAST_RANGE_PRESETS
+          : HEIZLAST_RANGE_PRESETS;
+    }
+    if (ventilation) {
+      return buildLuftungRangePresetsFromLosses(
+        rooms.map((r) => r.ventilation.ventilationHeatLoss || 0),
+      );
+    }
+    return buildLoadRangePresetsFromLoads(
+      rooms.map((r) => (cooling ? r.coolLoad : r.heatLoad) || 0),
+    );
+  }, [rooms, ventilation, cooling]);
+  const tempPresets = useMemo(
+    () => buildTemperatureRangePresets(rooms.map((r) => r.temperature)),
+    [rooms],
+  );
   const loadUnitHint = ventilation ? "W" : "W/m²";
   const loadLabelKey = ventilation
     ? "luftungHeatLoss"
@@ -502,6 +522,7 @@ export default function LegendBody({
                   values={temperatureRange}
                   onCommit={setTemperatureRange}
                   unitHint="°C"
+                  presets={tempPresets}
                 />
               </div>
             )}
