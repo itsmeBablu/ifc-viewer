@@ -11,9 +11,9 @@ import { t } from "@/lib/i18n";
 import { useAppStore, useEffectiveColorPalette, useLegendColorOverrides } from "@/store/useAppStore";
 import type { Room } from "@/lib/types";
 import type { Viewer3DHandle } from "./Viewer3D";
-import Slider from "./ui/Slider";
+import Slider from "../common/ui/Slider";
 import type { RefObject } from "react";
-import ModelText from "./ModelText";
+import ModelText from "../common/ModelText";
 
 type Mode = "search" | "filter";
 

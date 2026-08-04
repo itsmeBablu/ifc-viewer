@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import LegendSwatchPresetGrid from "./LegendSwatchPresetGrid";
-import HoverTip from "./HoverTip";
+import HoverTip from "../common/HoverTip";
 import { t, type UiLanguage } from "@/lib/i18n";
 import type { ColorStop } from "@/lib/colorMapping";
 import type { LegendColorMode } from "@/lib/colorMapping";

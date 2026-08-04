@@ -19,15 +19,15 @@ import {
   pdfLegendFromStore,
 } from "@/lib/pdfCapture";
 import { exportAllPagesPdf, exportHeizlastPdf, exportPresentationPdf } from "@/lib/pdfExport";
-import LiquidGlassSpinner from "./LiquidGlassSpinner";
+import LiquidGlassSpinner from "../common/LiquidGlassSpinner";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t, type UiLanguage } from "@/lib/i18n";
-import { useModelScene } from "./ModelSceneContext";
-import GlassPanel from "./GlassPanel";
-import ModelText from "./ModelText";
-import type { Viewer3DHandle } from "./Viewer3D";
+import { useModelScene } from "../viewer/ModelSceneContext";
+import GlassPanel from "../common/GlassPanel";
+import ModelText from "../common/ModelText";
+import type { Viewer3DHandle } from "../viewer/Viewer3D";
 import type { Floor, Room } from "@/lib/types";
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { DataViewMode } from "@/lib/dataViewMode";

@@ -6,14 +6,14 @@ import { listVisibleFloors } from "@/lib/floorFilter";
 import { roomVentilationListMetrics } from "@/lib/ventilation";
 import { t } from "@/lib/i18n";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
-import { useModelScene } from "./ModelSceneContext";
+import { useModelScene } from "../viewer/ModelSceneContext";
 import {
   GlassInset,
   GlassSelect,
   PanelTitle,
   heading,
-} from "./ui";
-import ModelText from "./ModelText";
+} from "../common/ui";
+import ModelText from "../common/ModelText";
 
 type Props = {
   embedded?: boolean;

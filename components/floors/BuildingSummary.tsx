@@ -4,8 +4,8 @@ import { useMemo } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { getModelById } from "@/lib/modelRegistry";
 import { t } from "@/lib/i18n";
-import { GlassInset, PanelTitle, heading } from "./ui";
-import ModelText from "./ModelText";
+import { GlassInset, PanelTitle, heading } from "../common/ui";
+import ModelText from "../common/ModelText";
 
 type Props = {
   embedded?: boolean;

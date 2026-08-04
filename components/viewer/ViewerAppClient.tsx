@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import gsap from "gsap";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
-import LiquidGlassSpinner from "./LiquidGlassSpinner";
+import LiquidGlassSpinner from "../common/LiquidGlassSpinner";
 
 const ViewerApp = dynamic(() => import("./ViewerApp"), {
   ssr: false,

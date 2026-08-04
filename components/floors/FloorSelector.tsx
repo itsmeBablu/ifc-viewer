@@ -6,7 +6,7 @@
  */
 import { useMemo } from "react";
 import { useAppStore } from "@/store/useAppStore";
-import { GlassChip, GlassSelect, heading } from "./ui";
+import { GlassChip, GlassSelect, heading } from "../common/ui";
 
 export default function FloorSelector() {
   const floors = useAppStore((s) => s.floors);

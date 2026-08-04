@@ -3,13 +3,13 @@
 import { useState, type RefObject } from "react";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
-import type { Viewer3DHandle } from "./Viewer3D";
+import type { Viewer3DHandle } from "../viewer/Viewer3D";
 import {
   GlassButton,
   GlassInset,
   GlassInput,
   PanelTitle,
-} from "./ui";
+} from "../common/ui";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;

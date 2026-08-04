@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import GsapHeightAccordion from "./GsapHeightAccordion";
+import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import { IoOptionsOutline } from "react-icons/io5";
 import { MdPushPin } from "react-icons/md";
 import {
@@ -23,7 +23,7 @@ import {
   groupRoomsByVentilationZone,
   summaryVentilationZoneKey,
 } from "@/lib/ventilation";
-import { useModelScene } from "./ModelSceneContext";
+import { useModelScene } from "../viewer/ModelSceneContext";
 
 const LAYOUT_OPTIONS: {
   id: PresentationLayoutMode;

@@ -1,6 +1,6 @@
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Floor, Room } from "@/lib/types";
-import type { Viewer3DHandle } from "@/components/Viewer3D";
+import type { Viewer3DHandle } from "@/components/viewer/Viewer3D";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { resolveColorPalette } from "@/lib/colorMapping";
 import {

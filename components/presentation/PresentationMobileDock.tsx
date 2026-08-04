@@ -1,8 +1,8 @@
 "use client";
 
 import { useAppStore } from "@/store/useAppStore";
-import GlassPanel from "./GlassPanel";
-import LegendBody from "./LegendBody";
+import GlassPanel from "../common/GlassPanel";
+import LegendBody from "../legend/LegendBody";
 import PresentationSidePanel from "./PresentationSidePanel";
 import {
   mobileDockBottomPortraitClass,

@@ -20,15 +20,15 @@ import {
 import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
 import RoomTooltip from "./RoomTooltip";
-import LoadIfcButton from "./LoadIfcButton";
-import HeaderActions from "./HeaderActions";
-import FloorsPanel from "./FloorsPanel";
-import LegendPanel from "./LegendPanel";
-import PresentationMobileDock from "./PresentationMobileDock";
-import PresentationSidePanel from "./PresentationSidePanel";
-import MobileCornerMenu from "./MobileCornerMenu";
-import GlassPanel from "./GlassPanel";
-import { GlassButton, IconAlert } from "./ui";
+import LoadIfcButton from "../common/LoadIfcButton";
+import HeaderActions from "../layout/HeaderActions";
+import FloorsPanel from "../floors/FloorsPanel";
+import LegendPanel from "../legend/LegendPanel";
+import PresentationMobileDock from "../presentation/PresentationMobileDock";
+import PresentationSidePanel from "../presentation/PresentationSidePanel";
+import MobileCornerMenu from "../layout/MobileCornerMenu";
+import GlassPanel from "../common/GlassPanel";
+import { GlassButton, IconAlert } from "../common/ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
 import { t } from "@/lib/i18n";
@@ -38,12 +38,12 @@ import {
   OPEN_IFC_FILE_EVENT,
   isTypingTarget,
 } from "@/lib/viewerHotkeys";
-import GsapOverlay from "./GsapOverlay";
-import SceneBusyOverlay from "./SceneBusyOverlay";
-import SceneBusyCursor from "./SceneBusyCursor";
-import LiquidGlassSpinner from "./LiquidGlassSpinner";
-import ThemeTransition from "./ThemeTransition";
-import ThemeHydration from "./ThemeHydration";
+import GsapOverlay from "../common/GsapOverlay";
+import SceneBusyOverlay from "../common/SceneBusyOverlay";
+import SceneBusyCursor from "../common/SceneBusyCursor";
+import LiquidGlassSpinner from "../common/LiquidGlassSpinner";
+import ThemeTransition from "../common/ThemeTransition";
+import ThemeHydration from "../common/ThemeHydration";
 import { canHover } from "@/lib/canHover";
 
 type LoadSource =

@@ -19,11 +19,11 @@ import {
 import { heading } from "@/lib/designTokens";
 import { t } from "@/lib/i18n";
 import { useAppStore, useLegendColorOverrides } from "@/store/useAppStore";
-import HoverTip from "./HoverTip";
+import HoverTip from "../common/HoverTip";
 import LegendRangeInput from "./LegendRangeInput";
 import LegendPalettePanel from "./LegendPalettePanel";
-import PresentationOptionsMenu from "./PresentationOptionsMenu";
-import VentilationZonePanel from "./VentilationZonePanel";
+import PresentationOptionsMenu from "../presentation/PresentationOptionsMenu";
+import VentilationZonePanel from "../ventilation/VentilationZonePanel";
 
 type Props = {
   /** Kept for callers; legend uses compact top padding either way. */

@@ -14,7 +14,7 @@ import {
 } from "@/lib/ventilation";
 import type { Room } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
-import ModelText from "./ModelText";
+import ModelText from "../common/ModelText";
 
 type Props = {
   compact?: boolean;

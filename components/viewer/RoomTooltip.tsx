@@ -17,7 +17,7 @@ import {
 } from "@/lib/ventilation";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
-import GlassPanel from "./GlassPanel";
+import GlassPanel from "../common/GlassPanel";
 
 type Props = {
   /** Cursor-follow position (3D hover). Ignored when `anchor` is set. */

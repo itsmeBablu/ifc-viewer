@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import GlassPanel from "./GlassPanel";
+import GlassPanel from "../common/GlassPanel";
 
 /** Top-left brand mark only. */
 export default function AppHeader() {

@@ -5,9 +5,9 @@ import {
   TEMPERATURE_STOPS,
 } from "@/lib/colorMapping";
 import { useAppStore } from "@/store/useAppStore";
-import GsapCrossfade from "./GsapCrossfade";
-import GlassPanel from "./GlassPanel";
-import { GlassChip, PanelTitle } from "./ui";
+import GsapCrossfade from "../common/GsapCrossfade";
+import GlassPanel from "../common/GlassPanel";
+import { GlassChip, PanelTitle } from "../common/ui";
 
 type Props = {
   embedded?: boolean;

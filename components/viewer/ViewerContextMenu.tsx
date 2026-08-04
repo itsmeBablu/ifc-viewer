@@ -7,9 +7,9 @@ import { compareBothModesLabelKey, supportsCompareBothModes } from "@/lib/dataVi
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
-import SliceHeightSlider from "./SliceHeightSlider";
+import SliceHeightSlider from "../common/SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
-import ModelText from "./ModelText";
+import ModelText from "../common/ModelText";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;

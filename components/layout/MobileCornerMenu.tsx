@@ -9,7 +9,7 @@ import {
 import gsap from "gsap";
 import { CiCircleMore } from "react-icons/ci";
 import { IoChevronDownSharp, IoChevronUp, IoClose } from "react-icons/io5";
-import GlassPanel from "./GlassPanel";
+import GlassPanel from "../common/GlassPanel";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { useAppStore } from "@/store/useAppStore";

@@ -20,11 +20,11 @@ import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
-import GsapHeightAccordion from "./GsapHeightAccordion";
-import GsapPopMenu from "./GsapPopMenu";
-import GlassPanel from "./GlassPanel";
-import ThemeToggle from "./ThemeToggle";
-import SeasonalBgToggle from "./SeasonalBgToggle";
+import GsapHeightAccordion from "../common/GsapHeightAccordion";
+import GsapPopMenu from "../common/GsapPopMenu";
+import GlassPanel from "../common/GlassPanel";
+import ThemeToggle from "../common/ThemeToggle";
+import SeasonalBgToggle from "../common/SeasonalBgToggle";
 import {
   HEADER_MODE_ICON,
   isDataViewMode,

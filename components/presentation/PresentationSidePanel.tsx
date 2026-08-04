@@ -6,10 +6,10 @@ import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t } from "@/lib/i18n";
-import LegendBody from "./LegendBody";
-import ModelText from "./ModelText";
-import VentilationZonePanel from "./VentilationZonePanel";
-import { useModelScene } from "./ModelSceneContext";
+import LegendBody from "../legend/LegendBody";
+import ModelText from "../common/ModelText";
+import VentilationZonePanel from "../ventilation/VentilationZonePanel";
+import { useModelScene } from "../viewer/ModelSceneContext";
 
 /** Light tint of a hex color for list row backgrounds. */
 function lightTint(hex: string, mix = 0.78): string {

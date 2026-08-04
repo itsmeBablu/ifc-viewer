@@ -9,10 +9,10 @@ import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import { getModelById } from "@/lib/modelRegistry";
 import { heading } from "@/lib/designTokens";
 import { useAppStore } from "@/store/useAppStore";
-import { useModelScene } from "./ModelSceneContext";
-import type { Viewer3DHandle } from "./Viewer3D";
+import { useModelScene } from "../viewer/ModelSceneContext";
+import type { Viewer3DHandle } from "../viewer/Viewer3D";
 import type { Floor } from "@/lib/types";
-import ModelText from "./ModelText";
+import ModelText from "../common/ModelText";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
