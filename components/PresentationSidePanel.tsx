@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { roomLoadColor, roomDensityLoad } from "@/lib/roomLoad";
+import { roomLoadColor, roomDensityLoad, roomTemperatureForView } from "@/lib/roomLoad";
 import { heading } from "@/lib/designTokens";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
@@ -9,6 +9,7 @@ import { t } from "@/lib/i18n";
 import LegendBody from "./LegendBody";
 import ModelText from "./ModelText";
 import VentilationZonePanel from "./VentilationZonePanel";
+import { useModelScene } from "./ModelSceneContext";
 
 /** Light tint of a hex color for list row backgrounds. */
 function lightTint(hex: string, mix = 0.78): string {
@@ -45,6 +46,7 @@ export default function PresentationSidePanel({
   const activeColorPalette = useEffectiveColorPalette();
   const heizlastRange = useAppStore((s) => s.heizlastRange);
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
+  const luftungRange = useAppStore((s) => s.luftungRange);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const customLegendColors = useAppStore((s) => s.customLegendColors);
   const loadOverrides =
@@ -54,10 +56,11 @@ export default function PresentationSidePanel({
         ? customLegendColors.luftung
         : customLegendColors.heizlast;
   const ventilation = dataViewMode === "luftung";
+  const { shellGroup } = useModelScene();
 
   const floorsWithRooms = useMemo(
-    () => listVisibleFloors(floors, rooms),
-    [floors, rooms],
+    () => listVisibleFloors(floors, rooms, shellGroup),
+    [floors, rooms, shellGroup],
   );
 
   const floorRooms = useMemo(() => {
@@ -185,6 +188,7 @@ export default function PresentationSidePanel({
                       heizlastRange,
                       kuhllastRange,
                       loadOverrides,
+                      luftungRange,
                     );
                     const density = roomDensityLoad(room, dataViewMode);
                     const active = room.id === selectedRoomId;
@@ -214,7 +218,11 @@ export default function PresentationSidePanel({
                           </ModelText>
                           <span className="ml-auto shrink-0 text-[9px] tabular-nums text-on-tint-muted">
                             {density.toFixed(0)} W/m² ·{" "}
-                            {room.temperature.toFixed(1)} °C
+                            {roomTemperatureForView(
+                              room,
+                              dataViewMode,
+                            ).toFixed(1)}{" "}
+                            °C
                           </span>
                           <span
                             className="h-2 w-2 shrink-0 rounded-sm border border-zinc-400/30"

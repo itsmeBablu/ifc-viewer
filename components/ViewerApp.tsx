@@ -36,6 +36,11 @@ import {
 } from "@/lib/colorMapping";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
+import { LEGEND_SWATCH_PRESETS } from "@/lib/legendSwatchPresets";
+import {
+  OPEN_IFC_FILE_EVENT,
+  isTypingTarget,
+} from "@/lib/viewerHotkeys";
 import GsapOverlay from "./GsapOverlay";
 import SceneBusyOverlay from "./SceneBusyOverlay";
 import SceneBusyCursor from "./SceneBusyCursor";
@@ -267,6 +272,13 @@ export default function ViewerApp() {
         setKuhllastRange(legend.kuhllast);
         setLuftungRange(legend.luftung);
         setTemperatureRange(legend.temperature);
+        useAppStore.getState().setCoolingTemperatureRange(legend.coolingTemperature);
+        // Always map colors to Schnellpalette #1 after ranges update.
+        const store = useAppStore.getState();
+        store.applyLegendSwatchPreset("heizlast", "thermal-classic");
+        store.applyLegendSwatchPreset("kuhllast", "thermal-classic");
+        store.applyLegendSwatchPreset("luftung", "thermal-classic");
+        store.applyLegendSwatchPreset("temperature", "thermal-classic");
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
         debugLog(
@@ -379,6 +391,75 @@ export default function ViewerApp() {
         loadedRef.current = null;
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      const store = useAppStore.getState();
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "o" || e.key === "O" || e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        window.dispatchEvent(new Event(OPEN_IFC_FILE_EVENT));
+        return;
+      }
+
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+      if (key === "h") {
+        e.preventDefault();
+        store.setDataViewMode("heizlast");
+        return;
+      }
+      if (key === "l") {
+        e.preventDefault();
+        store.setDataViewMode("luftung");
+        return;
+      }
+      if (key === "k") {
+        e.preventDefault();
+        store.setDataViewMode("kuhllast");
+        return;
+      }
+      if (key === "p") {
+        e.preventDefault();
+        const next = !store.isPresentationView;
+        store.setPresentationView(next);
+        const el = document.documentElement;
+        void (async () => {
+          try {
+            if (next) {
+              if (!document.fullscreenElement) await el.requestFullscreen();
+            } else if (document.fullscreenElement) {
+              await document.exitFullscreen();
+            }
+          } catch {
+            // presentation still toggles without fullscreen
+          }
+        })();
+        return;
+      }
+
+      if (/^[1-6]$/.test(key)) {
+        const preset = LEGEND_SWATCH_PRESETS[Number(key) - 1];
+        if (!preset) return;
+        e.preventDefault();
+        const mode =
+          store.colorMode === "temperature"
+            ? "temperature"
+            : store.dataViewMode === "kuhllast"
+              ? "kuhllast"
+              : store.dataViewMode === "luftung"
+                ? "luftung"
+                : "heizlast";
+        store.applyLegendSwatchPreset(mode, preset.id);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const sceneValue = useMemo(

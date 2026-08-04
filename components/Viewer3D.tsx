@@ -11,6 +11,7 @@ import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
+import { roomTemperatureForView } from "@/lib/roomLoad";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
 import { animateProgress, gsapEase } from "@/lib/gsapMotion";
 import gsap from "gsap";
@@ -89,9 +90,18 @@ function roomColorHex(
   customLegendColors?: CustomLegendColors,
   luftungRange?: number[],
 ): string {
+  // Lüftung always uses its own legend colors (not temperature mode).
+  if (dataViewMode === "luftung") {
+    return luftungToColor(
+      roomVentilationColorValue(room),
+      palette,
+      luftungRange,
+      customLegendColors?.luftung,
+    );
+  }
   if (mode === "temperature") {
     return temperatureToColor(
-      room.temperature,
+      roomTemperatureForView(room, dataViewMode),
       palette,
       temperatureRange,
       customLegendColors?.temperature,
@@ -103,14 +113,6 @@ function roomColorHex(
       palette,
       kuhllastRange,
       customLegendColors?.kuhllast,
-    );
-  }
-  if (dataViewMode === "luftung") {
-    return luftungToColor(
-      roomVentilationColorValue(room),
-      palette,
-      luftungRange,
-      customLegendColors?.luftung,
     );
   }
   return heizlastToColor(
@@ -286,8 +288,8 @@ function applyRenderMode(
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
-  const spaceOpacity = lighting?.spaceTransparency ?? 0.75;
-  const elementOpacity = lighting?.elementTransparency ?? 0.5;
+  const spaceOpacity = lighting?.spaceTransparency ?? 0.8;
+  const elementOpacity = lighting?.elementTransparency ?? 1;
   const colorAmt = lighting?.color ?? 1;
 
   if (overlays) {
@@ -430,6 +432,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
+  const activeTemperatureRange =
+    dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
   const renderMode = useAppStore((s) => s.renderMode);
   const lighting = useAppStore((s) => s.lighting);
   const sceneBackground = useAppStore((s) => s.sceneBackground);
@@ -841,7 +846,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         colorMode,
         activeColorPalette,
         heizlastRange,
-        temperatureRange,
+        activeTemperatureRange,
         dataViewMode,
         kuhllastRange,
         customLegendColors,
@@ -1032,10 +1037,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             colorMode,
             activeColorPalette,
             heizlastRange,
-            temperatureRange,
+            activeTemperatureRange,
             dataViewMode,
             kuhllastRange,
             customLegendColors,
+            luftungRange,
           );
           mesh.material = materialCacheRef.current.get(hex);
           mesh.userData.colorHex = hex;
@@ -1075,7 +1081,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         "heizlast",
         activeColorPalette,
         heizlastRange,
-        temperatureRange,
+        activeTemperatureRange,
         dataViewMode,
         kuhllastRange,
         customLegendColors,
@@ -1102,7 +1108,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         "temperature",
         activeColorPalette,
         heizlastRange,
-        temperatureRange,
+        activeTemperatureRange,
         dataViewMode,
         kuhllastRange,
         customLegendColors,
@@ -1193,7 +1199,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     dataViewMode,
     heizlastRange,
     kuhllastRange,
-    temperatureRange,
+    activeTemperatureRange,
     renderMode,
     lighting,
     colorMode,
@@ -1216,10 +1222,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           colorMode,
           activeColorPalette,
           heizlastRange,
-          temperatureRange,
+          activeTemperatureRange,
           dataViewMode,
           kuhllastRange,
           customLegendColors,
+          luftungRange,
         );
         const prev = mesh.material;
         mesh.material = materialCacheRef.current.get(hex);
@@ -1240,7 +1247,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       clipRef.current?.rebuildCaps();
       applySelectionHighlightRef.current();
     });
-  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, luftungRange, temperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
+  }, [colorMode, dataViewMode, activeColorPalette, colorTheme, customLegendColors, heizlastRange, kuhllastRange, luftungRange, activeTemperatureRange, rooms, roomsFromStore, renderMode, lighting, compareBothModes]);
 
   // Render mode + lighting
   useEffect(() => {
@@ -1439,7 +1446,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     dataViewMode,
     heizlastRange,
     kuhllastRange,
-    temperatureRange,
+    activeTemperatureRange,
     floors,
     shellGroup,
     rooms,
@@ -1562,6 +1569,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             ? PRESENTATION_GAP_Y_STACK
             : PRESENTATION_GAP_Y;
       const slotW = maxW * (1 + PRESENTATION_GAP_X);
+      // Equal center pitch — same generous spacing as last push.
       const slotH = maxH * (1 + gapY);
       const slots = layout === "grid" ? floorGridSlots(sorted.length) : null;
       const origin = measured[0]?.center.clone() ?? new THREE.Vector3();
@@ -1576,7 +1584,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           targetX = 0;
           targetY = 0;
         } else if (layout === "stack") {
-          // Equal vertical pitch between floor centers
           const desiredY = origin.y + i * slotH;
           targetY = (desiredY - m.center.y) * t;
           targetX = 0;
@@ -2193,6 +2200,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                       coolLoad: room.coolLoad,
                       kuhllast: room.kuhllast,
                       temperature: room.temperature,
+                      coolTemperature: room.coolTemperature,
                     }
                   : null,
                 keyProps,

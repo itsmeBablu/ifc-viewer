@@ -32,6 +32,24 @@ export function roomAbsoluteLoad(
   return dataViewMode === "kuhllast" ? room.kuhllast : room.heizlast;
 }
 
+/**
+ * Temperature for coloring / legend by view.
+ * Cooling uses Solar Computer summer analysis temps; heating uses setpoints.
+ */
+export function roomTemperatureForView(
+  room: Room,
+  dataViewMode: DataViewMode,
+): number {
+  if (dataViewMode === "kuhllast") {
+    if (room.coolTemperature != null && room.coolTemperature > 0) {
+      return room.coolTemperature;
+    }
+    // No cooling analysis for this room — keep out of summer band via setpoint fallback.
+    return room.temperature;
+  }
+  return room.temperature;
+}
+
 export function roomLoadColor(
   room: Room,
   dataViewMode: DataViewMode,

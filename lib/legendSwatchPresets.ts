@@ -35,7 +35,7 @@ export const LEGEND_SWATCH_PRESETS: LegendSwatchPreset[] = [
     id: "thermal-classic",
     name: "Thermal Classic",
     heatColors: ["#0066CC", "#3399FF", "#99CCFF", "#FFFF99", "#FF9933", "#CC0000"],
-    coolColors: ["#E0FBFC", "#90E0EF", "#00B4D8", "#0077B6", "#023E8A", "#03045E"],
+    coolColors: ["#90CAF9", "#42A5F5", "#1E88E5", "#1565C0", "#0D47A1", "#002171"],
     tempColors: ["#1B4965", "#5FA8D3", "#CAE9FF", "#FFD166", "#F77F00", "#D62828"],
   },
   {

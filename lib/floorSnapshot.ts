@@ -8,6 +8,7 @@ import {
   resolveColorPalette,
   temperatureToColor,
 } from "./colorMapping";
+import { roomTemperatureForView } from "./roomLoad";
 import { roomVentilationColorValue } from "./ventilation";
 import { THEME_COLORS } from "./themeColors";
 import { useAppStore } from "@/store/useAppStore";
@@ -60,19 +61,30 @@ export function renderFloorSnapshot(
     colorMode,
     compareBothModes,
     temperatureRange,
+    coolingTemperatureRange,
     colorTheme,
     customLegendColors,
   } = useAppStore.getState();
   const palette = resolveColorPalette(colorTheme, activeColorPalette);
+  const activeTempRange =
+    dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
 
   const snapshotColorMode = compareBothModes ? "heizlast" : colorMode;
 
   const roomPlanColor = (room: Room): string => {
+    if (dataViewMode === "luftung") {
+      return luftungToColor(
+        roomVentilationColorValue(room),
+        palette,
+        luftungRange,
+        customLegendColors.luftung,
+      );
+    }
     if (snapshotColorMode === "temperature") {
       return temperatureToColor(
-        room.temperature,
+        roomTemperatureForView(room, dataViewMode),
         palette,
-        temperatureRange,
+        activeTempRange,
         customLegendColors.temperature,
       );
     }
@@ -82,14 +94,6 @@ export function renderFloorSnapshot(
         palette,
         kuhllastRange,
         customLegendColors.kuhllast,
-      );
-    }
-    if (dataViewMode === "luftung") {
-      return luftungToColor(
-        roomVentilationColorValue(room),
-        palette,
-        luftungRange,
-        customLegendColors.luftung,
       );
     }
     return heizlastToColor(
@@ -102,7 +106,7 @@ export function renderFloorSnapshot(
 
   const range =
     snapshotColorMode === "temperature"
-      ? temperatureRange
+      ? activeTempRange
       : dataViewMode === "kuhllast"
         ? kuhllastRange
         : dataViewMode === "luftung"

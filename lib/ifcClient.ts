@@ -9,6 +9,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import * as WebIFC from "web-ifc";
 import type { Floor, LoadedModel, Room, RoomVentilation } from "./types";
 import { emptyVentilation } from "./ventilation";
+import { mergeDuplicateFloors, reassignUpperSlabsToNextFloor, pruneEmptyFloors } from "./floorFilter";
 import { debugLog } from "./debugLog";
 
 /** Prefer these PSet names when looking up heat-load / temperature values. */
@@ -76,6 +77,21 @@ export const TEMPERATURE_PROP_NAMES = [
   "HeatingDesignTemperature",
   "T_Soll",
   "TSoll",
+];
+
+/**
+ * Solar Computer cooling / summer analysis temperatures (°C).
+ * Prefer operative max, then air max — ignore zero placeholders.
+ */
+export const COOL_TEMPERATURE_PROP_NAMES = [
+  "SC_Raum_Temperatur_operativ_MAX_2078",
+  "SC_Raum_Temperatur_operativ_MAX_6020",
+  "SC_Raum_Temperatur_operativ_MAX",
+  "SC_Raum_Temperatur_MAX_2078",
+  "SC_Raum_Temperatur_MAX_6020",
+  "SC_Raum_Temperatur_MAX",
+  "Temperatur_operativ_MAX",
+  "Temperatur_MAX",
 ];
 
 export const ABSOLUTE_HEIZLAST_PROP_NAMES = [
@@ -901,6 +917,8 @@ async function extractSpaceProps(
   coolLoad: number;
   kuhllast: number | null;
   temperature: number;
+  coolTemperature: number | null;
+  height: number | null;
   number: string;
   ventilation: RoomVentilation;
   propDump: string[];
@@ -910,6 +928,8 @@ async function extractSpaceProps(
   let coolLoad = 0;
   let kuhllast: number | null = null;
   let temperature = 20;
+  let coolTemperature: number | null = null;
+  let height: number | null = null;
   let number = "";
   let ventilation = emptyVentilation();
   const propDump: string[] = [];
@@ -924,8 +944,9 @@ async function extractSpaceProps(
     // This IFC (SimCalc / Revit):
     //   SC_Raum_spezifischeHeizlast → W/m²
     //   Bemessungslast Heizung      → W
-    //   Kühllast W/m² / Kühllast W → cooling
-    //   SC_Raum_Temperatur / CAx_Raum_Temperatur → °C
+    //   Kühllast W/m² / Kühllast W → cooling (often negative in Solar Computer)
+    //   SC_Raum_Temperatur → heating setpoint °C
+    //   SC_Raum_Temperatur_operativ_MAX_* / _MAX_* → cooling analysis °C
     heatLoad =
       extractExactNamedNumeric(flat, HEAT_DENSITY_PROP_NAMES) ??
       extractNumericProp(
@@ -955,10 +976,12 @@ async function extractSpaceProps(
         fuzzyCoolLoadDensity,
       ) ??
       0;
+    // Solar Computer / Revit: cooling is negative (e.g. -38.94 W/m²). Keep sign.
 
     kuhllast =
       extractExactNamedNumeric(flat, ABSOLUTE_KUHLLAST_PROP_NAMES) ??
       extractAbsoluteKuhllast(flat);
+    // Absolute Kühllast W is also signed in Solar Computer (e.g. -145).
 
     temperature =
       extractExactNamedNumeric(flat, [
@@ -974,6 +997,32 @@ async function extractSpaceProps(
         fuzzyTemperature,
       ) ??
       20;
+
+    const rawCoolTemp =
+      extractExactNamedNumeric(flat, COOL_TEMPERATURE_PROP_NAMES) ??
+      extractNumericProp(
+        psets,
+        ["Ergebnisse der Analyse", ...TEMPERATURE_PSET_NAMES],
+        COOL_TEMPERATURE_PROP_NAMES,
+      );
+    // Solar Computer uses 0 as empty placeholder for unused analysis runs.
+    if (rawCoolTemp != null && Number.isFinite(rawCoolTemp) && rawCoolTemp > 0) {
+      coolTemperature = rawCoolTemp;
+    }
+
+    const rawHeight =
+      extractExactNamedNumeric(flat, [
+        "SC_Raum_Höhe",
+        "SC_Raum_Hoehe",
+        "Lichte Höhe",
+        "Lichte Hoehe",
+        "Unbounded Height",
+        "Clear Height",
+      ]) ?? null;
+    // Revit often exports mm (e.g. 2549.9); treat values > 20 as mm → m.
+    if (rawHeight != null && Number.isFinite(rawHeight) && rawHeight > 0) {
+      height = rawHeight > 20 ? rawHeight / 1000 : rawHeight;
+    }
 
     for (const item of flat) {
       const name = item.name.toLowerCase();
@@ -1000,6 +1049,8 @@ async function extractSpaceProps(
     coolLoad,
     kuhllast,
     temperature,
+    coolTemperature,
+    height,
     number,
     ventilation,
     propDump,
@@ -1456,7 +1507,7 @@ export async function loadIfcModel(
           );
           debugLog(
             "ifcClient",
-            `parsed heatLoad=${props.heatLoad} heizlast=${props.heizlast} coolLoad=${props.coolLoad} kuhllast=${props.kuhllast} temperature=${props.temperature}`,
+            `parsed heatLoad=${props.heatLoad} heizlast=${props.heizlast} coolLoad=${props.coolLoad} kuhllast=${props.kuhllast} temperature=${props.temperature} coolTemp=${props.coolTemperature}`,
             props.heatLoad === 0 || props.heizlast == null ? "warn" : "ok",
           );
         }
@@ -1480,12 +1531,66 @@ export async function loadIfcModel(
           coolLoad: props.coolLoad,
           kuhllast: props.kuhllast,
           temperature: props.temperature,
+          coolTemperature: props.coolTemperature,
+          height: props.height,
           ventilation: props.ventilation,
           floorId,
           expressId: spaceExpressId,
           geometry: geom,
         });
       }
+
+      // Unify ContainedIn (walls/doors/windows) + Aggregates (spaces) storeys.
+      const mergedFloors = mergeDuplicateFloors(floors, rooms, shellGeoms);
+      floors.length = 0;
+      floors.push(...mergedFloors);
+      debugLog(
+        "ifcClient",
+        `floors after merge: ${floors.length}`,
+        "ok",
+        floors.map((f) => f.name),
+      );
+
+      // Prefer Revit room clear-height as storey pitch metadata when available.
+      for (const floor of floors) {
+        const heights = rooms
+          .filter((r) => r.floorId === floor.id && r.height != null && r.height! > 0)
+          .map((r) => r.height!);
+        if (heights.length) {
+          floor.typicalHeight =
+            heights.reduce((a, b) => a + b, 0) / heights.length;
+        }
+      }
+
+      // Bottom slab + walls stay; ceiling / top slab moves to the next storey.
+      reassignUpperSlabsToNextFloor(floors, shellGeoms, (piece) => {
+        try {
+          const typeCode = api.GetLineType(modelID, piece.expressId);
+          const typeName =
+            (api.GetNameFromTypeCode(typeCode) ?? "").toLowerCase();
+          return (
+            typeCode === WebIFC.IFCSLAB ||
+            typeName.includes("slab") ||
+            typeName.includes("floor") ||
+            typeName.includes("footing") ||
+            typeName.includes("decke") ||
+            typeName.includes("bodenplatte") ||
+            typeName.includes("boden")
+          );
+        } catch {
+          return false;
+        }
+      });
+
+      const keptFloors = pruneEmptyFloors(floors, rooms, shellGeoms);
+      floors.length = 0;
+      floors.push(...keptFloors);
+      debugLog(
+        "ifcClient",
+        `floors after prune empty: ${floors.length}`,
+        "ok",
+        floors.map((f) => f.name),
+      );
 
       const heatValues = rooms.map((r) => r.heatLoad);
       const coolValues = rooms.map((r) => r.coolLoad);

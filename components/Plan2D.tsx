@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
+import { roomTemperatureForView } from "@/lib/roomLoad";
 import { roomVentilationColorValue } from "@/lib/ventilation";
 import { canHover } from "@/lib/canHover";
 import { isRoomPickAllowed } from "@/lib/pickAllowed";
@@ -31,9 +32,17 @@ function roomColor(
   temperatureRange: number[],
   customLegendColors?: CustomLegendColors,
 ): string {
+  if (dataViewMode === "luftung") {
+    return luftungToColor(
+      roomVentilationColorValue(room),
+      palette,
+      luftungRange,
+      customLegendColors?.luftung,
+    );
+  }
   if (mode === "temperature") {
     return temperatureToColor(
-      room.temperature,
+      roomTemperatureForView(room, dataViewMode),
       palette,
       temperatureRange,
       customLegendColors?.temperature,
@@ -45,14 +54,6 @@ function roomColor(
       palette,
       kuhllastRange,
       customLegendColors?.kuhllast,
-    );
-  }
-  if (dataViewMode === "luftung") {
-    return luftungToColor(
-      roomVentilationColorValue(room),
-      palette,
-      luftungRange,
-      customLegendColors?.luftung,
     );
   }
   return heizlastToColor(
@@ -91,6 +92,9 @@ export default function Plan2D({ onPointerMove, className }: Props) {
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
+  const activeTemperatureRange =
+    dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
   const customLegendColors = useAppStore((s) => s.customLegendColors);
 
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -268,7 +272,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
             heizlastRange,
             kuhllastRange,
             luftungRange,
-            temperatureRange,
+            activeTemperatureRange,
             customLegendColors,
           ),
         ),
@@ -304,7 +308,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
           heizlastRange,
           kuhllastRange,
           luftungRange,
-          temperatureRange,
+            activeTemperatureRange,
           customLegendColors,
         ),
       );
@@ -318,7 +322,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     heizlastRange,
     kuhllastRange,
     luftungRange,
-    temperatureRange,
+    activeTemperatureRange,
     customLegendColors,
   ]);
 
@@ -366,7 +370,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
           heizlastRange,
           kuhllastRange,
           luftungRange,
-          temperatureRange,
+            activeTemperatureRange,
           customLegendColors,
         );
         mat.color.set(sel);
@@ -385,7 +389,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
           heizlastRange,
           kuhllastRange,
           luftungRange,
-          temperatureRange,
+            activeTemperatureRange,
           customLegendColors,
         );
         mat.color.set(hex);
@@ -407,7 +411,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     luftungRange,
     dataViewMode,
     colorMode,
-    temperatureRange,
+    activeTemperatureRange,
     customLegendColors,
   ]);
 

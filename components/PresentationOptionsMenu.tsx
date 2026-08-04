@@ -23,6 +23,7 @@ import {
   groupRoomsByVentilationZone,
   summaryVentilationZoneKey,
 } from "@/lib/ventilation";
+import { useModelScene } from "./ModelSceneContext";
 
 const LAYOUT_OPTIONS: {
   id: PresentationLayoutMode;
@@ -108,12 +109,15 @@ function ViewModeChips({
       {DATA_VIEW_MODES.map((id) => {
         const selected = dataViewMode === id;
         const label = t(uiLanguage, DATA_VIEW_LABEL[id]);
+        const shortcut =
+          id === "heizlast" ? "H" : id === "luftung" ? "L" : "K";
+        const title = `${label} (${shortcut})`;
         return (
           <button
             key={id}
             type="button"
             role="menuitem"
-            title={label}
+            title={title}
             onClick={() => setDataViewMode(id)}
             className={`flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-xl px-1 text-center transition-[background,border,box-shadow,color] duration-300 ease-out ${
               compact ? "py-1" : "py-1.5"
@@ -170,6 +174,7 @@ export default function PresentationOptionsMenu({
     (s) => s.setSelectedVentilationZoneKey,
   );
   const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+  const { shellGroup } = useModelScene();
 
   const ventilationZones = groupRoomsByVentilationZone(
     presentationIsolate && presentationFloorId
@@ -184,7 +189,7 @@ export default function PresentationOptionsMenu({
         )
       : ventilationZones;
 
-  const floorsWithRooms = listVisibleFloors(floors, rooms);
+  const floorsWithRooms = listVisibleFloors(floors, rooms, shellGroup);
   const activeLayout = resolvePresentationLayout(
     floorsWithRooms.length || floors.length,
     presentationLayoutMode,

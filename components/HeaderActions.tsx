@@ -18,6 +18,7 @@ import {
 } from "@/lib/layoutTokens";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
+import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
 import GsapHeightAccordion from "./GsapHeightAccordion";
 import GsapPopMenu from "./GsapPopMenu";
@@ -356,10 +357,19 @@ export default function HeaderActions({
     return () => document.removeEventListener("click", onDoc);
   }, []);
 
+  useEffect(() => {
+    const openPicker = () => {
+      if (isLoadingModel) return;
+      fileInputRef.current?.click();
+    };
+    window.addEventListener(OPEN_IFC_FILE_EVENT, openPicker);
+    return () => window.removeEventListener(OPEN_IFC_FILE_EVENT, openPicker);
+  }, [isLoadingModel]);
+
   const modeOptions: { id: HeaderMode; label: string }[] = [
-    { id: "heizlast", label: t(uiLanguage, "heating") },
-    { id: "luftung", label: t(uiLanguage, "ventilation") },
-    { id: "kuhllast", label: t(uiLanguage, "cooling") },
+    { id: "heizlast", label: `${t(uiLanguage, "heating")} (H)` },
+    { id: "luftung", label: `${t(uiLanguage, "ventilation")} (L)` },
+    { id: "kuhllast", label: `${t(uiLanguage, "cooling")} (K)` },
     { id: "editor", label: t(uiLanguage, "tool") },
   ];
 

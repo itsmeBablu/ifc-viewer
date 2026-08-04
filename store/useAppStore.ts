@@ -23,6 +23,7 @@ import {
   DEFAULT_KUHLLAST_RANGE,
   DEFAULT_LUFTUNG_RANGE,
   DEFAULT_TEMPERATURE_RANGE,
+  DEFAULT_COOLING_TEMPERATURE_RANGE,
   parseLegendRange,
 } from "@/lib/colorMapping";
 import { listVisibleFloors } from "@/lib/floorFilter";
@@ -52,9 +53,10 @@ const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
 const AUTO_FOCUS_KEY = "ifc-viewer:autoFocusSelection";
 const THEME_KEY = "ifc-viewer:colorTheme";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
-const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange";
+const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange:v2";
 const LUFTUNG_RANGE_KEY = "ifc-viewer:luftungRange";
 const TEMP_RANGE_KEY = "ifc-viewer:temperatureRange";
+const COOL_TEMP_RANGE_KEY = "ifc-viewer:coolingTemperatureRange";
 const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors:v3";
 const LEGEND_SWATCH_PRESET_KEY = "ifc-viewer:legendSwatchPresetId:v2";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
@@ -144,8 +146,10 @@ type AppState = {
   kuhllastRange: number[];
   /** Legend Lüftung heat-loss stop values (6–8). */
   luftungRange: number[];
-  /** Legend temperature stop values (6–8). */
+  /** Legend temperature stop values (heating setpoint °C). */
   temperatureRange: number[];
+  /** Legend cooling analysis temperature stops (°C) — Solar Computer MAX/operative. */
+  coolingTemperatureRange: number[];
   /** User-edited swatch colors keyed by stop value string. */
   customLegendColors: CustomLegendColors;
   /** Last one-click swatch preset applied per legend mode. */
@@ -235,6 +239,7 @@ type AppState = {
   setKuhllastRange: (values: number[]) => void;
   setLuftungRange: (values: number[]) => void;
   setTemperatureRange: (values: number[]) => void;
+  setCoolingTemperatureRange: (values: number[]) => void;
   setLegendStopColor: (
     mode: LegendColorMode,
     value: number,
@@ -351,93 +356,18 @@ function persistLegendSwatchPresetIds(
   }
 }
 
-function customLegendIsEmpty(colors: CustomLegendColors): boolean {
-  return (
-    Object.keys(colors.heizlast).length === 0 &&
-    Object.keys(colors.kuhllast).length === 0 &&
-    Object.keys(colors.luftung).length === 0 &&
-    Object.keys(colors.temperature).length === 0
-  );
-}
-
 function initialCustomLegendColors(): CustomLegendColors {
-  const defaults = buildThermalClassicLegendColors({
+  // Always Schnellpalette #1 (Thermal Classic) on startup.
+  return buildThermalClassicLegendColors({
     heizlast: initialRange(HEIZLAST_RANGE_KEY, DEFAULT_HEIZLAST_RANGE),
     kuhllast: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
     luftung: initialRange(LUFTUNG_RANGE_KEY, DEFAULT_LUFTUNG_RANGE),
     temperature: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
   });
-  if (typeof window === "undefined") return defaults;
-  try {
-    // No Schnellpalette choice yet → Thermal Classic for heat / cool / vent / temp.
-    if (!localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)) return defaults;
-
-    const raw =
-      localStorage.getItem(CUSTOM_LEGEND_COLORS_KEY) ??
-      localStorage.getItem("ifc-viewer:customLegendColors:v2") ??
-      localStorage.getItem("ifc-viewer:customLegendColors");
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as Partial<CustomLegendColors>;
-    const merged: CustomLegendColors = {
-      temperature: parsed.temperature ?? {},
-      heizlast: parsed.heizlast ?? {},
-      kuhllast: parsed.kuhllast ?? {},
-      luftung: parsed.luftung ?? {},
-    };
-    if (customLegendIsEmpty(merged)) return defaults;
-
-    const presetIds = JSON.parse(
-      localStorage.getItem(LEGEND_SWATCH_PRESET_KEY)!,
-    ) as Partial<Record<LegendColorMode, string | null>>;
-
-    const pick = (
-      mode: LegendColorMode,
-      stored: CustomLegendColorMap,
-    ): CustomLegendColorMap =>
-      (presetIds[mode] ?? DEFAULT_LEGEND_SWATCH_PRESET_ID) ===
-      DEFAULT_LEGEND_SWATCH_PRESET_ID
-        ? defaults[mode]
-        : Object.keys(stored).length
-          ? stored
-          : defaults[mode];
-
-    return {
-      heizlast: pick("heizlast", merged.heizlast),
-      kuhllast: pick("kuhllast", merged.kuhllast),
-      luftung: pick("luftung", merged.luftung),
-      temperature: pick("temperature", merged.temperature),
-    };
-  } catch {
-    return defaults;
-  }
 }
 
 function initialLegendSwatchPresetIds(): Record<LegendColorMode, string | null> {
-  const defaults = { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
-  if (typeof window === "undefined") return defaults;
-  try {
-    const raw =
-      localStorage.getItem(LEGEND_SWATCH_PRESET_KEY) ??
-      localStorage.getItem("ifc-viewer:legendSwatchPresetId");
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as Partial<
-      Record<LegendColorMode, string | null>
-    >;
-    return {
-      temperature:
-        parsed.temperature === undefined
-          ? defaults.temperature
-          : parsed.temperature,
-      heizlast:
-        parsed.heizlast === undefined ? defaults.heizlast : parsed.heizlast,
-      kuhllast:
-        parsed.kuhllast === undefined ? defaults.kuhllast : parsed.kuhllast,
-      luftung:
-        parsed.luftung === undefined ? defaults.luftung : parsed.luftung,
-    };
-  } catch {
-    return defaults;
-  }
+  return { ...DEFAULT_THERMAL_CLASSIC_PRESET_IDS };
 }
 
 function initialRange(key: string, fallback: number[]): number[] {
@@ -527,12 +457,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   kuhllastRange: initialRange(KUHLLAST_RANGE_KEY, DEFAULT_KUHLLAST_RANGE),
   luftungRange: initialRange(LUFTUNG_RANGE_KEY, DEFAULT_LUFTUNG_RANGE),
   temperatureRange: initialRange(TEMP_RANGE_KEY, DEFAULT_TEMPERATURE_RANGE),
+  coolingTemperatureRange: initialRange(
+    COOL_TEMP_RANGE_KEY,
+    DEFAULT_COOLING_TEMPERATURE_RANGE,
+  ),
   customLegendColors: initialCustomLegendColors(),
   legendSwatchPresetId: initialLegendSwatchPresetIds(),
   renderMode: "fullColor",
   lighting: {
-    spaceTransparency: 0.75,
-    elementTransparency: 0.5,
+    spaceTransparency: 0.8,
+    elementTransparency: 1,
     color: 1,
     shadow: 0.55,
     indirectLight: 0.45,
@@ -622,8 +556,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       dataViewMode: mode,
       selectedVentilationZoneKey: mode === "luftung" ? nextZone : null,
-      ...(mode === "luftung" ? { compareBothModes: false } : {}),
+      ...(mode === "luftung"
+        ? { compareBothModes: false, colorMode: "heizlast" as const }
+        : {}),
     });
+    // Remap temperature swatches onto heating vs cooling analysis ranges.
+    const presetId = get().legendSwatchPresetId.temperature;
+    if (presetId) get().applyLegendSwatchPreset("temperature", presetId);
     // Autofocus preference persists across modes — re-apply to current selection.
     if (!s.autoFocusSelection) return;
     if (mode === "luftung" && nextZone) {
@@ -693,6 +632,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const presetId = get().legendSwatchPresetId.temperature;
     if (presetId) get().applyLegendSwatchPreset("temperature", presetId);
   },
+  setCoolingTemperatureRange: (values) => {
+    const parsed = parseLegendRange(values.join(","));
+    if (!parsed) return;
+    persistRange(COOL_TEMP_RANGE_KEY, parsed);
+    set({ coolingTemperatureRange: parsed });
+    const presetId = get().legendSwatchPresetId.temperature;
+    if (presetId) get().applyLegendSwatchPreset("temperature", presetId);
+  },
   setLegendStopColor: (mode, value, color) => {
     const key = String(value);
     set((s) => {
@@ -711,11 +658,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   resetLegendColors: (mode) => {
     const s = get();
+    const tempRange =
+      s.dataViewMode === "kuhllast"
+        ? s.coolingTemperatureRange
+        : s.temperatureRange;
     const classic = buildThermalClassicLegendColors({
       heizlast: s.heizlastRange,
       kuhllast: s.kuhllastRange,
       luftung: s.luftungRange,
-      temperature: s.temperatureRange,
+      temperature: tempRange,
     });
     set((state) => {
       const next: CustomLegendColors = {
@@ -738,7 +689,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => {
       const range =
         mode === "temperature"
-          ? s.temperatureRange
+          ? s.dataViewMode === "kuhllast"
+            ? s.coolingTemperatureRange
+            : s.temperatureRange
           : mode === "kuhllast"
             ? s.kuhllastRange
             : mode === "luftung"

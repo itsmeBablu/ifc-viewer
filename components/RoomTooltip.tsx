@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";
+import { roomTemperatureForView } from "@/lib/roomLoad";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import type { Room } from "@/lib/types";
 import { t, type UiLanguage, type UiTextKey } from "@/lib/i18n";
@@ -14,6 +15,7 @@ import {
   ventilationFlowRole,
   VENT_FLOW_HEX,
 } from "@/lib/ventilation";
+import type { DataViewMode } from "@/lib/dataViewMode";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";
 
@@ -36,6 +38,7 @@ function RoomInfoBody({
   temperatureRange,
   customLegendColors,
   uiLanguage,
+  dataViewMode,
   cooling,
   ventilation = false,
   compact = false,
@@ -48,11 +51,13 @@ function RoomInfoBody({
   temperatureRange: number[];
   customLegendColors: CustomLegendColors;
   uiLanguage: UiLanguage;
+  dataViewMode: DataViewMode;
   cooling: boolean;
   ventilation?: boolean;
   compact?: boolean;
 }) {
   const v = room.ventilation;
+  const displayTemp = roomTemperatureForView(room, dataViewMode);
   const loadColor = ventilation
     ? luftungToColor(
         roomVentilationColorValue(room),
@@ -74,7 +79,7 @@ function RoomInfoBody({
         customLegendColors.heizlast,
       );
   const tempColor = temperatureToColor(
-    room.temperature,
+    displayTemp,
     palette,
     temperatureRange,
     customLegendColors.temperature,
@@ -90,8 +95,8 @@ function RoomInfoBody({
   const density = Number.isFinite(densityVal)
     ? `${densityVal.toFixed(1).replace(".", ",")} W/m²`
     : "—";
-  const temp = Number.isFinite(room.temperature)
-    ? `${Math.round(room.temperature)}°C`
+  const temp = Number.isFinite(displayTemp)
+    ? `${Math.round(displayTemp)}°C`
     : "—";
 
   const titleKey: UiTextKey = ventilation
@@ -327,6 +332,7 @@ export default function RoomTooltip({
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const luftungRange = useAppStore((s) => s.luftungRange);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
   const customLegendColors = useAppStore((s) => s.customLegendColors);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
@@ -371,6 +377,9 @@ export default function RoomTooltip({
   const compact = isMobile && isSelection;
   const cooling = dataViewMode === "kuhllast";
   const ventilation = dataViewMode === "luftung";
+  const activeTemperatureRange = cooling
+    ? coolingTemperatureRange
+    : temperatureRange;
 
   let targetLeft = 0;
   let targetTop = 0;
@@ -441,9 +450,10 @@ export default function RoomTooltip({
           heizlastRange={heizlastRange}
           kuhllastRange={kuhllastRange}
           luftungRange={luftungRange}
-          temperatureRange={temperatureRange}
+          temperatureRange={activeTemperatureRange}
           customLegendColors={customLegendColors}
           uiLanguage={uiLanguage}
+          dataViewMode={dataViewMode}
           cooling={cooling}
           ventilation={ventilation}
           compact={compact}

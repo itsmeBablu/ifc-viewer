@@ -5,6 +5,7 @@ import {
   HEIZLAST_RANGE_PRESETS,
   KUHLLAST_RANGE_PRESETS,
   LUFTUNG_RANGE_PRESETS,
+  buildCoolingLoadRangePresetsFromLoads,
   buildLoadRangePresetsFromLoads,
   buildLuftungRangePresetsFromLosses,
   buildTemperatureRangePresets,
@@ -95,10 +96,14 @@ export default function LegendBody({
   const luftungRange = useAppStore((s) => s.luftungRange);
   const rooms = useAppStore((s) => s.rooms);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
+  const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
+  const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
+  const setCoolingTemperatureRange = useAppStore(
+    (s) => s.setCoolingTemperatureRange,
+  );
   const setHeizlastRange = useAppStore((s) => s.setHeizlastRange);
   const setKuhllastRange = useAppStore((s) => s.setKuhllastRange);
   const setLuftungRange = useAppStore((s) => s.setLuftungRange);
-  const setTemperatureRange = useAppStore((s) => s.setTemperatureRange);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
@@ -115,6 +120,12 @@ export default function LegendBody({
 
   const cooling = dataViewMode === "kuhllast";
   const ventilation = dataViewMode === "luftung";
+  const activeTemperatureRange = cooling
+    ? coolingTemperatureRange
+    : temperatureRange;
+  const setActiveTemperatureRange = cooling
+    ? setCoolingTemperatureRange
+    : setTemperatureRange;
   const loadKind: LegendColorMode = cooling
     ? "kuhllast"
     : ventilation
@@ -159,14 +170,23 @@ export default function LegendBody({
         rooms.map((r) => r.ventilation.ventilationHeatLoss || 0),
       );
     }
+    if (cooling) {
+      return buildCoolingLoadRangePresetsFromLoads(
+        rooms.map((r) => r.coolLoad || 0),
+      );
+    }
     return buildLoadRangePresetsFromLoads(
-      rooms.map((r) => (cooling ? r.coolLoad : r.heatLoad) || 0),
+      rooms.map((r) => r.heatLoad || 0),
     );
   }, [rooms, ventilation, cooling]);
-  const tempPresets = useMemo(
-    () => buildTemperatureRangePresets(rooms.map((r) => r.temperature)),
-    [rooms],
-  );
+  const tempPresets = useMemo(() => {
+    const temps = cooling
+      ? rooms
+          .map((r) => r.coolTemperature)
+          .filter((t): t is number => t != null && t > 0)
+      : rooms.map((r) => r.temperature);
+    return buildTemperatureRangePresets(temps);
+  }, [rooms, cooling]);
   const loadUnitHint = ventilation ? "W" : "W/m²";
   const loadLabelKey = ventilation
     ? "luftungHeatLoss"
@@ -179,7 +199,7 @@ export default function LegendBody({
   const tempStops = legendStopsForMode(
     "temperature",
     effectiveColorPalette,
-    temperatureRange,
+    activeTemperatureRange,
     tempOverrides,
   );
   const loadStops = legendStopsForMode(
@@ -310,7 +330,7 @@ export default function LegendBody({
             )
           )
         )}
-        {!compareBothModes && (
+        {!compareBothModes && !ventilation && (
         <div
           ref={modeBarRef}
           className={`legend-mode-bar flex rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ${
@@ -395,7 +415,7 @@ export default function LegendBody({
         </div>
         )}
 
-        {(compareBothModes || colorMode === "heizlast") && (
+        {(compareBothModes || colorMode === "heizlast" || ventilation) && (
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
@@ -404,6 +424,23 @@ export default function LegendBody({
                   cooling ? "kuhllastTopLeft" : "heizlastTopLeft",
                 )}
               </p>
+            )}
+            {ventilation && !compareBothModes && (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
+                  {t(uiLanguage, loadLabelKey)}
+                </p>
+                <button
+                  type="button"
+                  title={t(uiLanguage, "legendRangePreset")}
+                  onClick={() => setRangeOpen((v) => !v)}
+                  aria-expanded={rangeOpen}
+                  className="flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]"
+                >
+                  {t(uiLanguage, "legendRangePreset")}
+                  <Chevron open={rangeOpen} />
+                </button>
+              </div>
             )}
             <button
               type="button"
@@ -442,7 +479,9 @@ export default function LegendBody({
                 </span>
               ))}
             </div>
-            {!compareBothModes && rangeOpen && colorMode === "heizlast" && (
+            {!compareBothModes &&
+              rangeOpen &&
+              (colorMode === "heizlast" || ventilation) && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
                   values={loadRange}
@@ -472,7 +511,7 @@ export default function LegendBody({
           </div>
         )}
 
-        {(compareBothModes || colorMode === "temperature") && (
+        {(compareBothModes || colorMode === "temperature") && !ventilation && (
           <div className={compact ? "space-y-1" : "space-y-2"}>
             {compareBothModes && (
               <p className="text-[10px] font-medium tracking-wide text-zinc-500">
@@ -519,8 +558,8 @@ export default function LegendBody({
             {!compareBothModes && rangeOpen && colorMode === "temperature" && (
               <div ref={rangeBlockRef}>
                 <LegendRangeInput
-                  values={temperatureRange}
-                  onCommit={setTemperatureRange}
+                  values={activeTemperatureRange}
+                  onCommit={setActiveTemperatureRange}
                   unitHint="°C"
                   presets={tempPresets}
                 />

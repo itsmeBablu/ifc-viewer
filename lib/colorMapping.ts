@@ -54,17 +54,17 @@ const STANDARD_HEIZLAST: ColorStop[] = [
   { value: Number.POSITIVE_INFINITY, color: "#7A3300" },
 ];
 
-/** Summer cooling — ice cyan (low) → aqua → sky → indigo → violet (high). */
+/** Summer cooling — vivid sky → cobalt (readable on glass rooms in 3D). */
 const STANDARD_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#E0F7FA" },
-  { value: 0, color: "#B2EBF2" },
-  { value: 10, color: "#4DD0E1" },
-  { value: 20, color: "#00ACC1" },
-  { value: 25, color: "#0288D1" },
-  { value: 30, color: "#1565C0" },
-  { value: 40, color: "#5C6BC0" },
-  { value: 50, color: "#7B1FA2" },
-  { value: Number.POSITIVE_INFINITY, color: "#4A148C" },
+  { value: Number.NEGATIVE_INFINITY, color: "#E3F2FD" },
+  { value: 0, color: "#90CAF9" },
+  { value: 10, color: "#42A5F5" },
+  { value: 20, color: "#1E88E5" },
+  { value: 25, color: "#1565C0" },
+  { value: 30, color: "#0D47A1" },
+  { value: 40, color: "#0A3D91" },
+  { value: 50, color: "#082E6B" },
+  { value: Number.POSITIVE_INFINITY, color: "#041E42" },
 ];
 
 const STANDARD_TEMP: ColorStop[] = [
@@ -89,15 +89,15 @@ const SOFT_HEIZLAST: ColorStop[] = [
 ];
 
 const SOFT_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#E8F6F8" },
-  { value: 0, color: "#C5E8EE" },
-  { value: 10, color: "#9AD4DE" },
-  { value: 20, color: "#7BB8D4" },
-  { value: 25, color: "#7AA8C8" },
-  { value: 30, color: "#8A9EC8" },
-  { value: 40, color: "#A090C0" },
-  { value: 50, color: "#B888B8" },
-  { value: Number.POSITIVE_INFINITY, color: "#9A7098" },
+  { value: Number.NEGATIVE_INFINITY, color: "#E3F2FD" },
+  { value: 0, color: "#90CAF9" },
+  { value: 10, color: "#64B5F6" },
+  { value: 20, color: "#42A5F5" },
+  { value: 25, color: "#1E88E5" },
+  { value: 30, color: "#1565C0" },
+  { value: 40, color: "#0D47A1" },
+  { value: 50, color: "#0A3D91" },
+  { value: Number.POSITIVE_INFINITY, color: "#062A66" },
 ];
 
 const SOFT_TEMP: ColorStop[] = [
@@ -246,9 +246,12 @@ export function temperatureStopsFor(paletteId?: ColorPaletteId | string): ColorS
 }
 
 export const DEFAULT_HEIZLAST_RANGE = [0, 10, 20, 30, 40, 50];
-export const DEFAULT_KUHLLAST_RANGE = [0, 10, 20, 30, 40, 50];
+/** Solar Computer convention: 0 → more negative = higher cooling. */
+export const DEFAULT_KUHLLAST_RANGE = [0, -10, -20, -30, -40, -50];
 export const DEFAULT_LUFTUNG_RANGE = [0, 50, 100, 150, 200, 300, 400];
 export const DEFAULT_TEMPERATURE_RANGE = [0, 6, 15, 18, 20, 24];
+/** Summer / cooling analysis temperatures (Solar Computer MAX / operative). */
+export const DEFAULT_COOLING_TEMPERATURE_RANGE = [20, 22, 24, 26, 28, 30];
 export const MIN_LEGEND_STOPS = 6;
 /** Allow denser temperature legends when IFC rooms introduce extra °C stops. */
 export const MAX_LEGEND_STOPS = 12;
@@ -271,7 +274,12 @@ export const HEIZLAST_RANGE_PRESETS: LegendRangePreset[] = [
   { id: "to-100", label: "0, 20, 40, 60, 80, 100", values: [0, 20, 40, 60, 80, 100] },
 ];
 
-export const KUHLLAST_RANGE_PRESETS = HEIZLAST_RANGE_PRESETS;
+/** Kühllast presets — same magnitudes as Heizlast, Solar Computer signed. */
+export const KUHLLAST_RANGE_PRESETS: LegendRangePreset[] =
+  HEIZLAST_RANGE_PRESETS.map((p) => {
+    const values = p.values.map((v) => -v);
+    return { id: p.id, label: values.join(", "), values };
+  });
 
 /** Ventilation heat loss (W) — same color anchors as Heizlast, W-scale range. */
 export const LUFTUNG_RANGE_PRESETS: LegendRangePreset[] = [
@@ -370,6 +378,23 @@ export function buildLoadRangePresetsFromLoads(
     },
     ...withoutDup,
   ].slice(0, 12);
+}
+
+/** Cooling presets — magnitudes from |loads|, values signed like Solar Computer. */
+export function buildCoolingLoadRangePresetsFromLoads(
+  loads: number[],
+): LegendRangePreset[] {
+  const mags = loads.filter((v) => Number.isFinite(v)).map((v) => Math.abs(v));
+  return buildLoadRangePresetsFromLoads(mags).map((p) => {
+    const values = p.values.map((v) => -v);
+    return {
+      id: p.id,
+      label: p.label.includes("· auto")
+        ? `${values.join(", ")} · auto`
+        : values.join(", "),
+      values,
+    };
+  });
 }
 
 export function buildLuftungRangePresetsFromMax(
@@ -482,7 +507,17 @@ export function pickHeizlastRangeFromLoads(heatLoads: number[]): number[] {
   return buildEvenLegendRange(typicalTop, 6);
 }
 
-export const pickKuhllastRangeFromLoads = pickHeizlastRangeFromLoads;
+/** Solar Computer: keep signed cooling range 0 → −top. */
+export function pickKuhllastRangeFromLoads(coolLoads: number[]): number[] {
+  const mags = coolLoads
+    .filter((v) => Number.isFinite(v))
+    .map((v) => Math.abs(v));
+  if (!mags.length || Math.max(...mags) <= 0) {
+    return [...DEFAULT_KUHLLAST_RANGE];
+  }
+  const { typicalTop } = analyzeLoadScale(mags, { minTop: 50, step: 5 });
+  return buildEvenLegendRange(typicalTop, 6).map((v) => -v);
+}
 
 /** Pick Lüftung Wärmeverlust (W) range from room losses (outlier-aware). */
 export function pickLuftungRangeFromLosses(losses: number[]): number[] {
@@ -609,6 +644,7 @@ export function legendRangesFromRooms(
     heatLoad: number;
     coolLoad: number;
     temperature: number;
+    coolTemperature?: number | null;
     ventilation?: { ventilationHeatLoss?: number };
   }[],
 ): {
@@ -616,7 +652,11 @@ export function legendRangesFromRooms(
   kuhllast: number[];
   luftung: number[];
   temperature: number[];
+  coolingTemperature: number[];
 } {
+  const coolTemps = rooms
+    .map((r) => r.coolTemperature)
+    .filter((t): t is number => t != null && Number.isFinite(t) && t > 0);
   return {
     heizlast: pickHeizlastRangeFromLoads(rooms.map((r) => r.heatLoad)),
     kuhllast: pickKuhllastRangeFromLoads(rooms.map((r) => r.coolLoad)),
@@ -626,10 +666,14 @@ export function legendRangesFromRooms(
     temperature: mergeTemperatureRangeFromRooms(
       rooms.map((r) => r.temperature),
     ),
+    coolingTemperature: mergeTemperatureRangeFromRooms(
+      coolTemps,
+      DEFAULT_COOLING_TEMPERATURE_RANGE,
+    ),
   };
 }
 
-/** Parse "0, 10, 20, 30, 40, 50" → sorted unique numbers (6–12). */
+/** Parse "0, 10, 20…" or cooling "0, -10, -20…" — preserve asc/desc order. */
 export function parseLegendRange(input: string): number[] | null {
   const parts = input
     .split(/[,;\s]+/)
@@ -640,14 +684,26 @@ export function parseLegendRange(input: string): number[] | null {
   }
   const nums = parts.map(Number);
   if (nums.some((n) => !Number.isFinite(n))) return null;
-  const sorted = [...new Set(nums)].sort((a, b) => a - b);
+
+  const unique: number[] = [];
+  for (const n of nums) {
+    if (!unique.includes(n)) unique.push(n);
+  }
   if (
-    sorted.length < MIN_LEGEND_STOPS ||
-    sorted.length > MAX_LEGEND_STOPS
+    unique.length < MIN_LEGEND_STOPS ||
+    unique.length > MAX_LEGEND_STOPS
   ) {
     return null;
   }
-  return sorted;
+
+  let ascending = true;
+  let descending = true;
+  for (let i = 1; i < unique.length; i++) {
+    if (unique[i]! < unique[i - 1]!) ascending = false;
+    if (unique[i]! > unique[i - 1]!) descending = false;
+  }
+  if (ascending || descending) return unique;
+  return [...unique].sort((a, b) => a - b);
 }
 
 export function formatLegendRange(values: number[]): string {
@@ -858,24 +914,35 @@ function loadToColor(
     resolveStopsForRange(paletteStops, range),
     overrides,
   );
-  if (!Number.isFinite(value) || value < stops[0].value) {
-    return stops[0].color;
-  }
-  if (value >= stops[stops.length - 1].value) {
-    return stops[stops.length - 1].color;
+  if (!stops.length) return "#888888";
+  if (!Number.isFinite(value)) return stops[0]!.color;
+
+  const first = stops[0]!;
+  const last = stops[stops.length - 1]!;
+  const descending = last.value < first.value;
+
+  // Outside the legend span (works for heating ↑ and cooling ↓).
+  if (descending) {
+    if (value >= first.value) return first.color;
+    if (value <= last.value) return last.color;
+  } else {
+    if (value <= first.value) return first.color;
+    if (value >= last.value) return last.color;
   }
 
   for (let i = 0; i < stops.length - 1; i++) {
-    const a = stops[i];
-    const b = stops[i + 1];
-    if (value >= a.value && value <= b.value) {
+    const a = stops[i]!;
+    const b = stops[i + 1]!;
+    const lo = Math.min(a.value, b.value);
+    const hi = Math.max(a.value, b.value);
+    if (value >= lo && value <= hi) {
       const span = b.value - a.value;
       const t = span === 0 ? 0 : (value - a.value) / span;
       return rgbToHex(lerpRgb(hexToRgb(a.color), hexToRgb(b.color), t));
     }
   }
 
-  return stops[stops.length - 1].color;
+  return last.color;
 }
 
 /** CSS linear-gradient matching heizlast anchors for the active palette/range. */

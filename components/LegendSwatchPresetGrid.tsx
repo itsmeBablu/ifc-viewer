@@ -30,7 +30,7 @@ export default function LegendSwatchPresetGrid({
 
   return (
     <div className={`grid grid-cols-3 ${compact ? "gap-1" : "gap-1.5"}`}>
-      {presets.map((preset) => {
+      {presets.map((preset, index) => {
         const colors =
           mode === "temperature"
             ? (preset as TemperatureSwatchPreset).colors
@@ -39,6 +39,7 @@ export default function LegendSwatchPresetGrid({
           <SwatchPresetButton
             key={preset.id}
             name={preset.name}
+            shortcut={index + 1}
             presetId={preset.id}
             colors={colors}
             active={activePresetId === preset.id}
@@ -53,6 +54,7 @@ export default function LegendSwatchPresetGrid({
 
 function SwatchPresetButton({
   name,
+  shortcut,
   presetId,
   colors,
   active,
@@ -60,6 +62,7 @@ function SwatchPresetButton({
   onSelect,
 }: {
   name: string;
+  shortcut: number;
   presetId: string;
   colors: string[];
   active: boolean;
@@ -69,7 +72,7 @@ function SwatchPresetButton({
   return (
     <button
       type="button"
-      title={name}
+      title={`${name} (${shortcut})`}
       onClick={onSelect}
       className={`rounded-lg border text-left transition-all hover:brightness-105 active:scale-[0.98] ${
         compact ? "p-1" : "p-1.5"
@@ -97,7 +100,7 @@ function SwatchPresetButton({
           compact ? "text-[8px]" : "text-[9px]"
         }`}
       >
-        {name}
+        {shortcut}. {name}
       </p>
     </button>
   );

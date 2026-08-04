@@ -41,8 +41,8 @@ export default function FloorRoomsPanel({ embedded = false }: Props) {
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
 
   const floorsWithRooms = useMemo(
-    () => listVisibleFloors(floors, rooms),
-    [floors, rooms],
+    () => listVisibleFloors(floors, rooms, shellGroup),
+    [floors, rooms, shellGroup],
   );
 
   const floorRooms = useMemo(() => {

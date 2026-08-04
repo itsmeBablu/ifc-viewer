@@ -46,11 +46,22 @@ export type Room = {
   heatLoad: number;
   /** Absolute Heizlast parameter from IFC (typically W), if present. */
   heizlast: number | null;
-  /** Specific cooling load for coloring (W/m²) — IFC "Kühllast W/m²". */
+  /** Specific cooling load for coloring (W/m²) — Solar Computer signed (often negative). */
   coolLoad: number;
-  /** Absolute Kühllast from IFC (W), if present. */
+  /** Absolute Kühllast from IFC (W, signed), if present. */
   kuhllast: number | null;
+  /** Heating / setpoint temperature °C (SC_Raum_Temperatur). */
   temperature: number;
+  /**
+   * Cooling analysis temperature °C from Solar Computer
+   * (operative/max summer temps). Null when missing or 0.
+   */
+  coolTemperature: number | null;
+  /**
+   * Clear / room height in meters from Revit (SC_Raum_Höhe / Lichte Höhe).
+   * Null when missing.
+   */
+  height: number | null;
   ventilation: RoomVentilation;
   floorId: string;
   expressId: number;
@@ -62,6 +73,8 @@ export type Floor = {
   name: string;
   elevation: number;
   expressId: number;
+  /** Mean IFC room clear height (m) on this storey, when available. */
+  typicalHeight?: number;
 };
 
 export type ModelEntry = {
