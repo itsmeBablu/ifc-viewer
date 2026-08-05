@@ -205,9 +205,9 @@ export default function HeaderActions({
   const { highlight: menuRowHighlight, surfaceHighlight: menuRowSurfaceHighlight } =
     menuRowStyles(isDark);
 
-  /** Tool mode is local; heating/vent/cooling stay in the shared store. */
-  const [editorActive, setEditorActive] = useState(false);
-  const mode: HeaderMode = editorActive ? "editor" : dataViewMode;
+  const toolMode = useAppStore((s) => s.toolMode);
+  const setToolMode = useAppStore((s) => s.setToolMode);
+  const mode: HeaderMode = toolMode ? "editor" : dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
@@ -370,7 +370,7 @@ export default function HeaderActions({
     { id: "heizlast", label: `${t(uiLanguage, "heating")} (H)` },
     { id: "luftung", label: `${t(uiLanguage, "ventilation")} (L)` },
     { id: "kuhllast", label: `${t(uiLanguage, "cooling")} (K)` },
-    { id: "editor", label: t(uiLanguage, "tool") },
+    { id: "editor", label: `${t(uiLanguage, "tool")} (T)` },
   ];
 
   const yellowGloss = isDark
@@ -453,10 +453,10 @@ export default function HeaderActions({
                     onMouseEnter={() => setModeHoverId(opt.id)}
                     onClick={() => {
                       if (isDataViewMode(opt.id)) {
+                        setToolMode(false);
                         setDataViewMode(opt.id);
-                        setEditorActive(false);
                       } else {
-                        setEditorActive(true);
+                        setToolMode(true);
                       }
                       setModeOpen(false);
                       setModeHoverId(null);
