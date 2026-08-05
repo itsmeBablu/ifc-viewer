@@ -10,6 +10,11 @@ import * as WebIFC from "web-ifc";
 import type { Floor, LoadedModel, Room, RoomVentilation } from "./types";
 import { emptyVentilation } from "./ventilation";
 import { mergeDuplicateFloors, reassignUpperSlabsToNextFloor, pruneEmptyFloors } from "./floorFilter";
+import {
+  buildIfcMaterialNameMap,
+  classifyIfcSurface,
+  createIfcMaterial,
+} from "./ifcMaterials";
 import { debugLog } from "./debugLog";
 
 /** Prefer these PSet names when looking up heat-load / temperature values. */
@@ -225,6 +230,22 @@ function setOpenHandle(handle: OpenIfcHandle | null): void {
     handle;
 }
 
+/** Open web-ifc handle — lets the tool view query the spatial tree after load. */
+export function getOpenIfcModel(): OpenIfcHandle | null {
+  return getOpenHandle();
+}
+
+/** Built once per load so element selection can report the IFC material. */
+let materialNamesByModel: { modelID: number; names: Map<number, string> } | null =
+  null;
+
+/** IFC material name for an element, or null when the file declares none. */
+export function getIfcMaterialName(expressId: number): string | null {
+  const handle = getOpenHandle();
+  if (!handle || materialNamesByModel?.modelID !== handle.modelID) return null;
+  return materialNamesByModel.names.get(expressId) ?? null;
+}
+
 export function closeActiveIfcModel(): void {
   const openHandle = getOpenHandle();
   if (!openHandle) return;
@@ -234,6 +255,7 @@ export function closeActiveIfcModel(): void {
     // ignore
   }
   setOpenHandle(null);
+  materialNamesByModel = null;
 }
 
 export type LoadProgress = {
@@ -579,13 +601,65 @@ function boxesOverlapHeavily(a: THREE.Box3, b: THREE.Box3): boolean {
   return interVol / Math.min(aVol, bVol) > 0.55;
 }
 
-function ifcColorToHex(c: { x: number; y: number; z: number }): number {
-  const r = Math.round(Math.min(1, Math.max(0, c.x)) * 255);
-  const g = Math.round(Math.min(1, Math.max(0, c.y)) * 255);
-  const b = Math.round(Math.min(1, Math.max(0, c.z)) * 255);
-  // Near-black IFC defaults → soft structural gray so elements stay readable
-  if (r + g + b < 12) return 0xb8bec8;
-  return (r << 16) | (g << 8) | b;
+/**
+ * IFC surface style RGBA → hex + opacity. The alpha channel carries glazing
+ * transparency, so dropping it renders every window as a solid panel.
+ */
+function ifcColorToRgba(c: {
+  x: number;
+  y: number;
+  z: number;
+  w?: number;
+}): { colorHex: number; opacity: number } {
+  let r = Math.round(Math.min(1, Math.max(0, c.x)) * 255);
+  let g = Math.round(Math.min(1, Math.max(0, c.y)) * 255);
+  let b = Math.round(Math.min(1, Math.max(0, c.z)) * 255);
+  const alpha = typeof c.w === "number" ? c.w : 1;
+  // Alpha 0 is an export artifact, never "invisible on purpose".
+  const opacity = Math.min(1, Math.max(0, alpha === 0 ? 1 : alpha));
+
+  const sum = r + g + b;
+  if (sum === 0) {
+    // Pure black is web-ifc's "no surface style" default, not a design choice.
+    return { colorHex: 0xc3c9d2, opacity };
+  }
+  if (sum < 30) {
+    // Keep genuinely dark finishes dark, but light enough to still shade.
+    r = Math.max(r, 22);
+    g = Math.max(g, 22);
+    b = Math.max(b, 22);
+  }
+  return { colorHex: (r << 16) | (g << 8) | b, opacity };
+}
+
+type ShellPiece = {
+  geom: THREE.BufferGeometry;
+  expressId: number;
+  floorId: string;
+  colorHex: number;
+  /** Opacity from the IFC surface style (1 = opaque). */
+  opacity: number;
+  typeName: string;
+  materialName: string | null;
+};
+
+function cachedTypeName(
+  api: WebIFC.IfcAPI,
+  modelID: number,
+  expressId: number,
+  cache: Map<number, string>,
+): string {
+  const hit = cache.get(expressId);
+  if (hit != null) return hit;
+  let name = "";
+  try {
+    const code = api.GetLineType(modelID, expressId);
+    name = api.GetNameFromTypeCode(code) ?? "";
+  } catch {
+    name = "";
+  }
+  cache.set(expressId, name);
+  return name;
 }
 
 function ingestFlatMesh(
@@ -594,15 +668,12 @@ function ingestFlatMesh(
   mesh: WebIFC.FlatMesh,
   spaceIdSet: Set<number>,
   spaceGeoms: Map<number, THREE.BufferGeometry>,
-  shellGeoms: {
-    geom: THREE.BufferGeometry;
-    expressId: number;
-    floorId: string;
-    colorHex: number;
-  }[],
+  shellGeoms: ShellPiece[],
   containment: Map<number, number>,
   storeyGuidByExpress: Map<number, string>,
   floors: Floor[],
+  materialNames: Map<number, string>,
+  typeNameCache: Map<number, string>,
 ): void {
   const expressID = mesh.expressID;
 
@@ -622,17 +693,23 @@ function ingestFlatMesh(
       : undefined) ?? floors[0].id;
 
   // Keep IFC material colors: one shell piece per placed geometry
+  const typeName = cachedTypeName(api, modelID, expressID, typeNameCache);
+  const materialName = materialNames.get(expressID) ?? null;
   const geos = mesh.geometries;
   const count = geos.size();
   for (let i = 0; i < count; i++) {
     const placed = geos.get(i);
     const geom = placedGeometryToBuffer(api, modelID, placed);
     if (!geom) continue;
+    const { colorHex, opacity } = ifcColorToRgba(placed.color);
     shellGeoms.push({
       geom,
       expressId: expressID,
       floorId,
-      colorHex: ifcColorToHex(placed.color),
+      colorHex,
+      opacity,
+      typeName,
+      materialName,
     });
   }
 }
@@ -1176,12 +1253,16 @@ export async function loadIfcModel(
       const spaceIdSet = new Set(spaceIds);
       const rooms: Room[] = [];
       const spaceGeoms = new Map<number, THREE.BufferGeometry>();
-      const shellGeoms: {
-        geom: THREE.BufferGeometry;
-        expressId: number;
-        floorId: string;
-        colorHex: number;
-      }[] = [];
+      const shellGeoms: ShellPiece[] = [];
+      // Real IFC material names drive the PBR appearance of every element.
+      const materialNames = buildIfcMaterialNameMap(api, modelID);
+      materialNamesByModel = { modelID, names: materialNames };
+      const typeNameCache = new Map<number, string>();
+      debugLog(
+        "ifcClient",
+        `IFC materials resolved for ${materialNames.size} object(s)`,
+        materialNames.size ? "ok" : "warn",
+      );
 
       report({ phase: "geometry", progress: 0, message: "Extracting geometry…" });
       debugLog("ifcClient", `IfcSpace count: ${spaceIds.length}`, "info");
@@ -1204,6 +1285,8 @@ export async function loadIfcModel(
             containment,
             storeyGuidByExpress,
             floors,
+            materialNames,
+            typeNameCache,
           );
         } catch (err) {
           meshErrors += 1;
@@ -1615,22 +1698,24 @@ export async function loadIfcModel(
       shellGroup.name = "building-shell";
 
       for (const piece of shellGeoms) {
-        const mat = new THREE.MeshStandardMaterial({
-          color: piece.colorHex,
-          roughness: 0.75,
-          metalness: 0.05,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.85,
-          depthWrite: false,
+        const colorHex = `#${piece.colorHex.toString(16).padStart(6, "0")}`;
+        const surface = classifyIfcSurface({
+          colorHex,
+          opacity: piece.opacity,
+          typeName: piece.typeName,
+          materialName: piece.materialName,
         });
-        mat.userData.baseColorHex = `#${piece.colorHex.toString(16).padStart(6, "0")}`;
+        const mat = createIfcMaterial(surface);
         const meshObj = new THREE.Mesh(piece.geom, mat);
-        meshObj.castShadow = true;
+        // Glazing casting hard shadows looks wrong and costs a shadow pass.
+        meshObj.castShadow = surface.surfaceClass !== "glass";
         meshObj.receiveShadow = true;
         meshObj.userData.floorId = piece.floorId;
         meshObj.userData.expressId = piece.expressId;
-        meshObj.userData.colorHex = mat.userData.baseColorHex;
+        meshObj.userData.colorHex = colorHex;
+        meshObj.userData.ifcSurface = surface;
+        meshObj.userData.ifcTypeName = piece.typeName;
+        meshObj.userData.ifcMaterialName = piece.materialName;
         shellGroup.add(meshObj);
       }
 
@@ -1672,7 +1757,18 @@ export async function getElementDetails(
   }
   const { api, modelID } = openHandle;
   try {
-    const line = api.GetLine(modelID, expressId, true);
+    // Flattening refs throws on entities with list-valued attributes — fall back
+    // to the raw line so the element still shows its identity.
+    let line: Record<string, unknown> | null = null;
+    try {
+      line = api.GetLine(modelID, expressId, true);
+    } catch {
+      try {
+        line = api.GetLine(modelID, expressId);
+      } catch {
+        line = null;
+      }
+    }
     const typeCode = api.GetLineType(modelID, expressId);
     const typeName =
       typeof api.GetNameFromTypeCode === "function"
@@ -1685,8 +1781,22 @@ export async function getElementDetails(
       readString(line?.Tag) ||
       typeName;
 
-    const psets = await api.properties.getPropertySets(modelID, expressId, true);
-    const flat = flattenProps(psets);
+    let flat: ReturnType<typeof flattenProps> = [];
+    try {
+      const psets = await api.properties.getPropertySets(
+        modelID,
+        expressId,
+        true,
+      );
+      flat = flattenProps(psets);
+    } catch (err) {
+      debugLog(
+        "ifcClient",
+        `property sets unavailable for #${expressId}`,
+        "warn",
+        err,
+      );
+    }
     const properties = flat.map((p) => ({
       name: p.name,
       value: readString(p.value),
@@ -1702,6 +1812,7 @@ export async function getElementDetails(
       floorId,
       kind,
       roomId,
+      materialName: getIfcMaterialName(expressId),
       properties,
     };
   } catch (err) {

@@ -223,6 +223,23 @@ type AppState = {
   /** Day (light) vs night (dark) UI theme. */
   colorTheme: import("@/lib/themeColors").ColorTheme;
 
+  /** Werkzeug — native IFC inspection view (structure tree instead of legend). */
+  toolMode: boolean;
+  /** Shading mode to restore when leaving Werkzeug. */
+  toolPrevRenderMode: RenderMode | null;
+  /** Space opacity to restore when leaving Werkzeug. */
+  toolPrevSpaceTransparency: number | null;
+  /** Element opacity to restore when leaving Werkzeug. */
+  toolPrevElementTransparency: number | null;
+  /** Express ids hidden via the IFC structure tree. Tool view only. */
+  hiddenElementIds: Set<number>;
+  /** Express ids kept visible when isolating; null means "no isolation". */
+  isolatedElementIds: Set<number> | null;
+  /** Express id picked in the tool view (tree or 3D) — drives the inspector. */
+  toolSelectedExpressId: number | null;
+  /** Incremented when the tool view should reveal + frame the selection. */
+  toolRevealToken: number;
+
   setActiveModelId: (
     id: string | null,
     label?: string | null,
@@ -311,6 +328,15 @@ type AppState = {
   goToSavedView: (id: string) => SavedView | undefined;
   removeSavedView: (id: string) => void;
   clearModelData: () => void;
+
+  setToolMode: (on: boolean) => void;
+  /** Hide / show a whole subtree at once. */
+  setElementsVisible: (expressIds: number[], visible: boolean) => void;
+  /** Show only these ids (and clear any previous isolation when empty). */
+  isolateElements: (expressIds: number[] | null) => void;
+  resetElementVisibility: () => void;
+  setToolSelectedExpressId: (expressId: number | null) => void;
+  requestToolReveal: (expressId: number) => void;
 };
 
 function persistPanel(key: string, open: boolean) {
@@ -470,7 +496,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   renderMode: "fullColor",
   lighting: {
     spaceTransparency: 0.8,
-    elementTransparency: 1,
+    elementTransparency: 0.8,
     color: 1,
     shadow: 0.55,
     indirectLight: 0.45,
@@ -508,11 +534,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   uiLanguage: "de",
   colorTheme: initialTheme(),
 
+  toolMode: false,
+  toolPrevRenderMode: null,
+  toolPrevSpaceTransparency: null,
+  toolPrevElementTransparency: null,
+  hiddenElementIds: new Set<number>(),
+  isolatedElementIds: null,
+  toolSelectedExpressId: null,
+  toolRevealToken: 0,
+
   setActiveModelId: (id, label, fileSizeBytes) => {
     set({
       activeModelId: id,
       activeModelLabel: label ?? null,
       activeModelFileSizeBytes: fileSizeBytes ?? null,
+      hiddenElementIds: new Set<number>(),
+      isolatedElementIds: null,
+      toolSelectedExpressId: null,
       selectedFloor: null,
       selectedRoomId: null,
       hoveredRoom: null,
@@ -840,6 +878,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPresentationView: (active) => {
     const s = get();
     if (active === s.isPresentationView) return;
+    // Presentation and Werkzeug both own visibility — never run them together.
+    if (active && s.toolMode) get().setToolMode(false);
     if (active) {
       const floorsWithRooms = listVisibleFloors(s.floors, s.rooms);
       const pool = floorsWithRooms.length ? floorsWithRooms : s.floors;
@@ -1090,6 +1130,93 @@ export const useAppStore = create<AppState>((set, get) => ({
       presentationIsolate: false,
       compareBothModes: false,
       activeFilter: null,
+      hiddenElementIds: new Set<number>(),
+      isolatedElementIds: null,
+      toolSelectedExpressId: null,
+    }),
+
+  setToolMode: (on) => {
+    if (on === get().toolMode) return;
+    if (on) {
+      const lighting = get().lighting;
+      // Werkzeug inspects the whole model: no floor slice, no presentation,
+      // no compare — those all fight the structure-tree visibility rules.
+      set({
+        toolMode: true,
+        // Werkzeug shows the model itself, so use the shading mode that renders
+        // IFC materials at full fidelity. The analysis mode comes back on exit.
+        toolPrevRenderMode: get().renderMode,
+        toolPrevSpaceTransparency: lighting.spaceTransparency,
+        toolPrevElementTransparency: lighting.elementTransparency,
+        renderMode: "realistic",
+        lighting: {
+          ...lighting,
+          // Rooms ghosted; building elements fully opaque for inspection.
+          spaceTransparency: 0.3,
+          elementTransparency: 1,
+        },
+        isPresentationView: false,
+        presentationPrevFloor: null,
+        presentationFloorId: null,
+        presentationIsolate: false,
+        compareBothModes: false,
+        selectedFloor: null,
+        selectedVentilationZoneKey: null,
+        activeFilter: null,
+        selectedRoomId: null,
+        selectedElement: null,
+        toolSelectedExpressId: null,
+        rightPanelOpen: true,
+        sidebarOpen: true,
+      });
+      return;
+    }
+    const prevSpace = get().toolPrevSpaceTransparency;
+    const prevElement = get().toolPrevElementTransparency;
+    set({
+      toolMode: false,
+      renderMode: get().toolPrevRenderMode ?? get().renderMode,
+      toolPrevRenderMode: null,
+      toolPrevSpaceTransparency: null,
+      toolPrevElementTransparency: null,
+      lighting: {
+        ...get().lighting,
+        spaceTransparency: prevSpace ?? 0.8,
+        elementTransparency: prevElement ?? 0.8,
+      },
+      hiddenElementIds: new Set<number>(),
+      isolatedElementIds: null,
+      toolSelectedExpressId: null,
+      selectedElement: null,
+    });
+  },
+
+  setElementsVisible: (expressIds, visible) => {
+    if (!expressIds.length) return;
+    const next = new Set(get().hiddenElementIds);
+    for (const id of expressIds) {
+      if (visible) next.delete(id);
+      else next.add(id);
+    }
+    set({ hiddenElementIds: next });
+  },
+
+  isolateElements: (expressIds) =>
+    set({
+      isolatedElementIds:
+        expressIds && expressIds.length ? new Set(expressIds) : null,
+    }),
+
+  resetElementVisibility: () =>
+    set({ hiddenElementIds: new Set<number>(), isolatedElementIds: null }),
+
+  setToolSelectedExpressId: (expressId) =>
+    set({ toolSelectedExpressId: expressId }),
+
+  requestToolReveal: (expressId) =>
+    set({
+      toolSelectedExpressId: expressId,
+      toolRevealToken: get().toolRevealToken + 1,
     }),
 }));
 

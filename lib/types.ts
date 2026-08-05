@@ -120,6 +120,8 @@ export type SelectedElement = {
   floorId: string | null;
   kind: "room" | "component";
   roomId: string | null;
+  /** IFC material name (IfcRelAssociatesMaterial), null when the file has none. */
+  materialName: string | null;
   properties: ElementProperty[];
 };
 

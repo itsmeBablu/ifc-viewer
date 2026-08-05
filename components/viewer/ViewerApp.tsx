@@ -27,6 +27,7 @@ import LegendPanel from "../legend/LegendPanel";
 import PresentationMobileDock from "../presentation/PresentationMobileDock";
 import PresentationSidePanel from "../presentation/PresentationSidePanel";
 import MobileCornerMenu from "../layout/MobileCornerMenu";
+import ToolSidePanel from "../tool/ToolSidePanel";
 import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
 import ViewerToolbar from "./ViewerToolbar";
@@ -81,6 +82,7 @@ export default function ViewerApp() {
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
+  const toolMode = useAppStore((s) => s.toolMode);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const pdfCaptureActive = useAppStore((s) => s.pdfCaptureActive);
 
@@ -387,22 +389,32 @@ export default function ViewerApp() {
 
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
 
+      // W — Werkzeug (native IFC inspection). Same key toggles back out.
+      if (key === "w") {
+        e.preventDefault();
+        store.setToolMode(!store.toolMode);
+        return;
+      }
       if (key === "h") {
         e.preventDefault();
+        store.setToolMode(false);
         store.setDataViewMode("heizlast");
         return;
       }
       if (key === "l") {
         e.preventDefault();
+        store.setToolMode(false);
         store.setDataViewMode("luftung");
         return;
       }
       if (key === "k") {
         e.preventDefault();
+        store.setToolMode(false);
         store.setDataViewMode("kuhllast");
         return;
       }
       if (key === "p") {
+        if (store.toolMode) return;
         e.preventDefault();
         const next = !store.isPresentationView;
         store.setPresentationView(next);
@@ -617,10 +629,12 @@ export default function ViewerApp() {
         </GsapOverlay>
 
         {/* Hover popup — desktop pointer only; mobile uses selection popup */}
-        {canHover() && !selectedRoomId && (
+        {/* Hover popup — desktop pointer only; mobile uses selection popup.
+            Werkzeug shows IFC properties in the inspector instead. */}
+        {!toolMode && canHover() && !selectedRoomId && (
           <RoomTooltip x={pointer.x} y={pointer.y} />
         )}
-        {selectedRoomId && (() => {
+        {!toolMode && selectedRoomId && (() => {
           const room = rooms.find((r) => r.id === selectedRoomId);
           if (!room) return null;
           return (
@@ -642,8 +656,9 @@ export default function ViewerApp() {
         />
 
         {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing).
-            Desktop: bottom-aligned above toolbar; top cleared for taller labeled header. */}
-        {isDesktop && (
+            Desktop: bottom-aligned above toolbar; top cleared for taller labeled header.
+            Werkzeug has no model-elements panel — the structure tree replaces it. */}
+        {isDesktop && !toolMode && (
           <aside
             ref={leftAsideRef}
             className={`fixed top-auto bottom-16 z-[35] flex h-[calc(100dvh-9.25rem)] max-h-[calc(100dvh-9.25rem)] w-[min(300px,calc(100vw-1.5rem))] flex-col sm:bottom-[4.5rem] sm:h-[calc(100dvh-9.5rem)] sm:max-h-[calc(100dvh-9.5rem)] md:left-4 md:w-[min(340px,calc(100vw-2rem))] lg:w-[min(360px,calc(100vw-2rem))] left-2 ${
@@ -704,25 +719,35 @@ export default function ViewerApp() {
           <aside
             ref={rightAsideRef}
             className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              isPresentationView
-                ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
-                : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
+              toolMode
+                ? "top-36 bottom-16 max-h-[calc(100dvh-11.5rem)] sm:bottom-[4.5rem] md:top-40"
+                : isPresentationView
+                  ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
+                  : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
             } right-2 pointer-events-auto md:right-4`}
           >
             <GlassPanel
               variant="panel"
               zIndex={35}
-              fill={false}
-              allowOverflow
-              wrapperClassName="relative mb-2 max-h-[inherit] w-full min-w-0"
+              fill={toolMode}
+              allowOverflow={!toolMode}
+              wrapperClassName={
+                toolMode
+                  ? "relative mb-2 flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
+                  : "relative mb-2 max-h-[inherit] w-full min-w-0"
+              }
             >
               <button
                 type="button"
                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
                 aria-label={
-                  rightPanelOpen
-                    ? t(uiLanguage, "hideLegend")
-                    : t(uiLanguage, "showLegend")
+                  toolMode
+                    ? rightPanelOpen
+                      ? t(uiLanguage, "hideIfcStructure")
+                      : t(uiLanguage, "showIfcStructure")
+                    : rightPanelOpen
+                      ? t(uiLanguage, "hideLegend")
+                      : t(uiLanguage, "showLegend")
                 }
                 className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center rounded-l-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
               >
@@ -743,11 +768,15 @@ export default function ViewerApp() {
               </button>
               <div
                 ref={rightContentRef}
-                className={`w-full min-w-0 pl-5 pr-1 thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain ${
-                  rightPanelOpen ? "" : "pointer-events-none"
-                }`}
+                className={`w-full min-w-0 pl-5 pr-1 ${
+                  toolMode
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                    : "thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain"
+                } ${rightPanelOpen ? "" : "pointer-events-none"}`}
               >
-                {isPresentationView ? (
+                {toolMode ? (
+                  <ToolSidePanel className="h-full flex-1" />
+                ) : isPresentationView ? (
                   <PresentationSidePanel />
                 ) : (
                   <LegendPanel />
@@ -767,25 +796,29 @@ export default function ViewerApp() {
                   setLeftPanelOpen(open);
                   if (!open) setRightPanelOpen(false);
                 }}
-                title={t(uiLanguage, "model")}
+                title={toolMode ? t(uiLanguage, "tool") : t(uiLanguage, "model")}
                 subtitle={activeModelLabel}
                 onLoadIfc={handleFile}
                 isLoadingModel={isLoadingModel}
                 landscapeMobile={isLandscape}
               >
-                {({ detailsOpen }) => (
-                  <>
-                    <FloorsPanel
-                      viewerRef={viewerRef}
-                      onFile={handleFile}
-                      isLoadingModel={isLoadingModel}
-                      mobileSheet
-                      mobileDetailsOpen={detailsOpen}
-                    />
-                    <div className="mx-3 border-t border-zinc-300/50" />
-                    <LegendPanel />
-                  </>
-                )}
+                {({ detailsOpen }) =>
+                  toolMode ? (
+                    <ToolSidePanel className="h-[70dvh]" />
+                  ) : (
+                    <>
+                      <FloorsPanel
+                        viewerRef={viewerRef}
+                        onFile={handleFile}
+                        isLoadingModel={isLoadingModel}
+                        mobileSheet
+                        mobileDetailsOpen={detailsOpen}
+                      />
+                      <div className="mx-3 border-t border-zinc-300/50" />
+                      <LegendPanel />
+                    </>
+                  )
+                }
               </MobileCornerMenu>
             )}
 

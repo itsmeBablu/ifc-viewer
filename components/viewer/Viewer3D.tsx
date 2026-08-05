@@ -52,6 +52,14 @@ import {
   syncVentilationMarkerZone,
   type VentilationMarkerLayer,
 } from "@/lib/ventilationMarkers";
+import { buildElementEdges } from "@/lib/ifcEdges";
+import {
+  applyIfcSurface,
+  classifyIfcSurface,
+  createIfcMaterial,
+  readIfcSurface,
+  type IfcSurface,
+} from "@/lib/ifcMaterials";
 import type { RenderMode, Room } from "@/lib/types";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
@@ -287,9 +295,14 @@ function applyRenderMode(
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
-  const spaceOpacity = lighting?.spaceTransparency ?? 0.8;
-  const elementOpacity = lighting?.elementTransparency ?? 1;
-  const colorAmt = lighting?.color ?? 1;
+  const inTool = useAppStore.getState().toolMode;
+  const spaceOpacity = inTool
+    ? 0.3
+    : (lighting?.spaceTransparency ?? 0.8);
+  // Werkzeug is a plain IFC viewer: the analysis sliders that fade elements so
+  // room colors read through must not wash out the real materials here.
+  const elementOpacity = inTool ? 1 : (lighting?.elementTransparency ?? 0.8);
+  const colorAmt = inTool ? 1 : (lighting?.color ?? 1);
 
   if (overlays) {
     // Texture normally hides overlays; if shell was culled (room-only IFC), show gray volumes
@@ -339,19 +352,15 @@ function applyRenderMode(
     shell.traverse((obj) => {
       if (!isShellMesh(obj)) return;
       const mat = obj.material as THREE.MeshStandardMaterial;
+      const surface = readIfcSurface(mat);
       const baseHex =
+        surface?.colorHex ??
         (mat.userData.baseColorHex as string | undefined) ??
         (obj.userData.colorHex as string | undefined) ??
         `#${mat.color.getHexString()}`;
-      mat.wireframe = wire;
-      if (textureOnly) {
-        mat.color.set(baseHex);
-        mat.roughness = 0.75;
-        mat.metalness = 0.05;
-        mat.envMapIntensity = 0.35;
-        applySurfaceOpacity(mat, 1, true);
-        mat.side = THREE.FrontSide;
-      } else if (light) {
+
+      if (light) {
+        // Study look: flat, desaturated, no reflections.
         const c = new THREE.Color(baseHex).lerp(
           new THREE.Color(0xd0d4dc),
           1 - colorAmt,
@@ -360,24 +369,40 @@ function applyRenderMode(
         mat.roughness = 1;
         mat.metalness = 0;
         mat.envMapIntensity = 0;
-        applySurfaceOpacity(mat, elementOpacity, false);
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
         mat.side = THREE.FrontSide;
-      } else if (mode === "realistic") {
-        mat.color.set(baseHex);
-        mat.roughness = 0.65;
-        mat.metalness = 0.08;
-        mat.envMapIntensity = 0.85;
         applySurfaceOpacity(mat, elementOpacity, false);
-        mat.side = THREE.FrontSide;
+        mat.wireframe = wire;
+        mat.needsUpdate = true;
+        return;
+      }
+
+      // Every other mode starts from the element's real IFC appearance —
+      // glass stays glazed, metal specular, concrete matte.
+      if (surface) {
+        applyIfcSurface(mat, surface, elementOpacity);
       } else {
-        // fullColor / wireframe — keep IFC material color; opacity from Elements slider
         mat.color.set(baseHex);
         mat.roughness = 0.8;
         mat.metalness = 0.04;
-        mat.envMapIntensity = 0.2;
-        applySurfaceOpacity(mat, elementOpacity, false);
+        mat.envMapIntensity = 0.35;
         mat.side = THREE.FrontSide;
+        applySurfaceOpacity(mat, elementOpacity, false);
       }
+
+      if (mode === "realistic") {
+        mat.envMapIntensity = (surface?.envMapIntensity ?? 0.4) * 1.7;
+        mat.roughness = Math.max(0.04, (surface?.roughness ?? 0.8) * 0.82);
+      } else if (textureOnly) {
+        // Texture = pure IFC colors, no analysis tint and no gloss boost.
+        mat.envMapIntensity = (surface?.envMapIntensity ?? 0.4) * 0.75;
+      }
+
+      if (colorAmt < 1) {
+        mat.color.lerp(new THREE.Color(0xb8bec8), 1 - colorAmt);
+      }
+      mat.wireframe = wire;
       mat.needsUpdate = true;
     });
   }
@@ -467,6 +492,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
+  const toolMode = useAppStore((s) => s.toolMode);
+  const hiddenElementIds = useAppStore((s) => s.hiddenElementIds);
+  const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
+  const toolRevealToken = useAppStore((s) => s.toolRevealToken);
+  const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
 
   const fitToVisible = (durationMs = 850) => {
     const camera = cameraRef.current;
@@ -813,23 +843,24 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         if (obj instanceof THREE.Mesh) {
           const src = obj.material as THREE.MeshStandardMaterial;
           const baseHex =
-            (src.userData.baseColorHex as string | undefined) ??
             (obj.userData.colorHex as string | undefined) ??
+            (src.userData.baseColorHex as string | undefined) ??
             `#${src.color.getHexString()}`;
-          const mat = new THREE.MeshStandardMaterial({
-            color: baseHex,
-            roughness: 0.75,
-            metalness: 0.05,
-            envMapIntensity: 0.25,
-            transparent: true,
-            opacity: 0.35,
-            depthWrite: false,
-            side: THREE.FrontSide,
-          });
-          mat.userData.baseColorHex = baseHex;
-          obj.userData.colorHex = baseHex;
+          // Object3D.clone() deep-copies userData, so the classified surface
+          // survives; older models without one get classified on the fly.
+          const surface =
+            (obj.userData.ifcSurface as IfcSurface | undefined) ??
+            classifyIfcSurface({
+              colorHex: baseHex,
+              opacity: 1,
+              typeName: obj.userData.ifcTypeName as string | undefined,
+              materialName: obj.userData.ifcMaterialName as string | undefined,
+            });
+          const mat = createIfcMaterial(surface);
+          obj.userData.colorHex = surface.colorHex;
+          obj.userData.ifcSurface = surface;
           obj.material = mat;
-          obj.castShadow = false;
+          obj.castShadow = surface.surfaceClass !== "glass";
           obj.receiveShadow = true;
         }
       });
@@ -1278,14 +1309,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       renderer.shadowMap.enabled = lighting.shadow > 0.05;
     }
     if (scene) {
-      // Indirect: strengthen env contribution on shell when present
+      // Indirect scales each material's own reflectivity — a flat value here
+      // would erase the difference between glass, metal and concrete.
       shellCloneRef.current?.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
+        if (renderMode === "light") return;
         const mat = obj.material as THREE.MeshStandardMaterial;
-        if (renderMode === "texture" || renderMode === "light") return;
+        const surface = readIfcSurface(mat);
+        const base = surface?.envMapIntensity ?? 0.4;
+        const modeBoost = renderMode === "realistic" ? 1.7 : 1;
         mat.envMapIntensity =
-          (renderMode === "realistic" ? 0.5 : 0.1) +
-          lighting.indirectLight * 0.9;
+          base * modeBoost * (0.55 + lighting.indirectLight * 0.95);
         mat.needsUpdate = true;
       });
     }
@@ -1453,6 +1487,103 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     isPresentationView,
     compareBothModes,
   ]);
+
+  // Werkzeug: per-element visibility from the IFC structure tree. Declared after
+  // the floor/slice effect so it always has the last word on mesh.visible.
+  const wasToolModeRef = useRef(false);
+  useEffect(() => {
+    const shell = shellCloneRef.current;
+    const overlays = overlaysRef.current;
+    if (!shell && !overlays) return;
+
+    const skip = (obj: THREE.Object3D) =>
+      !(obj instanceof THREE.Mesh) ||
+      obj.userData.isClipStencil ||
+      obj.userData.isClipCap ||
+      obj.userData.isSelectionOutline;
+
+    // Leaving Werkzeug: un-hide everything so the floor/presentation effects own
+    // visibility again (tool mode always leaves selectedFloor cleared).
+    if (!toolMode) {
+      if (!wasToolModeRef.current) return;
+      wasToolModeRef.current = false;
+      const restore = (obj: THREE.Object3D) => {
+        if (!skip(obj)) obj.visible = true;
+      };
+      shell?.traverse(restore);
+      overlays?.traverse(restore);
+      return;
+    }
+    wasToolModeRef.current = true;
+
+    const apply = (obj: THREE.Object3D) => {
+      if (skip(obj)) return;
+      const expressId = obj.userData.expressId as number | undefined;
+      if (expressId == null) return;
+      const isolated = isolatedElementIds;
+      obj.visible =
+        !hiddenElementIds.has(expressId) &&
+        (isolated == null || isolated.has(expressId));
+    };
+
+    if (overlays) overlays.visible = true;
+    shell?.traverse(apply);
+    overlays?.traverse(apply);
+  }, [
+    toolMode,
+    hiddenElementIds,
+    isolatedElementIds,
+    selectedFloor,
+    renderMode,
+    lighting,
+    shellGroup,
+    rooms,
+    roomsFromStore,
+  ]);
+
+  // Werkzeug: element outlines, the way desktop IFC viewers draw them.
+  useEffect(() => {
+    if (!toolMode) return;
+    const shell = shellCloneRef.current;
+    if (!shell) return;
+    const overlay = buildElementEdges(shell);
+    return () => overlay.dispose();
+  }, [toolMode, shellGroup, rooms, roomsFromStore]);
+
+  // Entering / leaving Werkzeug swaps the whole visible set — reframe it.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => fitToVisible(700));
+    return () => cancelAnimationFrame(id);
+  }, [toolMode]);
+
+  // Werkzeug: frame the element picked in the structure tree.
+  useEffect(() => {
+    if (!toolMode || toolRevealToken === 0 || toolSelectedExpressId == null) {
+      return;
+    }
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls) return;
+
+    const box = new THREE.Box3();
+    let found = false;
+    const consider = (obj: THREE.Object3D) => {
+      if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
+      if (obj.userData.expressId !== toolSelectedExpressId) return;
+      const b = new THREE.Box3().setFromObject(obj);
+      if (b.isEmpty()) return;
+      box.union(b);
+      found = true;
+    };
+    shellCloneRef.current?.traverse(consider);
+    overlaysRef.current?.traverse(consider);
+    if (!found) return;
+
+    const keepDirection = camera.position.clone().sub(controls.target);
+    const pose = frameBoundingBox(box, camera, 2.2, { keepDirection });
+    void flyTo(camera, controls, pose.position, pose.target, 700);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolRevealToken]);
 
   // Basic 3D: zoom to visible (isolated) floor when floor selection changes.
   useEffect(() => {
@@ -2095,15 +2226,20 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
 
     const applyPickSelection = (hit: THREE.Intersection | null) => {
+      const inTool = useAppStore.getState().toolMode;
       if (!hit) {
         setSelectedRoomId(null);
         setSelectedElement(null);
+        if (inTool) useAppStore.getState().setToolSelectedExpressId(null);
         return;
       }
       const ids = pickIdsFromObject(hit.object);
       let roomId = ids.roomId ?? null;
       const expressId = ids.expressId;
       const floorId = ids.floorId ?? null;
+      if (inTool) {
+        useAppStore.getState().setToolSelectedExpressId(expressId ?? null);
+      }
 
       // Resolve room by expressId when pick only has the space mesh id
       if (!roomId && expressId != null) {
@@ -2160,7 +2296,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             }
             // Mobile / compact layout: keep panels closed; user opens options explicitly.
             if (!isCompactMobileViewport()) {
-              setLeftPanelOpen(true);
+              if (!inTool) setLeftPanelOpen(true);
               setRightPanelOpen(true);
               if (useAppStore.getState().isPresentationView) {
                 useAppStore.getState().setPresentationRoomsOpen(true);
