@@ -1,0 +1,74 @@
+---
+description: Branch, dev-server, and end-of-task workflow for ibviewer when working on the Babu branch
+alwaysApply: true
+---
+
+# ibviewer workflow (Babu branch)
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all
+differ from your training data. Read the relevant guide in
+`node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
+## What to ask about, what not to
+
+- **Never ask for confirmation on tool mechanics** — shell commands, MCP calls,
+  file edits. The allow-list in `.cursor/cli.json` is the approval.
+- **Do ask** when the answer is genuinely the user's to make and is not derivable
+  from the repo: product or design intent, ambiguous UX tradeoffs, which of
+  several valid approaches they want, or a destructive/hard-to-reverse git action
+  (force-push, `reset --hard` on unbacked-up work, merging into `upstream`,
+  deleting a branch) that was not explicitly requested in the moment.
+- A prior approval does not carry forward. "Merge Babu into main" today does not
+  imply the same for a future unrelated task — ask again for each fresh instance
+  of a risky action.
+
+## Branch rules
+
+- **Develop on `Babu`, never directly on `main`.** Confirm where you are with
+  `git rev-parse --abbrev-ref HEAD`; don't assume.
+- Two remotes may exist: `origin` (the personal fork,
+  `danielalejandreperez/ibviewer`) and `upstream` (`itsmeBablu/IBV-Viewer`, the
+  shared repo). Default to reading and pushing against `origin` only.
+- **Never push, merge, or fetch-and-fast-forward into `upstream`** (either
+  `upstream/Babu` or `upstream/main`) unless explicitly asked in that moment —
+  it is shared with other collaborators.
+- **All changes stay on `Babu` until told otherwise.** Never merge `Babu` into
+  `main` on either remote unless the user asks for that specific task. Use the
+  `merge-babu` skill when they do.
+- **After a merge into `main`**, reset `Babu` to match rather than reconciling a
+  diverged branch — and only when asked.
+
+## Development workflow
+
+- **Keep the dev server running.** When starting work, check `localhost:3000`
+  first. If it is already up, leave it. If not, launch `npm run dev` and keep it
+  running for the rest of the session so changes are visible live. Don't kill it
+  between tasks. The `start-project` skill automates this whole check.
+- **Windows PowerShell 5.1**: `&&` and bash heredocs are not supported. Use
+  separate tool calls, and pass multi-line commit or PR bodies via a file
+  (`git commit -F <file>`).
+
+## End-of-task loop
+
+Run automatically, without asking, whenever a coding task is finished:
+
+1. Run `npm run lint`. There is no `typecheck`, `test`, or `test:e2e` script in
+   this repo yet — if one is added later, fold it into this loop rather than
+   running raw `tsc` or test binaries ad hoc.
+2. Commit and push `Babu` to `origin`.
+3. If lint is clean: tell the user the branch is ready and stop. Do not open a PR
+   or touch `main`/`upstream` unless asked.
+4. If lint fails: review the failure, fix the code, and repeat from step 1.
+   Pre-existing failures unrelated to your change are not yours to fix silently —
+   confirm against a baseline and report them instead of expanding scope.
+
+## Code exploration
+
+Prefer the `codebase-memory-mcp` tools (`search_graph`, `trace_path`,
+`get_code_snippet`, `query_graph`, `get_architecture`, `search_code`) over
+Grep/Glob for code-structure questions — they answer from a pre-built graph.
+Still use Grep/Glob/Read for plain text, config, and non-code files, and always
+read a file before editing it. If graph results disagree with what is on disk,
+`delete_project` then `index_repository` for a clean rebuild.
