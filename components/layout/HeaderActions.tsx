@@ -140,7 +140,7 @@ function HeaderTip({
   return (
     <div
       ref={wrapRef}
-      className="relative flex items-center justify-center"
+      className="relative flex h-full items-center justify-center self-stretch"
       onMouseEnter={() => {
         if (suppressed) return;
         updatePos();
@@ -366,11 +366,11 @@ export default function HeaderActions({
     return () => window.removeEventListener(OPEN_IFC_FILE_EVENT, openPicker);
   }, [isLoadingModel]);
 
-  const modeOptions: { id: HeaderMode; label: string }[] = [
-    { id: "heizlast", label: `${t(uiLanguage, "heating")} (H)` },
-    { id: "luftung", label: `${t(uiLanguage, "ventilation")} (L)` },
-    { id: "kuhllast", label: `${t(uiLanguage, "cooling")} (K)` },
-    { id: "editor", label: `${t(uiLanguage, "tool")} (T)` },
+  const modeOptions: { id: HeaderMode; label: string; shortcut: string }[] = [
+    { id: "heizlast", label: t(uiLanguage, "heating"), shortcut: "H" },
+    { id: "luftung", label: t(uiLanguage, "ventilation"), shortcut: "L" },
+    { id: "kuhllast", label: t(uiLanguage, "cooling"), shortcut: "K" },
+    { id: "editor", label: t(uiLanguage, "tool"), shortcut: "W" },
   ];
 
   const yellowGloss = isDark
@@ -391,9 +391,40 @@ export default function HeaderActions({
   const sideActive = `${sideBtn} ${yellowGloss}`;
 
   const showIconLabels = !isMobileHeader;
-  const iconStack = "flex flex-col items-center justify-center gap-0.5";
+  /** Tight icon→caption gap; fill header height so the pair sits vertically centered. */
+  const iconStack =
+    "flex h-full flex-col items-center justify-center gap-px";
   const iconCaption =
-    "max-w-[4.75rem] truncate text-center text-[8px] font-semibold leading-none tracking-wide text-[var(--text-muted)] whitespace-nowrap";
+    "max-w-[5.5rem] truncate text-center text-[10px] font-semibold leading-none tracking-wide text-[var(--text-muted)] whitespace-nowrap";
+
+  function ModeShortcutLabel({
+    label,
+    shortcut,
+  }: {
+    label: string;
+    shortcut: string;
+  }) {
+    const idx = label.toLocaleLowerCase().indexOf(shortcut.toLocaleLowerCase());
+    if (idx < 0) {
+      return (
+        <span className="inline-flex items-baseline gap-1.5">
+          <span>{label}</span>
+          <span className="underline decoration-1 underline-offset-2">
+            {shortcut}
+          </span>
+        </span>
+      );
+    }
+    return (
+      <span>
+        {label.slice(0, idx)}
+        <span className="underline decoration-1 underline-offset-2">
+          {label.slice(idx, idx + 1)}
+        </span>
+        {label.slice(idx + 1)}
+      </span>
+    );
+  }
   const modeLabel =
     mode === "editor"
       ? t(uiLanguage, "tool")
@@ -473,7 +504,10 @@ export default function HeaderActions({
                         className="h-4 w-4 object-contain"
                       />
                     </span>
-                    {opt.label}
+                    <ModeShortcutLabel
+                      label={opt.label}
+                      shortcut={opt.shortcut}
+                    />
                   </button>
                 );
               })}
@@ -649,8 +683,8 @@ export default function HeaderActions({
             >
               {/* Logo + mode — fixed left cluster (never shifts on expand) */}
               <div
-                className={`flex shrink-0 items-center pl-3 sm:pl-3.5 ${
-                  showIconLabels ? "py-0.5" : "py-1"
+                className={`flex shrink-0 items-center self-stretch pl-3 sm:pl-3.5 ${
+                  showIconLabels ? "" : "py-1"
                 }`}
               >
                 <Image
@@ -714,8 +748,8 @@ export default function HeaderActions({
               {showActions && (
                 <div
                   ref={iconsRef}
-                  className={`flex min-w-0 flex-1 items-center justify-evenly px-2 sm:px-3 ${
-                    showIconLabels ? "py-0.5" : "py-1"
+                  className={`flex min-w-0 flex-1 items-center justify-evenly self-stretch px-2 sm:px-3 ${
+                    showIconLabels ? "" : "py-1"
                   }`}
                 >
                     <HeaderTip

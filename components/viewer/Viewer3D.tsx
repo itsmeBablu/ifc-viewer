@@ -295,11 +295,13 @@ function applyRenderMode(
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
-  const spaceOpacity = lighting?.spaceTransparency ?? 0.8;
+  const inTool = useAppStore.getState().toolMode;
+  const spaceOpacity = inTool
+    ? 0.3
+    : (lighting?.spaceTransparency ?? 0.8);
   // Werkzeug is a plain IFC viewer: the analysis sliders that fade elements so
   // room colors read through must not wash out the real materials here.
-  const inTool = useAppStore.getState().toolMode;
-  const elementOpacity = inTool ? 1 : (lighting?.elementTransparency ?? 1);
+  const elementOpacity = inTool ? 1 : (lighting?.elementTransparency ?? 0.8);
   const colorAmt = inTool ? 1 : (lighting?.color ?? 1);
 
   if (overlays) {

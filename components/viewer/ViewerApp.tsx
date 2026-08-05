@@ -389,8 +389,8 @@ export default function ViewerApp() {
 
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
 
-      // T / W — Werkzeug (native IFC inspection). Same keys toggle back out.
-      if (key === "t" || key === "w") {
+      // W — Werkzeug (native IFC inspection). Same key toggles back out.
+      if (key === "w") {
         e.preventDefault();
         store.setToolMode(!store.toolMode);
         return;
@@ -720,7 +720,7 @@ export default function ViewerApp() {
             ref={rightAsideRef}
             className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
               toolMode
-                ? "top-20 bottom-16 max-h-[calc(100dvh-9.5rem)] sm:bottom-[4.5rem] md:top-24"
+                ? "top-36 bottom-16 max-h-[calc(100dvh-11.5rem)] sm:bottom-[4.5rem] md:top-40"
                 : isPresentationView
                   ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
                   : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"

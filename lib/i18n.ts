@@ -227,7 +227,7 @@ const dict = {
     coolingOptions: "Kühloptionen",
     ventilationOptions: "Lüftungsoptionen",
     viewHint: "Heizen (H), Lüftung (L) oder Kühlen (K)",
-    viewHintWithTool: "Heizen (H), Lüftung (L), Kühlen (K) oder Werkzeug (T)",
+    viewHintWithTool: "Heizen (H), Lüftung (L), Kühlen (K) oder Werkzeug (W)",
     dataHint: "IFC laden (Strg+O / Strg+N)",
     swatchPresetHint: "Taste 1–6 für Schnellpalette",
     profileHint: "Sprache, Design und Profil einstellen",
@@ -274,7 +274,7 @@ const dict = {
     expressId: "Express-ID",
     globalId: "GlobalId",
     noSearchResults: "Keine Treffer",
-    toolHint: "Natives IFC-Modell prüfen (T)",
+    toolHint: "Natives IFC-Modell prüfen (W)",
   },
   en: {
     appTitle: "Heating Load Presentation",
@@ -498,7 +498,7 @@ const dict = {
     coolingOptions: "Cooling options",
     ventilationOptions: "Ventilation options",
     viewHint: "Heating (H), ventilation (L), or cooling (K)",
-    viewHintWithTool: "Heating (H), ventilation (L), cooling (K), or tool (T)",
+    viewHintWithTool: "Heating (H), ventilation (L), cooling (K), or tool (W)",
     dataHint: "Load IFC (Ctrl+O / Ctrl+N)",
     swatchPresetHint: "Press 1–6 for quick presets",
     profileHint: "Language, theme and profile settings",
@@ -545,7 +545,7 @@ const dict = {
     expressId: "Express ID",
     globalId: "GlobalId",
     noSearchResults: "No matches",
-    toolHint: "Inspect the native IFC model (T)",
+    toolHint: "Inspect the native IFC model (W)",
   },
   es: {
     appTitle: "Presentación de Carga Térmica",
@@ -768,7 +768,7 @@ const dict = {
     coolingOptions: "Opciones de refrigeración",
     ventilationOptions: "Opciones de ventilación",
     viewHint: "Calefacción (H), ventilación (L) o refrigeración (K)",
-    viewHintWithTool: "Calefacción (H), ventilación (L), refrigeración (K) o herramienta (T)",
+    viewHintWithTool: "Calefacción (H), ventilación (L), refrigeración (K) o herramienta (W)",
     dataHint: "Cargar IFC (Ctrl+O / Ctrl+N)",
     swatchPresetHint: "Teclas 1–6 para paletas rápidas",
     profileHint: "Idioma, tema y ajustes de perfil",
@@ -815,7 +815,7 @@ const dict = {
     expressId: "ID Express",
     globalId: "GlobalId",
     noSearchResults: "Sin resultados",
-    toolHint: "Inspeccionar el modelo IFC nativo (T)",
+    toolHint: "Inspeccionar el modelo IFC nativo (W)",
   },
 } as const;
 

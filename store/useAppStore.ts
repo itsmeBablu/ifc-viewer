@@ -227,6 +227,10 @@ type AppState = {
   toolMode: boolean;
   /** Shading mode to restore when leaving Werkzeug. */
   toolPrevRenderMode: RenderMode | null;
+  /** Space opacity to restore when leaving Werkzeug. */
+  toolPrevSpaceTransparency: number | null;
+  /** Element opacity to restore when leaving Werkzeug. */
+  toolPrevElementTransparency: number | null;
   /** Express ids hidden via the IFC structure tree. Tool view only. */
   hiddenElementIds: Set<number>;
   /** Express ids kept visible when isolating; null means "no isolation". */
@@ -492,7 +496,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   renderMode: "fullColor",
   lighting: {
     spaceTransparency: 0.8,
-    elementTransparency: 1,
+    elementTransparency: 0.8,
     color: 1,
     shadow: 0.55,
     indirectLight: 0.45,
@@ -532,6 +536,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toolMode: false,
   toolPrevRenderMode: null,
+  toolPrevSpaceTransparency: null,
+  toolPrevElementTransparency: null,
   hiddenElementIds: new Set<number>(),
   isolatedElementIds: null,
   toolSelectedExpressId: null,
@@ -1132,6 +1138,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setToolMode: (on) => {
     if (on === get().toolMode) return;
     if (on) {
+      const lighting = get().lighting;
       // Werkzeug inspects the whole model: no floor slice, no presentation,
       // no compare — those all fight the structure-tree visibility rules.
       set({
@@ -1139,7 +1146,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Werkzeug shows the model itself, so use the shading mode that renders
         // IFC materials at full fidelity. The analysis mode comes back on exit.
         toolPrevRenderMode: get().renderMode,
+        toolPrevSpaceTransparency: lighting.spaceTransparency,
+        toolPrevElementTransparency: lighting.elementTransparency,
         renderMode: "realistic",
+        lighting: {
+          ...lighting,
+          // Rooms ghosted; building elements fully opaque for inspection.
+          spaceTransparency: 0.3,
+          elementTransparency: 1,
+        },
         isPresentationView: false,
         presentationPrevFloor: null,
         presentationFloorId: null,
@@ -1156,10 +1171,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       return;
     }
+    const prevSpace = get().toolPrevSpaceTransparency;
+    const prevElement = get().toolPrevElementTransparency;
     set({
       toolMode: false,
       renderMode: get().toolPrevRenderMode ?? get().renderMode,
       toolPrevRenderMode: null,
+      toolPrevSpaceTransparency: null,
+      toolPrevElementTransparency: null,
+      lighting: {
+        ...get().lighting,
+        spaceTransparency: prevSpace ?? 0.8,
+        elementTransparency: prevElement ?? 0.8,
+      },
       hiddenElementIds: new Set<number>(),
       isolatedElementIds: null,
       toolSelectedExpressId: null,
