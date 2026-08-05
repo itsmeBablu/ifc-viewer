@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -140,10 +139,10 @@ export default function FloorsPanel({
   const { shellGroup, rooms: sceneRooms } = useModelScene();
   const totalComponents = rooms.length + (shellGroup?.children?.length ?? 0);
 
-  const formatBytes = (bytes: number | null) => {
-    if (!Number.isFinite(bytes ?? NaN)) return "—";
+  const formatBytesParts = (bytes: number | null) => {
+    if (!Number.isFinite(bytes ?? NaN)) return { value: "—", unit: "" };
     const v = bytes as number;
-    if (v <= 0) return "0 B";
+    if (v <= 0) return { value: "0", unit: "B" };
     const units = ["B", "KB", "MB", "GB"] as const;
     let idx = 0;
     let n = v;
@@ -152,7 +151,7 @@ export default function FloorsPanel({
       idx += 1;
     }
     const digits = idx === 0 ? 0 : 1;
-    return `${n.toFixed(digits)} ${units[idx]}`;
+    return { value: n.toFixed(digits), unit: units[idx] as string };
   };
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
@@ -170,68 +169,18 @@ export default function FloorsPanel({
   /** Lock portal host while open — must not track fullscreenElement live (export exits FS). */
   const pdfPortalHostRef = useRef<HTMLElement | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"proyecto" | "elemento">(
+    "proyecto",
+  );
   const [floorsExpanded, setFloorsExpanded] = useState(true);
   const [roomsExpanded, setRoomsExpanded] = useState(true);
   const [selectionExpanded, setSelectionExpanded] = useState(false);
   const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [modelTipOpen, setModelTipOpen] = useState(false);
-  const [modelTipSuppressed, setModelTipSuppressed] = useState(false);
-  const [modelTipPos, setModelTipPos] = useState({ top: 0, left: 0 });
-  const modelBadgeRef = useRef<HTMLDivElement>(null);
-  const modelNameBtnRef = useRef<HTMLButtonElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
   const modelFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRoomsExpanded(Boolean(selectedFloor));
   }, [selectedFloor]);
-
-  const updateModelTipPos = () => {
-    const el = modelNameBtnRef.current ?? modelBadgeRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setModelTipPos({ top: r.bottom + 10, left: r.left + r.width / 2 });
-  };
-
-  useLayoutEffect(() => {
-    if (!modelTipOpen) return;
-    updateModelTipPos();
-    window.addEventListener("resize", updateModelTipPos);
-    window.addEventListener("scroll", updateModelTipPos, true);
-    return () => {
-      window.removeEventListener("resize", updateModelTipPos);
-      window.removeEventListener("scroll", updateModelTipPos, true);
-    };
-  }, [modelTipOpen]);
-
-  useEffect(() => {
-    if (!modelMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        modelMenuRef.current?.contains(target) ||
-        modelBadgeRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setModelMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [modelMenuOpen]);
-
-  const modelDetailHint = useMemo(() => {
-    const floorsLine = `${floors.length} ${t(uiLanguage, "floors")} · ${rooms.length} ${t(uiLanguage, "rooms")}`;
-    const sizeLine = `${totalComponents} · ${formatBytes(activeModelFileSizeBytes)}`;
-    return `${floorsLine}\n${sizeLine}`;
-  }, [
-    floors.length,
-    rooms.length,
-    totalComponents,
-    activeModelFileSizeBytes,
-    uiLanguage,
-  ]);
 
   const sortedFloors = useMemo(
     () => listVisibleFloors(floors, rooms, shellGroup),
@@ -261,6 +210,14 @@ export default function FloorsPanel({
     (activeModelId
       ? (getModelById(activeModelId)?.label ?? activeModelId)
       : t(uiLanguage, "noModel"));
+
+  const modelSizeParts = formatBytesParts(activeModelFileSizeBytes);
+  const modelDetailTiles = [
+    { value: modelSizeParts.value, unit: modelSizeParts.unit || "—" },
+    { value: String(totalComponents), unit: t(uiLanguage, "elements") },
+    { value: String(floors.length), unit: t(uiLanguage, "floors") },
+    { value: String(rooms.length), unit: t(uiLanguage, "rooms") },
+  ];
 
   useEffect(() => {
     if (activeModelId) clearFloorSnapshots(activeModelId);
@@ -583,12 +540,42 @@ export default function FloorsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-zinc-800">
+      {/* Tab menu: Proyecto (project-level info) / Elemento (selected element) */}
+      <div className="flex shrink-0 items-center gap-1 px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("proyecto")}
+          aria-pressed={activeTab === "proyecto"}
+          className={`flex-1 rounded-full px-3 py-1.5 text-center text-[11px] font-semibold transition-colors ${
+            activeTab === "proyecto"
+              ? "bg-zinc-900/10 text-zinc-900"
+              : "text-zinc-500 hover:bg-zinc-900/5 hover:text-zinc-700"
+          }`}
+        >
+          {t(uiLanguage, "tabProject")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("elemento")}
+          aria-pressed={activeTab === "elemento"}
+          className={`flex-1 rounded-full px-3 py-1.5 text-center text-[11px] font-semibold transition-colors ${
+            activeTab === "elemento"
+              ? "bg-zinc-900/10 text-zinc-900"
+              : "text-zinc-500 hover:bg-zinc-900/5 hover:text-zinc-700"
+          }`}
+        >
+          {t(uiLanguage, "tabElement")}
+        </button>
+      </div>
+
+      {activeTab === "proyecto" && (
+      <>
       <section className="px-4 py-2">
-        {/* Header row: label + yellow glass IFC name badge (desktop sidebar only) */}
+        {/* Header row: label + dedicated load button + info toggle (desktop sidebar only) */}
         {!mobileSheet && (
         <div className="flex items-center justify-between gap-2">
           <p className={heading.muted}>{t(uiLanguage, "model")}</p>
-          <div className="relative max-w-[70%]">
+          <div className="flex shrink-0 items-center gap-1.5">
             <input
               ref={modelFileInputRef}
               type="file"
@@ -600,156 +587,54 @@ export default function FloorsPanel({
                 if (file) onFile(file);
               }}
             />
-            <div
-              ref={modelBadgeRef}
-              className="flex max-w-full items-center gap-0.5 rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 py-0.5 pl-2.5 pr-1 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md"
+            <button
+              type="button"
+              disabled={isLoadingModel}
+              onClick={() => modelFileInputRef.current?.click()}
+              title={activeModelId ? modelLabel : undefined}
+              className="h-7 max-w-[9rem] min-w-0 shrink-0 truncate rounded-full border-2 border-black bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-3 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-95 disabled:opacity-45"
             >
-              <button
-                ref={modelNameBtnRef}
-                type="button"
-                disabled={isLoadingModel}
-                onMouseEnter={() => {
-                  if (modelTipSuppressed || modelMenuOpen) return;
-                  updateModelTipPos();
-                  setModelTipOpen(true);
-                }}
-                onMouseLeave={() => {
-                  setModelTipOpen(false);
-                  setModelTipSuppressed(false);
-                }}
-                onClick={() => {
-                  setModelTipOpen(false);
-                  setModelTipSuppressed(true);
-                  setModelMenuOpen((v) => !v);
-                }}
-                className="min-w-0 truncate text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-45"
-                aria-expanded={modelMenuOpen}
-                aria-label={modelLabel}
-              >
-                {modelLabel}
-              </button>
+              {activeModelId ? modelLabel : t(uiLanguage, "loadIfc")}
+            </button>
+            {activeModelId && (
               <button
                 type="button"
                 onClick={() => setModelDetailsOpen((v) => !v)}
+                onMouseEnter={() => setModelDetailsOpen(true)}
+                onMouseLeave={() => setModelDetailsOpen(false)}
                 aria-label={
                   modelDetailsOpen ? "Hide model details" : "Show model details"
                 }
                 aria-expanded={modelDetailsOpen}
-                className="flex shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-amber-950/80 transition hover:bg-amber-950/10"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-black bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-95"
               >
-                {modelDetailsOpen ? (
-                  <IoChevronUp className="h-3 w-3" />
-                ) : (
-                  <IoChevronDownSharp className="h-3 w-3" />
-                )}
+                i
               </button>
-            </div>
-
-            {modelTipOpen &&
-              !modelMenuOpen &&
-              typeof document !== "undefined" &&
-              createPortal(
-                <div
-                  role="tooltip"
-                  className="pointer-events-none fixed z-[200] w-max max-w-[240px] -translate-x-1/2"
-                  style={{ top: modelTipPos.top, left: modelTipPos.left }}
-                >
-                  <GlassPanel variant="control" zIndex={200}>
-                    <div className="px-3.5 py-2.5 text-center">
-                      <p className="text-[12px] font-semibold tracking-wide text-zinc-900">
-                        {modelLabel}
-                      </p>
-                      <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-zinc-600">
-                        {modelDetailHint}
-                      </p>
-                    </div>
-                  </GlassPanel>
-                </div>,
-                (document.fullscreenElement as HTMLElement | null) ??
-                  document.body,
-              )}
-
-            {modelMenuOpen && (
-              <div
-                ref={modelMenuRef}
-                className="absolute top-[calc(100%+0.4rem)] right-0 z-[60] w-max min-w-[10.5rem]"
-              >
-                <GlassPanel variant="control" zIndex={60}>
-                  <div className="flex flex-col gap-1 p-1.5">
-                    <button
-                      type="button"
-                      disabled={isLoadingModel}
-                      onClick={() => {
-                        setModelMenuOpen(false);
-                        modelFileInputRef.current?.click();
-                      }}
-                      className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 px-2.5 py-1.5 text-left text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:brightness-105 disabled:opacity-45"
-                    >
-                      {t(uiLanguage, "loadOtherIfc")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModelMenuOpen(false)}
-                      className="rounded-xl border border-transparent px-2.5 py-1.5 text-left text-[11px] text-zinc-700 transition hover:border-white/55 hover:bg-white/40"
-                    >
-                      {t(uiLanguage, "cancel")}
-                    </button>
-                  </div>
-                </GlassPanel>
-              </div>
             )}
           </div>
         </div>
         )}
 
-        {/* Details — toggled by header badge arrow on mobile */}
+        {/* Details — toggled by the info button (desktop) / external control (mobile) */}
         <div
           className={`overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${
             (mobileSheet ? mobileDetailsOpen : modelDetailsOpen)
-              ? `${mobileSheet ? "mt-0 pt-2" : "mt-1.5"} max-h-10 opacity-100`
+              ? `${mobileSheet ? "mt-0 pt-2" : "mt-1.5"} max-h-16 opacity-100`
               : "mt-0 max-h-0 opacity-0"
           }`}
         >
-          <div className="flex w-full items-center text-[11px] text-zinc-600">
-            {(
-              [
-                {
-                  label: t(uiLanguage, "floors"),
-                  value: String(floors.length),
-                },
-                {
-                  label: t(uiLanguage, "rooms"),
-                  value: String(rooms.length),
-                },
-                {
-                  label: "Komp.",
-                  value: String(totalComponents),
-                },
-                {
-                  label: null as string | null,
-                  value: formatBytes(activeModelFileSizeBytes),
-                },
-              ] as const
-            ).map((item, i, arr) => (
-              <div key={item.label ?? "size"} className="contents">
-                <span className="flex min-w-0 flex-1 items-baseline justify-center gap-1 whitespace-nowrap px-0.5">
-                  {item.label != null && (
-                    <span className="truncate text-zinc-500">
-                      {item.label}:
-                    </span>
-                  )}
-                  <span className="font-semibold tabular-nums text-zinc-800">
-                    {item.value}
-                  </span>
+          <div className="flex w-full items-stretch gap-1.5">
+            {modelDetailTiles.map((tile, i) => (
+              <div
+                key={i}
+                className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-zinc-300/50 bg-white/40 px-1 py-1.5 text-center"
+              >
+                <span className="tabular-nums text-[13px] font-semibold text-zinc-800">
+                  {tile.value}
                 </span>
-                {i < arr.length - 1 && (
-                  <span
-                    className="shrink-0 px-0.5 font-medium text-amber-400"
-                    aria-hidden
-                  >
-                    |
-                  </span>
-                )}
+                <span className="truncate text-[9px] font-medium text-zinc-500">
+                  {tile.unit}
+                </span>
               </div>
             ))}
           </div>
@@ -922,54 +807,106 @@ export default function FloorsPanel({
 
       <Divider />
 
-      {/* === FIXED BOTTOM: Selection (always shown) + Saved Views (10%) === */}
-      <section
-        className={`shrink-0 flex-col px-4 py-3 ${
-          selectionExpanded && selectedElement ? "flex h-[25%]" : "flex"
-        } space-y-2`}
-      >
-        {/* Header row — always visible */}
+      <section className="shrink-0 space-y-2 px-4 py-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className={heading.muted}>{t(uiLanguage, "selection")}</p>
-            {selectedElement && (
-              <ModelText
-                as="p"
-                className="truncate text-[11px] font-semibold text-zinc-800"
-              >
-                {selectedElement.name}
-              </ModelText>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-zinc-500">
-              Attributes
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={selectionExpanded}
-              disabled={!selectedElement}
-              onClick={() => setSelectionExpanded((v) => !v)}
-              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${
-                selectionExpanded && selectedElement
-                  ? "bg-sky-600"
-                  : "bg-zinc-300/80"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                  selectionExpanded && selectedElement
-                    ? "translate-x-4"
-                    : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
+          <p className={heading.panel}>{t(uiLanguage, "savedViews")}</p>
+          <button
+            type="button"
+            disabled={rooms.length === 0}
+            onClick={openPdfPopup}
+            title={t(uiLanguage, "savePdf")}
+            aria-label={t(uiLanguage, "savePdf")}
+            aria-expanded={pdfOpen}
+            className={yellowGlossBtn}
+          >
+            <PiFilePdfThin className="h-4 w-4" />
+            {t(uiLanguage, "savePdf")}
+          </button>
         </div>
+        {savedViews.length === 0 ? (
+          <p className="text-xs text-zinc-400">
+            {t(uiLanguage, "savedViewsHint")}
+          </p>
+        ) : (
+          <ul className="thin-scroll max-h-16 space-y-1 overflow-y-auto">
+            {savedViews.map((v) => (
+              <li
+                key={v.id}
+                className="flex items-center gap-1 rounded-lg bg-white/40 px-2 py-1"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-xs font-medium text-zinc-700 hover:text-zinc-900"
+                  onClick={() => handleGoView(v.id)}
+                >
+                  {v.name}
+                  <span className="ml-1.5 text-[9px] font-semibold uppercase text-zinc-400">
+                    {v.pageFormat ?? "a4"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 px-1 text-[10px] text-zinc-400 hover:text-red-600"
+                  onClick={() => removeSavedView(v.id)}
+                  aria-label={`Delete ${v.name}`}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      </>
+      )}
 
-        {selectionExpanded && selectedElement && (
-          <>
+      {activeTab === "elemento" && (
+        <section className="flex min-h-0 flex-1 flex-col space-y-2 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className={heading.muted}>{t(uiLanguage, "selection")}</p>
+              {selectedElement && (
+                <ModelText
+                  as="p"
+                  className="truncate text-[11px] font-semibold text-zinc-800"
+                >
+                  {selectedElement.name}
+                </ModelText>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium text-zinc-500">
+                Attributes
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={selectionExpanded}
+                disabled={!selectedElement}
+                onClick={() => setSelectionExpanded((v) => !v)}
+                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${
+                  selectionExpanded && selectedElement
+                    ? "bg-sky-600"
+                    : "bg-zinc-300/80"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    selectionExpanded && selectedElement
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {!selectedElement ? (
+            <p className="text-[11px] text-zinc-400">
+              {t(uiLanguage, "noElementSelectedHint")}
+            </p>
+          ) : (
+            selectionExpanded && (
               <div className="min-h-0 flex-1 rounded-xl border border-zinc-300/40 bg-white/30 p-2">
                 <p className="mb-1 text-[10px] font-semibold tracking-wide text-zinc-600">
                   Attributes
@@ -1038,62 +975,10 @@ export default function FloorsPanel({
                   </ul>
                 </div>
               </div>
-            </>
+            )
           )}
-      </section>
-
-      <Divider />
-
-      <section className="shrink-0 space-y-2 px-4 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className={heading.panel}>{t(uiLanguage, "savedViews")}</p>
-          <button
-            type="button"
-            disabled={rooms.length === 0}
-            onClick={openPdfPopup}
-            title={t(uiLanguage, "savePdf")}
-            aria-label={t(uiLanguage, "savePdf")}
-            aria-expanded={pdfOpen}
-            className={yellowGlossBtn}
-          >
-            <PiFilePdfThin className="h-4 w-4" />
-            {t(uiLanguage, "savePdf")}
-          </button>
-        </div>
-        {savedViews.length === 0 ? (
-          <p className="text-xs text-zinc-400">
-            {t(uiLanguage, "savedViewsHint")}
-          </p>
-        ) : (
-          <ul className="thin-scroll max-h-16 space-y-1 overflow-y-auto">
-            {savedViews.map((v) => (
-              <li
-                key={v.id}
-                className="flex items-center gap-1 rounded-lg bg-white/40 px-2 py-1"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left text-xs font-medium text-zinc-700 hover:text-zinc-900"
-                  onClick={() => handleGoView(v.id)}
-                >
-                  {v.name}
-                  <span className="ml-1.5 text-[9px] font-semibold uppercase text-zinc-400">
-                    {v.pageFormat ?? "a4"}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="shrink-0 px-1 text-[10px] text-zinc-400 hover:text-red-600"
-                  onClick={() => removeSavedView(v.id)}
-                  aria-label={`Delete ${v.name}`}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        </section>
+      )}
 
       {pdfOpen &&
         typeof document !== "undefined" &&
