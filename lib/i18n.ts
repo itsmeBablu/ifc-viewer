@@ -68,6 +68,7 @@ const dict = {
     noRoomsOnFloor: "Keine Räume auf dieser Ebene.",
     selectFloorHint: "Ebene wählen, um Plan und Räume zu sehen",
     view3d: "3D-Ansicht",
+    allLevels: "Alle",
     roomsInSelectedFloor: "Räume in ausgewählter Ebene",
     savedViews: "Gespeicherte Ansichten",
     savedViewsHint:
@@ -345,6 +346,7 @@ const dict = {
     noRoomsOnFloor: "No rooms on this floor.",
     selectFloorHint: "Select a floor to see its plan and rooms",
     view3d: "3D View",
+    allLevels: "All",
     roomsInSelectedFloor: "Rooms in selected floor",
     savedViews: "Saved views",
     savedViewsHint:
@@ -620,6 +622,7 @@ const dict = {
     noRoomsOnFloor: "No hay habitaciones en esta planta.",
     selectFloorHint: "Selecciona una planta para ver plano y habitaciones",
     view3d: "Vista 3D",
+    allLevels: "Todas",
     roomsInSelectedFloor: "Habitaciones en planta seleccionada",
     savedViews: "Vistas guardadas",
     savedViewsHint:

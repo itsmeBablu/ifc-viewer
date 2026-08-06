@@ -20,6 +20,7 @@ import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
+import { useModelSummary } from "@/lib/useModelSummary";
 import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import GsapPopMenu from "../common/GsapPopMenu";
 import GlassPanel from "../common/GlassPanel";
@@ -95,10 +96,15 @@ function UploadIcon() {
 function HeaderTip({
   label,
   hint,
+  content,
+  wide = false,
   children,
 }: {
   label: string;
   hint: string;
+  /** Overrides the default label/hint text with richer content (e.g. model info). */
+  content?: ReactNode;
+  wide?: boolean;
   children: ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -168,18 +174,22 @@ function HeaderTip({
           <div
             ref={tipRef}
             role="tooltip"
-            className="pointer-events-none fixed z-[200] w-max max-w-[220px] -translate-x-1/2"
+            className={`pointer-events-none fixed z-[200] w-max -translate-x-1/2 ${
+              wide ? "max-w-[16rem]" : "max-w-[220px]"
+            }`}
             style={{ top: pos.top, left: pos.left, visibility: "hidden" }}
           >
             <GlassPanel variant="control" zIndex={200}>
-              <div className="px-3 py-2 text-center">
-                <p className="text-[11px] font-semibold tracking-wide text-[var(--text-strong)]">
-                  {label}
-                </p>
-                <p className="mt-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
-                  {hint}
-                </p>
-              </div>
+              {content ?? (
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[11px] font-semibold tracking-wide text-[var(--text-strong)]">
+                    {label}
+                  </p>
+                  <p className="mt-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
+                    {hint}
+                  </p>
+                </div>
+              )}
             </GlassPanel>
           </div>,
           document.body,
@@ -198,6 +208,7 @@ export default function HeaderActions({
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
+  const { modelLabel, tiles: modelTiles } = useModelSummary();
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -755,6 +766,31 @@ export default function HeaderActions({
                     <HeaderTip
                       label={t(uiLanguage, "data")}
                       hint={t(uiLanguage, "dataHint")}
+                      wide={hasModel}
+                      content={
+                        hasModel ? (
+                          <div className="w-56 px-3 py-2.5">
+                            <p className="mb-1.5 truncate text-center text-[11px] font-semibold text-[var(--text-strong)]">
+                              {modelLabel}
+                            </p>
+                            <div className="flex items-stretch gap-1.5">
+                              {modelTiles.map((tile, i) => (
+                                <div
+                                  key={i}
+                                  className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-1 py-1.5 text-center"
+                                >
+                                  <span className="tabular-nums text-[13px] font-semibold text-[var(--text-strong)]">
+                                    {tile.value}
+                                  </span>
+                                  <span className="truncate text-[9px] font-medium text-[var(--text-muted)]">
+                                    {tile.unit}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : undefined
+                      }
                     >
                       <button
                         type="button"

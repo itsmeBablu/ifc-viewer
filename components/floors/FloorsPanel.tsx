@@ -11,7 +11,6 @@ import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
-import { getModelById } from "@/lib/modelRegistry";
 import {
   captureAllPagesAssets,
   capturePresentationAssets,
@@ -20,6 +19,7 @@ import {
 import { exportAllPagesPdf, exportHeizlastPdf, exportPresentationPdf } from "@/lib/pdfExport";
 import LiquidGlassSpinner from "../common/LiquidGlassSpinner";
 import { heading } from "@/lib/designTokens";
+import { useModelSummary } from "@/lib/useModelSummary";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t, type UiLanguage } from "@/lib/i18n";
@@ -84,8 +84,6 @@ function PdfModeChecks({
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
-  onFile: (file: File) => void;
-  isLoadingModel?: boolean;
   /** Mobile sheet: hide Modell row (lives in menu header); details controlled by parent. */
   mobileSheet?: boolean;
   mobileDetailsOpen?: boolean;
@@ -95,11 +93,12 @@ function Divider() {
   return <div className="mx-3 border-t border-zinc-300/50" />;
 }
 
+/** Sentinel <select> value for "show all levels" (selectedFloor === null). */
+const ALL_LEVELS_VALUE = "__all__";
+
 /** Left panel: building summary, floors, rooms, slice, saved views. */
 export default function FloorsPanel({
   viewerRef,
-  onFile,
-  isLoadingModel = false,
   mobileSheet = false,
   mobileDetailsOpen = false,
 }: Props) {
@@ -119,11 +118,6 @@ export default function FloorsPanel({
   const kuhllastRange = useAppStore((s) => s.kuhllastRange);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const temperatureRange = useAppStore((s) => s.temperatureRange);
-  const activeModelId = useAppStore((s) => s.activeModelId);
-  const activeModelLabel = useAppStore((s) => s.activeModelLabel);
-  const activeModelFileSizeBytes = useAppStore(
-    (s) => s.activeModelFileSizeBytes,
-  );
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
 
@@ -137,22 +131,9 @@ export default function FloorsPanel({
   const removeSavedView = useAppStore((s) => s.removeSavedView);
 
   const { shellGroup, rooms: sceneRooms } = useModelScene();
-  const totalComponents = rooms.length + (shellGroup?.children?.length ?? 0);
+  const { activeModelId, modelLabel, tiles: modelDetailTiles } =
+    useModelSummary();
 
-  const formatBytesParts = (bytes: number | null) => {
-    if (!Number.isFinite(bytes ?? NaN)) return { value: "—", unit: "" };
-    const v = bytes as number;
-    if (v <= 0) return { value: "0", unit: "B" };
-    const units = ["B", "KB", "MB", "GB"] as const;
-    let idx = 0;
-    let n = v;
-    while (n >= 1024 && idx < units.length - 1) {
-      n /= 1024;
-      idx += 1;
-    }
-    const digits = idx === 0 ? 0 : 1;
-    return { value: n.toFixed(digits), unit: units[idx] as string };
-  };
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfExportKind, setPdfExportKind] = useState<
@@ -172,11 +153,8 @@ export default function FloorsPanel({
   const [activeTab, setActiveTab] = useState<"proyecto" | "elemento">(
     "proyecto",
   );
-  const [floorsExpanded, setFloorsExpanded] = useState(true);
   const [roomsExpanded, setRoomsExpanded] = useState(true);
   const [selectionExpanded, setSelectionExpanded] = useState(false);
-  const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
-  const modelFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setRoomsExpanded(Boolean(selectedFloor));
@@ -186,6 +164,16 @@ export default function FloorsPanel({
     () => listVisibleFloors(floors, rooms, shellGroup),
     [floors, rooms, shellGroup],
   );
+
+  /**
+   * Only levels flagged "Building Story" are selectable in the level picker.
+   * If none of them carry the property (e.g. the IFC export dropped it),
+   * fall back to listing every level so the picker isn't left empty.
+   */
+  const primaryFloors = useMemo(() => {
+    const flagged = sortedFloors.filter((f) => f.isBuildingStory);
+    return flagged.length > 0 ? flagged : sortedFloors;
+  }, [sortedFloors]);
 
   useEffect(() => {
     if (selectedFloor && !sortedFloors.some((f) => f.id === selectedFloor)) {
@@ -204,20 +192,6 @@ export default function FloorsPanel({
   }, [rooms, selectedFloor]);
 
   const selectedFloorObj = sortedFloors.find((f) => f.id === selectedFloor);
-
-  const modelLabel =
-    activeModelLabel ??
-    (activeModelId
-      ? (getModelById(activeModelId)?.label ?? activeModelId)
-      : t(uiLanguage, "noModel"));
-
-  const modelSizeParts = formatBytesParts(activeModelFileSizeBytes);
-  const modelDetailTiles = [
-    { value: modelSizeParts.value, unit: modelSizeParts.unit || "—" },
-    { value: String(totalComponents), unit: t(uiLanguage, "elements") },
-    { value: String(floors.length), unit: t(uiLanguage, "floors") },
-    { value: String(rooms.length), unit: t(uiLanguage, "rooms") },
-  ];
 
   useEffect(() => {
     if (activeModelId) clearFloorSnapshots(activeModelId);
@@ -541,7 +515,7 @@ export default function FloorsPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col text-zinc-800">
       {/* Tab menu: Proyecto (project-level info) / Elemento (selected element) */}
-      <div className="flex shrink-0 items-center gap-1 px-4 pt-3">
+      <div className="flex shrink-0 items-center gap-1 px-4 pt-3 pb-2">
         <button
           type="button"
           onClick={() => setActiveTab("proyecto")}
@@ -567,59 +541,16 @@ export default function FloorsPanel({
           {t(uiLanguage, "tabElement")}
         </button>
       </div>
+      <Divider />
 
       {activeTab === "proyecto" && (
       <>
       <section className="px-4 py-2">
-        {/* Header row: label + dedicated load button + info toggle (desktop sidebar only) */}
-        {!mobileSheet && (
-        <div className="flex items-center justify-between gap-2">
-          <p className={heading.muted}>{t(uiLanguage, "model")}</p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <input
-              ref={modelFileInputRef}
-              type="file"
-              accept=".ifc,application/x-step,application/octet-stream,.IFC"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) onFile(file);
-              }}
-            />
-            <button
-              type="button"
-              disabled={isLoadingModel}
-              onClick={() => modelFileInputRef.current?.click()}
-              title={activeModelId ? modelLabel : undefined}
-              className="h-7 max-w-[9rem] min-w-0 shrink-0 truncate rounded-full border-2 border-black bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 px-3 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-95 disabled:opacity-45"
-            >
-              {activeModelId ? modelLabel : t(uiLanguage, "loadIfc")}
-            </button>
-            {activeModelId && (
-              <button
-                type="button"
-                onClick={() => setModelDetailsOpen((v) => !v)}
-                onMouseEnter={() => setModelDetailsOpen(true)}
-                onMouseLeave={() => setModelDetailsOpen(false)}
-                aria-label={
-                  modelDetailsOpen ? "Hide model details" : "Show model details"
-                }
-                aria-expanded={modelDetailsOpen}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-black bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-[11px] font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md transition active:scale-95"
-              >
-                i
-              </button>
-            )}
-          </div>
-        </div>
-        )}
-
-        {/* Details — toggled by the info button (desktop) / external control (mobile) */}
+        {/* Details — mobile sheet only; desktop shows model info via the header's Data button */}
         <div
           className={`overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out ${
-            (mobileSheet ? mobileDetailsOpen : modelDetailsOpen)
-              ? `${mobileSheet ? "mt-0 pt-2" : "mt-1.5"} max-h-16 opacity-100`
+            mobileSheet && mobileDetailsOpen
+              ? "mt-0 pt-2 max-h-16 opacity-100"
               : "mt-0 max-h-0 opacity-0"
           }`}
         >
@@ -648,73 +579,33 @@ export default function FloorsPanel({
       <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
         <div className="flex shrink-0 items-center justify-between gap-2">
           <p className={heading.panel}>{t(uiLanguage, "floorsAndRooms")}</p>
-          <button
-            type="button"
-            onClick={() => setFloorsExpanded((v) => !v)}
-            aria-label={floorsExpanded ? t(uiLanguage, "hideFloors") : t(uiLanguage, "showFloors")}
-            className="flex items-center justify-center rounded-lg border border-zinc-300/60 bg-white/40 px-1.5 py-0.5 text-zinc-600 transition-colors duration-200 hover:bg-white/60"
-          >
-            {floorsExpanded ? (
-              <IoChevronDownSharp className="h-3 w-3" />
-            ) : (
-              <IoChevronUp className="h-3 w-3" />
-            )}
-          </button>
         </div>
 
-        {floorsExpanded && (
-          <div className="flex min-h-0 flex-1 flex-col space-y-1 overflow-hidden pt-0.5">
-            {/* 3D View (all elements, no isolation) */}
-            <button
-              type="button"
-              onClick={() => {
+        <div className="flex min-h-0 flex-1 flex-col space-y-1 overflow-hidden pt-0.5">
+            {/* Level picker: "Alle" (all, no isolation) or a level with Building Story = 1 */}
+            <select
+              value={selectedFloor ?? ALL_LEVELS_VALUE}
+              onChange={(e) => {
+                const value = e.target.value;
                 setSelectedElement(null);
-                setSelectedRoomId(null);
-                setSelectedFloor(null);
-                setRoomsExpanded(false);
+                if (value === ALL_LEVELS_VALUE) {
+                  setSelectedRoomId(null);
+                  setSelectedFloor(null);
+                  setRoomsExpanded(false);
+                } else {
+                  setSelectedFloor(value);
+                  setRoomsExpanded(true);
+                }
               }}
-              className={`w-full shrink-0 rounded-lg border px-2 py-1 text-left text-[11px] transition-colors ${
-                selectedFloor == null
-                  ? "border-amber-200/70 bg-gradient-to-br from-amber-100/55 via-yellow-100/40 to-amber-200/35 font-semibold text-zinc-900"
-                  : "border-zinc-300/60 bg-white/30 text-zinc-600 hover:bg-white/45"
-              }`}
+              className="h-7 w-full shrink-0 truncate rounded-lg border border-zinc-300/60 bg-white/30 px-2 text-[11px] font-medium text-zinc-700"
             >
-              <span className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate">{t(uiLanguage, "view3d")}</span>
-                <span className="tabular-nums text-[10px] text-zinc-400">
-                  {sortedFloors.length}
-                </span>
-              </span>
-            </button>
-
-            {/* Floors list */}
-            <div className="thin-scroll max-h-[30%] shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-lg border border-zinc-300/50 bg-white/30">
-              {sortedFloors.map((f) => {
-                const active = f.id === selectedFloor;
-                const count = rooms.filter((r) => r.floorId === f.id).length;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedElement(null);
-                      setSelectedFloor(f.id);
-                      setRoomsExpanded(true);
-                    }}
-                    className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[11px] transition-colors ${
-                      active
-                        ? "bg-zinc-900/10 font-semibold text-zinc-900"
-                        : "text-zinc-600 hover:bg-zinc-900/5"
-                    }`}
-                  >
-                    <ModelText className="min-w-0 truncate">{f.name}</ModelText>
-                    <span className="tabular-nums text-[10px] text-zinc-400">
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+              <option value={ALL_LEVELS_VALUE}>{t(uiLanguage, "allLevels")}</option>
+              {primaryFloors.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
 
             {/* Rooms tab + 2D layout — grows to Selection top line */}
             {selectedFloor ? (
@@ -800,7 +691,6 @@ export default function FloorsPanel({
               </p>
             )}
           </div>
-        )}
       </section>
       </div>
       {/* === END MIDDLE === */}

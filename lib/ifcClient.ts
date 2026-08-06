@@ -1166,6 +1166,30 @@ async function resolveIfcBytes(
   return source instanceof Uint8Array ? source : new Uint8Array(source);
 }
 
+// Revit's IFC exporter writes each parameter under its current UI-language
+// caption, not a fixed English name — so Revit's LEVEL_IS_BUILDING_STORY
+// (English caption "Building Story") shows up as "Gebäudegeschoss" in an
+// export made from a German-language Revit. Ported from ibviewerOld, which
+// confirmed this via RevitLookup on a real project model.
+const BUILDING_STORY_NAMES = ["Building Story", "Gebäudegeschoss"];
+
+/**
+ * A storey counts as a real building story ONLY when its "Building Story"
+ * property is explicitly present and truthy (1/true/yes/ja) — strict
+ * positive match, not a default. A storey where the property is missing,
+ * unreadable, or explicitly 0/false is NOT a building story.
+ */
+function isActiveBuildingStory(
+  flat: { pset: string; name: string; value: unknown }[],
+): boolean {
+  for (const item of flat) {
+    if (!propNameMatches(item.name, BUILDING_STORY_NAMES)) continue;
+    const value = readBoolean(item.value);
+    if (value != null) return value;
+  }
+  return false;
+}
+
 /**
  * Load an IFC from a public path, File, or ArrayBuffer and extract floors,
  * colored room spaces, and a building shell group that keeps IFC material colors.
@@ -1233,9 +1257,34 @@ export async function loadIfcModel(
           readString(line.Name) || readString(line.LongName) || `Storey ${sid}`;
         const elevation = readNumber(line.Elevation) ?? 0;
         storeyGuidByExpress.set(sid, id);
-        floors.push({ id, name, elevation, expressId: sid });
+        let isBuildingStory = false;
+        try {
+          const storeyPsets = await api.properties.getPropertySets(modelID, sid, true);
+          const storeyFlat = flattenProps(storeyPsets);
+          isBuildingStory = isActiveBuildingStory(storeyFlat);
+          debugLog(
+            "ifcClient",
+            `storey "${name}" (#${sid}) properties`,
+            "info",
+            storeyFlat.map((p) => `${p.pset}.${p.name}=${readString(p.value)}`),
+          );
+        } catch (err) {
+          debugLog(
+            "ifcClient",
+            `Building Story property unavailable for storey #${sid}`,
+            "warn",
+            err,
+          );
+        }
+        floors.push({ id, name, elevation, expressId: sid, isBuildingStory });
       }
       floors.sort((a, b) => a.elevation - b.elevation);
+      const buildingStoryCount = floors.filter((f) => f.isBuildingStory).length;
+      debugLog(
+        "ifcClient",
+        `Building Story read on ${buildingStoryCount}/${floors.length} storey(s)`,
+        buildingStoryCount > 0 ? "ok" : "warn",
+      );
 
       if (floors.length === 0) {
         floors.push({
