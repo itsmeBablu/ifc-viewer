@@ -61,7 +61,7 @@ export default function ToolSidePanel({
   const selectedNoteId = useToolMarkupStore((s) => s.selectedNoteId);
   const pendingNote = useToolMarkupStore((s) => s.pendingNote);
 
-  const [tab, setTab] = useState<ToolTab>("elements");
+  const [tab, setTab] = useState<ToolTab>("editor");
   const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelTipOpen, setModelTipOpen] = useState(false);
