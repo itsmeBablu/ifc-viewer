@@ -220,40 +220,26 @@ export default function FloorsPanel({
     }
     const fromX = Number(gsap.getProperty(underline, "x"));
     const fromW = Number(gsap.getProperty(underline, "width"));
-    const goingRight = toX + toW / 2 >= fromX + fromW / 2;
-    // Water / rubber: stretch elastic across the gap → pinch droplet → settle line.
-    const stretchX = goingRight ? fromX : toX;
-    const stretchW = Math.max(
-      goingRight ? toX + toW - fromX : fromX + fromW - toX,
-      Math.max(fromW, toW),
-    );
-    const droplet = 10;
-    const tl = gsap.timeline({ overwrite: true });
-    tl.to(underline, {
-      x: stretchX,
-      width: stretchW,
-      scaleY: 0.5,
-      duration: 0.26,
-      ease: "power2.inOut",
-    })
-      .to(underline, {
-        x: toX + (toW - droplet) / 2,
-        width: droplet,
-        scaleY: 1.4,
-        duration: 0.18,
-        ease: "power2.in",
-      })
+    // Soft glide: gently narrow mid-travel, then land under the tab.
+    const midX = fromX + (toX - fromX) * 0.5;
+    const midW = Math.max(18, Math.min(fromW, toW) * 0.45);
+    gsap
+      .timeline({ overwrite: true })
+      .fromTo(
+        underline,
+        { x: fromX, width: fromW },
+        {
+          x: midX + (fromW - midW) / 2,
+          width: midW,
+          duration: 0.18,
+          ease: "power2.in",
+        },
+      )
       .to(underline, {
         x: toX,
-        width: toW * 1.08,
-        scaleY: 1,
-        duration: 0.24,
-        ease: "back.out(1.7)",
-      })
-      .to(underline, {
         width: toW,
-        duration: 0.12,
-        ease: gsapEase.iosOut,
+        duration: 0.26,
+        ease: "power3.out",
       });
   }, [leftPanelMode, uiLanguage, autoOpenAttributes]);
 
@@ -268,16 +254,13 @@ export default function FloorsPanel({
     gsap.fromTo(
       body,
       {
-        autoAlpha: 0.35,
-        x: toRight ? 18 : -18,
-        scaleX: 0.92,
-        transformOrigin: toRight ? "100% 50%" : "0% 50%",
+        autoAlpha: 0.4,
+        y: toRight ? 6 : -6,
       },
       {
         autoAlpha: 1,
-        x: 0,
-        scaleX: 1,
-        duration: gsapDuration.fast,
+        y: 0,
+        duration: 0.28,
         ease: gsapEase.iosOut,
         overwrite: true,
       },
@@ -916,7 +899,7 @@ export default function FloorsPanel({
           <span
             ref={underlineRef}
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 h-[2.5px] rounded-full bg-amber-400 will-change-transform"
+            className="pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-amber-400"
             style={{ width: 32 }}
           />
         </div>
