@@ -28,6 +28,8 @@ import PresentationMobileDock from "../presentation/PresentationMobileDock";
 import PresentationSidePanel from "../presentation/PresentationSidePanel";
 import MobileCornerMenu from "../layout/MobileCornerMenu";
 import ToolSidePanel from "../tool/ToolSidePanel";
+import MarkupToolbar from "../tool/MarkupToolbar";
+import MarkupPropertiesPanel from "../tool/MarkupPropertiesPanel";
 import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
 import ViewerToolbar from "./ViewerToolbar";
@@ -648,6 +650,18 @@ export default function ViewerApp() {
           );
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
+        {toolMode && (
+          <>
+            <div className="pointer-events-none fixed top-1/2 left-3 z-[36] -translate-y-1/2 md:left-4">
+              <MarkupToolbar />
+            </div>
+            <div className="pointer-events-none fixed top-[7.5rem] left-[4.25rem] z-[36] w-[min(15rem,calc(100vw-5rem))] md:left-[4.75rem]">
+              <div className="pointer-events-auto">
+                <MarkupPropertiesPanel />
+              </div>
+            </div>
+          </>
+        )}
         <ViewerContextMenu
           viewerRef={viewerRef}
           rootRef={rootRef}

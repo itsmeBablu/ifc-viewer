@@ -25,6 +25,9 @@ import type { CustomLegendColors } from "@/lib/colorMapping";
 import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
+import { MarkupSceneLayer } from "@/components/tool/MarkupSceneLayer";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { isShapeTool } from "@/components/tool/MarkupIcons";
 import {
   ClipSliceController,
   floorWorldYBounds,
@@ -506,6 +509,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const applySelectionHighlightRef = useRef<() => void>(() => {});
   const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
   const lastTickRef = useRef(performance.now());
+  const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -555,6 +559,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
   const toolMode = useAppStore((s) => s.toolMode);
+  const activeModelId = useAppStore((s) => s.activeModelId);
+  const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const hiddenElementIds = useAppStore((s) => s.hiddenElementIds);
   const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
   const toolRevealToken = useAppStore((s) => s.toolRevealToken);
@@ -802,6 +808,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     compareRootRef.current = compareRoot;
     helpersRef.current = helpers;
 
+    const markup = new MarkupSceneLayer();
+    markup.attach(scene, container);
+    markup.onNoteClick = (id) => {
+      useToolMarkupStore.getState().selectNote(id);
+    };
+    markupLayerRef.current = markup;
+
     const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -810,6 +823,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
       viewCube.updateViewport(w, h);
+      markupLayerRef.current?.setSize(w, h);
     };
 
     const ro = new ResizeObserver(resize);
@@ -826,6 +840,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, sz.x, sz.y);
       renderer.render(scene, camera);
+      markupLayerRef.current?.render(camera);
       viewCube.updateViewport(sz.x, sz.y);
       viewCube.render(renderer);
       rafRef.current = requestAnimationFrame(tick);
@@ -844,6 +859,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
       viewCube.dispose();
       clip.dispose();
+      markupLayerRef.current?.detach(scene);
+      markupLayerRef.current = null;
       viewCubeRef.current = null;
       clipRef.current = null;
       sceneRef.current = null;
@@ -1648,6 +1665,44 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   useEffect(() => {
     const id = requestAnimationFrame(() => fitToVisible(700));
     return () => cancelAnimationFrame(id);
+  }, [toolMode]);
+
+  // Load / sync Werkzeug markup for the active model.
+  useEffect(() => {
+    const key =
+      activeModelId ??
+      (activeModelLabel ? `label:${activeModelLabel}` : null);
+    void useToolMarkupStore.getState().loadForModel(key);
+  }, [activeModelId, activeModelLabel]);
+
+  useEffect(() => {
+    markupLayerRef.current?.setVisible(toolMode);
+  }, [toolMode]);
+
+  useEffect(() => {
+    const layer = markupLayerRef.current;
+    if (!layer) return;
+    const unsub = useToolMarkupStore.subscribe((s) => {
+      layer.syncPlacements(s.placements, s.selectedPlacementId);
+      layer.syncNotes(s.notes, s.selectedNoteId);
+    });
+    const s = useToolMarkupStore.getState();
+    layer.syncPlacements(s.placements, s.selectedPlacementId);
+    layer.syncNotes(s.notes, s.selectedNoteId);
+    return unsub;
+  }, [toolMode, activeModelId, activeModelLabel]);
+
+  useEffect(() => {
+    if (!toolMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        useToolMarkupStore.getState().setArmedTool(null);
+        useToolMarkupStore.getState().cancelPendingNote();
+        useToolMarkupStore.getState().clearSelection();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [toolMode]);
 
   // Werkzeug: frame the element picked in the structure tree.
@@ -2512,6 +2567,54 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
       const hit = pickHit(e.clientX, e.clientY);
       const viewMode = useAppStore.getState().dataViewMode;
+      const inToolNow = useAppStore.getState().toolMode;
+
+      if (inToolNow) {
+        const markupStore = useToolMarkupStore.getState();
+        const layer = markupLayerRef.current;
+        const camera = cameraRef.current;
+        if (camera && layer) {
+          const rect = canvas.getBoundingClientRect();
+          pointerNdc.current.x =
+            ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointerNdc.current.y =
+            -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.current.setFromCamera(pointerNdc.current, camera);
+
+          const armed = markupStore.armedTool;
+          if (armed && hit?.point) {
+            const p = hit.point;
+            if (armed === "note") {
+              markupStore.beginNoteAt({ x: p.x, y: p.y, z: p.z });
+            } else if (isShapeTool(armed)) {
+              void markupStore.placeShape(armed, {
+                x: p.x,
+                y: p.y,
+                z: p.z,
+              });
+            }
+            return;
+          }
+
+          const picked = layer.pickMarkup(raycaster.current);
+          if (picked?.kind === "placement") {
+            markupStore.selectPlacement(picked.id);
+            return;
+          }
+          const noteId = layer.noteIdNearRay(
+            raycaster.current,
+            markupStore.notes,
+          );
+          if (noteId) {
+            markupStore.selectNote(noteId);
+            return;
+          }
+
+          if (!armed) {
+            markupStore.clearSelection();
+          }
+        }
+      }
 
       if (viewMode === "luftung") {
         if (!hit) {
