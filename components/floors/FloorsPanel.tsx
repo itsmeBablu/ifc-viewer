@@ -840,18 +840,18 @@ export default function FloorsPanel({
       <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
         <div
           ref={tabRowRef}
-          className="relative flex shrink-0 items-center justify-between gap-2 pb-1.5"
+          className="relative flex shrink-0 items-center justify-between gap-2 pb-2.5"
         >
           <button
             ref={floorsTabRef}
             type="button"
             onClick={() => setManualPanelMode("floors")}
             aria-pressed={leftPanelMode === "floors"}
-            className={`pb-0.5 text-[11px] font-semibold tracking-wide transition-colors ${
+            className={`rounded-lg px-2 py-1 text-[11px] font-semibold tracking-wide transition-colors ${
               leftPanelMode === "floors"
                 ? "text-zinc-900"
-                : "text-zinc-500 hover:text-zinc-700"
-            }`}
+                : "text-zinc-500"
+            } hover:bg-white/70 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.08)]`}
           >
             {t(uiLanguage, "floorsAndRooms")}
           </button>
@@ -861,11 +861,11 @@ export default function FloorsPanel({
               type="button"
               onClick={() => setManualPanelMode("attributes")}
               aria-pressed={leftPanelMode === "attributes"}
-              className={`pb-0.5 text-[11px] font-semibold tracking-wide transition-colors ${
+              className={`rounded-lg px-2 py-1 text-[11px] font-semibold tracking-wide transition-colors ${
                 leftPanelMode === "attributes"
                   ? "text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-700"
-              }`}
+                  : "text-zinc-500"
+              } hover:bg-white/70 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.08)]`}
             >
               {t(uiLanguage, "attributesToggle")}
             </button>
@@ -899,7 +899,7 @@ export default function FloorsPanel({
           <span
             ref={underlineRef}
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-amber-400"
+            className="pointer-events-none absolute bottom-0 left-0 h-px rounded-full bg-amber-400"
             style={{ width: 32 }}
           />
         </div>
