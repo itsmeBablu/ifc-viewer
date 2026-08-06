@@ -296,18 +296,20 @@ function applyRenderMode(
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
   const inTool = useAppStore.getState().toolMode;
+  // Werkzeug matches BIMvision-style IFC viewing: hide analysis rooms, show
+  // the shell in the file's own default colors with strong shaded meshes.
   const spaceOpacity = inTool
-    ? 0.3
+    ? 0
     : (lighting?.spaceTransparency ?? 0.8);
-  // Werkzeug is a plain IFC viewer: the analysis sliders that fade elements so
-  // room colors read through must not wash out the real materials here.
   const elementOpacity = inTool ? 1 : (lighting?.elementTransparency ?? 0.8);
   const colorAmt = inTool ? 1 : (lighting?.color ?? 1);
 
   if (overlays) {
     // Texture normally hides overlays; if shell was culled (room-only IFC), show gray volumes
     overlays.visible =
-      (showRoomOverlays && !textureOnly) || (textureOnly && shellEmpty);
+      !inTool &&
+      ((showRoomOverlays && !textureOnly) || (textureOnly && shellEmpty));
+    if (!inTool) {
     overlays.traverse((obj) => {
       // Skip stencil-cap helper meshes parented under rooms
       if (!isOverlayRoomMesh(obj)) return;
@@ -345,6 +347,7 @@ function applyRenderMode(
       }
       mat.needsUpdate = true;
     });
+    }
   }
 
   if (shell) {
@@ -354,10 +357,69 @@ function applyRenderMode(
       const mat = obj.material as THREE.MeshStandardMaterial;
       const surface = readIfcSurface(mat);
       const baseHex =
+        (obj.userData.colorHex as string | undefined) ??
         surface?.colorHex ??
         (mat.userData.baseColorHex as string | undefined) ??
-        (obj.userData.colorHex as string | undefined) ??
         `#${mat.color.getHexString()}`;
+      const rawOpacity =
+        typeof obj.userData.ifcOpacity === "number"
+          ? (obj.userData.ifcOpacity as number)
+          : (surface?.opacity ?? 1);
+
+      if (inTool) {
+        // Solid colorful BIM mesh (BIMvision-like). Glass must stay readable —
+        // too-low alpha + depthWrite makes windows disappear against the sky.
+        const fill = new THREE.Color(baseHex);
+        const surfaceClass = surface?.surfaceClass;
+        const isGlass =
+          surfaceClass === "glass" ||
+          rawOpacity < 0.92;
+
+        mat.wireframe = false;
+        mat.flatShading = false;
+        mat.depthTest = true;
+
+        if (isGlass) {
+          // Keep a visible glazing fill (never near-invisible).
+          let glassColor = fill.clone();
+          const lum =
+            0.2126 * glassColor.r +
+            0.7152 * glassColor.g +
+            0.0722 * glassColor.b;
+          if (lum > 0.82 || (fill.r + fill.g + fill.b) < 0.08) {
+            // Clear / missing IFC glass color → cool visible tint.
+            glassColor.setRGB(0.45, 0.72, 0.9);
+          }
+          const opacity = Math.max(
+            0.48,
+            Math.min(0.78, rawOpacity < 0.05 ? 0.55 : rawOpacity),
+          );
+          mat.color.copy(glassColor);
+          mat.roughness = 0.06;
+          mat.metalness = 0;
+          mat.envMapIntensity = 1.5;
+          mat.emissive.copy(glassColor).multiplyScalar(0.1);
+          mat.emissiveIntensity = 1;
+          mat.opacity = opacity;
+          mat.transparent = true;
+          // Transparent glass must not write depth or it punches holes / vanishes.
+          mat.depthWrite = false;
+          mat.side = THREE.DoubleSide;
+        } else {
+          mat.color.copy(fill);
+          mat.roughness = 0.45;
+          mat.metalness = 0.06;
+          mat.envMapIntensity = 0.9;
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+          mat.opacity = 1;
+          mat.transparent = false;
+          mat.depthWrite = true;
+          mat.side = THREE.FrontSide;
+        }
+        mat.needsUpdate = true;
+        return;
+      }
 
       if (light) {
         // Study look: flat, desaturated, no reflections.
@@ -846,18 +908,23 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             (obj.userData.colorHex as string | undefined) ??
             (src.userData.baseColorHex as string | undefined) ??
             `#${src.color.getHexString()}`;
+          const rawOpacity =
+            typeof obj.userData.ifcOpacity === "number"
+              ? (obj.userData.ifcOpacity as number)
+              : 1;
           // Object3D.clone() deep-copies userData, so the classified surface
           // survives; older models without one get classified on the fly.
           const surface =
             (obj.userData.ifcSurface as IfcSurface | undefined) ??
             classifyIfcSurface({
               colorHex: baseHex,
-              opacity: 1,
+              opacity: rawOpacity,
               typeName: obj.userData.ifcTypeName as string | undefined,
               materialName: obj.userData.ifcMaterialName as string | undefined,
             });
           const mat = createIfcMaterial(surface);
-          obj.userData.colorHex = surface.colorHex;
+          obj.userData.colorHex = baseHex;
+          obj.userData.ifcOpacity = rawOpacity;
           obj.userData.ifcSurface = surface;
           obj.material = mat;
           obj.castShadow = surface.surfaceClass !== "glass";
@@ -1297,33 +1364,51 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const ambient = ambientRef.current;
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
-    if (sun) {
-      sun.intensity = 0.2 + lighting.shadow * 1.6;
-      sun.castShadow = lighting.shadow > 0.05;
-    }
-    if (ambient) {
-      ambient.intensity = 0.15 + lighting.indirectLight * 0.7;
-    }
-    if (renderer) {
-      renderer.toneMappingExposure = 0.75 + lighting.indirectLight * 0.7;
-      renderer.shadowMap.enabled = lighting.shadow > 0.05;
+    if (toolMode) {
+      // Strong studio lighting so IFC default colors pop (BIMvision-like).
+      if (sun) {
+        sun.intensity = 1.45;
+        sun.castShadow = true;
+      }
+      if (ambient) {
+        ambient.intensity = 0.95;
+      }
+      if (renderer) {
+        renderer.toneMappingExposure = 1.25;
+        renderer.shadowMap.enabled = true;
+      }
+    } else {
+      if (sun) {
+        sun.intensity = 0.2 + lighting.shadow * 1.6;
+        sun.castShadow = lighting.shadow > 0.05;
+      }
+      if (ambient) {
+        ambient.intensity = 0.15 + lighting.indirectLight * 0.7;
+      }
+      if (renderer) {
+        renderer.toneMappingExposure = 0.75 + lighting.indirectLight * 0.7;
+        renderer.shadowMap.enabled = lighting.shadow > 0.05;
+      }
     }
     if (scene) {
       // Indirect scales each material's own reflectivity — a flat value here
       // would erase the difference between glass, metal and concrete.
-      shellCloneRef.current?.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh)) return;
-        if (renderMode === "light") return;
-        const mat = obj.material as THREE.MeshStandardMaterial;
-        const surface = readIfcSurface(mat);
-        const base = surface?.envMapIntensity ?? 0.4;
-        const modeBoost = renderMode === "realistic" ? 1.7 : 1;
-        mat.envMapIntensity =
-          base * modeBoost * (0.55 + lighting.indirectLight * 0.95);
-        mat.needsUpdate = true;
-      });
+      // Werkzeug sets envMapIntensity in applyRenderMode itself.
+      if (!toolMode) {
+        shellCloneRef.current?.traverse((obj) => {
+          if (!(obj instanceof THREE.Mesh)) return;
+          if (renderMode === "light") return;
+          const mat = obj.material as THREE.MeshStandardMaterial;
+          const surface = readIfcSurface(mat);
+          const base = surface?.envMapIntensity ?? 0.4;
+          const modeBoost = renderMode === "realistic" ? 1.7 : 1;
+          mat.envMapIntensity =
+            base * modeBoost * (0.55 + lighting.indirectLight * 0.95);
+          mat.needsUpdate = true;
+        });
+      }
     }
-  }, [renderMode, lighting]);
+  }, [renderMode, lighting, toolMode]);
 
   // 3D viewport background — solid or sky gradient
   useEffect(() => {
@@ -1526,9 +1611,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         (isolated == null || isolated.has(expressId));
     };
 
-    if (overlays) overlays.visible = true;
+    if (overlays) overlays.visible = !toolMode;
     shell?.traverse(apply);
-    overlays?.traverse(apply);
+    if (!toolMode) overlays?.traverse(apply);
+    else if (overlays) {
+      // Keep room meshes out of the way entirely — web-ifc shows the shell only.
+      overlays.traverse((obj) => {
+        if (!skip(obj)) obj.visible = false;
+      });
+    }
   }, [
     toolMode,
     hiddenElementIds,
@@ -1541,12 +1632,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     roomsFromStore,
   ]);
 
-  // Werkzeug: element outlines, the way desktop IFC viewers draw them.
+  // Werkzeug only: dense black mesh edges drawn on top so the whole model reads.
   useEffect(() => {
     if (!toolMode) return;
     const shell = shellCloneRef.current;
     if (!shell) return;
-    const overlay = buildElementEdges(shell);
+    const overlay = buildElementEdges(shell, {
+      color: 0x000000,
+      thresholdAngle: 12,
+    });
     return () => overlay.dispose();
   }, [toolMode, shellGroup, rooms, roomsFromStore]);
 
@@ -2288,6 +2382,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             if (!isRoomPickAllowed(detailRoomId, detailFloor)) return;
 
             setSelectedElement(details);
+            useAppStore.getState().bumpScenePickToken();
             // Keep room id in sync with element details (highlight key)
             if (details.roomId) {
               setSelectedRoomId(details.roomId);

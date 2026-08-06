@@ -1,19 +1,18 @@
 import * as THREE from "three";
+import { debugLog } from "./debugLog";
 
 /**
  * Element outlines for the Werkzeug view.
  *
- * Desktop IFC viewers draw a thin dark line on every element silhouette — it is
- * what makes a model read as building geometry rather than coloured blobs.
- * Lines are attached as children of their element so they inherit `visible`
- * from the structure-tree toggles for free.
+ * Thin crease lines etched on the shaded mesh (depth-tested) so the colorful
+ * IFC fill stays primary — BIMvision-style, not wireframe-only.
  */
 
 export type EdgeOverlayOptions = {
-  /** Skip the overlay entirely past this many meshes (perf guard). */
+  /** Soft cap — still draws, but logs if the model is huge. */
   maxMeshes?: number;
   color?: number;
-  /** Only crease angles above this (degrees) become lines. */
+  /** Only crease angles above this (degrees) become lines. Lower = denser. */
   thresholdAngle?: number;
   /** Meshes processed per frame while building. */
   chunkSize?: number;
@@ -34,19 +33,23 @@ export function buildElementEdges(
   options: EdgeOverlayOptions = {},
 ): EdgeOverlayHandle {
   const {
-    maxMeshes = 3500,
-    color = 0x39404a,
-    thresholdAngle = 24,
-    chunkSize = 220,
+    maxMeshes = 12000,
+    color = 0x000000,
+    thresholdAngle = 12,
+    chunkSize = 180,
   } = options;
 
-  // Opaque so the lines stay out of the transparency sort, with a polygon
-  // offset pulling them off the surface they trace instead of z-fighting it.
+  // Sit on the mesh surface (not floating on top) so fills stay visible.
+  // polygonOffset pulls lines slightly forward without hiding the colors.
   const material = new THREE.LineBasicMaterial({
     color,
+    linewidth: 1,
+    depthTest: true,
+    depthWrite: false,
+    transparent: false,
     polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
   });
 
   const created: THREE.LineSegments[] = [];
@@ -58,7 +61,9 @@ export function buildElementEdges(
     if (!(obj instanceof THREE.Mesh)) return;
     if (isEdgeOverlay(obj)) return;
     if (obj.userData.isClipStencil || obj.userData.isClipCap) return;
+    if (obj.userData.isSelectionOutline) return;
     if (!obj.geometry?.attributes?.position) return;
+    if (!obj.visible) return;
     targets.push(obj);
   });
 
@@ -73,18 +78,28 @@ export function buildElementEdges(
     material.dispose();
   };
 
-  if (!targets.length || targets.length > maxMeshes) {
-    // Nothing to do, or too heavy to be worth the draw calls.
+  if (!targets.length) {
     material.dispose();
     return { dispose: () => {} };
+  }
+
+  const work = targets.length > maxMeshes ? targets.slice(0, maxMeshes) : targets;
+  if (targets.length > maxMeshes) {
+    debugLog(
+      "ifcEdges",
+      `model has ${targets.length} meshes — drawing edges on first ${maxMeshes}`,
+      "warn",
+    );
+  } else {
+    debugLog("ifcEdges", `building edges for ${work.length} mesh(es)`, "ok");
   }
 
   let index = 0;
   const step = () => {
     if (disposed) return;
-    const end = Math.min(index + chunkSize, targets.length);
+    const end = Math.min(index + chunkSize, work.length);
     for (; index < end; index++) {
-      const mesh = targets[index];
+      const mesh = work[index];
       let edges: THREE.EdgesGeometry;
       try {
         edges = new THREE.EdgesGeometry(mesh.geometry, thresholdAngle);
@@ -97,16 +112,18 @@ export function buildElementEdges(
       }
       const line = new THREE.LineSegments(edges, material);
       line.userData[EDGE_FLAG] = true;
+      line.renderOrder = 2;
       // Outlines must never win a pick or steal the element's selection.
       line.raycast = () => {};
       mesh.add(line);
       created.push(line);
     }
 
-    if (index < targets.length) {
+    if (index < work.length) {
       frame = requestAnimationFrame(step);
     } else {
       frame = 0;
+      debugLog("ifcEdges", `edge overlay ready (${created.length} sets)`, "ok");
     }
   };
 
