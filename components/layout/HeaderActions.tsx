@@ -788,6 +788,9 @@ export default function HeaderActions({
                                 </div>
                               ))}
                             </div>
+                            <p className="mt-1.5 text-center text-[10px] font-medium tracking-wide text-amber-700/90">
+                              {t(uiLanguage, "loadOtherIfcShortcut")}
+                            </p>
                           </div>
                         ) : undefined
                       }

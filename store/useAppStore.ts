@@ -138,6 +138,8 @@ type AppState = {
   selectedRoomId: string | null;
   hoveredRoom: Room | null;
   selectedElement: SelectedElement | null;
+  /** Increments on each 3D scene pick (for left-panel auto Attributes). */
+  scenePickToken: number;
   colorMode: ColorMode;
   /** Heating / ventilation / cooling — synced between header and legend. */
   dataViewMode: DataViewMode;
@@ -251,6 +253,8 @@ type AppState = {
   setSelectedRoomId: (roomId: string | null) => void;
   setHoveredRoom: (room: Room | null) => void;
   setSelectedElement: (el: SelectedElement | null) => void;
+  /** Bumped when the user picks an element in the 3D scene (not from UI lists). */
+  bumpScenePickToken: () => void;
   setColorMode: (mode: ColorMode) => void;
   setDataViewMode: (mode: DataViewMode) => void;
   setActiveColorPalette: (id: ColorPaletteId) => void;
@@ -480,6 +484,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedRoomId: null,
   hoveredRoom: null,
   selectedElement: null,
+  scenePickToken: 0,
   colorMode: "heizlast",
   dataViewMode: "heizlast",
   activeColorPalette: initialPalette(),
@@ -583,6 +588,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   setHoveredRoom: (room) => set({ hoveredRoom: room }),
   setSelectedElement: (el) => set({ selectedElement: el }),
+  bumpScenePickToken: () =>
+    set({ scenePickToken: get().scenePickToken + 1 }),
   setColorMode: (mode) => {
     if (mode === get().colorMode) return;
     set({ colorMode: mode });

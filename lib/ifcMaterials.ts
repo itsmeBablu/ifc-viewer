@@ -49,7 +49,8 @@ const PRESETS: Record<IfcSurfaceClass, SurfacePreset> = {
     metalness: 0.0,
     envMapIntensity: 1.5,
     doubleSide: true,
-    maxOpacity: 0.3,
+    // Floor so glazing never drops out against sky / light backgrounds.
+    maxOpacity: 0.55,
   },
   metal: {
     roughness: 0.3,

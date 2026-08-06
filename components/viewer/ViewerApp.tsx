@@ -703,7 +703,11 @@ export default function ViewerApp() {
                   leftPanelOpen ? "" : "pointer-events-none"
                 }`}
               >
-                <FloorsPanel viewerRef={viewerRef} />
+                <FloorsPanel
+                  viewerRef={viewerRef}
+                  onFile={handleFile}
+                  isLoadingModel={isLoadingModel}
+                />
               </div>
             </GlassPanel>
           </aside>
@@ -805,6 +809,8 @@ export default function ViewerApp() {
                     <>
                       <FloorsPanel
                         viewerRef={viewerRef}
+                        onFile={handleFile}
+                        isLoadingModel={isLoadingModel}
                         mobileSheet
                         mobileDetailsOpen={detailsOpen}
                       />
