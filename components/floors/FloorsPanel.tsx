@@ -132,6 +132,7 @@ export default function FloorsPanel({
   );
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
+  const scenePickToken = useAppStore((s) => s.scenePickToken);
 
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
@@ -163,16 +164,11 @@ export default function FloorsPanel({
   const pdfPortalHostRef = useRef<HTMLElement | null>(null);
 
   const [roomsExpanded, setRoomsExpanded] = useState(true);
-  const [manualPanelMode, setManualPanelMode] = useState<
-    "floors" | "attributes"
-  >("floors");
-  /** When on, 3D selection drives the tab: pick → Attributes, clear → Floors. */
+  const [leftPanelMode, setLeftPanelMode] = useState<"floors" | "attributes">(
+    "floors",
+  );
+  /** When on: 3D pick → Attributes, clear → Floors. Manual tab clicks still work. */
   const [autoOpenAttributes, setAutoOpenAttributes] = useState(false);
-  const leftPanelMode: "floors" | "attributes" = autoOpenAttributes
-    ? selectedElement
-      ? "attributes"
-      : "floors"
-    : manualPanelMode;
   const floorsTabRef = useRef<HTMLButtonElement>(null);
   const attributesTabRef = useRef<HTMLButtonElement>(null);
   const underlineRef = useRef<HTMLSpanElement>(null);
@@ -190,6 +186,20 @@ export default function FloorsPanel({
   useEffect(() => {
     setRoomsExpanded(Boolean(selectedFloor));
   }, [selectedFloor]);
+
+  // Auto-toggle: follow new 3D picks / clears, but never lock the tabs.
+  const autoPickSeen = useRef(0);
+  useEffect(() => {
+    if (!autoOpenAttributes) return;
+    if (scenePickToken === 0 || scenePickToken === autoPickSeen.current) return;
+    autoPickSeen.current = scenePickToken;
+    if (selectedElement) setLeftPanelMode("attributes");
+  }, [scenePickToken, autoOpenAttributes, selectedElement]);
+
+  useEffect(() => {
+    if (!autoOpenAttributes) return;
+    if (!selectedElement) setLeftPanelMode("floors");
+  }, [selectedElement, autoOpenAttributes]);
 
   const underlineReady = useRef(false);
   const panelBodyRef = useRef<HTMLDivElement>(null);
@@ -845,7 +855,7 @@ export default function FloorsPanel({
           <button
             ref={floorsTabRef}
             type="button"
-            onClick={() => setManualPanelMode("floors")}
+            onClick={() => setLeftPanelMode("floors")}
             aria-pressed={leftPanelMode === "floors"}
             className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
               leftPanelMode === "floors"
@@ -859,7 +869,7 @@ export default function FloorsPanel({
             <button
               ref={attributesTabRef}
               type="button"
-              onClick={() => setManualPanelMode("attributes")}
+              onClick={() => setLeftPanelMode("attributes")}
               aria-pressed={leftPanelMode === "attributes"}
               className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
                 leftPanelMode === "attributes"
@@ -877,12 +887,11 @@ export default function FloorsPanel({
               title={t(uiLanguage, "attributesAutoSelect")}
               onClick={() => {
                 setAutoOpenAttributes((on) => {
-                  if (on) {
-                    setManualPanelMode(
-                      selectedElement ? "attributes" : "floors",
-                    );
+                  const next = !on;
+                  if (next && selectedElement) {
+                    setLeftPanelMode("attributes");
                   }
-                  return !on;
+                  return next;
                 });
               }}
               className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
