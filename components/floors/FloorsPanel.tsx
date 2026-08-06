@@ -34,7 +34,7 @@ import type { PageFormat } from "@/lib/presentationLayout";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { DATA_VIEW_MODES } from "@/lib/dataViewMode";
 import gsap from "gsap";
-import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
+import { killGsap } from "@/lib/gsapMotion";
 
 function formatBytes(bytes: number | null) {
   const { value, unit } = formatBytesParts(bytes);
