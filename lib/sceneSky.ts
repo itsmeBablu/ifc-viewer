@@ -1,3 +1,11 @@
+/**
+ * 3D scene background presets (solid colors and top/bottom sky gradients),
+ * plus helpers to resolve, interpolate, and render them as a THREE texture.
+ *
+ * Picks a season/day-night sky per DataViewMode + ColorTheme (winter for
+ * heating/ventilation, summer for cooling) and supports animated theme/mode
+ * transitions via encoded "gradient:top:bottom" lerp strings.
+ */
 import * as THREE from "three";
 import { lerpHex, type ColorTheme } from "@/lib/themeColors";
 import type { DataViewMode } from "@/lib/dataViewMode";

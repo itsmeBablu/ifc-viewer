@@ -1,3 +1,10 @@
+/**
+ * Drives the 3D viewer through each floor/mode/presentation combination to
+ * capture PNG snapshots for PDF export (see pdfExport.ts for the PDF layout
+ * itself). Temporarily mutates useAppStore view state (color mode, floor
+ * selection, presentation layout) and always restores it in a `finally`,
+ * waiting on animation/settle frames between captures via Viewer3DHandle.
+ */
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { ColorMode, Floor, Room } from "@/lib/types";
 import type { Viewer3DHandle } from "@/components/viewer/Viewer3D";

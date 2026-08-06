@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * In-app debug log store and `debugLog` helper, backed by a zustand store
+ * (`useDebugStore`) that also powers a debug-panel UI. Every call mirrors to
+ * the browser console (grouped by level) while keeping a capped rolling
+ * buffer of entries for later inspection. Used throughout lib/ (ifcClient,
+ * ifcStructure, ifcMaterials, etc.) to trace IFC parsing without relying on
+ * console output alone.
+ */
 import { create } from "zustand";
 
 export type DebugLevel = "info" | "warn" | "error" | "ok";

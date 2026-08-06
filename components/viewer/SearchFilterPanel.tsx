@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * SearchFilterPanel — bottom-toolbar popup body with two tabs: room Search
+ * (name/number, jumps floor + optionally flies the camera) and a Filter tab
+ * (heat-load range + temperature chips) that fades non-matching rooms in the
+ * 3D scene via `activeFilter`.
+ *
+ * Reads/writes rooms, floors, selectedFloor, activeFilter and legend ranges
+ * on useAppStore; drives `viewerRef.current?.flyToRoom` when Autofocus is on.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   temperatureLegendStops,

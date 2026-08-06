@@ -1,5 +1,32 @@
 "use client";
 
+/**
+ * Viewer3D — the core Three.js scene component: loads the IFC shell and room
+ * overlays (cloned from `useModelScene`) into a perspective scene with
+ * OrbitControls, a view cube, PMREM environment lighting and shadows, and
+ * imperatively exposes camera pose / fly-to / fit / capture via
+ * `Viewer3DHandle` (`ref`) for ViewerApp, the toolbar and saved views.
+ *
+ * Reacts to a large slice of useAppStore: `renderMode` + `lighting` (drives
+ * `applyRenderMode`, which also branches on `toolMode` — Werkzeug hides all
+ * room/space overlays and forces full element opacity, BIMvision-style),
+ * `colorMode`/`dataViewMode` + legend ranges/palette (room overlay + shell
+ * coloring, including a side-by-side "compare both modes" twin scene),
+ * `selectedFloor` + `sliceProgress` (horizontal clip-plane slicing via
+ * `ClipSliceController`), `isPresentationView`/`presentationLayoutMode`/
+ * `presentationIsolate` (the exploded floor-grid/stack layout with
+ * GSAP-tweened offsets and iso camera framing), ventilation markers
+ * (`dataViewMode === "luftung"`, also suppressed while `bauteilMode` is on),
+ * and `toolMode`/`hiddenElementIds`/`isolatedElementIds` (Werkzeug per-element
+ * visibility + edge outlines from the IFC structure tree).
+ *
+ * Also owns pointer-based hover/select picking (raycasting against room
+ * meshes, Schnitthöhe clip caps, and shell meshes, with room-vs-element
+ * resolution and `isRoomPickAllowed` gating) and view-cube snap navigation.
+ * This file is intentionally large (~2500 lines) — treat this header as an
+ * orientation map, not an exhaustive spec.
+ */
+
 import {
   forwardRef,
   useEffect,
@@ -9,6 +36,7 @@ import {
 import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
@@ -25,6 +53,15 @@ import type { CustomLegendColors } from "@/lib/colorMapping";
 import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
+import {
+  applyGridSnap,
+  enhanceHitWithVertexSnap,
+  pickMarkupSurface,
+} from "@/lib/markupSnap";
+import { snapToNearbyAabb, toMm } from "@/lib/markupUnits";
+import { MarkupSceneLayer } from "@/components/tool/MarkupSceneLayer";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { isShapeTool } from "@/components/tool/MarkupIcons";
 import {
   ClipSliceController,
   floorWorldYBounds,
@@ -478,7 +515,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const rafRef = useRef<number>(0);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  const perspectiveCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const shellCloneRef = useRef<THREE.Group | null>(null);
@@ -506,6 +545,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const applySelectionHighlightRef = useRef<() => void>(() => {});
   const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
   const lastTickRef = useRef(performance.now());
+  const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
+  const lastNotePinTokenRef = useRef(0);
+  const transformControlsRef = useRef<TransformControls | null>(null);
+  const transformDraggingRef = useRef(false);
+  const persistGizmoRef = useRef<() => void>(() => {});
+  const orthoFrustumRef = useRef(20);
+  const activeViewPresetRef = useRef<string>("free");
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -555,17 +601,41 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
   const toolMode = useAppStore((s) => s.toolMode);
+  const activeModelId = useAppStore((s) => s.activeModelId);
+  const activeModelLabel = useAppStore((s) => s.activeModelLabel);
+  const bauteilMode = useAppStore((s) => s.bauteilMode);
   const hiddenElementIds = useAppStore((s) => s.hiddenElementIds);
   const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
   const toolRevealToken = useAppStore((s) => s.toolRevealToken);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
+  const notePinToken = useToolMarkupStore((s) => s.notePinToken);
 
   const fitToVisible = (durationMs = 850) => {
-    const camera = cameraRef.current;
     const controls = controlsRef.current;
     const overlays = overlaysRef.current;
     const shell = shellCloneRef.current;
-    if (!camera || !controls) return;
+    if (!controls) return;
+
+    // In Werkzeug ortho views: reframe the same preset (keep Top when floors change).
+    const inTool = useAppStore.getState().toolMode;
+    const preset = useToolMarkupStore.getState().viewPreset;
+    if (inTool && preset !== "free") {
+      useToolMarkupStore.getState().setViewPreset(preset);
+      return;
+    }
+
+    const camera = perspectiveCameraRef.current;
+    if (!camera) return;
+
+    if (cameraRef.current !== camera) {
+      cameraRef.current = camera;
+      controls.object = camera;
+      controls.enableRotate = true;
+      const tc = transformControlsRef.current;
+      if (tc) {
+        (tc as TransformControls & { camera: THREE.Camera }).camera = camera;
+      }
+    }
 
     // Ensure explode / compare offsets are in world matrices before measuring
     overlays?.updateWorldMatrix(true, true);
@@ -634,7 +704,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   useImperativeHandle(ref, () => ({
     getCameraPose: () => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current ?? cameraRef.current;
       const controls = controlsRef.current;
       if (!camera || !controls) {
         return { position: [0, 0, 0], target: [0, 0, 0] };
@@ -645,9 +715,14 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       };
     },
     flyToPose: async (position, target, duration = 800) => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       if (!camera || !controls) return;
+      if (cameraRef.current !== camera) {
+        cameraRef.current = camera;
+        controls.object = camera;
+        controls.enableRotate = true;
+      }
       await flyTo(
         camera,
         controls,
@@ -658,7 +733,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     },
     fitVisible: fitToVisible,
     flyToRoom: async (roomId: string) => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       const mesh = roomMeshById.current.get(roomId);
       if (!camera || !controls || !mesh) return;
@@ -713,6 +788,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
     camera.position.set(20, 20, 20);
+    const ortho = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 5000);
+    ortho.position.copy(camera.position);
+    perspectiveCameraRef.current = camera;
+    orthoCameraRef.current = ortho;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -773,6 +852,26 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       RIGHT: MOUSE.PAN,
     };
 
+    const transform = new TransformControls(camera, renderer.domElement);
+    transform.setSize(0.85);
+    transform.enabled = false;
+    const transformHelper = transform.getHelper();
+    transformHelper.visible = false;
+    transform.addEventListener("dragging-changed", (event) => {
+      const dragging = Boolean(
+        (event as unknown as { value: boolean }).value,
+      );
+      transformDraggingRef.current = dragging;
+      controls.enabled = !dragging;
+      // Persist on drag end here — pointerup often fires after dragging-changed
+      // has already cleared the flag, which skipped saves and snapped meshes back.
+      if (!dragging) {
+        requestAnimationFrame(() => persistGizmoRef.current());
+      }
+    });
+    scene.add(transformHelper);
+    transformControlsRef.current = transform;
+
     const overlays = new THREE.Group();
     overlays.name = "room-overlays";
     scene.add(overlays);
@@ -802,14 +901,29 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     compareRootRef.current = compareRoot;
     helpersRef.current = helpers;
 
+    const markup = new MarkupSceneLayer();
+    markup.attach(scene, container);
+    markup.onNoteClick = (id) => {
+      useToolMarkupStore.getState().selectNote(id);
+    };
+    markupLayerRef.current = markup;
+
     const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
       if (w === 0 || h === 0) return;
-      camera.aspect = w / h;
+      const aspect = w / h;
+      camera.aspect = aspect;
       camera.updateProjectionMatrix();
+      const frustum = orthoFrustumRef.current;
+      ortho.left = (-frustum * aspect) / 2;
+      ortho.right = (frustum * aspect) / 2;
+      ortho.top = frustum / 2;
+      ortho.bottom = -frustum / 2;
+      ortho.updateProjectionMatrix();
       renderer.setSize(w, h, false);
       viewCube.updateViewport(w, h);
+      markupLayerRef.current?.setSize(w, h);
     };
 
     const ro = new ResizeObserver(resize);
@@ -817,17 +931,23 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     resize();
 
     const tick = () => {
+      const activeCam = cameraRef.current ?? camera;
       controls.update();
-      viewCube.syncFromCamera(camera, controls.target);
+      if (activeCam instanceof THREE.PerspectiveCamera) {
+        viewCube.syncFromCamera(activeCam, controls.target);
+      }
       const now = performance.now();
       lastTickRef.current = now;
       const sz = new THREE.Vector2();
       renderer.getSize(sz);
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, sz.x, sz.y);
-      renderer.render(scene, camera);
+      renderer.render(scene, activeCam);
+      markupLayerRef.current?.render(activeCam);
       viewCube.updateViewport(sz.x, sz.y);
-      viewCube.render(renderer);
+      if (activeCam instanceof THREE.PerspectiveCamera) {
+        viewCube.render(renderer);
+      }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -844,6 +964,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
       viewCube.dispose();
       clip.dispose();
+      transformControlsRef.current?.detach();
+      transformControlsRef.current?.dispose();
+      transformControlsRef.current = null;
+      markupLayerRef.current?.detach(scene);
+      markupLayerRef.current = null;
       viewCubeRef.current = null;
       clipRef.current = null;
       sceneRef.current = null;
@@ -1002,7 +1127,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const existing = scene.getObjectByName("ventilation-markers");
     if (existing) scene.remove(existing);
 
-    if (dataViewMode !== "luftung") return;
+    if (dataViewMode !== "luftung" || bauteilMode) return;
 
     const sourceRooms = rooms.length ? rooms : roomsFromStore;
     const endWork = runSceneWork(() => {
@@ -1020,7 +1145,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const markers = scene.getObjectByName("ventilation-markers");
       if (markers) scene.remove(markers);
     };
-  }, [dataViewMode, rooms, roomsFromStore, markerVisibleFloorId]);
+  }, [dataViewMode, bauteilMode, rooms, roomsFromStore, markerVisibleFloorId]);
 
   useEffect(() => {
     syncVentilationMarkerPresentationOffsets(
@@ -1052,7 +1177,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   useEffect(() => {
     if (dataViewMode !== "luftung" || !selectedVentilationZoneKey) return;
     if (!useAppStore.getState().autoFocusSelection) return;
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
 
@@ -1081,7 +1206,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!useAppStore.getState().autoFocusSelection) return;
     const roomId = useAppStore.getState().selectedRoomId;
     if (!roomId) return;
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     const mesh = roomMeshById.current.get(roomId);
     if (!camera || !controls || !mesh) return;
@@ -1588,7 +1713,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       obj.userData.isSelectionOutline;
 
     // Leaving Werkzeug: un-hide everything so the floor/presentation effects own
-    // visibility again (tool mode always leaves selectedFloor cleared).
+    // visibility again.
     if (!toolMode) {
       if (!wasToolModeRef.current) return;
       wasToolModeRef.current = false;
@@ -1601,12 +1726,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
     wasToolModeRef.current = true;
 
+    const floorFilter = selectedFloor;
     const apply = (obj: THREE.Object3D) => {
       if (skip(obj)) return;
       const expressId = obj.userData.expressId as number | undefined;
       if (expressId == null) return;
       const isolated = isolatedElementIds;
+      const floorId = obj.userData.floorId as string | undefined;
+      const floorOk =
+        floorFilter == null || !floorId || floorId === floorFilter;
       obj.visible =
+        floorOk &&
         !hiddenElementIds.has(expressId) &&
         (isolated == null || isolated.has(expressId));
     };
@@ -1650,12 +1780,444 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     return () => cancelAnimationFrame(id);
   }, [toolMode]);
 
+  // Load / sync Werkzeug markup for the active model.
+  useEffect(() => {
+    const key =
+      activeModelId ??
+      (activeModelLabel ? `label:${activeModelLabel}` : null);
+    void useToolMarkupStore.getState().loadForModel(key);
+  }, [activeModelId, activeModelLabel]);
+
+  useEffect(() => {
+    markupLayerRef.current?.setVisible(toolMode);
+  }, [toolMode]);
+
+  useEffect(() => {
+    const layer = markupLayerRef.current;
+    if (!layer) return;
+    const unsub = useToolMarkupStore.subscribe((s) => {
+      // Don't rebuild from store mid-drag — that resets the mesh to the old pose.
+      if (transformDraggingRef.current) return;
+      layer.syncPlacements(s.placements, s.selectedPlacementId);
+      layer.syncNotes(s.notes, s.selectedNoteId);
+      for (const p of s.placements) {
+        const mesh = layer.getMesh(p.id);
+        if (!mesh) continue;
+        mesh.visible =
+          s.markupFloorId == null ||
+          p.floorId == null ||
+          p.floorId === s.markupFloorId;
+      }
+    });
+    const s = useToolMarkupStore.getState();
+    layer.syncPlacements(s.placements, s.selectedPlacementId);
+    layer.syncNotes(s.notes, s.selectedNoteId);
+    return unsub;
+  }, [toolMode, activeModelId, activeModelLabel]);
+
+  useEffect(() => {
+    if (!toolMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (e.key === "Escape") {
+        useToolMarkupStore.getState().setArmedTool(null);
+        useToolMarkupStore.getState().cancelPendingNote();
+        useToolMarkupStore.getState().clearSelection();
+        useToolMarkupStore.getState().setCubeDraw(null);
+      }
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        !typing &&
+        !e.metaKey &&
+        !e.ctrlKey
+      ) {
+        const s = useToolMarkupStore.getState();
+        if (s.selectedPlacementId) {
+          e.preventDefault();
+          void s.deletePlacement(s.selectedPlacementId);
+          return;
+        }
+        if (s.selectedNoteId) {
+          e.preventDefault();
+          void s.deleteNote(s.selectedNoteId);
+          return;
+        }
+      }
+      if (e.key === "i" || e.key === "I") {
+        if (e.altKey || e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().resetElementVisibility();
+          return;
+        }
+        const id = useAppStore.getState().toolSelectedExpressId;
+        if (id != null) {
+          e.preventDefault();
+          useAppStore.getState().isolateElements([id]);
+          useAppStore.getState().requestToolReveal(id);
+        }
+      }
+      if (e.key === "g" || e.key === "G") {
+        useToolMarkupStore.getState().setTransformMode("translate");
+      }
+      if (e.key === "r" || e.key === "R") {
+        useToolMarkupStore.getState().setTransformMode("rotate");
+      }
+      if (e.key === "t" || e.key === "T") {
+        useToolMarkupStore.getState().setTransformMode("scale");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toolMode]);
+
+  // Attach TransformControls to the selected markup mesh.
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    const layer = markupLayerRef.current;
+    if (!tc || !layer) return;
+
+    const sync = () => {
+      const s = useToolMarkupStore.getState();
+      const helper = tc.getHelper();
+      if (!toolMode || !s.selectedPlacementId) {
+        tc.detach();
+        helper.visible = false;
+        tc.enabled = false;
+        return;
+      }
+      const mesh = layer.getMesh(s.selectedPlacementId);
+      if (!mesh) {
+        tc.detach();
+        helper.visible = false;
+        tc.enabled = false;
+        return;
+      }
+      tc.attach(mesh);
+      tc.setMode(s.transformMode);
+      helper.visible = true;
+      tc.enabled = true;
+    };
+
+    sync();
+    const unsub = useToolMarkupStore.subscribe(sync);
+    return () => {
+      unsub();
+      tc.detach();
+      tc.getHelper().visible = false;
+      tc.enabled = false;
+    };
+  }, [toolMode, activeModelId]);
+
+  // Persist transform after gizmo drag; optional face snap on translate.
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    if (!tc) return;
+
+    persistGizmoRef.current = () => {
+      const obj = tc.object as THREE.Object3D | undefined;
+      if (!obj?.userData.markupId) return;
+      const id = obj.userData.markupId as string;
+      const store = useToolMarkupStore.getState();
+      const current = store.placements.find((p) => p.id === id);
+      if (!current) return;
+
+      let posX = obj.position.x;
+      let posY = obj.position.y;
+      let posZ = obj.position.z;
+      const rotX = obj.rotation.x;
+      const rotY = obj.rotation.y;
+      const rotZ = obj.rotation.z;
+
+      let sizeX = current.sizeX;
+      let sizeY = current.sizeY;
+      let sizeZ = current.sizeZ;
+      if (store.transformMode === "scale") {
+        sizeX = Math.max(0.05, current.sizeX * obj.scale.x);
+        sizeY = Math.max(0.05, current.sizeY * obj.scale.y);
+        sizeZ = Math.max(0.05, current.sizeZ * obj.scale.z);
+        obj.scale.set(1, 1, 1);
+      }
+
+      // Face snap on release only when SNAP is on — never force Y to floor.
+      if (
+        store.snapToFaces &&
+        store.transformMode === "translate" &&
+        shellCloneRef.current
+      ) {
+        const ray = raycaster.current;
+        ray.set(
+          new THREE.Vector3(posX, posY + 0.05, posZ),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const roots = [
+          shellCloneRef.current,
+          markupLayerRef.current?.group,
+        ].filter(Boolean) as THREE.Object3D[];
+        const surface = pickMarkupSurface(ray, roots);
+        if (
+          surface &&
+          surface.object !== obj &&
+          !surface.object.userData?.isMarkupPlacement
+        ) {
+          // Only snap Y onto nearby surface (within 2m), keep XY from the drag.
+          if (Math.abs(surface.point.y - posY) < 2) {
+            posY = surface.point.y + surface.normal.y * 0.015;
+          }
+        }
+      }
+      if (store.gridSnap && store.transformMode === "translate") {
+        const g = applyGridSnap(
+          new THREE.Vector3(posX, posY, posZ),
+          store.gridSize,
+          ["x", "z"],
+        );
+        posX = g.x;
+        posZ = g.z;
+        obj.position.set(posX, posY, posZ);
+      }
+
+      if (store.transformMode === "translate") {
+        const moving = new THREE.Box3().setFromObject(obj);
+        const targets: THREE.Box3[] = [];
+        shellCloneRef.current?.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || !o.visible) return;
+          if (o.userData.isClipCap || o.userData.isClipStencil) return;
+          targets.push(new THREE.Box3().setFromObject(o));
+        });
+        markupLayerRef.current?.group.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || o === obj) return;
+          if (!o.userData.isMarkupPlacement) return;
+          targets.push(new THREE.Box3().setFromObject(o));
+        });
+        const snapped = snapToNearbyAabb(moving, targets, 0.12);
+        if (snapped) {
+          posX = snapped.x;
+          posZ = snapped.z;
+          obj.position.set(posX, posY, posZ);
+        }
+      }
+
+      void store.updatePlacement(id, {
+        posX,
+        posY,
+        posZ,
+        rotX,
+        rotY,
+        rotZ,
+        sizeX,
+        sizeY,
+        sizeZ,
+      });
+    };
+
+    return () => {
+      persistGizmoRef.current = () => {};
+    };
+  }, [toolMode]);
+
+  // Camera presets — orthographic Top/N/S/O/W vs free perspective 3D.
+  useEffect(() => {
+    const applyPreset = (preset: string) => {
+      const persp = perspectiveCameraRef.current;
+      const ortho = orthoCameraRef.current;
+      const controls = controlsRef.current;
+      const tc = transformControlsRef.current;
+      const renderer = rendererRef.current;
+      if (!persp || !ortho || !controls || !renderer) return;
+
+      const box = new THREE.Box3();
+      const shell = shellCloneRef.current;
+      if (shell) box.setFromObject(shell);
+      else
+        box.setFromCenterAndSize(
+          new THREE.Vector3(),
+          new THREE.Vector3(20, 10, 20),
+        );
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const span = Math.max(size.x, size.y, size.z, 8);
+      const dist = span * 1.35;
+      const eyeY = center.y + size.y * 0.2;
+      const aspect =
+        renderer.domElement.clientWidth /
+          Math.max(1, renderer.domElement.clientHeight) || 1;
+
+      const useOrtho = preset !== "free";
+      activeViewPresetRef.current = preset;
+
+      if (useOrtho) {
+        const frustum = Math.max(span * 1.15, 8);
+        orthoFrustumRef.current = frustum;
+        ortho.left = (-frustum * aspect) / 2;
+        ortho.right = (frustum * aspect) / 2;
+        ortho.top = frustum / 2;
+        ortho.bottom = -frustum / 2;
+        ortho.near = 0.1;
+        ortho.far = 5000;
+        ortho.updateProjectionMatrix();
+
+        if (preset === "top") {
+          ortho.position.set(center.x, center.y + dist, center.z + 0.001);
+          ortho.up.set(0, 0, -1);
+        } else if (preset === "north") {
+          ortho.position.set(center.x, eyeY, center.z + dist);
+          ortho.up.set(0, 1, 0);
+        } else if (preset === "south") {
+          ortho.position.set(center.x, eyeY, center.z - dist);
+          ortho.up.set(0, 1, 0);
+        } else if (preset === "east") {
+          ortho.position.set(center.x + dist, eyeY, center.z);
+          ortho.up.set(0, 1, 0);
+        } else {
+          ortho.position.set(center.x - dist, eyeY, center.z);
+          ortho.up.set(0, 1, 0);
+        }
+        ortho.lookAt(center);
+        cameraRef.current = ortho;
+        controls.object = ortho;
+        controls.enableRotate = false;
+        controls.minPolarAngle = 0;
+        controls.maxPolarAngle = Math.PI;
+        controls.target.copy(center);
+        if (tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = ortho;
+        }
+      } else {
+        persp.up.set(0, 1, 0);
+        persp.position.set(
+          center.x + dist * 0.7,
+          center.y + dist * 0.55,
+          center.z + dist * 0.7,
+        );
+        persp.lookAt(center);
+        persp.updateProjectionMatrix();
+        cameraRef.current = persp;
+        controls.object = persp;
+        controls.enableRotate = true;
+        controls.target.copy(center);
+        if (tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
+        }
+      }
+      controls.update();
+    };
+
+    const unsub = useToolMarkupStore.subscribe((s, prev) => {
+      if (s.viewPresetToken === prev.viewPresetToken) return;
+      if (!toolMode) return;
+      applyPreset(s.viewPreset);
+    });
+
+    // Apply current preset when entering Werkzeug.
+    if (toolMode) {
+      applyPreset(useToolMarkupStore.getState().viewPreset);
+    } else {
+      // Leave Werkzeug → restore free orbit perspective.
+      const persp = perspectiveCameraRef.current;
+      const controls = controlsRef.current;
+      const tc = transformControlsRef.current;
+      if (persp && controls) {
+        persp.up.set(0, 1, 0);
+        cameraRef.current = persp;
+        controls.object = persp;
+        controls.enableRotate = true;
+        if (tc && "camera" in tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
+        }
+      }
+      activeViewPresetRef.current = "free";
+    }
+
+    return unsub;
+  }, [toolMode]);
+
+  // Live element-to-element + distance snap while dragging a markup shape.
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    if (!tc || !toolMode) return;
+
+    const onChange = () => {
+      if (!transformDraggingRef.current) return;
+      const store = useToolMarkupStore.getState();
+      if (store.transformMode !== "translate") return;
+      const obj = tc.object as THREE.Object3D | undefined;
+      if (!obj?.userData.markupId) return;
+
+      const moving = new THREE.Box3().setFromObject(obj);
+      const targets: THREE.Box3[] = [];
+      shellCloneRef.current?.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return;
+        if (o.userData.isClipCap || o.userData.isClipStencil) return;
+        targets.push(new THREE.Box3().setFromObject(o));
+      });
+      markupLayerRef.current?.group.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return;
+        if (o === obj || o.userData.isMarkupPreview) return;
+        if (!o.userData.isMarkupPlacement) return;
+        targets.push(new THREE.Box3().setFromObject(o));
+      });
+
+      const snapped = snapToNearbyAabb(moving, targets, 0.1);
+      if (snapped) {
+        obj.position.x = snapped.x;
+        obj.position.z = snapped.z;
+      }
+
+      // Nearest planar gap for HUD (mm).
+      let bestGap = Infinity;
+      const mc = moving.getCenter(new THREE.Vector3());
+      for (const t of targets) {
+        if (t.isEmpty()) continue;
+        const tc2 = t.getCenter(new THREE.Vector3());
+        const gapX = Math.min(
+          Math.abs(moving.min.x - t.max.x),
+          Math.abs(moving.max.x - t.min.x),
+        );
+        const gapZ = Math.min(
+          Math.abs(moving.min.z - t.max.z),
+          Math.abs(moving.max.z - t.min.z),
+        );
+        const gap = Math.min(gapX, gapZ);
+        if (gap < bestGap && gap < 2) bestGap = gap;
+        void tc2;
+        void mc;
+      }
+      if (bestGap < Infinity) {
+        store.setDragSnapHint(`${Math.round(toMm(bestGap))} mm`);
+      } else {
+        store.setDragSnapHint(null);
+      }
+    };
+
+    const onDrag = (event: { value?: boolean }) => {
+      const dragging = Boolean(
+        (event as unknown as { value: boolean }).value,
+      );
+      if (!dragging) {
+        useToolMarkupStore.getState().setDragSnapHint(null);
+      }
+    };
+
+    tc.addEventListener("objectChange", onChange);
+    tc.addEventListener("dragging-changed", onDrag as never);
+    return () => {
+      tc.removeEventListener("objectChange", onChange);
+      tc.removeEventListener("dragging-changed", onDrag as never);
+      useToolMarkupStore.getState().setDragSnapHint(null);
+    };
+  }, [toolMode]);
+
   // Werkzeug: frame the element picked in the structure tree.
   useEffect(() => {
     if (!toolMode || toolRevealToken === 0 || toolSelectedExpressId == null) {
       return;
     }
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
 
@@ -1678,6 +2240,74 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     void flyTo(camera, controls, pose.position, pose.target, 700);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolRevealToken]);
+
+  // Werkzeug: Pin note command — attach notice to current IFC/shape selection.
+  useEffect(() => {
+    if (!toolMode) return;
+    if (notePinToken === 0 || notePinToken === lastNotePinTokenRef.current) {
+      return;
+    }
+    lastNotePinTokenRef.current = notePinToken;
+
+    const markup = useToolMarkupStore.getState();
+    const placementId = markup.selectedPlacementId;
+    const expressId = useAppStore.getState().toolSelectedExpressId;
+    const layer = markupLayerRef.current;
+
+    if (placementId && layer) {
+      const mesh = layer.getMesh(placementId);
+      if (mesh) {
+        const p = new THREE.Vector3();
+        mesh.getWorldPosition(p);
+        const place = markup.placements.find((x) => x.id === placementId);
+        markup.beginNoteAt(
+          { x: p.x, y: p.y + 0.12, z: p.z },
+          {
+            placementId,
+            expressId: null,
+            elementName: place?.label || place?.type || `Shape`,
+            floorId: place?.floorId ?? markup.markupFloorId,
+          },
+        );
+      }
+      return;
+    }
+
+    if (expressId == null) {
+      markup.setArmedTool("note");
+      markup.setNotePlaceHint("markupNotePinHint");
+      return;
+    }
+
+    const box = new THREE.Box3();
+    let found = false;
+    const consider = (obj: THREE.Object3D) => {
+      if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
+      if (obj.userData.expressId !== expressId) return;
+      const b = new THREE.Box3().setFromObject(obj);
+      if (b.isEmpty()) return;
+      box.union(b);
+      found = true;
+    };
+    shellCloneRef.current?.traverse(consider);
+    overlaysRef.current?.traverse(consider);
+    if (!found) {
+      markup.setArmedTool("note");
+      markup.setNotePlaceHint("markupNotePinHint");
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const el = useAppStore.getState().selectedElement;
+    markup.beginNoteAt(
+      { x: center.x, y: box.max.y + 0.08, z: center.z },
+      {
+        expressId,
+        placementId: null,
+        elementName: el?.name ?? `Element #${expressId}`,
+        floorId: el?.floorId ?? markup.markupFloorId,
+      },
+    );
+  }, [notePinToken, toolMode]);
 
   // Basic 3D: zoom to visible (isolated) floor when floor selection changes.
   useEffect(() => {
@@ -2009,7 +2639,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const baseOpacity = useAppStore.getState().lighting.spaceTransparency;
       const selectedRoom = useAppStore.getState().selectedRoomId;
       const selectedEl = useAppStore.getState().selectedElement;
-      const selectedExpress = selectedEl?.expressId ?? null;
+      const inTool = useAppStore.getState().toolMode;
+      const toolExpress = useAppStore.getState().toolSelectedExpressId;
+      // In Werkzeug, tree/3D pick sets toolSelectedExpressId sync — prefer it
+      // over a still-loading or stale selectedElement.expressId.
+      const selectedExpress = inTool
+        ? (toolExpress ?? selectedEl?.expressId ?? null)
+        : (selectedEl?.expressId ?? null);
       const selectedElRoomId = selectedEl?.roomId ?? null;
       const lightMode = useAppStore.getState().renderMode === "light";
       const filter = useAppStore.getState().activeFilter;
@@ -2155,16 +2791,43 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       shellCloneRef.current?.traverse((obj) => {
         if (!isShellMesh(obj)) return;
         clearSelectionOutlines(obj);
-        const mat = obj.material as THREE.MeshStandardMaterial;
+        let mat = obj.material as THREE.MeshStandardMaterial;
+        // IFC meshes often share materials — clone so one selection doesn't
+        // tint / clear emissive on every wall that reuses the same mat.
+        if (!mat.userData.selectionClone) {
+          mat = mat.clone();
+          mat.userData.selectionClone = true;
+          if (!mat.userData.baseColorHex) {
+            mat.userData.baseColorHex = `#${mat.color.getHexString()}`;
+          }
+          obj.material = mat;
+        }
         const isSel =
-          hasRoomSelection && obj.userData.expressId === selectedExpress;
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
+          selectedExpress != null &&
+          obj.userData.expressId === selectedExpress;
+        const baseHex =
+          (obj.userData.colorHex as string | undefined) ??
+          (mat.userData.baseColorHex as string | undefined) ??
+          `#${mat.color.getHexString()}`;
+        // Werkzeug: light amber emissive + outline even without a room selection.
         if (isSel) {
-          const hex =
-            (obj.userData.colorHex as string | undefined) ??
-            `#${mat.color.getHexString()}`;
-          attachColorOutline(obj, hex);
+          mat.color.set(baseHex);
+          if (inTool) {
+            attachAlignedOutline(obj, 0xf59e0b, 1.04, 0.9);
+            mat.color.lerp(new THREE.Color(0xfbbf24), 0.18);
+            mat.emissive.setHex(0xfbbf24);
+            mat.emissiveIntensity = 0.55;
+          } else {
+            attachColorOutline(obj, baseHex);
+            mat.emissive.setHex(0xf59e0b);
+            mat.emissiveIntensity = 0.25;
+          }
+          obj.renderOrder = 8;
+        } else {
+          mat.color.set(baseHex);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+          obj.renderOrder = 0;
         }
         mat.needsUpdate = true;
       });
@@ -2175,6 +2838,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   }, [
     selectedRoomId,
     selectedElement,
+    toolSelectedExpressId,
+    toolMode,
     lighting.spaceTransparency,
     isPresentationView,
     activeColorPalette,
@@ -2333,6 +2998,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const floorId = ids.floorId ?? null;
       if (inTool) {
         useAppStore.getState().setToolSelectedExpressId(expressId ?? null);
+        // Drop stale inspector payload until getElementDetails resolves.
+        setSelectedElement(null);
       }
 
       // Resolve room by expressId when pick only has the space mesh id
@@ -2349,7 +3016,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           ? useAppStore.getState().rooms.find((r) => r.id === roomId)?.floorId
           : null) ??
         null;
-      if (!isRoomPickAllowed(roomId, resolvedFloor)) {
+      if (inTool) {
+        // Allow picking any IFC element in Werkzeug; only rooms respect floor filter.
+        if (roomId && !isRoomPickAllowed(roomId, resolvedFloor)) {
+          return;
+        }
+      } else if (!isRoomPickAllowed(roomId, resolvedFloor)) {
         return;
       }
 
@@ -2379,7 +3051,19 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                     ?.floorId
                 : null) ??
               null;
-            if (!isRoomPickAllowed(detailRoomId, detailFloor)) return;
+            if (
+              !inTool &&
+              !isRoomPickAllowed(detailRoomId, detailFloor)
+            ) {
+              return;
+            }
+            if (
+              inTool &&
+              detailRoomId &&
+              !isRoomPickAllowed(detailRoomId, detailFloor)
+            ) {
+              return;
+            }
 
             setSelectedElement(details);
             useAppStore.getState().bumpScenePickToken();
@@ -2461,6 +3145,74 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         return;
       }
       cube?.clearHover();
+
+      // Live cube footprint / note snap indicator while a tool is armed.
+      if (useAppStore.getState().toolMode) {
+        const ms = useToolMarkupStore.getState();
+        const layer = markupLayerRef.current;
+        const cam = cameraRef.current;
+        if (ms.armedTool && cam && layer) {
+          const rect = canvas.getBoundingClientRect();
+          pointerNdc.current.x =
+            ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointerNdc.current.y =
+            -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.current.setFromCamera(pointerNdc.current, cam);
+          const roots: THREE.Object3D[] = [];
+          if (shellCloneRef.current) roots.push(shellCloneRef.current);
+          roots.push(layer.group);
+          let surface = pickMarkupSurface(raycaster.current, roots);
+          if (surface && ms.armedTool === "note") {
+            surface = enhanceHitWithVertexSnap(
+              surface,
+              raycaster.current,
+              0.3,
+            );
+            layer.setSnapIndicator(surface.snappedVertex ?? surface.point);
+          } else {
+            layer.setSnapIndicator(null);
+          }
+          if (surface && ms.cubeDraw?.phase === "footprint") {
+            let p = surface.point.clone();
+            if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
+            ms.setCubeDraw({
+              ...ms.cubeDraw,
+              current: { x: p.x, y: p.y, z: p.z },
+            });
+            layer.setCubeDrawPreview(
+              ms.cubeDraw.start,
+              { x: p.x, y: p.y, z: p.z },
+              ms.cubeDraw.height,
+            );
+          } else if (ms.cubeDraw?.phase === "height") {
+            const start = ms.cubeDraw.start;
+            const end = ms.cubeDraw.footprintEnd ?? ms.cubeDraw.current;
+            let h = 0.5;
+            // Prefer screen-Y drag (works in Top ortho — vertical plane rays don't).
+            // ~20 mm per pixel, always 50 mm steps so the third click feels snappy.
+            if (ms.cubeDraw.heightScreenY != null) {
+              const dy = ms.cubeDraw.heightScreenY - e.clientY; // drag up = taller
+              h = Math.max(0.05, dy * 0.02);
+            }
+            // In elevation / 3D, also use world Y when the ray hits above the floor.
+            if (ms.viewPreset !== "top" && surface) {
+              const fromY = Math.max(0.05, Math.abs(surface.point.y - start.y));
+              h = Math.max(h, fromY);
+            }
+            h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
+            ms.setCubeDraw({ ...ms.cubeDraw, height: h, current: end });
+            layer.setCubeDrawPreview(start, end, h);
+          } else if (!ms.cubeDraw) {
+            layer.setCubeDrawPreview(null, null);
+          }
+          canvas.style.cursor = surface ? "crosshair" : "default";
+          setHoveredRoom(null);
+          return;
+        }
+        layer?.setSnapIndicator(null);
+        layer?.setCubeDrawPreview(null, null);
+      }
+
       const hit = pickHit(e.clientX, e.clientY);
       if (!hit) {
         setHoveredRoom(null);
@@ -2497,14 +3249,20 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         suppressNextClick = false;
         return;
       }
+      if (transformDraggingRef.current) return;
       const cube = viewCubeRef.current;
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
         const zone = cube.pick(e.clientX, e.clientY, canvas);
         if (zone) {
           e.preventDefault();
           e.stopPropagation();
+          if (cameraRef.current !== camera) {
+            cameraRef.current = camera;
+            controls.object = camera;
+            controls.enableRotate = true;
+          }
           void cube.snapMainCamera(zone, camera, controls, 600);
         }
         return;
@@ -2512,6 +3270,195 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
       const hit = pickHit(e.clientX, e.clientY);
       const viewMode = useAppStore.getState().dataViewMode;
+      const inToolNow = useAppStore.getState().toolMode;
+
+      if (inToolNow) {
+        const markupStore = useToolMarkupStore.getState();
+        const layer = markupLayerRef.current;
+        const camera = cameraRef.current;
+        if (camera && layer) {
+          const rect = canvas.getBoundingClientRect();
+          pointerNdc.current.x =
+            ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointerNdc.current.y =
+            -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.current.setFromCamera(pointerNdc.current, camera);
+
+          // Dedicated surface pick — never use analysis cut-plane hits
+          // (those can return point (0,0,0) and dump every shape at origin).
+          const roots: THREE.Object3D[] = [];
+          if (shellCloneRef.current) roots.push(shellCloneRef.current);
+          roots.push(layer.group);
+          let surface = pickMarkupSurface(raycaster.current, roots);
+
+          const armed = markupStore.armedTool;
+          if (armed && surface) {
+            if (armed === "note") {
+              surface = enhanceHitWithVertexSnap(
+                surface,
+                raycaster.current,
+                0.3,
+              );
+            }
+            let p = surface.point.clone();
+            // Sit slightly along the face normal so shapes don't z-fight.
+            p.addScaledVector(surface.normal, 0.015);
+            if (markupStore.gridSnap) {
+              p = applyGridSnap(p, markupStore.gridSize, ["x", "z"]);
+            }
+
+            let rot = { x: 0, y: 0, z: 0 };
+            if (markupStore.snapToFaces) {
+              const quat = new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 1, 0),
+                surface.normal.clone().normalize(),
+              );
+              const euler = new THREE.Euler().setFromQuaternion(quat);
+              rot = { x: euler.x, y: euler.y, z: euler.z };
+            }
+
+            const ids = pickIdsFromObject(surface.object);
+            const floorId =
+              markupStore.markupFloorId ?? ids.floorId ?? null;
+
+            // Cube: 1st click corner · 2nd click width/depth · 3rd click height
+            if (armed === "cube") {
+              if (!markupStore.cubeDraw) {
+                markupStore.setCubeDraw({
+                  start: { x: p.x, y: p.y, z: p.z },
+                  current: { x: p.x, y: p.y, z: p.z },
+                  footprintEnd: null,
+                  phase: "footprint",
+                  height: 0.5,
+                  heightScreenY: null,
+                });
+                return;
+              }
+              if (markupStore.cubeDraw.phase === "footprint") {
+                markupStore.setCubeDraw({
+                  ...markupStore.cubeDraw,
+                  current: { x: p.x, y: p.y, z: p.z },
+                  footprintEnd: { x: p.x, y: p.y, z: p.z },
+                  phase: "height",
+                  heightScreenY: e.clientY,
+                  height: 0.5,
+                });
+                layer.setCubeDrawPreview(
+                  markupStore.cubeDraw.start,
+                  { x: p.x, y: p.y, z: p.z },
+                  0.5,
+                );
+                return;
+              }
+              if (markupStore.cubeDraw.phase === "height") {
+                const start = markupStore.cubeDraw.start;
+                const end =
+                  markupStore.cubeDraw.footprintEnd ??
+                  markupStore.cubeDraw.current;
+                let h = markupStore.cubeDraw.height;
+                if (markupStore.cubeDraw.heightScreenY != null) {
+                  const dy =
+                    markupStore.cubeDraw.heightScreenY - e.clientY;
+                  h = Math.max(0.05, dy * 0.02);
+                }
+                if (markupStore.viewPreset !== "top") {
+                  h = Math.max(h, Math.abs(p.y - start.y));
+                }
+                h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
+                const w = Math.max(0.05, Math.abs(end.x - start.x));
+                const d = Math.max(0.05, Math.abs(end.z - start.z));
+                const cx = (end.x + start.x) / 2;
+                const cz = (end.z + start.z) / 2;
+                const cy = start.y + h / 2;
+                void markupStore.placeShape(
+                  "cube",
+                  { x: cx, y: cy, z: cz },
+                  {
+                    floorId,
+                    rot: { x: 0, y: 0, z: 0 },
+                    sizeX: w,
+                    sizeY: h,
+                    sizeZ: d,
+                  },
+                );
+                markupStore.setCubeDraw(null);
+                layer.setCubeDrawPreview(null, null);
+                return;
+              }
+            }
+
+            if (armed === "note") {
+              const markupId =
+                (surface.object.userData.markupId as string | undefined) ??
+                null;
+              const expressId = ids.expressId ?? null;
+              if (!markupId && expressId == null) {
+                markupStore.setNotePlaceHint("markupNoteMustAttach");
+                return;
+              }
+              const elName =
+                useAppStore.getState().selectedElement?.name ??
+                (markupId
+                  ? `Shape ${markupId.slice(0, 8)}`
+                  : expressId != null
+                    ? `Element #${expressId}`
+                    : null);
+              markupStore.beginNoteAt(
+                { x: p.x, y: p.y, z: p.z },
+                {
+                  expressId,
+                  placementId: markupId,
+                  elementName: elName,
+                  floorId,
+                },
+              );
+            } else if (isShapeTool(armed) && armed !== "cube") {
+              void markupStore.placeShape(
+                armed,
+                { x: p.x, y: p.y, z: p.z },
+                { floorId, rot },
+              );
+            }
+            return;
+          }
+
+          if (armed === "note" && !surface) {
+            markupStore.setNotePlaceHint("markupNoteMustAttach");
+            return;
+          }
+
+          const picked = layer.pickMarkup(raycaster.current);
+          if (picked?.kind === "placement") {
+            markupStore.selectPlacement(picked.id);
+            return;
+          }
+          const noteId = layer.noteIdNearRay(
+            raycaster.current,
+            markupStore.notes,
+          );
+          if (noteId) {
+            markupStore.selectNote(noteId);
+            return;
+          }
+
+          if (!armed) {
+            markupStore.clearSelection();
+            markupStore.setCubeDraw(null);
+            // Select IFC element under cursor (surface pick, not cut-plane hit).
+            if (surface) {
+              applyPickSelection({
+                distance: surface.distance,
+                point: surface.point,
+                object: surface.object,
+                face: null,
+                faceIndex: 0,
+                uv: undefined,
+              } as THREE.Intersection);
+              return;
+            }
+          }
+        }
+      }
 
       if (viewMode === "luftung") {
         if (!hit) {

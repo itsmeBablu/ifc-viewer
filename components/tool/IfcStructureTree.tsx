@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * IfcStructureTree — collapsible spatial/type tree for the Werkzeug tool
+ * panel, with per-node visibility toggling, isolation, search, and
+ * "zoom to element". Paginates large branches (PAGE_SIZE) so storeys with
+ * thousands of leaves still render instantly.
+ *
+ * Reads/writes selection and visibility via useAppStore (hiddenElementIds,
+ * isolatedElementIds, toolSelectedExpressId, setElementsVisible,
+ * isolateElements, requestToolReveal).
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { getElementDetails } from "@/lib/ifcClient";
@@ -194,11 +205,20 @@ export default function IfcStructureTree({
     (node: IfcTreeNode) => {
       if (node.expressId == null) return;
       setToolSelectedExpressId(node.expressId);
+      // Clear stale details so highlight uses toolSelectedExpressId immediately.
+      setSelectedElement(null);
+      requestToolReveal(node.expressId);
+      useAppStore.getState().bumpScenePickToken();
       void getElementDetails(node.expressId).then((details) => {
-        if (details) setSelectedElement(details);
+        if (
+          details &&
+          useAppStore.getState().toolSelectedExpressId === node.expressId
+        ) {
+          setSelectedElement(details);
+        }
       });
     },
-    [setToolSelectedExpressId, setSelectedElement],
+    [setToolSelectedExpressId, setSelectedElement, requestToolReveal],
   );
 
   const hiddenCount = hiddenElementIds.size;
@@ -218,7 +238,7 @@ export default function IfcStructureTree({
       <div key={node.key}>
         <div
           data-express-id={node.expressId ?? undefined}
-          className={`group flex items-center gap-1 rounded-lg pr-1 transition-colors duration-150 ${
+          className={`group flex items-center gap-1 rounded-none border-b border-[var(--panel-divider)]/35 pr-1 transition-colors duration-150 ${
             selected
               ? "bg-[var(--chip-active-bg)] shadow-[inset_0_0_0_1px_var(--panel-divider)]"
               : "hover:bg-[var(--surface-muted)]"
@@ -298,7 +318,9 @@ export default function IfcStructureTree({
               onClick={() => requestToolReveal(node.expressId as number)}
               title={t(uiLanguage, "zoomToElement")}
               aria-label={t(uiLanguage, "zoomToElement")}
-              className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] group-hover:flex"
+              className={`h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] ${
+                selected ? "flex" : "hidden group-hover:flex"
+              }`}
             >
               <IconTarget />
             </button>
@@ -308,7 +330,9 @@ export default function IfcStructureTree({
             onClick={() => isolateElements(node.leafIds)}
             title={t(uiLanguage, "isolateElement")}
             aria-label={t(uiLanguage, "isolateElement")}
-            className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] group-hover:flex"
+            className={`h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] ${
+              selected ? "flex" : "hidden group-hover:flex"
+            }`}
           >
             <IconIsolate />
           </button>

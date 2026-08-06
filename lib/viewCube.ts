@@ -1,3 +1,11 @@
+/**
+ * ViewCube — the corner navigation cube rendered as its own mini scene
+ * over the main viewport (frosted-glass faces, edge/corner hit zones).
+ *
+ * Handles its own hit-testing, hover styling, and camera-snap animation
+ * (via flyTo) when a face/edge/corner is clicked. Rendered and driven by
+ * Viewer3D, synced each frame to the main OrbitControls camera.
+ */
 import * as THREE from "three";
 import { flyTo } from "./flyTo";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";

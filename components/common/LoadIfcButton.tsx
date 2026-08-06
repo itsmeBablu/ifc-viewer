@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * LoadIfcButton — file-picker button for loading a local .ifc model.
+ *
+ * Hides a native file input and proxies clicks to it; wraps the visible
+ * button in GlassPanel. `variant` switches between the primary amber CTA
+ * style and a plain glass-inset style; `iconOnly` collapses it to an
+ * icon-only circular button.
+ */
+
 import { useRef } from "react";
 import GlassPanel from "./GlassPanel";
 import { IconUpload } from "./ui";
@@ -30,7 +39,7 @@ export default function LoadIfcButton({
       <input
         ref={inputRef}
         type="file"
-        accept=".ifc,application/x-step,application/octet-stream,.IFC"
+        accept=".ifc,.frag,application/x-step,application/octet-stream,.IFC,.FRAG"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

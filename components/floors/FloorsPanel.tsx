@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * FloorsPanel — left sidebar: model badge (name, size, IFC upload) with an
+ * animated-underline Floors/Attributes tab row, floor/room browser with a 2D
+ * snapshot, saved-view PDF export dialog, and the selected-element inspector
+ * when the Attributes tab is active. `leftPanelMode` auto-follows 3D picks
+ * (via `scenePickToken`) into Attributes when `autoOpenAttributes` is on,
+ * without locking out manual tab clicks.
+ *
+ * Reads floors/rooms/selection/saved-views from useAppStore; drives the 3D
+ * viewer via `viewerRef` (flyToPose, camera pose capture, viewport capture)
+ * to restore saved-view framing and to render presentation/all-pages/saved
+ * PDF exports (via lib/pdfCapture + lib/pdfExport). Floor plan thumbnails
+ * come from lib/floorSnapshot, rendered off the shell group from
+ * ModelSceneContext.
+ */
+
 import {
   useEffect,
   useLayoutEffect,
@@ -646,7 +662,7 @@ export default function FloorsPanel({
             <input
               ref={modelFileInputRef}
               type="file"
-              accept=".ifc,application/x-step,application/octet-stream,.IFC"
+              accept=".ifc,.frag,application/x-step,application/octet-stream,.IFC,.FRAG"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];

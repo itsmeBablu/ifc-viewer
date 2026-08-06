@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * ViewerAppClient — thin client boundary that lazy-loads ViewerApp via
+ * `next/dynamic` with `ssr: false` (Three.js/WebGL needs the browser), showing
+ * a fade-in glass spinner fallback while the chunk loads. This is the
+ * component `app/page.tsx` actually renders.
+ */
+
 import { useLayoutEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import gsap from "gsap";

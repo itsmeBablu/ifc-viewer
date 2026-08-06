@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * ThemeToggle — sun/moon pill switch for light/dark color theme.
+ *
+ * Animates the knob position and icon opacities with GSAP on theme
+ * change; the cinematic full-screen day/night blend itself is handled
+ * separately by ThemeTransition, which listens to the same store state.
+ */
+
 import { useLayoutEffect, useRef } from "react";
 import gsap from "gsap";
 import { PiMoonThin, PiSunDimThin } from "react-icons/pi";

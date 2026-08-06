@@ -1,7 +1,3 @@
-import * as THREE from "three";
-import * as WebIFC from "web-ifc";
-import { debugLog } from "./debugLog";
-
 /**
  * IFC surface appearance.
  *
@@ -10,7 +6,14 @@ import { debugLog } from "./debugLog";
  * is glazed, metal is specular and concrete is matte — so we resolve the IFC
  * material name (from IfcRelAssociatesMaterial, following the type when the
  * material sits on IfcWallType & friends) and map it onto PBR presets.
+ *
+ * Consumed by ifcClient.ts to build each shell mesh's THREE.MeshStandardMaterial
+ * (`classifyIfcSurface` + `createIfcMaterial`), and by shading-mode UI code via
+ * `applyIfcSurface`/`readIfcSurface` to restore the IFC look after a toggle.
  */
+import * as THREE from "three";
+import * as WebIFC from "web-ifc";
+import { debugLog } from "./debugLog";
 
 export type IfcSurfaceClass =
   | "glass"

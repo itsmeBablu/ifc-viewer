@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * ThemeHydration — applies the persisted color theme (and, when auto
+ * seasonal background is on, the mode-specific sky) to CSS vars/store
+ * before first paint, avoiding a flash of the wrong theme.
+ *
+ * Renders nothing; runs once via useLayoutEffect on mount.
+ */
+
 import { useLayoutEffect } from "react";
 import { applyThemeVars } from "@/lib/themeColors";
 import {

@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * LiquidGlassSpinner — temperature-gradient ring spinner used for all
+ * "busy"/loading indicators in the app (cursor busy state, scene overlay,
+ * generic loading UI).
+ *
+ * `hollow` toggles a transparent center vs. a filled glass disc; `label`
+ * renders visible text below the ring, `srLabel` sets the a11y status text.
+ */
+
 type Size = "xs" | "sm" | "md" | "lg";
 
 type Props = {

@@ -1,11 +1,21 @@
 "use client";
 
+/**
+ * ElementInspector — tabbed property inspector for the Werkzeug tool panel.
+ * Shows the selected IFC element's attributes, grouped property sets, and
+ * quantities, falling back to Attributes when a tab has no content.
+ *
+ * Reads `selectedElement`, `toolSelectedExpressId`, and `floors` from
+ * useAppStore; the element is set by IfcStructureTree or a 3D pick.
+ */
+
 import { useMemo, useState } from "react";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { humanizeIfcType } from "@/lib/ifcStructure";
 import type { ElementProperty } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import ModelText from "../common/ModelText";
+import { IconIsolate, IconReset } from "./ToolIcons";
 
 type TabId = "attributes" | "psets" | "quantities" | "all";
 
@@ -62,6 +72,10 @@ export default function ElementInspector({
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const selectedElement = useAppStore((s) => s.selectedElement);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
+  const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
+  const isolateElements = useAppStore((s) => s.isolateElements);
+  const resetElementVisibility = useAppStore((s) => s.resetElementVisibility);
+  const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const floors = useAppStore((s) => s.floors);
   const [tab, setTab] = useState<TabId>("attributes");
 
@@ -85,7 +99,6 @@ export default function ElementInspector({
     return properties.length > 0;
   };
 
-  // Fall back to Attributes when the new element has nothing for the open tab.
   const activeTab: TabId = tabHasContent(tab) ? tab : "attributes";
 
   const pending =
@@ -95,6 +108,12 @@ export default function ElementInspector({
   const floorName = selectedElement?.floorId
     ? (floors.find((f) => f.id === selectedElement.floorId)?.name ?? null)
     : null;
+
+  const isolationActive = isolatedElementIds != null;
+  const selectedIsolated =
+    selectedElement != null &&
+    isolatedElementIds != null &&
+    isolatedElementIds.has(selectedElement.expressId);
 
   const tabBtn = (active: boolean) =>
     `rounded-lg px-2 py-1 text-[10px] font-semibold tracking-wide transition-colors duration-150 ${
@@ -109,11 +128,25 @@ export default function ElementInspector({
         <h3 className="text-xs font-semibold tracking-wide text-[var(--text-strong)]">
           {t(uiLanguage, "elementDetails")}
         </h3>
-        {selectedElement && (
-          <span className="shrink-0 text-[9px] font-medium tabular-nums text-[var(--text-muted)]">
-            #{selectedElement.expressId}
-          </span>
-        )}
+        <div className="flex items-center gap-1">
+          {isolationActive && (
+            <button
+              type="button"
+              onClick={() => resetElementVisibility()}
+              title={t(uiLanguage, "clearIsolation")}
+              aria-label={t(uiLanguage, "clearIsolation")}
+              className="inline-flex items-center gap-1 rounded-lg border border-amber-200/70 bg-amber-100/70 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950 transition hover:brightness-105"
+            >
+              <IconReset className="h-3 w-3" />
+              {t(uiLanguage, "clearIsolation")}
+            </button>
+          )}
+          {selectedElement && (
+            <span className="shrink-0 text-[9px] font-medium tabular-nums text-[var(--text-muted)]">
+              #{selectedElement.expressId}
+            </span>
+          )}
+        </div>
       </div>
 
       {!selectedElement ? (
@@ -128,12 +161,49 @@ export default function ElementInspector({
               {t(uiLanguage, "noElementSelectedHint")}
             </p>
           )}
+          {isolationActive && (
+            <button
+              type="button"
+              onClick={() => resetElementVisibility()}
+              className="mt-2 w-full rounded-xl border border-amber-200/70 bg-amber-100/80 px-2 py-1.5 text-[11px] font-semibold text-amber-950"
+            >
+              {t(uiLanguage, "clearIsolation")}
+            </button>
+          )}
         </div>
       ) : (
         <>
           <ModelText className="truncate px-1 text-[11px] font-semibold text-[var(--text-strong)]">
             {selectedElement.name}
           </ModelText>
+
+          <div className="mt-1.5 flex gap-1 px-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                isolateElements([selectedElement.expressId]);
+                requestToolReveal(selectedElement.expressId);
+              }}
+              aria-pressed={selectedIsolated}
+              className={`inline-flex flex-1 items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-semibold transition ${
+                selectedIsolated
+                  ? "bg-sky-400/90 text-sky-950"
+                  : "border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
+              }`}
+            >
+              <IconIsolate />
+              {t(uiLanguage, "isolateElement")}
+            </button>
+            <button
+              type="button"
+              onClick={() => resetElementVisibility()}
+              disabled={!isolationActive}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-1.5 text-[10px] font-semibold text-[var(--text-body)] transition hover:bg-[var(--surface-muted)] disabled:opacity-40"
+            >
+              <IconReset className="h-3.5 w-3.5" />
+              {t(uiLanguage, "clearIsolation")}
+            </button>
+          </div>
 
           <div className="mt-1 flex flex-wrap gap-0.5 px-0.5">
             {TABS.filter((entry) => tabHasContent(entry.id)).map((entry) => (

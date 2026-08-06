@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * PresentationSidePanel — right-side panel for the presentation view:
+ * LegendBody plus, when `presentationIsolate` is on, a floor picker and
+ * either a room list or the VentilationZonePanel (Lüftung mode).
+ *
+ * Reads floors/rooms, presentationFloorId/Isolate, and color-range state
+ * from useAppStore; selecting a room fetches details via ifcClient.
+ */
+
 import { useEffect, useMemo } from "react";
 import { roomLoadColor, roomDensityLoad, roomTemperatureForView } from "@/lib/roomLoad";
 import { heading } from "@/lib/designTokens";

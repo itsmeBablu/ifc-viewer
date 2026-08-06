@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * LegendPalettePanel — popover with the LegendSwatchPresetGrid quick-picks
+ * plus per-stop color inputs for the active legend mode (load or
+ * temperature). Opened from LegendBody's palette toggle.
+ *
+ * Purely presentational: stops, overrides, and all handlers arrive as
+ * props from LegendBody; no direct store access.
+ */
+
 import type { ReactNode } from "react";
 import LegendSwatchPresetGrid from "./LegendSwatchPresetGrid";
 import HoverTip from "../common/HoverTip";

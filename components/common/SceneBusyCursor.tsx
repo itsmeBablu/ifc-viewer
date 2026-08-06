@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * SceneBusyCursor — small gradient spinner that follows the pointer while
+ * the 3D scene is busy (recoloring/rebuilding), giving cursor-level busy
+ * feedback distinct from the centered SceneBusyOverlay.
+ *
+ * Hidden during initial model load and until the pointer has moved over
+ * the canvas at least once (`active`); reuses LiquidGlassSpinner.
+ */
+
 import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";

@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * SceneBusyOverlay — centered full-screen spinner + label shown while the
+ * 3D scene is busy (e.g. recoloring on a mode switch), but not during the
+ * initial model load (that has its own loading UI).
+ *
+ * Reuses LiquidGlassSpinner; text is localized via lib/i18n.
+ */
+
 import LiquidGlassSpinner from "./LiquidGlassSpinner";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";

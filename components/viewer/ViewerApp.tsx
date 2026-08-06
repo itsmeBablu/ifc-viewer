@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * ViewerApp — main application composition root, rendered (via
+ * ViewerAppClient) as the whole viewer page.
+ *
+ * Owns IFC model loading (registry entries, file picker, and drag-and-drop),
+ * tracking progress/error state and disposing the previous model before
+ * swapping in a new `shellGroup`/`rooms`/`floors` into useAppStore. Provides
+ * that scene data to children via `ModelSceneContext`.
+ *
+ * Wires up HeaderActions, the left FloorsPanel / right LegendPanel-or-
+ * ToolSidePanel collapsible side panels (desktop) and MobileCornerMenu /
+ * PresentationMobileDock (mobile), Viewer3D, ViewerToolbar,
+ * ViewerContextMenu, and RoomTooltip (hover + selection popups).
+ *
+ * Owns the global keyboard shortcuts: Ctrl/Cmd+O/N to open a file, W to
+ * toggle Werkzeug (native IFC inspection) mode, B for Bauteil mode, H/L/K to
+ * switch dataViewMode (heizlast/luftung/kuhllast), P to toggle presentation
+ * view (with fullscreen), and 1-6 to apply a legend swatch preset.
+ */
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import type { Group } from "three";
@@ -39,6 +59,13 @@ import {
   OPEN_IFC_FILE_EVENT,
   isTypingTarget,
 } from "@/lib/viewerHotkeys";
+import { cacheIfcBytes, parseFragFile } from "@/lib/markupFragSave";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import {
+  idbPutNote,
+  idbPutPlacement,
+} from "@/lib/toolMarkupDb";
+import { normalizeNote, normalizePlacement } from "@/lib/toolMarkup";
 import GsapOverlay from "../common/GsapOverlay";
 import SceneBusyOverlay from "../common/SceneBusyOverlay";
 import SceneBusyCursor from "../common/SceneBusyCursor";
@@ -50,6 +77,16 @@ import { canHover } from "@/lib/canHover";
 type LoadSource =
   | { kind: "registry"; modelId: string }
   | { kind: "file"; id: string; name: string; file: File };
+
+function DragSnapHud() {
+  const hint = useToolMarkupStore((s) => s.dragSnapHint);
+  if (!hint) return null;
+  return (
+    <div className="pointer-events-none fixed top-[6.5rem] left-1/2 z-[37] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-[var(--popover-bg)] px-3 py-1.5 text-[11px] font-semibold tabular-nums text-emerald-700 shadow-lg backdrop-blur-md md:top-28">
+      {hint}
+    </div>
+  );
+}
 
 export default function ViewerApp() {
   const viewerRef = useRef<Viewer3DHandle>(null);
@@ -172,7 +209,8 @@ export default function ViewerApp() {
       gsap.set(aside, { x, opacity: state === "hidden" ? 0 : 1 });
       leftPanelReady.current = true;
     } else {
-      animateSidebarPanel(aside, state);
+      // Fast: must clear out before a hovered header dropdown pops in above it.
+      animateSidebarPanel(aside, state, { fast: true });
     }
 
     if (leftContentRef.current) {
@@ -251,8 +289,20 @@ export default function ViewerApp() {
           const entry = getModelById(source.modelId);
           if (!entry) throw new Error(`Unknown model: ${source.modelId}`);
           ifcSource = entry.ifcPath;
+          try {
+            const res = await fetch(entry.ifcPath);
+            if (res.ok) {
+              const ab = await res.arrayBuffer();
+              cacheIfcBytes(id, label, ab);
+            }
+          } catch {
+            /* optional cache for .ifc merge export */
+          }
         } else {
           ifcSource = source.file;
+          const ab = await source.file.arrayBuffer();
+          cacheIfcBytes(id, source.name, ab);
+          ifcSource = ab;
         }
 
         const result = await loadIfcModel(ifcSource, (p) => {
@@ -266,6 +316,9 @@ export default function ViewerApp() {
         useAppStore.getState().fitLegendToRooms(result.rooms);
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
+        // Every load starts in Bauteil — the raw model before any data view.
+        useAppStore.getState().setToolMode(false);
+        useAppStore.getState().setBauteilMode(true);
         debugLog(
           "ViewerApp",
           `load success — rooms=${result.rooms.length} floors=${result.floors.length}`,
@@ -302,16 +355,50 @@ export default function ViewerApp() {
         "info",
         { size: file.size, type: file.type },
       );
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith(".frag")) {
+        void (async () => {
+          try {
+            const { meta, ifcBytes } = await parseFragFile(file);
+            const id = meta.modelKey || `frag-${Date.now()}`;
+            if (ifcBytes && ifcBytes.byteLength > 0) {
+              cacheIfcBytes(id, meta.modelLabel ?? file.name, ifcBytes);
+              await runLoad({
+                kind: "file",
+                id,
+                name: meta.modelLabel ?? file.name.replace(/\.frag$/i, ".ifc"),
+                file: new File(
+                  [Uint8Array.from(ifcBytes)],
+                  meta.modelLabel ?? "model.ifc",
+                ),
+              });
+            }
+            for (const p of meta.placements) {
+              await idbPutPlacement(normalizePlacement(p));
+            }
+            for (const n of meta.notes) {
+              await idbPutNote(normalizeNote(n));
+            }
+            await useToolMarkupStore.getState().loadForModel(id);
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Failed to open .frag";
+            setLoadError(message);
+          }
+        })();
+        return;
+      }
       const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       void runLoad({ kind: "file", id, name: file.name, file });
     },
-    [runLoad],
+    [runLoad, setLoadError],
   );
 
   const isIfcFile = useCallback((file: File) => {
     const name = file.name.toLowerCase();
     return (
       name.endsWith(".ifc") ||
+      name.endsWith(".frag") ||
       file.type === "application/x-step" ||
       file.type === "application/octet-stream"
     );
@@ -392,24 +479,35 @@ export default function ViewerApp() {
       // W — Werkzeug (native IFC inspection). Same key toggles back out.
       if (key === "w") {
         e.preventDefault();
-        store.setToolMode(!store.toolMode);
+        const next = !store.toolMode;
+        if (next) store.setBauteilMode(false);
+        store.setToolMode(next);
+        return;
+      }
+      if (key === "b") {
+        e.preventDefault();
+        store.setToolMode(false);
+        store.setBauteilMode(!store.bauteilMode);
         return;
       }
       if (key === "h") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("heizlast");
         return;
       }
       if (key === "l") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("luftung");
         return;
       }
       if (key === "k") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("kuhllast");
         return;
       }
@@ -648,6 +746,7 @@ export default function ViewerApp() {
           );
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
+        {toolMode && <DragSnapHud />}
         <ViewerContextMenu
           viewerRef={viewerRef}
           rootRef={rootRef}
@@ -775,7 +874,11 @@ export default function ViewerApp() {
                 } ${rightPanelOpen ? "" : "pointer-events-none"}`}
               >
                 {toolMode ? (
-                  <ToolSidePanel className="h-full flex-1" />
+                  <ToolSidePanel
+                    className="h-full flex-1"
+                    onFile={handleFile}
+                    isLoadingModel={isLoadingModel}
+                  />
                 ) : isPresentationView ? (
                   <PresentationSidePanel />
                 ) : (
@@ -804,7 +907,11 @@ export default function ViewerApp() {
               >
                 {({ detailsOpen }) =>
                   toolMode ? (
-                    <ToolSidePanel className="h-[70dvh]" />
+                    <ToolSidePanel
+                      className="h-[70dvh]"
+                      onFile={handleFile}
+                      isLoadingModel={isLoadingModel}
+                    />
                   ) : (
                     <>
                       <FloorsPanel

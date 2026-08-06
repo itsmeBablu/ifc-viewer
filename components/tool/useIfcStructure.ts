@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * useIfcStructure — hook that builds the IFC spatial/type tree for the
+ * Werkzeug tool panel, keyed to the currently loaded model.
+ *
+ * Reads activeModelId/isLoadingModel from useAppStore and shellGroup/rooms
+ * from useModelScene; rebuilds via buildIfcStructure only when the model
+ * changes, reporting the prior structure as "loading" until the new one
+ * is ready so the tree never flashes stale data.
+ */
+
 import { useEffect, useState } from "react";
 import type { Group } from "three";
 import { buildIfcStructure, type IfcStructure } from "@/lib/ifcStructure";

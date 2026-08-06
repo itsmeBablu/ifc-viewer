@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * HoverTip — hover/focus tooltip styled like the bottom toolbar's tip
+ * (glass label + hint text), portaled to <body> (or the fullscreen
+ * element) so parent overflow/clipping can't hide it.
+ *
+ * Tracks the anchor's position on scroll/resize; `placement` flips the
+ * tip above or below the anchor. A click suppresses the tip until the
+ * pointer leaves, so it doesn't reappear right after a tap/click.
+ */
+
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { canHover } from "@/lib/canHover";
