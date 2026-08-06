@@ -840,14 +840,14 @@ export default function FloorsPanel({
       <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
         <div
           ref={tabRowRef}
-          className="relative flex shrink-0 items-center justify-between gap-2 pb-2.5"
+          className="relative flex shrink-0 items-end justify-between gap-2 pb-px"
         >
           <button
             ref={floorsTabRef}
             type="button"
             onClick={() => setManualPanelMode("floors")}
             aria-pressed={leftPanelMode === "floors"}
-            className={`rounded-lg px-2 py-1 text-[11px] font-semibold tracking-wide transition-colors ${
+            className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
               leftPanelMode === "floors"
                 ? "text-zinc-900"
                 : "text-zinc-500"
@@ -855,13 +855,13 @@ export default function FloorsPanel({
           >
             {t(uiLanguage, "floorsAndRooms")}
           </button>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-end gap-1.5">
             <button
               ref={attributesTabRef}
               type="button"
               onClick={() => setManualPanelMode("attributes")}
               aria-pressed={leftPanelMode === "attributes"}
-              className={`rounded-lg px-2 py-1 text-[11px] font-semibold tracking-wide transition-colors ${
+              className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
                 leftPanelMode === "attributes"
                   ? "text-zinc-900"
                   : "text-zinc-500"
