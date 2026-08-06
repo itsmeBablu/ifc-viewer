@@ -202,8 +202,6 @@ export default function FloorsPanel({
   }, [selectedElement, autoOpenAttributes]);
 
   const underlineReady = useRef(false);
-  const panelBodyRef = useRef<HTMLDivElement>(null);
-  const prevModeRef = useRef(leftPanelMode);
 
   useLayoutEffect(() => {
     const underline = underlineRef.current;
@@ -215,22 +213,18 @@ export default function FloorsPanel({
     if (!underline || !row || !active) return;
     const rowBox = row.getBoundingClientRect();
     const tabBox = active.getBoundingClientRect();
-    const toX = tabBox.left - rowBox.left;
-    const toW = Math.max(tabBox.width, 12);
+    // Inset so the line sits inside the button (under the label).
+    const insetX = 8;
+    const toX = tabBox.left - rowBox.left + insetX;
+    const toW = Math.max(tabBox.width - insetX * 2, 12);
     killGsap(underline);
     if (!underlineReady.current) {
-      gsap.set(underline, {
-        x: toX,
-        width: toW,
-        scaleY: 1,
-        transformOrigin: "50% 100%",
-      });
+      gsap.set(underline, { x: toX, width: toW });
       underlineReady.current = true;
       return;
     }
     const fromX = Number(gsap.getProperty(underline, "x"));
     const fromW = Number(gsap.getProperty(underline, "width"));
-    // Soft glide: gently narrow mid-travel, then land under the tab.
     const midX = fromX + (toX - fromX) * 0.5;
     const midW = Math.max(18, Math.min(fromW, toW) * 0.45);
     gsap
@@ -252,30 +246,6 @@ export default function FloorsPanel({
         ease: "power3.out",
       });
   }, [leftPanelMode, uiLanguage, autoOpenAttributes]);
-
-  useLayoutEffect(() => {
-    const body = panelBodyRef.current;
-    if (!body) return;
-    const prev = prevModeRef.current;
-    prevModeRef.current = leftPanelMode;
-    if (prev === leftPanelMode) return;
-    const toRight = leftPanelMode === "attributes";
-    killGsap(body);
-    gsap.fromTo(
-      body,
-      {
-        autoAlpha: 0.4,
-        y: toRight ? 6 : -6,
-      },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.28,
-        ease: gsapEase.iosOut,
-        overwrite: true,
-      },
-    );
-  }, [leftPanelMode]);
 
   const updateModelTipPos = () => {
     const el = modelNameBtnRef.current ?? modelBadgeRef.current;
@@ -850,32 +820,32 @@ export default function FloorsPanel({
       <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
         <div
           ref={tabRowRef}
-          className="relative flex shrink-0 items-end justify-between gap-2 pb-px"
+          className="relative flex shrink-0 items-center justify-between gap-2"
         >
           <button
             ref={floorsTabRef}
             type="button"
             onClick={() => setLeftPanelMode("floors")}
             aria-pressed={leftPanelMode === "floors"}
-            className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
+            className={`relative rounded-lg px-2.5 py-1.5 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
               leftPanelMode === "floors"
                 ? "text-zinc-900"
                 : "text-zinc-500"
-            } hover:bg-white/70 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.08)]`}
+            } hover:bg-white/75 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.1)]`}
           >
             {t(uiLanguage, "floorsAndRooms")}
           </button>
-          <div className="flex items-end gap-1.5">
+          <div className="flex items-center gap-1.5">
             <button
               ref={attributesTabRef}
               type="button"
               onClick={() => setLeftPanelMode("attributes")}
               aria-pressed={leftPanelMode === "attributes"}
-              className={`rounded-md px-1.5 py-0 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
+              className={`relative rounded-lg px-2.5 py-1.5 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
                 leftPanelMode === "attributes"
                   ? "text-zinc-900"
                   : "text-zinc-500"
-              } hover:bg-white/70 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.08)]`}
+              } hover:bg-white/75 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.1)]`}
             >
               {t(uiLanguage, "attributesToggle")}
             </button>
@@ -908,15 +878,12 @@ export default function FloorsPanel({
           <span
             ref={underlineRef}
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 h-px rounded-full bg-amber-400"
+            className="pointer-events-none absolute bottom-1 left-0 h-px rounded-full bg-amber-400"
             style={{ width: 32 }}
           />
         </div>
 
-        <div
-          ref={panelBodyRef}
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-        >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {leftPanelMode === "attributes" ? (
           !selectedElement ? (
             <p className="px-1 text-[11px] text-zinc-400">
