@@ -66,8 +66,12 @@ type ToolMarkupState = {
   lastSavedAt: number | null;
   notePlaceHint: string | null;
   dragSnapHint: string | null;
+  /** Bumped to pin a note onto the current IFC/shape selection (Viewer resolves pose). */
+  notePinToken: number;
 
   setArmedTool: (tool: MarkupToolId | null) => void;
+  /** Bump so Viewer pins a notice on the current IFC/shape selection. */
+  requestNotePin: () => void;
   setNotePlaceHint: (msg: string | null) => void;
   setDragSnapHint: (msg: string | null) => void;
   setTransformMode: (mode: MarkupTransformMode) => void;
@@ -166,15 +170,25 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   lastSavedAt: null,
   notePlaceHint: null,
   dragSnapHint: null,
+  notePinToken: 0,
 
   setNotePlaceHint: (msg) => set({ notePlaceHint: msg }),
   setDragSnapHint: (msg) => set({ dragSnapHint: msg }),
+
+  requestNotePin: () =>
+    set((s) => ({
+      notePinToken: s.notePinToken + 1,
+      armedTool: null,
+      pendingNote: null,
+      notePlaceHint: null,
+    })),
 
   setArmedTool: (tool) =>
     set({
       armedTool: tool,
       pendingNote: null,
-      notePlaceHint: null,
+      notePlaceHint:
+        tool === "note" ? "markupNotePinHint" : null,
       selectedPlacementId: tool ? null : get().selectedPlacementId,
       selectedNoteId: tool ? null : get().selectedNoteId,
     }),

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { t } from "@/lib/i18n";
+import HoverTip from "@/components/common/HoverTip";
+import { t, type UiTextKey } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import {
@@ -10,17 +10,18 @@ import {
   isShapeTool,
 } from "./MarkupIcons";
 
-const TOOL_HINT: Record<
-  string,
-  | "markupHint_cube"
-  | "markupHint_sphere"
-  | "markupHint_cylinder"
-  | "markupHint_cone"
-  | "markupHint_torus"
-  | "markupHint_capsule"
-  | "markupHint_pyramid"
-  | "markupHint_note"
-> = {
+const TOOL_LABEL: Record<string, UiTextKey> = {
+  cube: "markupShape_cube",
+  sphere: "markupShape_sphere",
+  cylinder: "markupShape_cylinder",
+  cone: "markupShape_cone",
+  torus: "markupShape_torus",
+  capsule: "markupShape_capsule",
+  pyramid: "markupShape_pyramid",
+  note: "markupShape_note",
+};
+
+const TOOL_HINT: Record<string, UiTextKey> = {
   cube: "markupHint_cube",
   sphere: "markupHint_sphere",
   cylinder: "markupHint_cylinder",
@@ -31,7 +32,7 @@ const TOOL_HINT: Record<
   note: "markupHint_note",
 };
 
-/** Shape / note tools — large icons + tooltips. */
+/** Shape / Pin tools — icon + truncated label, bottom-bar style hover tips. */
 export default function MarkupToolsSection({
   className = "",
   hideChrome = false,
@@ -41,10 +42,24 @@ export default function MarkupToolsSection({
   hideChrome?: boolean;
 }) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
+  const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
   const armedTool = useToolMarkupStore((s) => s.armedTool);
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
+  const requestNotePin = useToolMarkupStore((s) => s.requestNotePin);
+  const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
   const notePlaceHint = useToolMarkupStore((s) => s.notePlaceHint);
-  const [tip, setTip] = useState<string | null>(null);
+
+  const armOrPinNote = () => {
+    if (armedTool === "note") {
+      setArmedTool(null);
+      return;
+    }
+    if (selectedPlacementId || toolSelectedExpressId != null) {
+      requestNotePin();
+      return;
+    }
+    setArmedTool("note");
+  };
 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
@@ -57,27 +72,41 @@ export default function MarkupToolsSection({
         {MARKUP_TOOL_ORDER.map((id) => {
           const Icon = MARKUP_TOOL_ICONS[id];
           const active = armedTool === id;
+          const label = t(uiLanguage, TOOL_LABEL[id]);
+          const hint = t(uiLanguage, TOOL_HINT[id]);
           return (
-            <button
+            <HoverTip
               key={id}
-              type="button"
-              aria-pressed={active}
-              title={t(uiLanguage, TOOL_HINT[id])}
-              onMouseEnter={() => setTip(t(uiLanguage, TOOL_HINT[id]))}
-              onMouseLeave={() => setTip(null)}
-              onFocus={() => setTip(t(uiLanguage, TOOL_HINT[id]))}
-              onBlur={() => setTip(null)}
-              onClick={() => setArmedTool(active ? null : id)}
-              className={`flex h-12 w-full items-center justify-center rounded-xl border transition duration-150 ${
-                active
-                  ? "border-amber-300/80 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
-                  : "border-[var(--panel-divider)] bg-[var(--surface-muted)]/50 text-[var(--text-body)] hover:border-amber-200/60 hover:bg-amber-50/80"
-              }`}
+              label={label}
+              hint={hint}
+              placement="below"
+              className="min-w-0"
             >
-              <span className="[&>svg]:h-6 [&>svg]:w-6">
-                <Icon />
-              </span>
-            </button>
+              <button
+                type="button"
+                aria-pressed={active}
+                aria-label={label}
+                onClick={() => {
+                  if (id === "note") {
+                    armOrPinNote();
+                    return;
+                  }
+                  setArmedTool(active ? null : id);
+                }}
+                className={`flex h-[3.35rem] w-full min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-xl border px-1 transition duration-150 ${
+                  active
+                    ? "border-amber-300/80 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+                    : "border-[var(--panel-divider)] bg-[var(--surface-muted)]/50 text-[var(--text-body)] hover:border-amber-200/60 hover:bg-amber-50/80"
+                }`}
+              >
+                <span className="shrink-0 [&>svg]:h-5 [&>svg]:w-5">
+                  <Icon />
+                </span>
+                <span className="w-full truncate text-center text-[9px] font-semibold leading-tight tracking-wide">
+                  {label}
+                </span>
+              </button>
+            </HoverTip>
           );
         })}
       </div>
@@ -88,15 +117,14 @@ export default function MarkupToolsSection({
         }`}
       >
         {notePlaceHint
-          ? t(uiLanguage, notePlaceHint as "markupNoteMustAttach")
-          : tip ??
-            (armedTool === "cube"
-              ? t(uiLanguage, "markupDrawCubeHint3")
-              : armedTool === "note"
-                ? t(uiLanguage, "markupNoteMustAttach")
-                : armedTool && isShapeTool(armedTool)
-                  ? t(uiLanguage, "markupClickToPlace")
-                  : t(uiLanguage, "markupSelectIfcHint"))}
+          ? t(uiLanguage, notePlaceHint as UiTextKey)
+          : armedTool === "cube"
+            ? t(uiLanguage, "markupDrawCubeHint3")
+            : armedTool === "note"
+              ? t(uiLanguage, "markupNotePinHint")
+              : armedTool && isShapeTool(armedTool)
+                ? t(uiLanguage, "markupClickToPlace")
+                : t(uiLanguage, "markupSelectIfcHint")}
       </p>
     </div>
   );

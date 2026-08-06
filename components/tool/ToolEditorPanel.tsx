@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CiGrid32 } from "react-icons/ci";
 import { TbTarget } from "react-icons/tb";
 import { TfiSave } from "react-icons/tfi";
+import HoverTip from "@/components/common/HoverTip";
 import {
   buildFragBlob,
   buildMarkupOnlyIfc,
@@ -36,8 +37,11 @@ const chipIdle =
 const chipOn =
   "bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
 
+const saveGloss =
+  "markup-save-gloss flex h-8 w-8 items-center justify-center rounded-lg text-emerald-950 transition duration-150 disabled:opacity-35";
+
 /**
- * Editor tab — compact Save / views / snap / grid / color + tools + floors.
+ * Editor tab — Save/Snap/Grid/Color · views · shapes · floors · properties.
  */
 export default function ToolEditorPanel({
   className = "",
@@ -112,88 +116,117 @@ export default function ToolEditorPanel({
     <div
       className={`flex min-h-0 flex-col gap-2.5 overflow-y-auto thin-scroll ${className}`}
     >
-      <div
-        ref={saveRef}
-        className="relative flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/35 p-1.5"
-      >
-        <button
-          type="button"
-          title={t(uiLanguage, "markupSaveAs")}
-          aria-expanded={saveOpen}
-          disabled={!modelKey}
-          onClick={() => setSaveOpen((v) => !v)}
-          className={`${chip} w-8 ${chipIdle} disabled:opacity-35`}
-        >
-          <TfiSave className="h-3.5 w-3.5" />
-        </button>
-
-        <span className="mx-0.5 h-5 w-px shrink-0 bg-[var(--panel-divider)]" />
-
-        {VIEWS.map((v) => {
-          const active = viewPreset === v.id;
-          return (
-            <button
-              key={v.id}
-              type="button"
-              title={t(uiLanguage, v.titleKey as "markupView_top")}
-              aria-pressed={active}
-              onClick={() => setViewPreset(v.id)}
-              className={`${chip} min-w-[2rem] px-2 text-[10px] font-bold tracking-wide ${
-                active ? chipOn : chipIdle
-              }`}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-
-        <span className="mx-0.5 h-5 w-px shrink-0 bg-[var(--panel-divider)]" />
-
-        <button
-          type="button"
-          title={t(uiLanguage, "markupSnap")}
-          aria-pressed={snapToFaces}
-          onClick={() => setSnapToFaces(!snapToFaces)}
-          className={`${chip} w-8 ${snapToFaces ? chipOn : chipIdle}`}
-        >
-          <TbTarget className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          title={t(uiLanguage, "markupGridSnap")}
-          aria-pressed={gridSnap}
-          onClick={() => setGridSnap(!gridSnap)}
-          className={`${chip} w-8 ${gridSnap ? chipOn : chipIdle}`}
-        >
-          <CiGrid32 className="h-4 w-4" />
-        </button>
-        <ColorSwatchPicker
-          color={defaultColor}
-          onChange={setDefaultColor}
-          size="md"
-        />
-
-        {saveOpen && (
-          <div className="absolute top-[calc(100%+0.35rem)] left-0 z-30 w-44 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] py-1 shadow-xl">
-            <p className="px-3 py-1 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-              {t(uiLanguage, "markupSaveAs")}
-            </p>
+      <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/35 p-1.5">
+        {/* Row 1: Save · Snap · Grid · Color */}
+        <div ref={saveRef} className="relative flex items-center gap-2">
+          <HoverTip
+            label={t(uiLanguage, "markupSave")}
+            hint={t(uiLanguage, "markupSaveHint")}
+            placement="below"
+          >
             <button
               type="button"
-              onClick={() => saveAs("frag")}
-              className="w-full px-3 py-2 text-left text-[11px] font-medium text-[var(--text-body)] transition duration-150 hover:bg-amber-50"
+              aria-label={t(uiLanguage, "markupSaveAs")}
+              aria-expanded={saveOpen}
+              disabled={!modelKey}
+              onClick={() => setSaveOpen((v) => !v)}
+              className={saveGloss}
             >
-              {t(uiLanguage, "markupSaveFrag")}
+              <TfiSave className="h-3.5 w-3.5" />
             </button>
+          </HoverTip>
+
+          <HoverTip
+            label={t(uiLanguage, "markupSnapShort")}
+            hint={t(uiLanguage, "markupSnap")}
+            placement="below"
+          >
             <button
               type="button"
-              onClick={() => saveAs("ifc")}
-              className="w-full px-3 py-2 text-left text-[11px] font-medium text-[var(--text-body)] transition duration-150 hover:bg-amber-50"
+              aria-pressed={snapToFaces}
+              onClick={() => setSnapToFaces(!snapToFaces)}
+              className={`${chip} w-8 ${snapToFaces ? chipOn : chipIdle}`}
             >
-              {t(uiLanguage, "markupSaveIfc")}
+              <TbTarget className="h-4 w-4" />
             </button>
-          </div>
-        )}
+          </HoverTip>
+
+          <HoverTip
+            label={t(uiLanguage, "markupGridShort")}
+            hint={t(uiLanguage, "markupGridSnap")}
+            placement="below"
+          >
+            <button
+              type="button"
+              aria-pressed={gridSnap}
+              onClick={() => setGridSnap(!gridSnap)}
+              className={`${chip} w-8 ${gridSnap ? chipOn : chipIdle}`}
+            >
+              <CiGrid32 className="h-4 w-4" />
+            </button>
+          </HoverTip>
+
+          <HoverTip
+            label={t(uiLanguage, "markupColor")}
+            hint={t(uiLanguage, "markupColorHint")}
+            placement="below"
+          >
+            <ColorSwatchPicker
+              color={defaultColor}
+              onChange={setDefaultColor}
+              size="md"
+            />
+          </HoverTip>
+
+          {saveOpen && (
+            <div className="absolute top-[calc(100%+0.35rem)] left-0 z-30 w-44 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] py-1 shadow-xl">
+              <p className="px-3 py-1 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                {t(uiLanguage, "markupSaveAs")}
+              </p>
+              <button
+                type="button"
+                onClick={() => saveAs("frag")}
+                className="w-full px-3 py-2 text-left text-[11px] font-medium text-[var(--text-body)] transition duration-150 hover:bg-amber-50"
+              >
+                {t(uiLanguage, "markupSaveFrag")}
+              </button>
+              <button
+                type="button"
+                onClick={() => saveAs("ifc")}
+                className="w-full px-3 py-2 text-left text-[11px] font-medium text-[var(--text-body)] transition duration-150 hover:bg-amber-50"
+              >
+                {t(uiLanguage, "markupSaveIfc")}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Row 2: Top · N · S · O · W · 3D */}
+        <div className="flex items-center justify-between gap-1.5">
+          {VIEWS.map((v) => {
+            const active = viewPreset === v.id;
+            return (
+              <HoverTip
+                key={v.id}
+                label={v.label}
+                hint={t(uiLanguage, v.titleKey as "markupView_top")}
+                placement="below"
+                className="min-w-0 flex-1"
+              >
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setViewPreset(v.id)}
+                  className={`${chip} w-full px-1 text-[10px] font-bold tracking-wide ${
+                    active ? chipOn : chipIdle
+                  }`}
+                >
+                  {v.label}
+                </button>
+              </HoverTip>
+            );
+          })}
+        </div>
       </div>
 
       <MarkupToolsSection hideChrome />

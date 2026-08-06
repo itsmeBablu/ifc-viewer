@@ -546,6 +546,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
   const lastTickRef = useRef(performance.now());
   const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
+  const lastNotePinTokenRef = useRef(0);
   const transformControlsRef = useRef<TransformControls | null>(null);
   const transformDraggingRef = useRef(false);
   const persistGizmoRef = useRef<() => void>(() => {});
@@ -607,6 +608,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
   const toolRevealToken = useAppStore((s) => s.toolRevealToken);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
+  const notePinToken = useToolMarkupStore((s) => s.notePinToken);
 
   const fitToVisible = (durationMs = 850) => {
     const controls = controlsRef.current;
@@ -2238,6 +2240,74 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     void flyTo(camera, controls, pose.position, pose.target, 700);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolRevealToken]);
+
+  // Werkzeug: Pin note command — attach notice to current IFC/shape selection.
+  useEffect(() => {
+    if (!toolMode) return;
+    if (notePinToken === 0 || notePinToken === lastNotePinTokenRef.current) {
+      return;
+    }
+    lastNotePinTokenRef.current = notePinToken;
+
+    const markup = useToolMarkupStore.getState();
+    const placementId = markup.selectedPlacementId;
+    const expressId = useAppStore.getState().toolSelectedExpressId;
+    const layer = markupLayerRef.current;
+
+    if (placementId && layer) {
+      const mesh = layer.getMesh(placementId);
+      if (mesh) {
+        const p = new THREE.Vector3();
+        mesh.getWorldPosition(p);
+        const place = markup.placements.find((x) => x.id === placementId);
+        markup.beginNoteAt(
+          { x: p.x, y: p.y + 0.12, z: p.z },
+          {
+            placementId,
+            expressId: null,
+            elementName: place?.label || place?.type || `Shape`,
+            floorId: place?.floorId ?? markup.markupFloorId,
+          },
+        );
+      }
+      return;
+    }
+
+    if (expressId == null) {
+      markup.setArmedTool("note");
+      markup.setNotePlaceHint("markupNotePinHint");
+      return;
+    }
+
+    const box = new THREE.Box3();
+    let found = false;
+    const consider = (obj: THREE.Object3D) => {
+      if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
+      if (obj.userData.expressId !== expressId) return;
+      const b = new THREE.Box3().setFromObject(obj);
+      if (b.isEmpty()) return;
+      box.union(b);
+      found = true;
+    };
+    shellCloneRef.current?.traverse(consider);
+    overlaysRef.current?.traverse(consider);
+    if (!found) {
+      markup.setArmedTool("note");
+      markup.setNotePlaceHint("markupNotePinHint");
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const el = useAppStore.getState().selectedElement;
+    markup.beginNoteAt(
+      { x: center.x, y: box.max.y + 0.08, z: center.z },
+      {
+        expressId,
+        placementId: null,
+        elementName: el?.name ?? `Element #${expressId}`,
+        floorId: el?.floorId ?? markup.markupFloorId,
+      },
+    );
+  }, [notePinToken, toolMode]);
 
   // Basic 3D: zoom to visible (isolated) floor when floor selection changes.
   useEffect(() => {

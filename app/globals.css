@@ -600,6 +600,62 @@ body {
   }
 }
 
+/* Werkzeug Save — green liquid gloss chip */
+.markup-save-gloss {
+  position: relative;
+  overflow: hidden;
+  color: #064e3b;
+  background:
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(187, 247, 208, 0.35) 28%,
+      transparent 52%
+    ),
+    linear-gradient(145deg, #86efac 0%, #22c55e 48%, #15803d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(21, 128, 61, 0.35),
+    0 2px 10px rgba(34, 197, 94, 0.35);
+  border: 1px solid rgba(22, 163, 74, 0.45);
+}
+.markup-save-gloss::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 42%;
+  border-radius: 6px 6px 40% 40%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0.05)
+  );
+}
+.markup-save-gloss:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(21, 128, 61, 0.3),
+    0 3px 14px rgba(34, 197, 94, 0.45);
+}
+.markup-save-gloss:active:not(:disabled) {
+  filter: brightness(0.97);
+  transform: translateY(0.5px);
+}
+[data-theme="dark"] .markup-save-gloss {
+  color: #ecfdf5;
+  background:
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(52, 211, 153, 0.2) 30%,
+      transparent 55%
+    ),
+    linear-gradient(145deg, #34d399 0%, #16a34a 50%, #14532d 100%);
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
 /* Thin scrollbars app-wide */
 * {
   scrollbar-width: thin;
