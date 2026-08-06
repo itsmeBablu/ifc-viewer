@@ -633,3 +633,22 @@ body.pdf-capturing .pdf-capture-hide {
     pointer-events: none !important;
   }
 }
+
+/* Werkzeug DCC chrome — dark dock, slightly lighter than viewport */
+.tool-dock-panel.glass-surface,
+.tool-dock-panel.ios-glass {
+  --glass-tint: rgba(18, 22, 30, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  background: rgba(16, 20, 28, 0.92) !important;
+  color: #e4e4e7;
+}
+.tool-chrome {
+  color: #e4e4e7;
+}
+.tool-chrome .thin-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.tool-tree-dark {
+  color: #d4d4d8;
+}
+

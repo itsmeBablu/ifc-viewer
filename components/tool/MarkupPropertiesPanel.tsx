@@ -1,13 +1,56 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MARKUP_COLOR_PALETTE, sizeFieldsFor } from "@/lib/toolMarkup";
+import { sizeFieldsFor } from "@/lib/toolMarkup";
+import { fromMm, toMm } from "@/lib/markupUnits";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import ColorSwatchPicker from "./ColorSwatchPicker";
+
+function MmField({
+  label,
+  sceneValue,
+  onCommit,
+}: {
+  label: string;
+  sceneValue: number;
+  onCommit: (scene: number) => void;
+}) {
+  const [text, setText] = useState(() => String(Math.round(toMm(sceneValue))));
+  useEffect(() => {
+    setText(String(Math.round(toMm(sceneValue))));
+  }, [sceneValue]);
+
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
+        {label}
+      </span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const n = Number(text);
+            if (Number.isFinite(n)) onCommit(fromMm(n));
+            else setText(String(Math.round(toMm(sceneValue))));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none transition duration-150 focus:border-amber-400/60"
+        />
+        <span className="shrink-0 text-[9px] text-zinc-500">mm</span>
+      </div>
+    </label>
+  );
+}
 
 /**
- * Floating / docked properties for the selected markup shape or note.
+ * Dark attribute editor — mm position/size + collapsible color swatch.
  */
 export default function MarkupPropertiesPanel({
   className = "",
@@ -27,8 +70,11 @@ export default function MarkupPropertiesPanel({
   const commitPendingNote = useToolMarkupStore((s) => s.commitPendingNote);
   const cancelPendingNote = useToolMarkupStore((s) => s.cancelPendingNote);
   const clearSelection = useToolMarkupStore((s) => s.clearSelection);
+  const transformMode = useToolMarkupStore((s) => s.transformMode);
+  const setTransformMode = useToolMarkupStore((s) => s.setTransformMode);
 
-  const placement = placements.find((p) => p.id === selectedPlacementId) ?? null;
+  const placement =
+    placements.find((p) => p.id === selectedPlacementId) ?? null;
   const note = notes.find((n) => n.id === selectedNoteId) ?? null;
   const [draftNote, setDraftNote] = useState("");
 
@@ -40,42 +86,47 @@ export default function MarkupPropertiesPanel({
     if (note) setDraftNote(note.text);
   }, [note?.id, note?.text]);
 
+  const shell = `rounded-xl border border-white/10 bg-[#141820]/80 p-2.5 ${className}`;
+
   if (pendingNote) {
     return (
-      <div
-        className={`rounded-2xl border border-[var(--panel-divider)] bg-[var(--glass-panel-bg,rgba(255,255,255,0.85))] p-2.5 shadow-lg backdrop-blur-md ${className}`}
-      >
-        <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
+      <div className={shell}>
+        <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
           {t(uiLanguage, "markupNote")}
         </p>
-      {pendingNote && (pendingNote.elementName || pendingNote.expressId != null) && (
-        <p className="mb-1.5 truncate text-[9px] text-[var(--text-muted)]">
-          {t(uiLanguage, "markupAttachedTo")}:{" "}
-          <span className="font-semibold text-[var(--text-body)]">
-            {pendingNote.elementName ?? `#${pendingNote.expressId}`}
-          </span>
-        </p>
-      )}
+        {(pendingNote.elementName ||
+          pendingNote.expressId != null ||
+          pendingNote.placementId) && (
+          <p className="mb-1.5 truncate text-[9px] text-zinc-500">
+            {t(uiLanguage, "markupAttachedTo")}:{" "}
+            <span className="font-semibold text-zinc-200">
+              {pendingNote.elementName ??
+                (pendingNote.placementId
+                  ? pendingNote.placementId
+                  : `#${pendingNote.expressId}`)}
+            </span>
+          </p>
+        )}
         <textarea
           autoFocus
           value={draftNote}
           onChange={(e) => setDraftNote(e.target.value)}
           rows={3}
           placeholder={t(uiLanguage, "markupNotePlaceholder")}
-          className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/60 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
+          className="mb-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
         />
         <div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => void commitPendingNote(draftNote)}
-            className="flex-1 rounded-xl bg-amber-400/90 px-2 py-1.5 text-[11px] font-semibold text-amber-950"
+            className="flex-1 rounded-xl bg-amber-400/90 px-2 py-1.5 text-[11px] font-semibold text-amber-950 transition duration-150"
           >
             {t(uiLanguage, "markupSave")}
           </button>
           <button
             type="button"
             onClick={cancelPendingNote}
-            className="rounded-xl px-2 py-1.5 text-[11px] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+            className="rounded-xl px-2 py-1.5 text-[11px] text-zinc-500 transition duration-150 hover:bg-white/8 hover:text-zinc-200"
           >
             {t(uiLanguage, "cancel")}
           </button>
@@ -86,44 +137,44 @@ export default function MarkupPropertiesPanel({
 
   if (note) {
     return (
-      <div
-        className={`rounded-2xl border border-[var(--panel-divider)] bg-[var(--glass-panel-bg,rgba(255,255,255,0.85))] p-2.5 shadow-lg backdrop-blur-md ${className}`}
-      >
+      <div className={shell}>
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
+          <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
             {t(uiLanguage, "markupNote")}
           </p>
           <button
             type="button"
             onClick={clearSelection}
-            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+            className="text-[10px] text-zinc-500 transition duration-150 hover:text-zinc-200"
           >
-            ✕
+            {t(uiLanguage, "close")}
           </button>
         </div>
+        {(note.elementName || note.expressId != null || note.placementId) && (
+          <p className="mb-1.5 truncate text-[9px] text-zinc-500">
+            {t(uiLanguage, "markupAttachedTo")}:{" "}
+            <span className="font-semibold text-zinc-200">
+              {note.elementName ??
+                note.placementId ??
+                `#${note.expressId}`}
+            </span>
+          </p>
+        )}
         <textarea
           value={draftNote}
           onChange={(e) => setDraftNote(e.target.value)}
           onBlur={() => {
             if (draftNote.trim() !== note.text) {
-              void updateNote(note.id, { text: draftNote.trim() });
+              void updateNote(note.id, { text: draftNote });
             }
           }}
           rows={3}
-          className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/60 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
+          className="mb-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
         />
-        {(note.elementName || note.expressId != null) && (
-          <p className="mb-2 truncate text-[9px] text-[var(--text-muted)]">
-            {t(uiLanguage, "markupAttachedTo")}:{" "}
-            <span className="font-semibold text-[var(--text-body)]">
-              {note.elementName ?? `#${note.expressId}`}
-            </span>
-          </p>
-        )}
         <button
           type="button"
           onClick={() => void deleteNote(note.id)}
-          className="w-full rounded-xl border border-red-200/80 bg-red-50/80 px-2 py-1.5 text-[11px] font-semibold text-red-700"
+          className="w-full rounded-xl bg-red-500/15 px-2 py-1.5 text-[11px] font-semibold text-red-300 transition duration-150 hover:bg-red-500/25"
         >
           {t(uiLanguage, "markupDelete")}
         </button>
@@ -131,29 +182,103 @@ export default function MarkupPropertiesPanel({
     );
   }
 
-  if (!placement) return null;
+  if (!placement) {
+    return (
+      <div className={`${shell} text-[11px] text-zinc-500`}>
+        {t(uiLanguage, "markupSelectIfcHint")}
+      </div>
+    );
+  }
 
   const fields = sizeFieldsFor(placement.type);
 
   return (
-    <div
-      className={`rounded-2xl border border-[var(--panel-divider)] bg-[var(--glass-panel-bg,rgba(255,255,255,0.85))] p-2.5 shadow-lg backdrop-blur-md ${className}`}
-    >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
-          {t(uiLanguage, `markupShape_${placement.type}`)}
+    <div className={shell}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+          {t(uiLanguage, `markupShape_${placement.type}` as "markupShape_cube")}
         </p>
         <button
           type="button"
           onClick={clearSelection}
-          className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          className="text-[10px] text-zinc-500 transition duration-150 hover:text-zinc-200"
         >
-          ✕
+          {t(uiLanguage, "close")}
         </button>
       </div>
 
-      <label className="mb-2 block">
-        <span className="mb-0.5 block text-[9px] font-medium text-[var(--text-muted)]">
+      <div className="mb-2 flex gap-1">
+        {(
+          [
+            ["translate", "markupMove"],
+            ["rotate", "markupRotate"],
+            ["scale", "markupScale"],
+          ] as const
+        ).map(([mode, key]) => (
+          <button
+            key={mode}
+            type="button"
+            aria-pressed={transformMode === mode}
+            onClick={() => setTransformMode(mode)}
+            className={`flex-1 rounded-lg px-1 py-1 text-[9px] font-bold transition duration-150 ${
+              transformMode === mode
+                ? "bg-sky-400/90 text-sky-950"
+                : "bg-white/6 text-zinc-500 hover:bg-white/10"
+            }`}
+          >
+            {t(uiLanguage, key)}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-2 grid grid-cols-3 gap-1.5">
+        <MmField
+          label="X"
+          sceneValue={placement.posX}
+          onCommit={(v) => void updatePlacement(placement.id, { posX: v })}
+        />
+        <MmField
+          label="Y"
+          sceneValue={placement.posY}
+          onCommit={(v) => void updatePlacement(placement.id, { posY: v })}
+        />
+        <MmField
+          label="Z"
+          sceneValue={placement.posZ}
+          onCommit={(v) => void updatePlacement(placement.id, { posZ: v })}
+        />
+      </div>
+
+      <div className="mb-2 grid grid-cols-3 gap-1.5">
+        {fields.map((f) => (
+          <MmField
+            key={f.key}
+            label={f.label}
+            sceneValue={placement[f.key]}
+            onCommit={(v) =>
+              void updatePlacement(placement.id, {
+                [f.key]: Math.max(0.01, v),
+              })
+            }
+          />
+        ))}
+      </div>
+
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
+          {t(uiLanguage, "markupColor")}
+        </span>
+        <ColorSwatchPicker
+          color={placement.color}
+          onChange={(hex) =>
+            void updatePlacement(placement.id, { color: hex })
+          }
+          size="md"
+        />
+      </div>
+
+      <label className="mb-2 flex flex-col gap-0.5">
+        <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
           {t(uiLanguage, "markupLabel")}
         </span>
         <input
@@ -164,88 +289,14 @@ export default function MarkupPropertiesPanel({
               label: e.target.value || null,
             })
           }
-          placeholder="Heizung / Lüftung…"
-          className="w-full rounded-lg border border-[var(--panel-divider)] bg-white/60 px-2 py-1 text-[11px] outline-none focus:border-amber-300"
+          className="rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
         />
       </label>
-
-      <div className="mb-2 space-y-1.5">
-        {fields.map((f) => (
-          <label key={f.key} className="flex items-center gap-2">
-            <span className="w-8 shrink-0 text-[9px] font-semibold text-[var(--text-muted)]">
-              {f.label}
-            </span>
-            <input
-              type="range"
-              min={f.min}
-              max={f.max}
-              step={f.step}
-              value={placement[f.key]}
-              onChange={(e) =>
-                void updatePlacement(placement.id, {
-                  [f.key]: Number(e.target.value),
-                })
-              }
-              className="min-w-0 flex-1"
-            />
-            <input
-              type="number"
-              min={f.min}
-              max={f.max}
-              step={f.step}
-              value={Number(placement[f.key].toFixed(2))}
-              onChange={(e) =>
-                void updatePlacement(placement.id, {
-                  [f.key]: Number(e.target.value),
-                })
-              }
-              className="w-14 rounded-md border border-[var(--panel-divider)] bg-white/60 px-1 py-0.5 text-[10px] tabular-nums outline-none"
-            />
-          </label>
-        ))}
-      </div>
-
-      <p className="mb-1 text-[9px] font-medium text-[var(--text-muted)]">
-        {t(uiLanguage, "markupColor")}
-      </p>
-      <div className="mb-2 flex flex-wrap gap-1">
-        {MARKUP_COLOR_PALETTE.map((hex) => {
-          const active = placement.color.toLowerCase() === hex.toLowerCase();
-          return (
-            <button
-              key={hex}
-              type="button"
-              aria-label={hex}
-              onClick={() => void updatePlacement(placement.id, { color: hex })}
-              className={`h-5 w-5 rounded-full border ${
-                active
-                  ? "border-zinc-800 ring-1 ring-amber-400"
-                  : "border-black/15"
-              }`}
-              style={{ backgroundColor: hex }}
-            />
-          );
-        })}
-        <label className="relative h-5 w-5 overflow-hidden rounded-full border border-[var(--panel-divider)]">
-          <input
-            type="color"
-            value={placement.color}
-            onChange={(e) =>
-              void updatePlacement(placement.id, { color: e.target.value })
-            }
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-          <span
-            className="absolute inset-0"
-            style={{ backgroundColor: placement.color }}
-          />
-        </label>
-      </div>
 
       <button
         type="button"
         onClick={() => void deletePlacement(placement.id)}
-        className="w-full rounded-xl border border-red-200/80 bg-red-50/80 px-2 py-1.5 text-[11px] font-semibold text-red-700"
+        className="w-full rounded-xl bg-red-500/15 px-2 py-1.5 text-[11px] font-semibold text-red-300 transition duration-150 hover:bg-red-500/25"
       >
         {t(uiLanguage, "markupDelete")}
       </button>

@@ -58,6 +58,7 @@ import {
   enhanceHitWithVertexSnap,
   pickMarkupSurface,
 } from "@/lib/markupSnap";
+import { snapToNearbyAabb, toMm } from "@/lib/markupUnits";
 import { MarkupSceneLayer } from "@/components/tool/MarkupSceneLayer";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { isShapeTool } from "@/components/tool/MarkupIcons";
@@ -514,7 +515,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const rafRef = useRef<number>(0);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  const perspectiveCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const shellCloneRef = useRef<THREE.Group | null>(null);
@@ -546,6 +549,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const transformControlsRef = useRef<TransformControls | null>(null);
   const transformDraggingRef = useRef(false);
   const persistGizmoRef = useRef<() => void>(() => {});
+  const orthoFrustumRef = useRef(20);
+  const activeViewPresetRef = useRef<string>("free");
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -604,11 +609,24 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
 
   const fitToVisible = (durationMs = 850) => {
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     const overlays = overlaysRef.current;
     const shell = shellCloneRef.current;
     if (!camera || !controls) return;
+
+    // Fitting always uses the perspective camera — switch back to free 3D if
+    // Werkzeug was in an orthographic plan/elevation view.
+    if (cameraRef.current !== camera) {
+      cameraRef.current = camera;
+      controls.object = camera;
+      controls.enableRotate = true;
+      const tc = transformControlsRef.current;
+      if (tc) {
+        (tc as TransformControls & { camera: THREE.Camera }).camera = camera;
+      }
+      useToolMarkupStore.getState().setViewPreset("free");
+    }
 
     // Ensure explode / compare offsets are in world matrices before measuring
     overlays?.updateWorldMatrix(true, true);
@@ -677,7 +695,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   useImperativeHandle(ref, () => ({
     getCameraPose: () => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current ?? cameraRef.current;
       const controls = controlsRef.current;
       if (!camera || !controls) {
         return { position: [0, 0, 0], target: [0, 0, 0] };
@@ -688,9 +706,14 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       };
     },
     flyToPose: async (position, target, duration = 800) => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       if (!camera || !controls) return;
+      if (cameraRef.current !== camera) {
+        cameraRef.current = camera;
+        controls.object = camera;
+        controls.enableRotate = true;
+      }
       await flyTo(
         camera,
         controls,
@@ -701,7 +724,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     },
     fitVisible: fitToVisible,
     flyToRoom: async (roomId: string) => {
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       const mesh = roomMeshById.current.get(roomId);
       if (!camera || !controls || !mesh) return;
@@ -756,6 +779,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
     camera.position.set(20, 20, 20);
+    const ortho = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 5000);
+    ortho.position.copy(camera.position);
+    perspectiveCameraRef.current = camera;
+    orthoCameraRef.current = ortho;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -876,8 +903,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const w = container.clientWidth;
       const h = container.clientHeight;
       if (w === 0 || h === 0) return;
-      camera.aspect = w / h;
+      const aspect = w / h;
+      camera.aspect = aspect;
       camera.updateProjectionMatrix();
+      const frustum = orthoFrustumRef.current;
+      ortho.left = (-frustum * aspect) / 2;
+      ortho.right = (frustum * aspect) / 2;
+      ortho.top = frustum / 2;
+      ortho.bottom = -frustum / 2;
+      ortho.updateProjectionMatrix();
       renderer.setSize(w, h, false);
       viewCube.updateViewport(w, h);
       markupLayerRef.current?.setSize(w, h);
@@ -888,18 +922,23 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     resize();
 
     const tick = () => {
+      const activeCam = cameraRef.current ?? camera;
       controls.update();
-      viewCube.syncFromCamera(camera, controls.target);
+      if (activeCam instanceof THREE.PerspectiveCamera) {
+        viewCube.syncFromCamera(activeCam, controls.target);
+      }
       const now = performance.now();
       lastTickRef.current = now;
       const sz = new THREE.Vector2();
       renderer.getSize(sz);
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, sz.x, sz.y);
-      renderer.render(scene, camera);
-      markupLayerRef.current?.render(camera);
+      renderer.render(scene, activeCam);
+      markupLayerRef.current?.render(activeCam);
       viewCube.updateViewport(sz.x, sz.y);
-      viewCube.render(renderer);
+      if (activeCam instanceof THREE.PerspectiveCamera) {
+        viewCube.render(renderer);
+      }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -1129,7 +1168,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   useEffect(() => {
     if (dataViewMode !== "luftung" || !selectedVentilationZoneKey) return;
     if (!useAppStore.getState().autoFocusSelection) return;
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
 
@@ -1158,7 +1197,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!useAppStore.getState().autoFocusSelection) return;
     const roomId = useAppStore.getState().selectedRoomId;
     if (!roomId) return;
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     const mesh = roomMeshById.current.get(roomId);
     if (!camera || !controls || !mesh) return;
@@ -1909,6 +1948,27 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         obj.position.set(posX, posY, posZ);
       }
 
+      if (store.transformMode === "translate") {
+        const moving = new THREE.Box3().setFromObject(obj);
+        const targets: THREE.Box3[] = [];
+        shellCloneRef.current?.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || !o.visible) return;
+          if (o.userData.isClipCap || o.userData.isClipStencil) return;
+          targets.push(new THREE.Box3().setFromObject(o));
+        });
+        markupLayerRef.current?.group.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || o === obj) return;
+          if (!o.userData.isMarkupPlacement) return;
+          targets.push(new THREE.Box3().setFromObject(o));
+        });
+        const snapped = snapToNearbyAabb(moving, targets, 0.12);
+        if (snapped) {
+          posX = snapped.x;
+          posZ = snapped.z;
+          obj.position.set(posX, posY, posZ);
+        }
+      }
+
       void store.updatePlacement(id, {
         posX,
         posY,
@@ -1927,53 +1987,196 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
   }, [toolMode]);
 
-  // Camera presets (top / N S O W) for floor markup.
+  // Camera presets — orthographic Top/N/S/O/W vs free perspective 3D.
   useEffect(() => {
-    const unsub = useToolMarkupStore.subscribe((s, prev) => {
-      if (s.viewPresetToken === prev.viewPresetToken) return;
-      if (!toolMode) return;
-      const camera = cameraRef.current;
+    const applyPreset = (preset: string) => {
+      const persp = perspectiveCameraRef.current;
+      const ortho = orthoCameraRef.current;
       const controls = controlsRef.current;
-      if (!camera || !controls) return;
+      const tc = transformControlsRef.current;
+      const renderer = rendererRef.current;
+      if (!persp || !ortho || !controls || !renderer) return;
 
       const box = new THREE.Box3();
       const shell = shellCloneRef.current;
       if (shell) box.setFromObject(shell);
-      else box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(20, 10, 20));
+      else
+        box.setFromCenterAndSize(
+          new THREE.Vector3(),
+          new THREE.Vector3(20, 10, 20),
+        );
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const span = Math.max(size.x, size.y, size.z, 8);
       const dist = span * 1.35;
       const eyeY = center.y + size.y * 0.2;
+      const aspect =
+        renderer.domElement.clientWidth /
+          Math.max(1, renderer.domElement.clientHeight) || 1;
 
-      if (s.viewPreset === "top") {
-        camera.position.set(center.x, center.y + dist, center.z + 0.01);
+      const useOrtho = preset !== "free";
+      activeViewPresetRef.current = preset;
+
+      if (useOrtho) {
+        const frustum = Math.max(span * 1.15, 8);
+        orthoFrustumRef.current = frustum;
+        ortho.left = (-frustum * aspect) / 2;
+        ortho.right = (frustum * aspect) / 2;
+        ortho.top = frustum / 2;
+        ortho.bottom = -frustum / 2;
+        ortho.near = 0.1;
+        ortho.far = 5000;
+        ortho.updateProjectionMatrix();
+
+        if (preset === "top") {
+          ortho.position.set(center.x, center.y + dist, center.z + 0.001);
+          ortho.up.set(0, 0, -1);
+        } else if (preset === "north") {
+          ortho.position.set(center.x, eyeY, center.z + dist);
+          ortho.up.set(0, 1, 0);
+        } else if (preset === "south") {
+          ortho.position.set(center.x, eyeY, center.z - dist);
+          ortho.up.set(0, 1, 0);
+        } else if (preset === "east") {
+          ortho.position.set(center.x + dist, eyeY, center.z);
+          ortho.up.set(0, 1, 0);
+        } else {
+          ortho.position.set(center.x - dist, eyeY, center.z);
+          ortho.up.set(0, 1, 0);
+        }
+        ortho.lookAt(center);
+        cameraRef.current = ortho;
+        controls.object = ortho;
+        controls.enableRotate = false;
+        controls.minPolarAngle = 0;
+        controls.maxPolarAngle = Math.PI;
         controls.target.copy(center);
-      } else if (s.viewPreset === "north") {
-        // Looking toward -Z (from +Z)
-        camera.position.set(center.x, eyeY, center.z + dist);
-        controls.target.copy(center);
-      } else if (s.viewPreset === "south") {
-        camera.position.set(center.x, eyeY, center.z - dist);
-        controls.target.copy(center);
-      } else if (s.viewPreset === "east") {
-        // Ost — from +X
-        camera.position.set(center.x + dist, eyeY, center.z);
-        controls.target.copy(center);
-      } else if (s.viewPreset === "west") {
-        camera.position.set(center.x - dist, eyeY, center.z);
-        controls.target.copy(center);
+        if (tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = ortho;
+        }
       } else {
-        camera.position.set(
+        persp.up.set(0, 1, 0);
+        persp.position.set(
           center.x + dist * 0.7,
           center.y + dist * 0.55,
           center.z + dist * 0.7,
         );
+        persp.lookAt(center);
+        persp.updateProjectionMatrix();
+        cameraRef.current = persp;
+        controls.object = persp;
+        controls.enableRotate = true;
         controls.target.copy(center);
+        if (tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
+        }
       }
       controls.update();
+    };
+
+    const unsub = useToolMarkupStore.subscribe((s, prev) => {
+      if (s.viewPresetToken === prev.viewPresetToken) return;
+      if (!toolMode) return;
+      applyPreset(s.viewPreset);
     });
+
+    // Apply current preset when entering Werkzeug.
+    if (toolMode) {
+      applyPreset(useToolMarkupStore.getState().viewPreset);
+    } else {
+      // Leave Werkzeug → restore free orbit perspective.
+      const persp = perspectiveCameraRef.current;
+      const controls = controlsRef.current;
+      const tc = transformControlsRef.current;
+      if (persp && controls) {
+        persp.up.set(0, 1, 0);
+        cameraRef.current = persp;
+        controls.object = persp;
+        controls.enableRotate = true;
+        if (tc && "camera" in tc) {
+          (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
+        }
+      }
+      activeViewPresetRef.current = "free";
+    }
+
     return unsub;
+  }, [toolMode]);
+
+  // Live element-to-element + distance snap while dragging a markup shape.
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    if (!tc || !toolMode) return;
+
+    const onChange = () => {
+      if (!transformDraggingRef.current) return;
+      const store = useToolMarkupStore.getState();
+      if (store.transformMode !== "translate") return;
+      const obj = tc.object as THREE.Object3D | undefined;
+      if (!obj?.userData.markupId) return;
+
+      const moving = new THREE.Box3().setFromObject(obj);
+      const targets: THREE.Box3[] = [];
+      shellCloneRef.current?.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return;
+        if (o.userData.isClipCap || o.userData.isClipStencil) return;
+        targets.push(new THREE.Box3().setFromObject(o));
+      });
+      markupLayerRef.current?.group.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return;
+        if (o === obj || o.userData.isMarkupPreview) return;
+        if (!o.userData.isMarkupPlacement) return;
+        targets.push(new THREE.Box3().setFromObject(o));
+      });
+
+      const snapped = snapToNearbyAabb(moving, targets, 0.1);
+      if (snapped) {
+        obj.position.x = snapped.x;
+        obj.position.z = snapped.z;
+      }
+
+      // Nearest planar gap for HUD (mm).
+      let bestGap = Infinity;
+      const mc = moving.getCenter(new THREE.Vector3());
+      for (const t of targets) {
+        if (t.isEmpty()) continue;
+        const tc2 = t.getCenter(new THREE.Vector3());
+        const gapX = Math.min(
+          Math.abs(moving.min.x - t.max.x),
+          Math.abs(moving.max.x - t.min.x),
+        );
+        const gapZ = Math.min(
+          Math.abs(moving.min.z - t.max.z),
+          Math.abs(moving.max.z - t.min.z),
+        );
+        const gap = Math.min(gapX, gapZ);
+        if (gap < bestGap && gap < 2) bestGap = gap;
+        void tc2;
+        void mc;
+      }
+      if (bestGap < Infinity) {
+        store.setDragSnapHint(`${Math.round(toMm(bestGap))} mm`);
+      } else {
+        store.setDragSnapHint(null);
+      }
+    };
+
+    const onDrag = (event: { value?: boolean }) => {
+      const dragging = Boolean(
+        (event as unknown as { value: boolean }).value,
+      );
+      if (!dragging) {
+        useToolMarkupStore.getState().setDragSnapHint(null);
+      }
+    };
+
+    tc.addEventListener("objectChange", onChange);
+    tc.addEventListener("dragging-changed", onDrag as never);
+    return () => {
+      tc.removeEventListener("objectChange", onChange);
+      tc.removeEventListener("dragging-changed", onDrag as never);
+      useToolMarkupStore.getState().setDragSnapHint(null);
+    };
   }, [toolMode]);
 
   // Werkzeug: frame the element picked in the structure tree.
@@ -1981,7 +2184,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!toolMode || toolRevealToken === 0 || toolSelectedExpressId == null) {
       return;
     }
-    const camera = cameraRef.current;
+    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     if (!camera || !controls) return;
 
@@ -2892,13 +3095,18 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
       if (transformDraggingRef.current) return;
       const cube = viewCubeRef.current;
-      const camera = cameraRef.current;
+      const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
         const zone = cube.pick(e.clientX, e.clientY, canvas);
         if (zone) {
           e.preventDefault();
           e.stopPropagation();
+          if (cameraRef.current !== camera) {
+            cameraRef.current = camera;
+            controls.object = camera;
+            controls.enableRotate = true;
+          }
           void cube.snapMainCamera(zone, camera, controls, 600);
         }
         return;
@@ -2994,15 +3202,26 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             }
 
             if (armed === "note") {
+              const markupId =
+                (surface.object.userData.markupId as string | undefined) ??
+                null;
+              const expressId = ids.expressId ?? null;
+              if (!markupId && expressId == null) {
+                markupStore.setNotePlaceHint("markupNoteMustAttach");
+                return;
+              }
               const elName =
                 useAppStore.getState().selectedElement?.name ??
-                (ids.expressId != null
-                  ? `Element #${ids.expressId}`
-                  : null);
+                (markupId
+                  ? `Shape ${markupId.slice(0, 8)}`
+                  : expressId != null
+                    ? `Element #${expressId}`
+                    : null);
               markupStore.beginNoteAt(
                 { x: p.x, y: p.y, z: p.z },
                 {
-                  expressId: ids.expressId ?? null,
+                  expressId,
+                  placementId: markupId,
                   elementName: elName,
                   floorId,
                 },
@@ -3014,6 +3233,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                 { floorId, rot },
               );
             }
+            return;
+          }
+
+          if (armed === "note" && !surface) {
+            markupStore.setNotePlaceHint("markupNoteMustAttach");
             return;
           }
 

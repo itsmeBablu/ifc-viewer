@@ -9,6 +9,7 @@ import {
   newMarkupId,
   normalizeNote,
   normalizePlacement,
+  pickRandomMarkupColor,
   type MarkupNote,
   type MarkupPlacement,
   type MarkupShapeType,
@@ -53,13 +54,18 @@ type ToolMarkupState = {
     posY: number;
     posZ: number;
     expressId: number | null;
+    placementId: string | null;
     elementName: string | null;
     floorId: string | null;
   } | null;
   defaultColor: string;
   lastSavedAt: number | null;
+  notePlaceHint: string | null;
+  dragSnapHint: string | null;
 
   setArmedTool: (tool: MarkupToolId | null) => void;
+  setNotePlaceHint: (msg: string | null) => void;
+  setDragSnapHint: (msg: string | null) => void;
   setTransformMode: (mode: MarkupTransformMode) => void;
   setSnapToFaces: (on: boolean) => void;
   setGridSnap: (on: boolean) => void;
@@ -105,6 +111,7 @@ type ToolMarkupState = {
     pos: { x: number; y: number; z: number },
     meta?: {
       expressId?: number | null;
+      placementId?: string | null;
       elementName?: string | null;
       floorId?: string | null;
     },
@@ -122,6 +129,7 @@ type ToolMarkupState = {
         | "posY"
         | "posZ"
         | "expressId"
+        | "placementId"
         | "elementName"
         | "floorId"
       >
@@ -152,11 +160,17 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   pendingNote: null,
   defaultColor: DEFAULT_MARKUP_COLOR,
   lastSavedAt: null,
+  notePlaceHint: null,
+  dragSnapHint: null,
+
+  setNotePlaceHint: (msg) => set({ notePlaceHint: msg }),
+  setDragSnapHint: (msg) => set({ dragSnapHint: msg }),
 
   setArmedTool: (tool) =>
     set({
       armedTool: tool,
       pendingNote: null,
+      notePlaceHint: null,
       selectedPlacementId: tool ? null : get().selectedPlacementId,
       selectedNoteId: tool ? null : get().selectedNoteId,
     }),
@@ -238,7 +252,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       sizeX: meta?.sizeX ?? sizes.sizeX,
       sizeY: meta?.sizeY ?? sizes.sizeY,
       sizeZ: meta?.sizeZ ?? sizes.sizeZ,
-      color: get().defaultColor,
+      color: pickRandomMarkupColor(),
       label: null,
       floorId: meta?.floorId ?? get().markupFloorId,
       createdAt: now,
@@ -263,8 +277,35 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       updatedAt: Date.now(),
     };
     await idbPutPlacement(next);
+    const moved =
+      patch.posX != null || patch.posY != null || patch.posZ != null;
+    let notes = get().notes;
+    if (moved) {
+      const dx = next.posX - current.posX;
+      const dy = next.posY - current.posY;
+      const dz = next.posZ - current.posZ;
+      const attached = notes.filter((n) => n.placementId === id);
+      if (attached.length) {
+        const updatedNotes = await Promise.all(
+          attached.map(async (n) => {
+            const nn = {
+              ...n,
+              posX: n.posX + dx,
+              posY: n.posY + dy,
+              posZ: n.posZ + dz,
+              updatedAt: Date.now(),
+            };
+            await idbPutNote(nn);
+            return nn;
+          }),
+        );
+        const byId = new Map(updatedNotes.map((n) => [n.id, n]));
+        notes = notes.map((n) => byId.get(n.id) ?? n);
+      }
+    }
     set((s) => ({
       placements: s.placements.map((p) => (p.id === id ? next : p)),
+      notes,
     }));
   },
 
@@ -285,20 +326,29 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       pendingNote: null,
     }),
 
-  beginNoteAt: (pos, meta) =>
+  beginNoteAt: (pos, meta) => {
+    const expressId = meta?.expressId ?? null;
+    const placementId = meta?.placementId ?? null;
+    if (expressId == null && !placementId) {
+      set({ notePlaceHint: "markupNoteMustAttach" });
+      return;
+    }
     set({
       pendingNote: {
         posX: pos.x,
         posY: pos.y,
         posZ: pos.z,
-        expressId: meta?.expressId ?? null,
+        expressId,
+        placementId,
         elementName: meta?.elementName ?? null,
         floorId: meta?.floorId ?? get().markupFloorId,
       },
       armedTool: null,
       selectedPlacementId: null,
       selectedNoteId: null,
-    }),
+      notePlaceHint: null,
+    });
+  },
 
   cancelPendingNote: () => set({ pendingNote: null }),
 
@@ -308,6 +358,11 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     if (!modelKey || !pending) return;
     const trimmed = text.trim();
     if (!trimmed) {
+      set({ pendingNote: null });
+      return;
+    }
+    // Notes must attach to an IFC element or a placed shape.
+    if (pending.expressId == null && !pending.placementId) {
       set({ pendingNote: null });
       return;
     }
@@ -321,6 +376,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       text: trimmed,
       author,
       expressId: pending.expressId,
+      placementId: pending.placementId,
       elementName: pending.elementName,
       floorId: pending.floorId,
       createdAt: now,

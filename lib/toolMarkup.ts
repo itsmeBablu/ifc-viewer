@@ -52,8 +52,10 @@ export type MarkupNote = {
   posZ: number;
   text: string;
   author: string | null;
-  /** IFC express id the note is pinned to (selected element). */
+  /** IFC express id the note is pinned to. */
   expressId: number | null;
+  /** Placed markup shape id — notes follow this mesh when set. */
+  placementId: string | null;
   elementName: string | null;
   floorId: string | null;
   createdAt: number;
@@ -91,6 +93,25 @@ export const MARKUP_COLOR_PALETTE: string[] = [
   "#FFFFFF", // white
   "#1C1917", // near-black
 ];
+
+/** Curated palette for random assignment on place (pleasant, distinct). */
+export const MARKUP_RANDOM_PALETTE: string[] = [
+  "#F59E0B",
+  "#EF4444",
+  "#F97316",
+  "#22C55E",
+  "#14B8A6",
+  "#3B82F6",
+  "#8B5CF6",
+  "#EC4899",
+  "#EAB308",
+  "#06B6D4",
+];
+
+export function pickRandomMarkupColor(): string {
+  const i = Math.floor(Math.random() * MARKUP_RANDOM_PALETTE.length);
+  return MARKUP_RANDOM_PALETTE[i] ?? DEFAULT_MARKUP_COLOR;
+}
 
 export const MARKUP_SHAPE_TOOLS: MarkupShapeType[] = [
   "cube",
@@ -240,6 +261,7 @@ export function normalizeNote(
     text: raw.text,
     author: raw.author ?? null,
     expressId: raw.expressId ?? null,
+    placementId: raw.placementId ?? null,
     elementName: raw.elementName ?? null,
     floorId: raw.floorId ?? null,
     createdAt: raw.createdAt ?? Date.now(),

@@ -47,7 +47,7 @@ import LegendPanel from "../legend/LegendPanel";
 import PresentationMobileDock from "../presentation/PresentationMobileDock";
 import PresentationSidePanel from "../presentation/PresentationSidePanel";
 import MobileCornerMenu from "../layout/MobileCornerMenu";
-import MarkupToolbar from "../tool/MarkupToolbar";
+import ToolTopBar from "../tool/ToolTopBar";
 import ToolSidePanel from "../tool/ToolSidePanel";
 import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
@@ -78,6 +78,16 @@ import { canHover } from "@/lib/canHover";
 type LoadSource =
   | { kind: "registry"; modelId: string }
   | { kind: "file"; id: string; name: string; file: File };
+
+function DragSnapHud() {
+  const hint = useToolMarkupStore((s) => s.dragSnapHint);
+  if (!hint) return null;
+  return (
+    <div className="pointer-events-none fixed top-[8.75rem] left-1/2 z-[37] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-[#0f141c]/92 px-3 py-1.5 text-[11px] font-semibold tabular-nums text-emerald-300 shadow-lg backdrop-blur-md md:top-[9.25rem]">
+      {hint}
+    </div>
+  );
+}
 
 export default function ViewerApp() {
   const viewerRef = useRef<Viewer3DHandle>(null);
@@ -738,9 +748,12 @@ export default function ViewerApp() {
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
         {toolMode && (
-          <div className="pointer-events-none fixed top-1/2 left-3 z-[36] -translate-y-1/2 md:left-4">
-            <MarkupToolbar compact />
-          </div>
+          <>
+            <div className="pointer-events-none fixed top-[5.75rem] left-1/2 z-[37] -translate-x-1/2 md:top-[6.25rem]">
+              <ToolTopBar />
+            </div>
+            <DragSnapHud />
+          </>
         )}
         <ViewerContextMenu
           viewerRef={viewerRef}
@@ -825,6 +838,7 @@ export default function ViewerApp() {
               zIndex={35}
               fill={toolMode}
               allowOverflow={!toolMode}
+              className={toolMode ? "tool-dock-panel" : ""}
               wrapperClassName={
                 toolMode
                   ? "relative mb-2 flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
