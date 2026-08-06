@@ -260,17 +260,19 @@ export default function MarkupPropertiesPanel({
         ))}
       </div>
 
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-col gap-1.5">
         <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "markupColor")}
         </span>
-        <ColorSwatchPicker
-          color={placement.color}
-          onChange={(hex) =>
-            void updatePlacement(placement.id, { color: hex })
-          }
-          size="md"
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <ColorSwatchPicker
+            color={placement.color}
+            onChange={(hex) =>
+              void updatePlacement(placement.id, { color: hex })
+            }
+            size="md"
+          />
+        </div>
       </div>
 
       <label className="mb-2 flex flex-col gap-0.5">
