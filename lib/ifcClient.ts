@@ -1713,6 +1713,7 @@ export async function loadIfcModel(
         meshObj.userData.floorId = piece.floorId;
         meshObj.userData.expressId = piece.expressId;
         meshObj.userData.colorHex = colorHex;
+        meshObj.userData.ifcOpacity = piece.opacity;
         meshObj.userData.ifcSurface = surface;
         meshObj.userData.ifcTypeName = piece.typeName;
         meshObj.userData.ifcMaterialName = piece.materialName;
