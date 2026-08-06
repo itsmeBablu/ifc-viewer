@@ -25,11 +25,21 @@ import {
   idbPutPlacement,
 } from "@/lib/toolMarkupDb";
 
+type CubeDrawState = {
+  start: { x: number; y: number; z: number };
+  current: { x: number; y: number; z: number };
+  phase: "footprint" | "height";
+  height: number;
+} | null;
+
 type ToolMarkupState = {
   modelKey: string | null;
   armedTool: MarkupToolId | null;
   transformMode: MarkupTransformMode;
   snapToFaces: boolean;
+  gridSnap: boolean;
+  gridSize: number;
+  cubeDraw: CubeDrawState;
   markupFloorId: string | null;
   viewPreset: MarkupViewPreset;
   /** Bumped when viewPreset changes so Viewer3D can fly the camera. */
@@ -52,6 +62,8 @@ type ToolMarkupState = {
   setArmedTool: (tool: MarkupToolId | null) => void;
   setTransformMode: (mode: MarkupTransformMode) => void;
   setSnapToFaces: (on: boolean) => void;
+  setGridSnap: (on: boolean) => void;
+  setCubeDraw: (draw: CubeDrawState) => void;
   setMarkupFloorId: (floorId: string | null) => void;
   setViewPreset: (preset: MarkupViewPreset) => void;
   setDefaultColor: (color: string) => void;
@@ -59,7 +71,13 @@ type ToolMarkupState = {
   placeShape: (
     type: MarkupShapeType,
     pos: { x: number; y: number; z: number },
-    meta?: { floorId?: string | null; rot?: { x: number; y: number; z: number } },
+    meta?: {
+      floorId?: string | null;
+      rot?: { x: number; y: number; z: number };
+      sizeX?: number;
+      sizeY?: number;
+      sizeZ?: number;
+    },
   ) => Promise<MarkupPlacement | null>;
   updatePlacement: (
     id: string,
@@ -113,6 +131,7 @@ type ToolMarkupState = {
   selectNote: (id: string | null) => void;
   clearSelection: () => void;
   saveMarkupFile: (modelLabel?: string | null) => boolean;
+  markSaved: () => void;
 };
 
 export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
@@ -120,6 +139,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   armedTool: null,
   transformMode: "translate",
   snapToFaces: true,
+  gridSnap: false,
+  gridSize: 0.1,
+  cubeDraw: null,
   markupFloorId: null,
   viewPreset: "free",
   viewPresetToken: 0,
@@ -142,6 +164,8 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   setTransformMode: (mode) => set({ transformMode: mode }),
 
   setSnapToFaces: (on) => set({ snapToFaces: on }),
+  setGridSnap: (on) => set({ gridSnap: on }),
+  setCubeDraw: (draw) => set({ cubeDraw: draw }),
 
   setMarkupFloorId: (floorId) => set({ markupFloorId: floorId }),
 
@@ -211,9 +235,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       rotX: meta?.rot?.x ?? 0,
       rotY: meta?.rot?.y ?? 0,
       rotZ: meta?.rot?.z ?? 0,
-      sizeX: sizes.sizeX,
-      sizeY: sizes.sizeY,
-      sizeZ: sizes.sizeZ,
+      sizeX: meta?.sizeX ?? sizes.sizeX,
+      sizeY: meta?.sizeY ?? sizes.sizeY,
+      sizeZ: meta?.sizeZ ?? sizes.sizeZ,
       color: get().defaultColor,
       label: null,
       floorId: meta?.floorId ?? get().markupFloorId,
@@ -360,4 +384,6 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     set({ lastSavedAt: Date.now() });
     return true;
   },
+
+  markSaved: () => set({ lastSavedAt: Date.now() }),
 }));

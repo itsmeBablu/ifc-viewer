@@ -26,6 +26,11 @@ import type { CustomLegendColors } from "@/lib/colorMapping";
 import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
+import {
+  applyGridSnap,
+  enhanceHitWithVertexSnap,
+  pickMarkupSurface,
+} from "@/lib/markupSnap";
 import { MarkupSceneLayer } from "@/components/tool/MarkupSceneLayer";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { isShapeTool } from "@/components/tool/MarkupIcons";
@@ -1835,27 +1840,42 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       if (
         store.snapToFaces &&
         store.transformMode === "translate" &&
-        shellCloneRef.current &&
-        cameraRef.current
+        shellCloneRef.current
       ) {
+        // Prefer a downward surface pick at the object's XZ — not analysis
+        // cut-plane hits (those used to return (0,0,0)).
         const ray = raycaster.current;
         ray.set(
-          new THREE.Vector3(posX, posY + 50, posZ),
+          new THREE.Vector3(posX, posY + 80, posZ),
           new THREE.Vector3(0, -1, 0),
         );
-        const hits = ray
-          .intersectObject(shellCloneRef.current, true)
-          .filter(
-            (h) =>
-              !h.object.userData.isMarkupPlacement &&
-              !h.object.userData.isClipStencil,
-          );
-        if (hits[0]) {
-          posX = hits[0].point.x;
-          posY = hits[0].point.y;
-          posZ = hits[0].point.z;
-          obj.position.copy(hits[0].point);
+        const roots = [shellCloneRef.current, markupLayerRef.current?.group].filter(
+          Boolean,
+        ) as THREE.Object3D[];
+        const surface = pickMarkupSurface(ray, roots);
+        if (surface && surface.object !== obj) {
+          const snapped = surface.point
+            .clone()
+            .addScaledVector(surface.normal, 0.015);
+          posX = snapped.x;
+          posY = snapped.y;
+          posZ = snapped.z;
+          if (store.gridSnap) {
+            const g = applyGridSnap(snapped, store.gridSize, ["x", "z"]);
+            posX = g.x;
+            posZ = g.z;
+          }
+          obj.position.set(posX, posY, posZ);
         }
+      } else if (store.gridSnap && store.transformMode === "translate") {
+        const g = applyGridSnap(
+          new THREE.Vector3(posX, posY, posZ),
+          store.gridSize,
+          ["x", "z"],
+        );
+        posX = g.x;
+        posZ = g.z;
+        obj.position.set(posX, posY, posZ);
       }
 
       void store.updatePlacement(id, {
@@ -2736,6 +2756,56 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         return;
       }
       cube?.clearHover();
+
+      // Live cube footprint / note snap indicator while a tool is armed.
+      if (useAppStore.getState().toolMode) {
+        const ms = useToolMarkupStore.getState();
+        const layer = markupLayerRef.current;
+        const cam = cameraRef.current;
+        if (ms.armedTool && cam && layer) {
+          const rect = canvas.getBoundingClientRect();
+          pointerNdc.current.x =
+            ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointerNdc.current.y =
+            -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.current.setFromCamera(pointerNdc.current, cam);
+          const roots: THREE.Object3D[] = [];
+          if (shellCloneRef.current) roots.push(shellCloneRef.current);
+          roots.push(layer.group);
+          let surface = pickMarkupSurface(raycaster.current, roots);
+          if (surface && ms.armedTool === "note") {
+            surface = enhanceHitWithVertexSnap(
+              surface,
+              raycaster.current,
+              0.3,
+            );
+            layer.setSnapIndicator(surface.snappedVertex ?? surface.point);
+          } else {
+            layer.setSnapIndicator(null);
+          }
+          if (surface && ms.cubeDraw?.phase === "footprint") {
+            let p = surface.point.clone();
+            if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
+            ms.setCubeDraw({
+              ...ms.cubeDraw,
+              current: { x: p.x, y: p.y, z: p.z },
+            });
+            layer.setCubeDrawPreview(
+              ms.cubeDraw.start,
+              { x: p.x, y: p.y, z: p.z },
+              ms.cubeDraw.height,
+            );
+          } else if (!ms.cubeDraw) {
+            layer.setCubeDrawPreview(null, null);
+          }
+          canvas.style.cursor = surface ? "crosshair" : "default";
+          setHoveredRoom(null);
+          return;
+        }
+        layer?.setSnapIndicator(null);
+        layer?.setCubeDrawPreview(null, null);
+      }
+
       const hit = pickHit(e.clientX, e.clientY);
       if (!hit) {
         setHoveredRoom(null);
@@ -2802,31 +2872,85 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             -((e.clientY - rect.top) / rect.height) * 2 + 1;
           raycaster.current.setFromCamera(pointerNdc.current, camera);
 
+          // Dedicated surface pick — never use analysis cut-plane hits
+          // (those can return point (0,0,0) and dump every shape at origin).
+          const roots: THREE.Object3D[] = [];
+          if (shellCloneRef.current) roots.push(shellCloneRef.current);
+          roots.push(layer.group);
+          let surface = pickMarkupSurface(raycaster.current, roots);
+
           const armed = markupStore.armedTool;
-          if (armed && hit?.point) {
-            const p = hit.point.clone();
-            const ids = pickIdsFromObject(hit.object);
+          if (armed && surface) {
+            if (armed === "note") {
+              surface = enhanceHitWithVertexSnap(
+                surface,
+                raycaster.current,
+                0.3,
+              );
+            }
+            let p = surface.point.clone();
+            // Sit slightly along the face normal so shapes don't z-fight.
+            p.addScaledVector(surface.normal, 0.015);
+            if (markupStore.gridSnap) {
+              p = applyGridSnap(p, markupStore.gridSize, ["x", "z"]);
+            }
+
             let rot = { x: 0, y: 0, z: 0 };
-            if (markupStore.snapToFaces && hit.face) {
-              const normal = hit.face.normal
-                .clone()
-                .transformDirection(hit.object.matrixWorld)
-                .normalize();
-              // Lift slightly along normal so shapes sit on the face.
-              p.addScaledVector(normal, 0.02);
+            if (markupStore.snapToFaces) {
               const quat = new THREE.Quaternion().setFromUnitVectors(
                 new THREE.Vector3(0, 1, 0),
-                normal,
+                surface.normal.clone().normalize(),
               );
-              const e = new THREE.Euler().setFromQuaternion(quat);
-              rot = { x: e.x, y: e.y, z: e.z };
+              const euler = new THREE.Euler().setFromQuaternion(quat);
+              rot = { x: euler.x, y: euler.y, z: euler.z };
             }
+
+            const ids = pickIdsFromObject(surface.object);
             const floorId =
               markupStore.markupFloorId ?? ids.floorId ?? null;
+
+            // Cube draw-to-place: first click starts footprint.
+            if (armed === "cube") {
+              if (!markupStore.cubeDraw) {
+                markupStore.setCubeDraw({
+                  start: { x: p.x, y: p.y, z: p.z },
+                  current: { x: p.x, y: p.y, z: p.z },
+                  phase: "footprint",
+                  height: 0.5,
+                });
+                return;
+              }
+              if (markupStore.cubeDraw.phase === "footprint") {
+                const start = markupStore.cubeDraw.start;
+                const w = Math.max(0.05, Math.abs(p.x - start.x));
+                const d = Math.max(0.05, Math.abs(p.z - start.z));
+                const h = 0.5;
+                const cx = (p.x + start.x) / 2;
+                const cz = (p.z + start.z) / 2;
+                const cy = start.y + h / 2;
+                void markupStore.placeShape(
+                  "cube",
+                  { x: cx, y: cy, z: cz },
+                  {
+                    floorId,
+                    rot: { x: 0, y: 0, z: 0 },
+                    sizeX: w,
+                    sizeY: h,
+                    sizeZ: d,
+                  },
+                );
+                markupStore.setCubeDraw(null);
+                layer.setCubeDrawPreview(null, null);
+                return;
+              }
+            }
+
             if (armed === "note") {
               const elName =
                 useAppStore.getState().selectedElement?.name ??
-                (ids.expressId != null ? `Element #${ids.expressId}` : null);
+                (ids.expressId != null
+                  ? `Element #${ids.expressId}`
+                  : null);
               markupStore.beginNoteAt(
                 { x: p.x, y: p.y, z: p.z },
                 {
@@ -2835,7 +2959,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                   floorId,
                 },
               );
-            } else if (isShapeTool(armed)) {
+            } else if (isShapeTool(armed) && armed !== "cube") {
               void markupStore.placeShape(
                 armed,
                 { x: p.x, y: p.y, z: p.z },
@@ -2861,6 +2985,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
           if (!armed) {
             markupStore.clearSelection();
+            markupStore.setCubeDraw(null);
           }
         }
       }

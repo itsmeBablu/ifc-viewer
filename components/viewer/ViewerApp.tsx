@@ -41,6 +41,13 @@ import {
   OPEN_IFC_FILE_EVENT,
   isTypingTarget,
 } from "@/lib/viewerHotkeys";
+import { cacheIfcBytes, parseFragFile } from "@/lib/markupFragSave";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import {
+  idbPutNote,
+  idbPutPlacement,
+} from "@/lib/toolMarkupDb";
+import { normalizeNote, normalizePlacement } from "@/lib/toolMarkup";
 import GsapOverlay from "../common/GsapOverlay";
 import SceneBusyOverlay from "../common/SceneBusyOverlay";
 import SceneBusyCursor from "../common/SceneBusyCursor";
@@ -255,6 +262,9 @@ export default function ViewerApp() {
           ifcSource = entry.ifcPath;
         } else {
           ifcSource = source.file;
+          const ab = await source.file.arrayBuffer();
+          cacheIfcBytes(id, source.name, ab);
+          ifcSource = ab;
         }
 
         const result = await loadIfcModel(ifcSource, (p) => {
@@ -304,16 +314,50 @@ export default function ViewerApp() {
         "info",
         { size: file.size, type: file.type },
       );
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith(".frag")) {
+        void (async () => {
+          try {
+            const { meta, ifcBytes } = await parseFragFile(file);
+            const id = meta.modelKey || `frag-${Date.now()}`;
+            if (ifcBytes && ifcBytes.byteLength > 0) {
+              cacheIfcBytes(id, meta.modelLabel ?? file.name, ifcBytes);
+              await runLoad({
+                kind: "file",
+                id,
+                name: meta.modelLabel ?? file.name.replace(/\.frag$/i, ".ifc"),
+                file: new File(
+                  [Uint8Array.from(ifcBytes)],
+                  meta.modelLabel ?? "model.ifc",
+                ),
+              });
+            }
+            for (const p of meta.placements) {
+              await idbPutPlacement(normalizePlacement(p));
+            }
+            for (const n of meta.notes) {
+              await idbPutNote(normalizeNote(n));
+            }
+            await useToolMarkupStore.getState().loadForModel(id);
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Failed to open .frag";
+            setLoadError(message);
+          }
+        })();
+        return;
+      }
       const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       void runLoad({ kind: "file", id, name: file.name, file });
     },
-    [runLoad],
+    [runLoad, setLoadError],
   );
 
   const isIfcFile = useCallback((file: File) => {
     const name = file.name.toLowerCase();
     return (
       name.endsWith(".ifc") ||
+      name.endsWith(".frag") ||
       file.type === "application/x-step" ||
       file.type === "application/octet-stream"
     );

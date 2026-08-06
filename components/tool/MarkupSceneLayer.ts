@@ -22,6 +22,8 @@ export class MarkupSceneLayer {
   private host: HTMLElement | null = null;
   private scene: THREE.Scene | null = null;
   private selectedId: string | null = null;
+  private cubePreview: THREE.Mesh | null = null;
+  private snapIndicator: THREE.Mesh | null = null;
   onNoteClick: ((id: string) => void) | null = null;
 
   constructor() {
@@ -119,6 +121,65 @@ export class MarkupSceneLayer {
 
   getMesh(id: string): THREE.Mesh | null {
     return this.meshes.get(id) ?? null;
+  }
+
+  /** Live footprint while drawing a cube (corner → opposite corner). */
+  setCubeDrawPreview(
+    start: { x: number; y: number; z: number } | null,
+    current: { x: number; y: number; z: number } | null,
+    height = 0.5,
+  ) {
+    if (!start || !current) {
+      if (this.cubePreview) {
+        this.cubePreview.visible = false;
+      }
+      return;
+    }
+    const w = Math.max(0.05, Math.abs(current.x - start.x));
+    const d = Math.max(0.05, Math.abs(current.z - start.z));
+    const h = Math.max(0.05, height);
+    const cx = (current.x + start.x) / 2;
+    const cz = (current.z + start.z) / 2;
+    const cy = start.y + h / 2;
+    if (!this.cubePreview) {
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        roughness: 0.6,
+      });
+      this.cubePreview = new THREE.Mesh(geo, mat);
+      this.cubePreview.name = "markup-cube-preview";
+      this.cubePreview.userData.isMarkupPreview = true;
+      this.group.add(this.cubePreview);
+    }
+    this.cubePreview.visible = true;
+    this.cubePreview.position.set(cx, cy, cz);
+    this.cubePreview.scale.set(w, h, d);
+  }
+
+  /** Small sphere showing note vertex/face snap target. */
+  setSnapIndicator(point: THREE.Vector3 | null) {
+    if (!point) {
+      if (this.snapIndicator) this.snapIndicator.visible = false;
+      return;
+    }
+    if (!this.snapIndicator) {
+      const geo = new THREE.SphereGeometry(0.06, 12, 12);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x22c55e,
+        depthTest: false,
+      });
+      this.snapIndicator = new THREE.Mesh(geo, mat);
+      this.snapIndicator.name = "markup-snap-indicator";
+      this.snapIndicator.userData.isMarkupPreview = true;
+      this.snapIndicator.renderOrder = 999;
+      this.group.add(this.snapIndicator);
+    }
+    this.snapIndicator.visible = true;
+    this.snapIndicator.position.copy(point);
   }
 
   pickMarkup(
@@ -223,5 +284,17 @@ export class MarkupSceneLayer {
       obj.element.remove();
     }
     this.noteObjects.clear();
+    if (this.cubePreview) {
+      this.group.remove(this.cubePreview);
+      this.cubePreview.geometry.dispose();
+      (this.cubePreview.material as THREE.Material).dispose();
+      this.cubePreview = null;
+    }
+    if (this.snapIndicator) {
+      this.group.remove(this.snapIndicator);
+      this.snapIndicator.geometry.dispose();
+      (this.snapIndicator.material as THREE.Material).dispose();
+      this.snapIndicator = null;
+    }
   }
 }

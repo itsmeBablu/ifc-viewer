@@ -230,7 +230,7 @@ export default function MobileCornerMenu({
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".ifc,application/x-step,application/octet-stream,.IFC"
+                      accept=".ifc,.frag,application/x-step,application/octet-stream,.IFC,.FRAG"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
