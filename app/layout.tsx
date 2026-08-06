@@ -1,3 +1,13 @@
+/**
+ * RootLayout — the app-wide HTML shell for every route.
+ *
+ * Owns document-level concerns: `<html>`/`<body>` structure, Geist font
+ * loading, page metadata/viewport/icons, and a blocking inline `<script>`
+ * that restores the persisted color theme (light/dark) from localStorage
+ * before hydration to avoid a flash of the wrong theme.
+ *
+ * Wraps `children`, i.e. the routed page content (see app/page.tsx).
+ */
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";

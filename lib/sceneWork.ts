@@ -1,3 +1,10 @@
+/**
+ * Ref-counted "scene busy" tracking for expensive 3D rebuilds.
+ *
+ * Wraps synchronous or async viewer work so the busy overlay (in
+ * useAppStore) can paint before the main thread blocks, and clears once all
+ * in-flight units finish. No-ops while a model is already loading.
+ */
 import { useAppStore } from "@/store/useAppStore";
 
 function canTrackSceneWork(): boolean {

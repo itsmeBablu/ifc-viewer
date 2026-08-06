@@ -1,3 +1,11 @@
+/**
+ * Curated one-click "Schnellpalette" swatch themes for the legend UI.
+ *
+ * Each LegendSwatchPreset supplies 6 anchor colors per data mode (heat/cool/
+ * temperature); `buildThermalClassicLegendColors` maps the default preset
+ * onto arbitrary stop ranges via colorMapping's anchor-to-range helpers.
+ * Separate temperature-only chip presets are also defined here.
+ */
 import {
   mapAnchorColorsToRange,
   mapHeatAnchorColorsToRange,

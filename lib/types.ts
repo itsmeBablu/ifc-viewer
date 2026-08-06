@@ -1,3 +1,10 @@
+/**
+ * Shared TypeScript domain types for the IFC viewer — a types-only module,
+ * no runtime code. Covers loaded-model data (Room, Floor, RoomVentilation,
+ * LoadedModel), app entities (ModelEntry, SavedView, SelectedElement), and
+ * UI/color-mode enums (ColorMode, RenderMode). Imported across lib/, store/,
+ * and components/ wherever these shapes are passed around.
+ */
 import type * as THREE from "three";
 
 export type VentilationFlowRole =

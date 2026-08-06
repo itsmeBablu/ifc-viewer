@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ThemeTransition — cinematic full-screen day/night blend overlay,
+ * portaled to <body>, that plays whenever colorTheme or dataViewMode
+ * (for auto seasonal sky) changes.
+ *
+ * Supports interrupting a blend mid-flight and reversing/continuing from
+ * the current progress instead of restarting, so rapid toggles stay
+ * smooth; also cross-fades the 3D scene's sky background in step with
+ * the overlay when autoSceneBackground is enabled.
+ */
+
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";

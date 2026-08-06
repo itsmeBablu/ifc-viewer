@@ -1,3 +1,13 @@
+/**
+ * Builds and animates the 3D ventilation flow markers (supply/extract/
+ * overflow arrows, ceiling extract-fan models) shown in Lüftung view.
+ *
+ * Resolves each room's exterior facade or interior zone-supply wall by
+ * raycasting/probing neighboring room geometry, then constructs GSAP-driven
+ * arrow clusters via `buildVentilationMarkers`. Visibility/zone-focus and
+ * presentation-explode offset syncing are exposed as separate update fns,
+ * consumed by the Viewer3D scene each frame/selection change.
+ */
 import gsap from "gsap";
 import * as THREE from "three";
 import { killGsap } from "@/lib/gsapMotion";

@@ -1,10 +1,12 @@
+/**
+ * Static registry of bundled demo/sample models (secondary to local File
+ * upload — most users load their own .ifc via the file picker instead).
+ * Entries are only fetched when the user explicitly picks one from this
+ * list, never on startup. Do not list paths that aren't present under
+ * public/models/, since `getModelById`/`getModels` assume they resolve.
+ */
 import type { ModelEntry } from "./types";
 
-/**
- * Registry models (secondary to local File upload).
- * Only fetched when the user explicitly picks an entry — never on startup.
- * Do not list paths that are not present under public/models/.
- */
 const MODELS: ModelEntry[] = [
   // Uncomment / add once the file exists at public/models/building-a.ifc:
   // {

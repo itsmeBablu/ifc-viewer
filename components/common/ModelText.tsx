@@ -1,3 +1,11 @@
+/**
+ * ModelText — renders IFC-sourced strings (floor/room/element names) with
+ * browser auto-translate disabled, so imported labels display verbatim.
+ *
+ * Thin wrapper around a configurable tag (span/p/div) with the
+ * `notranslate` class and `translate="no"`.
+ */
+
 import type { ReactNode } from "react";
 
 /**

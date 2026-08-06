@@ -1,3 +1,10 @@
+/**
+ * Scope-aware pick eligibility for rooms/floors in the 3D viewer.
+ *
+ * Restricts picking to the isolated floor in Presentation View's isolate
+ * mode, or the selected floor in normal view; used by click/hover pick
+ * handlers and to sanitize a stored selection against the current scope.
+ */
 import { useAppStore } from "@/store/useAppStore";
 
 /** Whether a room/floor may be picked in the current view (isolate / floor filter). */

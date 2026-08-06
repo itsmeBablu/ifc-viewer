@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * LegendSwatchPresetGrid — 3-column grid of one-click gradient swatch
+ * presets (LEGEND_SWATCH_PRESETS / LEGEND_TEMPERATURE_SWATCH_PRESETS) for
+ * the active legend color mode.
+ *
+ * Purely presentational; the chosen preset id is reported to the parent
+ * (LegendPalettePanel) via `onSelect`.
+ */
+
 import {
   LEGEND_SWATCH_PRESETS,
   LEGEND_TEMPERATURE_SWATCH_PRESETS,

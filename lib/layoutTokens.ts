@@ -1,3 +1,12 @@
+/**
+ * Layout geometry tokens shared between the header and viewer chrome.
+ *
+ * Pixel/CSS-calc helpers (header width, left panel width, mobile dock
+ * insets) that mirror the Tailwind breakpoints and safe-area insets used in
+ * ViewerApp/ViewerToolbar, so JS-side measurements stay consistent with the
+ * actual rendered layout.
+ */
+
 /** IBV wordmark aspect (ibv_logo.svg viewBox). */
 const IBV_LOGO_ASPECT = 309.85333 / 72.639999;
 

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * App-wide translation dictionary (de/en/es) and the `t()` lookup helper.
+ * German is the primary/source language and the fallback when a key is
+ * missing in the active locale. Consumed throughout the UI via useAppStore's
+ * uiLanguage; keep additions in sync across all three locales.
+ */
+
 export type UiLanguage = "en" | "de" | "es";
 
 const dict = {
@@ -224,15 +231,16 @@ const dict = {
     noData: "Keine Daten",
     data: "Daten",
     profile: "Profil",
-    heating: "Heizen",
-    cooling: "Kühlen",
-    ventilation: "Lüftung",
+    heating: "Heizung",
+    cooling: "Kälte",
+    ventilation: "Wohnungslüftung",
+    bauteil: "Bauteile",
     presentationOptionsSection: "Optionen",
     heatingOptions: "Heizoptionen",
     coolingOptions: "Kühloptionen",
     ventilationOptions: "Lüftungsoptionen",
     viewHint: "Heizen (H), Lüftung (L) oder Kühlen (K)",
-    viewHintWithTool: "Heizen (H), Lüftung (L), Kühlen (K) oder Werkzeug (W)",
+    viewHintWithTool: "Bauteile (B), Heizung (H), Kälte (K), Wohnungslüftung (L) oder Werkzeuge (W)",
     dataHint: "IFC laden (Strg+O / Strg+N)",
     swatchPresetHint: "Taste 1–6 für Schnellpalette",
     profileHint: "Sprache, Design und Profil einstellen",
@@ -562,12 +570,13 @@ const dict = {
     heating: "Heating",
     cooling: "Cooling",
     ventilation: "Ventilation",
+    bauteil: "Elements",
     presentationOptionsSection: "Options",
     heatingOptions: "Heating options",
     coolingOptions: "Cooling options",
     ventilationOptions: "Ventilation options",
     viewHint: "Heating (H), ventilation (L), or cooling (K)",
-    viewHintWithTool: "Heating (H), ventilation (L), cooling (K), or tool (W)",
+    viewHintWithTool: "Elements (B), heating (H), cooling (K), ventilation (L), or tool (W)",
     dataHint: "Load IFC (Ctrl+O / Ctrl+N)",
     swatchPresetHint: "Press 1–6 for quick presets",
     profileHint: "Language, theme and profile settings",
@@ -896,12 +905,13 @@ const dict = {
     heating: "Calefacción",
     cooling: "Refrigeración",
     ventilation: "Ventilación",
+    bauteil: "Elementos",
     presentationOptionsSection: "Opciones",
     heatingOptions: "Opciones de calefacción",
     coolingOptions: "Opciones de refrigeración",
     ventilationOptions: "Opciones de ventilación",
     viewHint: "Calefacción (H), ventilación (L) o refrigeración (K)",
-    viewHintWithTool: "Calefacción (H), ventilación (L), refrigeración (K) o herramienta (W)",
+    viewHintWithTool: "Elementos (B), calefacción (H), refrigeración (K), ventilación (L) o herramienta (W)",
     dataHint: "Cargar IFC (Ctrl+O / Ctrl+N)",
     swatchPresetHint: "Teclas 1–6 para paletas rápidas",
     profileHint: "Idioma, tema y ajustes de perfil",

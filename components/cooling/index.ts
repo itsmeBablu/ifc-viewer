@@ -1,7 +1,6 @@
 /**
- * Cooling (Kühllast) — own cooling-only UI in this folder.
- *
- * Shared (do not duplicate):
+ * Cooling (Kühllast) — intentionally empty barrel; no cooling-only
+ * components exist. The mode reuses shared UI instead:
  * - ../common — glass, theme, tips
  * - ../viewer — 3D / 2D / toolbar
  * - ../legend — scale / palette (switches by dataViewMode)

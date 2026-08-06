@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * ViewerApp — main application composition root, rendered (via
+ * ViewerAppClient) as the whole viewer page.
+ *
+ * Owns IFC model loading (registry entries, file picker, and drag-and-drop),
+ * tracking progress/error state and disposing the previous model before
+ * swapping in a new `shellGroup`/`rooms`/`floors` into useAppStore. Provides
+ * that scene data to children via `ModelSceneContext`.
+ *
+ * Wires up HeaderActions, the left FloorsPanel / right LegendPanel-or-
+ * ToolSidePanel collapsible side panels (desktop) and MobileCornerMenu /
+ * PresentationMobileDock (mobile), Viewer3D, ViewerToolbar,
+ * ViewerContextMenu, and RoomTooltip (hover + selection popups).
+ *
+ * Owns the global keyboard shortcuts: Ctrl/Cmd+O/N to open a file, W to
+ * toggle Werkzeug (native IFC inspection) mode, B for Bauteil mode, H/L/K to
+ * switch dataViewMode (heizlast/luftung/kuhllast), P to toggle presentation
+ * view (with fullscreen), and 1-6 to apply a legend swatch preset.
+ */
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import type { Group } from "three";
@@ -180,7 +200,8 @@ export default function ViewerApp() {
       gsap.set(aside, { x, opacity: state === "hidden" ? 0 : 1 });
       leftPanelReady.current = true;
     } else {
-      animateSidebarPanel(aside, state);
+      // Fast: must clear out before a hovered header dropdown pops in above it.
+      animateSidebarPanel(aside, state, { fast: true });
     }
 
     if (leftContentRef.current) {
@@ -260,11 +281,7 @@ export default function ViewerApp() {
           if (!entry) throw new Error(`Unknown model: ${source.modelId}`);
           ifcSource = entry.ifcPath;
           try {
-            const res = await fetch(
-              typeof entry.ifcPath === "string"
-                ? entry.ifcPath
-                : entry.ifcPath.toString(),
-            );
+            const res = await fetch(entry.ifcPath);
             if (res.ok) {
               const ab = await res.arrayBuffer();
               cacheIfcBytes(id, label, ab);
@@ -290,6 +307,9 @@ export default function ViewerApp() {
         useAppStore.getState().fitLegendToRooms(result.rooms);
         setShellGroup(result.shellGroup);
         if (source.kind === "registry") persistModelId(id);
+        // Every load starts in Bauteil — the raw model before any data view.
+        useAppStore.getState().setToolMode(false);
+        useAppStore.getState().setBauteilMode(true);
         debugLog(
           "ViewerApp",
           `load success — rooms=${result.rooms.length} floors=${result.floors.length}`,
@@ -450,24 +470,35 @@ export default function ViewerApp() {
       // W — Werkzeug (native IFC inspection). Same key toggles back out.
       if (key === "w") {
         e.preventDefault();
-        store.setToolMode(!store.toolMode);
+        const next = !store.toolMode;
+        if (next) store.setBauteilMode(false);
+        store.setToolMode(next);
+        return;
+      }
+      if (key === "b") {
+        e.preventDefault();
+        store.setToolMode(false);
+        store.setBauteilMode(!store.bauteilMode);
         return;
       }
       if (key === "h") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("heizlast");
         return;
       }
       if (key === "l") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("luftung");
         return;
       }
       if (key === "k") {
         e.preventDefault();
         store.setToolMode(false);
+        store.setBauteilMode(false);
         store.setDataViewMode("kuhllast");
         return;
       }

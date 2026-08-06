@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * GsapCrossfade — crossfades its children whenever `contentKey` changes.
+ *
+ * Used to swap panel content (e.g. legend modes) with a short GSAP
+ * fade/slide instead of an abrupt DOM replace; animation timings live in
+ * lib/gsapMotion (duration/easing tokens, killGsap for cleanup).
+ */
+
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import gsap from "gsap";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";

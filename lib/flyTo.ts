@@ -1,3 +1,11 @@
+/**
+ * Camera fly/framing helpers for the 3D viewer.
+ *
+ * `flyTo` animates camera position + OrbitControls target via GSAP
+ * (see gsapMotion.flyToProgress); `frameBoundingBox`/`frameBoundingBoxOrtho`
+ * compute a camera pose that frames a world-space box for perspective and
+ * orthographic (plan view) cameras respectively.
+ */
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { flyToProgress } from "./gsapMotion";

@@ -1,8 +1,21 @@
 /**
- * IFC loading + parsing (client-side only via web-ifc WASM).
+ * Core web-ifc loader (client-side only, via the web-ifc WASM API).
  *
- * Property / PSet names are configurable — Revit IFC exports often use custom
- * shared parameters. Adjust these constants to match your export mapping.
+ * `loadIfcModel` opens an .ifc source (path, File, or ArrayBuffer), walks the
+ * spatial tree (site/building/storey/space), and streams every element mesh
+ * into a merged "shell" THREE.Group (keeping per-element IFC material colors)
+ * plus a per-room space geometry — the shape Viewer3D.tsx renders. It also
+ * builds the Floor list from IfcBuildingStorey and hands duplicate/derived
+ * storeys off to floorFilter.ts to merge/prune.
+ *
+ * Room property extraction reads thermal/ventilation IFC property sets
+ * (Heizlast, Kühllast, Lüftung volumes and temperatures) using the pset/prop
+ * name constants below — intentionally overridable, since Revit IFC exports
+ * carry custom shared-parameter names per project.
+ *
+ * The opened web-ifc handle is kept alive across HMR so `getElementDetails`
+ * and `getIfcMaterialName` can keep querying properties/materials until
+ * `closeActiveIfcModel` or the next `loadIfcModel` call replaces it.
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";

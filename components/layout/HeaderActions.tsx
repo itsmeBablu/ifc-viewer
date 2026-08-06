@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * HeaderActions — the app's top-left header bar: logo, mode-selector menu
+ * (Bauteile / Heizung / Kälte / Wohnungslüftung / Werkzeuge), the IFC upload
+ * button, and a Profil menu (language, theme, seasonal background).
+ *
+ * Renders as a single animated glass shell (GSAP-driven width/opacity) that
+ * expands on hover/pin and collapses on mobile. Dropdowns (mode menu, profile
+ * menu, language flyout) are hover-opened with short close-grace timers so
+ * the pointer can travel from the trigger button into the portalled menu
+ * without it closing prematurely; menus are positioned via `createPortal`
+ * against live `getBoundingClientRect()` measurements rather than CSS anchoring.
+ *
+ * Coupled to the left FloorsPanel: whenever any header dropdown (mode menu,
+ * profile menu, or the "Cargar IFC" hover tip) is open, an effect calls
+ * `useAppStore`'s `setLeftPanelOpen(false)` to auto-collapse FloorsPanel so
+ * the two don't visually overlap; it restores `setLeftPanelOpen(true)` once
+ * all three close. This sync is desktop/tablet only — mobile has its own
+ * corner-menu layout (see MobileCornerMenu) and skips the collapse.
+ */
+
 import {
   useEffect,
   useLayoutEffect,
@@ -21,7 +41,6 @@ import { t } from "@/lib/i18n";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelSummary } from "@/lib/useModelSummary";
-import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import GsapPopMenu from "../common/GsapPopMenu";
 import GlassPanel from "../common/GlassPanel";
 import ThemeToggle from "../common/ThemeToggle";
@@ -98,6 +117,7 @@ function HeaderTip({
   hint,
   content,
   wide = false,
+  onOpenChange,
   children,
 }: {
   label: string;
@@ -105,6 +125,8 @@ function HeaderTip({
   /** Overrides the default label/hint text with richer content (e.g. model info). */
   content?: ReactNode;
   wide?: boolean;
+  /** Notified whenever the hover/focus tip opens or closes. */
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -112,6 +134,11 @@ function HeaderTip({
   const [open, setOpen] = useState(false);
   const [suppressed, setSuppressed] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    onOpenChange?.(open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const updatePos = () => {
     const el = wrapRef.current;
@@ -218,8 +245,13 @@ export default function HeaderActions({
 
   const toolMode = useAppStore((s) => s.toolMode);
   const setToolMode = useAppStore((s) => s.setToolMode);
-  const mode: HeaderMode = toolMode ? "editor" : dataViewMode;
+  const bauteilMode = useAppStore((s) => s.bauteilMode);
+  const setBauteilMode = useAppStore((s) => s.setBauteilMode);
+  const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
+  const mode: HeaderMode = toolMode ? "editor" : bauteilMode ? "bauteil" : dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
+  /** Cargar IFC hover/focus tip open — mirrored into FloorsPanel's open state. */
+  const [dataTipOpen, setDataTipOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
   /** Which dropdown row is under the pointer — highlight follows this, not only selection. */
@@ -245,6 +277,13 @@ export default function HeaderActions({
   const chevronRef = useRef<SVGSVGElement>(null);
   const iconsRef = useRef<HTMLDivElement>(null);
   const headerReady = useRef(false);
+  const modeBtnRef = useRef<HTMLButtonElement>(null);
+  const [modePos, setModePos] = useState({ top: 0, left: 0 });
+  const didSyncFloorsRef = useRef(false);
+  const modeCloseTimer = useRef<number | null>(null);
+  const profileCloseTimer = useRef<number | null>(null);
+  const languageRowRef = useRef<HTMLButtonElement>(null);
+  const [langFlyoutPos, setLangFlyoutPos] = useState({ top: 0, left: 0 });
 
   const expanded =
     !isMobileHeader || pinned || hovered || modeOpen || profileOpen;
@@ -352,6 +391,8 @@ export default function HeaderActions({
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
+        if (modeCloseTimer.current != null) window.clearTimeout(modeCloseTimer.current);
+        if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
         setModeOpen(false);
         setProfileOpen(false);
         setLanguageExpanded(false);
@@ -377,10 +418,113 @@ export default function HeaderActions({
     return () => window.removeEventListener(OPEN_IFC_FILE_EVENT, openPicker);
   }, [isLoadingModel]);
 
+  useEffect(() => {
+    return () => {
+      if (modeCloseTimer.current != null) window.clearTimeout(modeCloseTimer.current);
+      if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
+    };
+  }, []);
+
+  /** Mode dropdown position — anchored to the mode button itself, like HeaderTip. */
+  const updateModePos = () => {
+    const el = modeBtnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setModePos({ top: r.bottom + 8, left: r.left });
+  };
+
+  useLayoutEffect(() => {
+    if (!modeOpen) return;
+    updateModePos();
+    window.addEventListener("resize", updateModePos);
+    window.addEventListener("scroll", updateModePos, true);
+    return () => {
+      window.removeEventListener("resize", updateModePos);
+      window.removeEventListener("scroll", updateModePos, true);
+    };
+  }, [modeOpen]);
+
+  /** Any header dropdown opening auto-collapses FloorsPanel; closing restores it. */
+  useEffect(() => {
+    if (isMobileHeader) return;
+    if (!didSyncFloorsRef.current) {
+      didSyncFloorsRef.current = true;
+      return;
+    }
+    setLeftPanelOpen(!modeOpen && !dataTipOpen && !profileOpen);
+  }, [modeOpen, dataTipOpen, profileOpen, isMobileHeader, setLeftPanelOpen]);
+
+  /** Language flyout position — anchored to the Sprache row, opening to its right. */
+  const updateLangFlyoutPos = () => {
+    const el = languageRowRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setLangFlyoutPos({ top: r.top, left: r.right + 8 });
+  };
+
+  useLayoutEffect(() => {
+    if (!languageExpanded) return;
+    updateLangFlyoutPos();
+    window.addEventListener("resize", updateLangFlyoutPos);
+    window.addEventListener("scroll", updateLangFlyoutPos, true);
+    return () => {
+      window.removeEventListener("resize", updateLangFlyoutPos);
+      window.removeEventListener("scroll", updateLangFlyoutPos, true);
+    };
+  }, [languageExpanded]);
+
+  const cancelModeMenuClose = () => {
+    if (modeCloseTimer.current != null) {
+      window.clearTimeout(modeCloseTimer.current);
+      modeCloseTimer.current = null;
+    }
+  };
+  /** Hover opens the mode menu — mirrors the Cargar IFC / Profil hover tips. */
+  const openModeMenu = () => {
+    cancelModeMenuClose();
+    setModeOpen(true);
+    setProfileOpen(false);
+    setLanguageExpanded(false);
+    setProfileHoverId(null);
+    setHovered(true);
+  };
+  /** Small grace delay so moving the pointer from the button into the portalled
+   *  menu below it doesn't close the menu before the pointer arrives. */
+  const closeModeMenuSoon = () => {
+    cancelModeMenuClose();
+    modeCloseTimer.current = window.setTimeout(() => {
+      setModeOpen(false);
+      setModeHoverId(null);
+    }, 150);
+  };
+
+  const cancelProfileMenuClose = () => {
+    if (profileCloseTimer.current != null) {
+      window.clearTimeout(profileCloseTimer.current);
+      profileCloseTimer.current = null;
+    }
+  };
+  const openProfileMenu = () => {
+    cancelProfileMenuClose();
+    setProfileOpen(true);
+    setModeOpen(false);
+    setModeHoverId(null);
+    setProfileHoverId(null);
+  };
+  const closeProfileMenuSoon = () => {
+    cancelProfileMenuClose();
+    profileCloseTimer.current = window.setTimeout(() => {
+      setProfileOpen(false);
+      setProfileHoverId(null);
+      setLanguageExpanded(false);
+    }, 150);
+  };
+
   const modeOptions: { id: HeaderMode; label: string; shortcut: string }[] = [
+    { id: "bauteil", label: t(uiLanguage, "bauteil"), shortcut: "B" },
     { id: "heizlast", label: t(uiLanguage, "heating"), shortcut: "H" },
-    { id: "luftung", label: t(uiLanguage, "ventilation"), shortcut: "L" },
     { id: "kuhllast", label: t(uiLanguage, "cooling"), shortcut: "K" },
+    { id: "luftung", label: t(uiLanguage, "ventilation"), shortcut: "L" },
     { id: "editor", label: t(uiLanguage, "tool"), shortcut: "W" },
   ];
 
@@ -405,8 +549,9 @@ export default function HeaderActions({
   /** Tight icon→caption gap; fill header height so the pair sits vertically centered. */
   const iconStack =
     "flex h-full flex-col items-center justify-center gap-px";
+  /** Wraps to 2 lines instead of truncating — some translations (es/en) run long. */
   const iconCaption =
-    "max-w-[5.5rem] truncate text-center text-[10px] font-semibold leading-none tracking-wide text-[var(--text-muted)] whitespace-nowrap";
+    "line-clamp-2 max-w-[6.75rem] break-words text-center text-[9px] font-semibold leading-tight tracking-wide text-[var(--text-muted)]";
 
   function ModeShortcutLabel({
     label,
@@ -416,16 +561,9 @@ export default function HeaderActions({
     shortcut: string;
   }) {
     const idx = label.toLocaleLowerCase().indexOf(shortcut.toLocaleLowerCase());
-    if (idx < 0) {
-      return (
-        <span className="inline-flex items-baseline gap-1.5">
-          <span>{label}</span>
-          <span className="underline decoration-1 underline-offset-2">
-            {shortcut}
-          </span>
-        </span>
-      );
-    }
+    // Shortcut letters are German initials — when a translation doesn't
+    // contain the letter naturally, just show the label (no loose letter).
+    if (idx < 0) return <span>{label}</span>;
     return (
       <span>
         {label.slice(0, idx)}
@@ -439,11 +577,13 @@ export default function HeaderActions({
   const modeLabel =
     mode === "editor"
       ? t(uiLanguage, "tool")
-      : mode === "luftung"
-        ? t(uiLanguage, "ventilation")
-        : mode === "kuhllast"
-          ? t(uiLanguage, "cooling")
-          : t(uiLanguage, "heating");
+      : mode === "bauteil"
+        ? t(uiLanguage, "bauteil")
+        : mode === "luftung"
+          ? t(uiLanguage, "ventilation")
+          : mode === "kuhllast"
+            ? t(uiLanguage, "cooling")
+            : t(uiLanguage, "heating");
 
   return (
     <div
@@ -476,60 +616,76 @@ export default function HeaderActions({
         }}
       />
 
-      <div className="relative w-full">
-        <GsapPopMenu
-          show={modeOpen}
-          className="absolute top-[calc(100%+0.45rem)] left-0 z-[50]"
-          onMouseLeave={() => setModeHoverId(null)}
-        >
-          <GlassPanel variant="menu" zIndex={50}>
-            <div className="w-max min-w-[12rem] divide-y divide-zinc-200/70 p-1 text-xs text-[var(--text-body)]">
-              {modeOptions.map((opt) => {
-                const selected = mode === opt.id;
-                const highlighted =
-                  modeHoverId != null ? modeHoverId === opt.id : selected;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onMouseEnter={() => setModeHoverId(opt.id)}
-                    onClick={() => {
-                      if (isDataViewMode(opt.id)) {
-                        setToolMode(false);
-                        setDataViewMode(opt.id);
-                      } else {
-                        setToolMode(true);
-                      }
-                      setModeOpen(false);
-                      setModeHoverId(null);
-                    }}
-                    className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left ${
-                      highlighted
-                        ? menuRowHighlight
-                        : `${menuRowIdle} ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
-                    }`}
-                  >
-                    <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--chip-active-bg)]">
-                      <ModeIcon
-                        mode={opt.id}
-                        className="h-4 w-4 object-contain"
-                      />
-                    </span>
-                    <ModeShortcutLabel
-                      label={opt.label}
-                      shortcut={opt.shortcut}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </GlassPanel>
-        </GsapPopMenu>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed z-[50]"
+            style={{ top: modePos.top, left: modePos.left }}
+            onMouseEnter={cancelModeMenuClose}
+            onMouseLeave={closeModeMenuSoon}
+          >
+            <GsapPopMenu show={modeOpen} onMouseLeave={() => setModeHoverId(null)}>
+              <GlassPanel variant="menu" zIndex={50}>
+                <div className="w-max min-w-[12rem] divide-y divide-zinc-200/70 p-1 text-xs text-[var(--text-body)]">
+                  {modeOptions.map((opt) => {
+                    const selected = mode === opt.id;
+                    const highlighted =
+                      modeHoverId != null ? modeHoverId === opt.id : selected;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onMouseEnter={() => setModeHoverId(opt.id)}
+                        onClick={() => {
+                          if (opt.id === "bauteil") {
+                            setToolMode(false);
+                            setBauteilMode(true);
+                          } else if (isDataViewMode(opt.id)) {
+                            setToolMode(false);
+                            setBauteilMode(false);
+                            setDataViewMode(opt.id);
+                          } else {
+                            setBauteilMode(false);
+                            setToolMode(true);
+                          }
+                          setModeOpen(false);
+                          setModeHoverId(null);
+                        }}
+                        className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left ${
+                          highlighted
+                            ? menuRowHighlight
+                            : `${menuRowIdle} ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
+                        }`}
+                      >
+                        <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--chip-active-bg)]">
+                          <ModeIcon
+                            mode={opt.id}
+                            className="h-4 w-4 object-contain"
+                          />
+                        </span>
+                        <ModeShortcutLabel
+                          label={opt.label}
+                          shortcut={opt.shortcut}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </GlassPanel>
+            </GsapPopMenu>
+          </div>,
+          document.body,
+        )}
 
+      <div className="relative w-full">
         <GsapPopMenu
           show={profileOpen}
           className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]"
-          onMouseLeave={() => setProfileHoverId(null)}
+          onMouseEnter={cancelProfileMenuClose}
+          onMouseLeave={() => {
+            setProfileHoverId(null);
+            closeProfileMenuSoon();
+          }}
         >
           <GlassPanel variant="menu" zIndex={50}>
             <div className="box-border w-[13.25rem] p-1.5 sm:w-[14.25rem] sm:p-2">
@@ -538,6 +694,7 @@ export default function HeaderActions({
               </p>
 
               <button
+                ref={languageRowRef}
                 type="button"
                 onClick={() => setLanguageExpanded((v) => !v)}
                 aria-expanded={languageExpanded}
@@ -551,70 +708,75 @@ export default function HeaderActions({
                 }`}
               >
                 <span>{t(uiLanguage, "language")}</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`shrink-0 transition-transform duration-300 ${
-                    languageExpanded ? "rotate-180" : ""
-                  }`}
-                  aria-hidden
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
+                <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/60 shadow-sm">
+                  <Image
+                    src={`/${uiLanguage}.svg`}
+                    alt={uiLanguage}
+                    width={16}
+                    height={16}
+                    className="h-full w-full object-cover"
+                  />
+                </span>
               </button>
 
-              <GsapHeightAccordion
-                open={languageExpanded}
-                innerClassName="flex flex-col gap-1 px-1 pb-1 pt-0.5"
-                contentKey={uiLanguage}
-              >
-                {(
-                  [
-                    ["en", "langEn"],
-                    ["de", "langDe"],
-                    ["es", "langEs"],
-                  ] as const
-                ).map(([lang, labelKey]) => {
-                  const selected = uiLanguage === lang;
-                  const highlighted =
-                    profileHoverId != null
-                      ? profileHoverId === lang
-                      : selected;
-                  return (
-                    <button
-                      key={lang}
-                      type="button"
-                      onMouseEnter={() => setProfileHoverId(lang)}
-                      onClick={() => {
-                        setUiLanguage(lang);
-                        setProfileHoverId(null);
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
-                        highlighted
-                          ? menuRowHighlight
-                          : `${menuRowIdle} text-[var(--text-body)] ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
-                      }`}
-                    >
-                      <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
-                        <Image
-                          src={`/${lang}.svg`}
-                          alt={lang}
-                          width={20}
-                          height={20}
-                          className="h-full w-full object-cover"
-                        />
-                      </span>
-                      {t(uiLanguage, labelKey)}
-                    </button>
-                  );
-                })}
-              </GsapHeightAccordion>
+              {typeof document !== "undefined" &&
+                createPortal(
+                  <div
+                    className="fixed z-[55]"
+                    style={{ top: langFlyoutPos.top, left: langFlyoutPos.left }}
+                    onMouseEnter={cancelProfileMenuClose}
+                    onMouseLeave={closeProfileMenuSoon}
+                  >
+                    <GsapPopMenu show={languageExpanded}>
+                      <GlassPanel variant="menu" zIndex={55}>
+                        <div className="w-max min-w-[9rem] space-y-1 p-1.5">
+                          {(
+                            [
+                              ["en", "langEn"],
+                              ["de", "langDe"],
+                              ["es", "langEs"],
+                            ] as const
+                          ).map(([lang, labelKey]) => {
+                            const selected = uiLanguage === lang;
+                            const highlighted =
+                              profileHoverId != null
+                                ? profileHoverId === lang
+                                : selected;
+                            return (
+                              <button
+                                key={lang}
+                                type="button"
+                                onMouseEnter={() => setProfileHoverId(lang)}
+                                onClick={() => {
+                                  setUiLanguage(lang);
+                                  setProfileHoverId(null);
+                                  setLanguageExpanded(false);
+                                }}
+                                className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
+                                  highlighted
+                                    ? menuRowHighlight
+                                    : `${menuRowIdle} text-[var(--text-body)] ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
+                                }`}
+                              >
+                                <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
+                                  <Image
+                                    src={`/${lang}.svg`}
+                                    alt={lang}
+                                    width={20}
+                                    height={20}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </span>
+                                {t(uiLanguage, labelKey)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </GlassPanel>
+                    </GsapPopMenu>
+                  </div>,
+                  document.body,
+                )}
 
               <div
                 onMouseEnter={() => setProfileHoverId("theme")}
@@ -687,7 +849,7 @@ export default function HeaderActions({
             <div
               ref={innerRef}
               className={`flex items-stretch ${
-                showIconLabels ? "h-[3.35rem]" : "h-10 sm:h-11"
+                showIconLabels ? "h-[3.75rem]" : "h-10 sm:h-11"
               } ${expanded ? "w-full" : "w-max"} ${
                 isMobileHeader ? "pr-5" : "pr-3 sm:pr-3.5"
               }`}
@@ -716,13 +878,14 @@ export default function HeaderActions({
                       }`}
                       aria-hidden
                     />
-                    <HeaderTip
-                      label={modeLabel}
-                      hint={t(uiLanguage, "viewHintWithTool")}
-                    >
+                    <div className="relative flex h-full items-center justify-center self-stretch">
                       <button
+                        ref={modeBtnRef}
                         type="button"
+                        onMouseEnter={openModeMenu}
+                        onMouseLeave={closeModeMenuSoon}
                         onClick={() => {
+                          cancelModeMenuClose();
                           setModeOpen((v) => !v);
                           setProfileOpen(false);
                           setLanguageExpanded(false);
@@ -732,6 +895,7 @@ export default function HeaderActions({
                         }}
                         aria-expanded={modeOpen}
                         aria-label={modeLabel}
+                        title={t(uiLanguage, "viewHintWithTool")}
                         className={
                           showIconLabels
                             ? iconStack
@@ -751,7 +915,7 @@ export default function HeaderActions({
                           <ModeIcon mode={mode} />
                         )}
                       </button>
-                    </HeaderTip>
+                    </div>
                   </>
                 )}
               </div>
@@ -767,6 +931,7 @@ export default function HeaderActions({
                       label={t(uiLanguage, "data")}
                       hint={t(uiLanguage, "dataHint")}
                       wide={hasModel}
+                      onOpenChange={setDataTipOpen}
                       content={
                         hasModel ? (
                           <div className="w-56 px-3 py-2.5">
@@ -828,13 +993,13 @@ export default function HeaderActions({
                       </button>
                     </HeaderTip>
 
-                    <HeaderTip
-                      label={t(uiLanguage, "profile")}
-                      hint={t(uiLanguage, "profileHint")}
-                    >
+                    <div className="relative flex h-full items-center justify-center self-stretch">
                       <button
                         type="button"
+                        onMouseEnter={openProfileMenu}
+                        onMouseLeave={closeProfileMenuSoon}
                         onClick={() => {
+                          cancelProfileMenuClose();
                           setProfileOpen((v) => {
                             if (v) setLanguageExpanded(false);
                             return !v;
@@ -845,6 +1010,7 @@ export default function HeaderActions({
                         }}
                         aria-expanded={profileOpen}
                         aria-label={t(uiLanguage, "profile")}
+                        title={t(uiLanguage, "profileHint")}
                         className={
                           showIconLabels
                             ? iconStack
@@ -868,7 +1034,7 @@ export default function HeaderActions({
                           <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
                         )}
                       </button>
-                    </HeaderTip>
+                    </div>
                 </div>
               )}
 

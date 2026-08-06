@@ -1,3 +1,11 @@
+/**
+ * Floor cleanup/normalization used by ifcClient.ts after the raw storey list
+ * is built: merges duplicate IFC storeys (rooms vs. shell often sit on
+ * different but logically-equal storeys), reassigns ceiling/top slabs to the
+ * storey above, prunes reference-only/empty floors, and filters which floors
+ * the UI shows. Operates on plain Floor/Room/shell-piece arrays, mutating
+ * `floorId` fields in place where noted.
+ */
 import type * as THREE from "three";
 import type { Floor, Room } from "./types";
 

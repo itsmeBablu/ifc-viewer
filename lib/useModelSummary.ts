@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * `useModelSummary` — hook for the sidebar/header model summary strip: the
+ * active model's display label plus size/elements/floors/rooms tiles.
+ * Reads model + geometry state from useAppStore and the shell group from
+ * ModelSceneContext; falls back to modelRegistry's static label when the
+ * store hasn't set one yet.
+ */
 import { useAppStore } from "@/store/useAppStore";
 import { useModelScene } from "@/components/viewer/ModelSceneContext";
 import { getModelById } from "@/lib/modelRegistry";

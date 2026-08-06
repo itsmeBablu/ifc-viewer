@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ViewerToolbar — bottom-center floating toolbar over the 3D canvas: fit
+ * model, search/filter (opens SearchFilterPanel), shading mode, lighting +
+ * background presets, save-view (name/PDF format/slice height), fullscreen,
+ * and the presentation-view toggle.
+ *
+ * Reads/writes render/lighting/background and presentation state on
+ * useAppStore; drives `viewerRef` for camera pose capture and fit, and
+ * `targetRef` (the app root) for the Fullscreen/Presentation API.
+ */
+
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BsFullscreen, BsFullscreenExit } from "react-icons/bs";

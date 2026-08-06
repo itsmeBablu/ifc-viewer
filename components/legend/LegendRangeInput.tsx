@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * LegendRangeInput — comma-separated numeric editor for a legend's 6-8
+ * range stops, with an optional preset dropdown and validation via
+ * parseLegendRange/formatLegendRange.
+ *
+ * Reads `uiLanguage` from useAppStore; commits parsed values through the
+ * `onCommit` prop supplied by LegendBody.
+ */
+
 import { useEffect, useState } from "react";
 import {
   formatLegendRange,

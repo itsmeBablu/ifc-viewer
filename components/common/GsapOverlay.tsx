@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * GsapOverlay — centered overlay wrapper with GSAP enter/exit transitions.
+ *
+ * Used for loading, empty-state, and error overlays; stays mounted through
+ * the exit animation (via animateOverlayOut's onComplete) before unmounting.
+ */
+
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { animateOverlayIn, animateOverlayOut } from "@/lib/gsapMotion";
 

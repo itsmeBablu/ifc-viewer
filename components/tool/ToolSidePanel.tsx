@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * ToolSidePanel — root panel for the Werkzeug (native IFC inspection) mode;
+ * tabs: IFC Elements | Modify (shapes, notes, save). Replaces the legend
+ * while this view is active.
+ */
+
 import {
   useEffect,
   useLayoutEffect,

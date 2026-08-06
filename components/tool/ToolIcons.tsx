@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * ToolIcons — small inline SVG icon set for the Werkzeug tool panel
+ * (chevron, eye/eye-off/eye-mixed, isolate, reset, target, search).
+ * Purely presentational; no store access or state.
+ */
+
 type IconProps = { className?: string };
 
 const stroke = {

@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * GsapHeightAccordion — animates a container's height between 0 and its
+ * content's natural height (iOS-style expand/collapse), replacing CSS
+ * max-height transitions which don't animate smoothly to `auto`.
+ *
+ * Keeps content mounted during the collapse animation, then unmounts;
+ * `contentKey` forces a re-measure when the inner content itself changes.
+ */
+
 import {
   useLayoutEffect,
   useRef,

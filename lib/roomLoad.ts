@@ -1,3 +1,9 @@
+/**
+ * Per-room load/temperature accessors for the active data view (Heizlast /
+ * Kühllast / Lüftung). Centralizes the "which Room field, and which color
+ * scale, applies for this DataViewMode" logic so components (legends, panels,
+ * 3D overlays) don't duplicate the heating/cooling/ventilation branching.
+ */
 import {
   heizlastToColor,
   kuhllastToColor,

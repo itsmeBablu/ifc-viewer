@@ -1,3 +1,13 @@
+/**
+ * Shared GSAP easing/duration presets and small animation helpers used
+ * across the header, side panels, overlays, and camera fly-to.
+ *
+ * Covers menu/overlay/sidebar in-out transitions and a single tracked
+ * "fly" tween so overlapping camera moves cancel cleanly. Note:
+ * `gsapDuration.panelQuick` is a shorter sidebar-collapse duration added so
+ * FloorsPanel finishes retracting before a header dropdown (menu duration)
+ * finishes appearing above it.
+ */
 import gsap from "gsap";
 
 /** iOS-like motion presets — tuned for UI + 3D camera. */
@@ -20,6 +30,7 @@ export const gsapDuration = {
   progress: 0.32,
   accordion: 0.4,
   sidebar: 0.9,
+  panelQuick: 0.16,
   menu: 0.32,
   tooltip: 0.16,
   follow: 0.12,
@@ -115,7 +126,7 @@ export function animateMenuOut(el: Element) {
 export function animateSidebarPanel(
   el: Element,
   state: "open" | "peek" | "hidden",
-  options?: { side?: "left" | "right"; peekPx?: number },
+  options?: { side?: "left" | "right"; peekPx?: number; fast?: boolean },
 ) {
   killGsap(el);
   const side = options?.side ?? "left";
@@ -141,8 +152,9 @@ export function animateSidebarPanel(
   return gsap.to(el, {
     x,
     opacity,
-    duration: gsapDuration.sidebar,
-    ease: gsapEase.panel,
+    // Fast: must fully retract before a header dropdown (menu duration) pops in above it.
+    duration: options?.fast ? gsapDuration.panelQuick : gsapDuration.sidebar,
+    ease: options?.fast ? gsapEase.iosOut : gsapEase.panel,
   });
 }
 

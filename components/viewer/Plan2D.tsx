@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Plan2D — top-down orthographic 2D floor-plan renderer, a lighter sibling of
+ * Viewer3D used for plan-style views. Clones the shared IFC shell (from
+ * `useModelScene`) into its own scene, renders flat room overlays colored by
+ * the active `colorMode`/`dataViewMode` (heizlast, kuhllast, luftung,
+ * temperature), and isolates the `selectedFloor`.
+ *
+ * Reads room/legend/filter state from useAppStore; drives
+ * `setHoveredRoom`/`setSelectedRoomId` on pointer hover/click (no camera fly —
+ * selection only, panning/zoom handled by OrbitControls in ortho mode).
+ */
+
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";

@@ -1,3 +1,10 @@
+/**
+ * Ventilation (Lüftung) domain logic: classifying a room's flow role
+ * (extract/supply/overflow/neutral) from IFC RaumArt codes and volume
+ * fields, grouping rooms into Nutzungszone summaries per floor, and
+ * formatting flow/heat-loss values for lists and tables. Consumed by the
+ * Lüftung data view, room panels, and ventilationMarkers' 3D marker layer.
+ */
 import type { Floor, Room, RoomVentilation, VentilationFlowRole } from "./types";
 
 export type VentilationZoneSummary = {
