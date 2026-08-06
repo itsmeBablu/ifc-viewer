@@ -4,11 +4,17 @@ import { create } from "zustand";
 import {
   DEFAULT_MARKUP_COLOR,
   DEFAULT_SHAPE_SIZES,
+  buildMarkupSavePackage,
+  downloadMarkupPackage,
   newMarkupId,
+  normalizeNote,
+  normalizePlacement,
   type MarkupNote,
   type MarkupPlacement,
   type MarkupShapeType,
   type MarkupToolId,
+  type MarkupTransformMode,
+  type MarkupViewPreset,
 } from "@/lib/toolMarkup";
 import {
   idbDeleteNote,
@@ -22,20 +28,38 @@ import {
 type ToolMarkupState = {
   modelKey: string | null;
   armedTool: MarkupToolId | null;
+  transformMode: MarkupTransformMode;
+  snapToFaces: boolean;
+  markupFloorId: string | null;
+  viewPreset: MarkupViewPreset;
+  /** Bumped when viewPreset changes so Viewer3D can fly the camera. */
+  viewPresetToken: number;
   placements: MarkupPlacement[];
   notes: MarkupNote[];
   selectedPlacementId: string | null;
   selectedNoteId: string | null;
-  /** Draft text when placing a note after a 3D click. */
-  pendingNote: { posX: number; posY: number; posZ: number } | null;
+  pendingNote: {
+    posX: number;
+    posY: number;
+    posZ: number;
+    expressId: number | null;
+    elementName: string | null;
+    floorId: string | null;
+  } | null;
   defaultColor: string;
+  lastSavedAt: number | null;
 
   setArmedTool: (tool: MarkupToolId | null) => void;
+  setTransformMode: (mode: MarkupTransformMode) => void;
+  setSnapToFaces: (on: boolean) => void;
+  setMarkupFloorId: (floorId: string | null) => void;
+  setViewPreset: (preset: MarkupViewPreset) => void;
   setDefaultColor: (color: string) => void;
   loadForModel: (modelKey: string | null) => Promise<void>;
   placeShape: (
     type: MarkupShapeType,
     pos: { x: number; y: number; z: number },
+    meta?: { floorId?: string | null; rot?: { x: number; y: number; z: number } },
   ) => Promise<MarkupPlacement | null>;
   updatePlacement: (
     id: string,
@@ -53,32 +77,59 @@ type ToolMarkupState = {
         | "sizeZ"
         | "color"
         | "label"
+        | "floorId"
       >
     >,
   ) => Promise<void>;
   deletePlacement: (id: string) => Promise<void>;
   selectPlacement: (id: string | null) => void;
-  beginNoteAt: (pos: { x: number; y: number; z: number }) => void;
+  beginNoteAt: (
+    pos: { x: number; y: number; z: number },
+    meta?: {
+      expressId?: number | null;
+      elementName?: string | null;
+      floorId?: string | null;
+    },
+  ) => void;
   cancelPendingNote: () => void;
   commitPendingNote: (text: string, author?: string | null) => Promise<void>;
   updateNote: (
     id: string,
-    patch: Partial<Pick<MarkupNote, "text" | "author" | "posX" | "posY" | "posZ">>,
+    patch: Partial<
+      Pick<
+        MarkupNote,
+        | "text"
+        | "author"
+        | "posX"
+        | "posY"
+        | "posZ"
+        | "expressId"
+        | "elementName"
+        | "floorId"
+      >
+    >,
   ) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   selectNote: (id: string | null) => void;
   clearSelection: () => void;
+  saveMarkupFile: (modelLabel?: string | null) => boolean;
 };
 
 export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   modelKey: null,
   armedTool: null,
+  transformMode: "translate",
+  snapToFaces: true,
+  markupFloorId: null,
+  viewPreset: "free",
+  viewPresetToken: 0,
   placements: [],
   notes: [],
   selectedPlacementId: null,
   selectedNoteId: null,
   pendingNote: null,
   defaultColor: DEFAULT_MARKUP_COLOR,
+  lastSavedAt: null,
 
   setArmedTool: (tool) =>
     set({
@@ -87,6 +138,18 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       selectedPlacementId: tool ? null : get().selectedPlacementId,
       selectedNoteId: tool ? null : get().selectedNoteId,
     }),
+
+  setTransformMode: (mode) => set({ transformMode: mode }),
+
+  setSnapToFaces: (on) => set({ snapToFaces: on }),
+
+  setMarkupFloorId: (floorId) => set({ markupFloorId: floorId }),
+
+  setViewPreset: (preset) =>
+    set((s) => ({
+      viewPreset: preset,
+      viewPresetToken: s.viewPresetToken + 1,
+    })),
 
   setDefaultColor: (color) => set({ defaultColor: color }),
 
@@ -100,22 +163,24 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         selectedNoteId: null,
         pendingNote: null,
         armedTool: null,
+        markupFloorId: null,
       });
       return;
     }
     try {
-      const [placements, notes] = await Promise.all([
+      const [rawPlacements, rawNotes] = await Promise.all([
         idbListPlacements(modelKey),
         idbListNotes(modelKey),
       ]);
       set({
         modelKey,
-        placements,
-        notes,
+        placements: rawPlacements.map((p) => normalizePlacement(p)),
+        notes: rawNotes.map((n) => normalizeNote(n)),
         selectedPlacementId: null,
         selectedNoteId: null,
         pendingNote: null,
         armedTool: null,
+        markupFloorId: null,
       });
     } catch {
       set({
@@ -126,11 +191,12 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         selectedNoteId: null,
         pendingNote: null,
         armedTool: null,
+        markupFloorId: null,
       });
     }
   },
 
-  placeShape: async (type, pos) => {
+  placeShape: async (type, pos, meta) => {
     const modelKey = get().modelKey;
     if (!modelKey) return null;
     const sizes = DEFAULT_SHAPE_SIZES[type];
@@ -142,14 +208,15 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       posX: pos.x,
       posY: pos.y,
       posZ: pos.z,
-      rotX: 0,
-      rotY: 0,
-      rotZ: 0,
+      rotX: meta?.rot?.x ?? 0,
+      rotY: meta?.rot?.y ?? 0,
+      rotZ: meta?.rot?.z ?? 0,
       sizeX: sizes.sizeX,
       sizeY: sizes.sizeY,
       sizeZ: sizes.sizeZ,
       color: get().defaultColor,
       label: null,
+      floorId: meta?.floorId ?? get().markupFloorId,
       createdAt: now,
       updatedAt: now,
     };
@@ -194,9 +261,16 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       pendingNote: null,
     }),
 
-  beginNoteAt: (pos) =>
+  beginNoteAt: (pos, meta) =>
     set({
-      pendingNote: { posX: pos.x, posY: pos.y, posZ: pos.z },
+      pendingNote: {
+        posX: pos.x,
+        posY: pos.y,
+        posZ: pos.z,
+        expressId: meta?.expressId ?? null,
+        elementName: meta?.elementName ?? null,
+        floorId: meta?.floorId ?? get().markupFloorId,
+      },
       armedTool: null,
       selectedPlacementId: null,
       selectedNoteId: null,
@@ -222,6 +296,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       posZ: pending.posZ,
       text: trimmed,
       author,
+      expressId: pending.expressId,
+      elementName: pending.elementName,
+      floorId: pending.floorId,
       createdAt: now,
       updatedAt: now,
     };
@@ -269,4 +346,18 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       selectedNoteId: null,
       pendingNote: null,
     }),
+
+  saveMarkupFile: (modelLabel = null) => {
+    const { modelKey, placements, notes } = get();
+    if (!modelKey) return false;
+    const pkg = buildMarkupSavePackage({
+      modelKey,
+      modelLabel,
+      placements,
+      notes,
+    });
+    downloadMarkupPackage(pkg);
+    set({ lastSavedAt: Date.now() });
+    return true;
+  },
 }));

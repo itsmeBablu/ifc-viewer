@@ -1167,7 +1167,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         presentationFloorId: null,
         presentationIsolate: false,
         compareBothModes: false,
-        selectedFloor: null,
         selectedVentilationZoneKey: null,
         activeFilter: null,
         selectedRoomId: null,

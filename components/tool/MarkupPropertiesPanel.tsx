@@ -48,6 +48,14 @@ export default function MarkupPropertiesPanel({
         <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
           {t(uiLanguage, "markupNote")}
         </p>
+      {pendingNote && (pendingNote.elementName || pendingNote.expressId != null) && (
+        <p className="mb-1.5 truncate text-[9px] text-[var(--text-muted)]">
+          {t(uiLanguage, "markupAttachedTo")}:{" "}
+          <span className="font-semibold text-[var(--text-body)]">
+            {pendingNote.elementName ?? `#${pendingNote.expressId}`}
+          </span>
+        </p>
+      )}
         <textarea
           autoFocus
           value={draftNote}
@@ -104,6 +112,14 @@ export default function MarkupPropertiesPanel({
           rows={3}
           className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/60 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
+        {(note.elementName || note.expressId != null) && (
+          <p className="mb-2 truncate text-[9px] text-[var(--text-muted)]">
+            {t(uiLanguage, "markupAttachedTo")}:{" "}
+            <span className="font-semibold text-[var(--text-body)]">
+              {note.elementName ?? `#${note.expressId}`}
+            </span>
+          </p>
+        )}
         <button
           type="button"
           onClick={() => void deleteNote(note.id)}

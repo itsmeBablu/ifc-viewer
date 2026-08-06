@@ -117,6 +117,10 @@ export class MarkupSceneLayer {
     }
   }
 
+  getMesh(id: string): THREE.Mesh | null {
+    return this.meshes.get(id) ?? null;
+  }
+
   pickMarkup(
     raycaster: THREE.Raycaster,
   ): { kind: "placement" | "note"; id: string } | null {

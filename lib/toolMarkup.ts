@@ -12,6 +12,10 @@ export type MarkupShapeType =
 
 export type MarkupToolId = MarkupShapeType | "note";
 
+export type MarkupTransformMode = "translate" | "rotate" | "scale";
+
+export type MarkupViewPreset = "free" | "top" | "front" | "right";
+
 export type MarkupPlacement = {
   id: string;
   modelKey: string;
@@ -28,6 +32,8 @@ export type MarkupPlacement = {
   sizeZ: number;
   color: string;
   label: string | null;
+  /** Floor this placement belongs to (IFC storey id), if any. */
+  floorId: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -40,6 +46,10 @@ export type MarkupNote = {
   posZ: number;
   text: string;
   author: string | null;
+  /** IFC express id the note is pinned to (selected element). */
+  expressId: number | null;
+  elementName: string | null;
+  floorId: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -179,9 +189,98 @@ export function rebuildPlacementMesh(
   old.dispose();
   mesh.position.set(placement.posX, placement.posY, placement.posZ);
   mesh.rotation.set(placement.rotX, placement.rotY, placement.rotZ);
+  mesh.scale.set(1, 1, 1);
   const mat = mesh.material as THREE.MeshStandardMaterial;
   mat.color.set(placement.color);
   mat.needsUpdate = true;
+}
+
+/** Backfill fields for older IndexedDB rows. */
+export function normalizePlacement(
+  raw: Partial<MarkupPlacement> &
+    Pick<MarkupPlacement, "id" | "modelKey" | "type">,
+): MarkupPlacement {
+  const sizes = DEFAULT_SHAPE_SIZES[raw.type] ?? DEFAULT_SHAPE_SIZES.cube;
+  return {
+    id: raw.id,
+    modelKey: raw.modelKey,
+    type: raw.type,
+    posX: raw.posX ?? 0,
+    posY: raw.posY ?? 0,
+    posZ: raw.posZ ?? 0,
+    rotX: raw.rotX ?? 0,
+    rotY: raw.rotY ?? 0,
+    rotZ: raw.rotZ ?? 0,
+    sizeX: raw.sizeX ?? sizes.sizeX,
+    sizeY: raw.sizeY ?? sizes.sizeY,
+    sizeZ: raw.sizeZ ?? sizes.sizeZ,
+    color: raw.color ?? DEFAULT_MARKUP_COLOR,
+    label: raw.label ?? null,
+    floorId: raw.floorId ?? null,
+    createdAt: raw.createdAt ?? Date.now(),
+    updatedAt: raw.updatedAt ?? Date.now(),
+  };
+}
+
+export function normalizeNote(
+  raw: Partial<MarkupNote> & Pick<MarkupNote, "id" | "modelKey" | "text">,
+): MarkupNote {
+  return {
+    id: raw.id,
+    modelKey: raw.modelKey,
+    posX: raw.posX ?? 0,
+    posY: raw.posY ?? 0,
+    posZ: raw.posZ ?? 0,
+    text: raw.text,
+    author: raw.author ?? null,
+    expressId: raw.expressId ?? null,
+    elementName: raw.elementName ?? null,
+    floorId: raw.floorId ?? null,
+    createdAt: raw.createdAt ?? Date.now(),
+    updatedAt: raw.updatedAt ?? Date.now(),
+  };
+}
+
+export type MarkupSavePackage = {
+  version: 1;
+  kind: "ibviewer-tool-markup";
+  savedAt: string;
+  modelKey: string;
+  modelLabel: string | null;
+  placements: MarkupPlacement[];
+  notes: MarkupNote[];
+};
+
+export function buildMarkupSavePackage(opts: {
+  modelKey: string;
+  modelLabel: string | null;
+  placements: MarkupPlacement[];
+  notes: MarkupNote[];
+}): MarkupSavePackage {
+  return {
+    version: 1,
+    kind: "ibviewer-tool-markup",
+    savedAt: new Date().toISOString(),
+    modelKey: opts.modelKey,
+    modelLabel: opts.modelLabel,
+    placements: opts.placements,
+    notes: opts.notes,
+  };
+}
+
+export function downloadMarkupPackage(pkg: MarkupSavePackage): void {
+  const blob = new Blob([JSON.stringify(pkg, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const base = (pkg.modelLabel ?? pkg.modelKey ?? "model")
+    .replace(/\.ifc$/i, "")
+    .replace(/[^\w.-]+/g, "_");
+  a.href = url;
+  a.download = `${base}.markup.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Size field labels per shape — for the properties panel. */

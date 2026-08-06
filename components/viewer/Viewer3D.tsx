@@ -9,6 +9,7 @@ import {
 import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
@@ -510,6 +511,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
   const lastTickRef = useRef(performance.now());
   const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
+  const transformControlsRef = useRef<TransformControls | null>(null);
+  const transformDraggingRef = useRef(false);
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -779,6 +782,21 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       RIGHT: MOUSE.PAN,
     };
 
+    const transform = new TransformControls(camera, renderer.domElement);
+    transform.setSize(0.85);
+    transform.enabled = false;
+    const transformHelper = transform.getHelper();
+    transformHelper.visible = false;
+    transform.addEventListener("dragging-changed", (event) => {
+      const dragging = Boolean(
+        (event as unknown as { value: boolean }).value,
+      );
+      transformDraggingRef.current = dragging;
+      controls.enabled = !dragging;
+    });
+    scene.add(transformHelper);
+    transformControlsRef.current = transform;
+
     const overlays = new THREE.Group();
     overlays.name = "room-overlays";
     scene.add(overlays);
@@ -859,6 +877,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
       viewCube.dispose();
       clip.dispose();
+      transformControlsRef.current?.detach();
+      transformControlsRef.current?.dispose();
+      transformControlsRef.current = null;
       markupLayerRef.current?.detach(scene);
       markupLayerRef.current = null;
       viewCubeRef.current = null;
@@ -1605,7 +1626,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       obj.userData.isSelectionOutline;
 
     // Leaving Werkzeug: un-hide everything so the floor/presentation effects own
-    // visibility again (tool mode always leaves selectedFloor cleared).
+    // visibility again.
     if (!toolMode) {
       if (!wasToolModeRef.current) return;
       wasToolModeRef.current = false;
@@ -1618,12 +1639,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     }
     wasToolModeRef.current = true;
 
+    const floorFilter = selectedFloor;
     const apply = (obj: THREE.Object3D) => {
       if (skip(obj)) return;
       const expressId = obj.userData.expressId as number | undefined;
       if (expressId == null) return;
       const isolated = isolatedElementIds;
+      const floorId = obj.userData.floorId as string | undefined;
+      const floorOk =
+        floorFilter == null || !floorId || floorId === floorFilter;
       obj.visible =
+        floorOk &&
         !hiddenElementIds.has(expressId) &&
         (isolated == null || isolated.has(expressId));
     };
@@ -1685,6 +1711,14 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const unsub = useToolMarkupStore.subscribe((s) => {
       layer.syncPlacements(s.placements, s.selectedPlacementId);
       layer.syncNotes(s.notes, s.selectedNoteId);
+      for (const p of s.placements) {
+        const mesh = layer.getMesh(p.id);
+        if (!mesh) continue;
+        mesh.visible =
+          s.markupFloorId == null ||
+          p.floorId == null ||
+          p.floorId === s.markupFloorId;
+      }
     });
     const s = useToolMarkupStore.getState();
     layer.syncPlacements(s.placements, s.selectedPlacementId);
@@ -1700,9 +1734,182 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         useToolMarkupStore.getState().cancelPendingNote();
         useToolMarkupStore.getState().clearSelection();
       }
+      if (e.key === "g" || e.key === "G") {
+        useToolMarkupStore.getState().setTransformMode("translate");
+      }
+      if (e.key === "r" || e.key === "R") {
+        useToolMarkupStore.getState().setTransformMode("rotate");
+      }
+      if (e.key === "t" || e.key === "T") {
+        // scale — avoid conflict with common shortcuts; use S would steal search
+        useToolMarkupStore.getState().setTransformMode("scale");
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [toolMode]);
+
+  // Attach TransformControls to the selected markup mesh.
+  useEffect(() => {
+    const tc = transformControlsRef.current;
+    const layer = markupLayerRef.current;
+    if (!tc || !layer) return;
+
+    const sync = () => {
+      const s = useToolMarkupStore.getState();
+      const helper = tc.getHelper();
+      if (!toolMode || !s.selectedPlacementId) {
+        tc.detach();
+        helper.visible = false;
+        tc.enabled = false;
+        return;
+      }
+      const mesh = layer.getMesh(s.selectedPlacementId);
+      if (!mesh) {
+        tc.detach();
+        helper.visible = false;
+        tc.enabled = false;
+        return;
+      }
+      tc.attach(mesh);
+      tc.setMode(s.transformMode);
+      helper.visible = true;
+      tc.enabled = true;
+    };
+
+    sync();
+    const unsub = useToolMarkupStore.subscribe(sync);
+    return () => {
+      unsub();
+      tc.detach();
+      tc.getHelper().visible = false;
+      tc.enabled = false;
+    };
+  }, [toolMode, activeModelId]);
+
+  // Persist transform after gizmo drag; optional face snap on translate.
+  useEffect(() => {
+    const canvas = rendererRef.current?.domElement;
+    const tc = transformControlsRef.current;
+    if (!canvas || !tc) return;
+
+    const persist = () => {
+      if (!transformDraggingRef.current && !tc.object) return;
+      const obj = tc.object as THREE.Object3D | undefined;
+      if (!obj?.userData.markupId) return;
+      const id = obj.userData.markupId as string;
+      const store = useToolMarkupStore.getState();
+      const current = store.placements.find((p) => p.id === id);
+      if (!current) return;
+
+      let posX = obj.position.x;
+      let posY = obj.position.y;
+      let posZ = obj.position.z;
+      const rotX = obj.rotation.x;
+      const rotY = obj.rotation.y;
+      const rotZ = obj.rotation.z;
+
+      let sizeX = current.sizeX;
+      let sizeY = current.sizeY;
+      let sizeZ = current.sizeZ;
+      if (store.transformMode === "scale") {
+        sizeX = Math.max(0.05, current.sizeX * obj.scale.x);
+        sizeY = Math.max(0.05, current.sizeY * obj.scale.y);
+        sizeZ = Math.max(0.05, current.sizeZ * obj.scale.z);
+        obj.scale.set(1, 1, 1);
+      }
+
+      if (
+        store.snapToFaces &&
+        store.transformMode === "translate" &&
+        shellCloneRef.current &&
+        cameraRef.current
+      ) {
+        const ray = raycaster.current;
+        ray.set(
+          new THREE.Vector3(posX, posY + 50, posZ),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const hits = ray
+          .intersectObject(shellCloneRef.current, true)
+          .filter(
+            (h) =>
+              !h.object.userData.isMarkupPlacement &&
+              !h.object.userData.isClipStencil,
+          );
+        if (hits[0]) {
+          posX = hits[0].point.x;
+          posY = hits[0].point.y;
+          posZ = hits[0].point.z;
+          obj.position.copy(hits[0].point);
+        }
+      }
+
+      void store.updatePlacement(id, {
+        posX,
+        posY,
+        posZ,
+        rotX,
+        rotY,
+        rotZ,
+        sizeX,
+        sizeY,
+        sizeZ,
+      });
+    };
+
+    const onUp = () => {
+      if (transformDraggingRef.current) {
+        // dragging-changed fires after pointerup sometimes — delay slightly
+        requestAnimationFrame(() => {
+          persist();
+          transformDraggingRef.current = false;
+          if (controlsRef.current) controlsRef.current.enabled = true;
+        });
+      }
+    };
+    canvas.addEventListener("pointerup", onUp);
+    return () => canvas.removeEventListener("pointerup", onUp);
+  }, [toolMode]);
+
+  // Camera presets (top / front / side) for floor markup.
+  useEffect(() => {
+    const unsub = useToolMarkupStore.subscribe((s, prev) => {
+      if (s.viewPresetToken === prev.viewPresetToken) return;
+      if (!toolMode) return;
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (!camera || !controls) return;
+
+      const box = new THREE.Box3();
+      const shell = shellCloneRef.current;
+      if (shell) box.setFromObject(shell);
+      else box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(20, 10, 20));
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const span = Math.max(size.x, size.y, size.z, 8);
+      const dist = span * 1.35;
+
+      if (s.viewPreset === "top") {
+        camera.position.set(center.x, center.y + dist, center.z + 0.01);
+        controls.target.copy(center);
+      } else if (s.viewPreset === "front") {
+        camera.position.set(center.x, center.y + size.y * 0.2, center.z + dist);
+        controls.target.copy(center);
+      } else if (s.viewPreset === "right") {
+        camera.position.set(center.x + dist, center.y + size.y * 0.2, center.z);
+        controls.target.copy(center);
+      } else {
+        camera.position.set(
+          center.x + dist * 0.7,
+          center.y + dist * 0.55,
+          center.z + dist * 0.7,
+        );
+        controls.target.copy(center);
+      }
+      controls.update();
+    });
+    return unsub;
   }, [toolMode]);
 
   // Werkzeug: frame the element picked in the structure tree.
@@ -2552,6 +2759,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         suppressNextClick = false;
         return;
       }
+      if (transformDraggingRef.current) return;
       const cube = viewCubeRef.current;
       const camera = cameraRef.current;
       const controls = controlsRef.current;
@@ -2583,15 +2791,43 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
           const armed = markupStore.armedTool;
           if (armed && hit?.point) {
-            const p = hit.point;
+            const p = hit.point.clone();
+            const ids = pickIdsFromObject(hit.object);
+            let rot = { x: 0, y: 0, z: 0 };
+            if (markupStore.snapToFaces && hit.face) {
+              const normal = hit.face.normal
+                .clone()
+                .transformDirection(hit.object.matrixWorld)
+                .normalize();
+              // Lift slightly along normal so shapes sit on the face.
+              p.addScaledVector(normal, 0.02);
+              const quat = new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 1, 0),
+                normal,
+              );
+              const e = new THREE.Euler().setFromQuaternion(quat);
+              rot = { x: e.x, y: e.y, z: e.z };
+            }
+            const floorId =
+              markupStore.markupFloorId ?? ids.floorId ?? null;
             if (armed === "note") {
-              markupStore.beginNoteAt({ x: p.x, y: p.y, z: p.z });
+              const elName =
+                useAppStore.getState().selectedElement?.name ??
+                (ids.expressId != null ? `Element #${ids.expressId}` : null);
+              markupStore.beginNoteAt(
+                { x: p.x, y: p.y, z: p.z },
+                {
+                  expressId: ids.expressId ?? null,
+                  elementName: elName,
+                  floorId,
+                },
+              );
             } else if (isShapeTool(armed)) {
-              void markupStore.placeShape(armed, {
-                x: p.x,
-                y: p.y,
-                z: p.z,
-              });
+              void markupStore.placeShape(
+                armed,
+                { x: p.x, y: p.y, z: p.z },
+                { floorId, rot },
+              );
             }
             return;
           }
