@@ -14,7 +14,13 @@ export type MarkupToolId = MarkupShapeType | "note";
 
 export type MarkupTransformMode = "translate" | "rotate" | "scale";
 
-export type MarkupViewPreset = "free" | "top" | "front" | "right";
+export type MarkupViewPreset =
+  | "free"
+  | "top"
+  | "north"
+  | "south"
+  | "east"
+  | "west";
 
 export type MarkupPlacement = {
   id: string;

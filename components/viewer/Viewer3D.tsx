@@ -518,6 +518,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
   const transformControlsRef = useRef<TransformControls | null>(null);
   const transformDraggingRef = useRef(false);
+  const persistGizmoRef = useRef<() => void>(() => {});
 
   const { shellGroup, rooms } = useModelScene();
   const colorMode = useAppStore((s) => s.colorMode);
@@ -798,6 +799,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       );
       transformDraggingRef.current = dragging;
       controls.enabled = !dragging;
+      // Persist on drag end here — pointerup often fires after dragging-changed
+      // has already cleared the flag, which skipped saves and snapped meshes back.
+      if (!dragging) {
+        requestAnimationFrame(() => persistGizmoRef.current());
+      }
     });
     scene.add(transformHelper);
     transformControlsRef.current = transform;
@@ -1714,6 +1720,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const layer = markupLayerRef.current;
     if (!layer) return;
     const unsub = useToolMarkupStore.subscribe((s) => {
+      // Don't rebuild from store mid-drag — that resets the mesh to the old pose.
+      if (transformDraggingRef.current) return;
       layer.syncPlacements(s.placements, s.selectedPlacementId);
       layer.syncNotes(s.notes, s.selectedNoteId);
       for (const p of s.placements) {
@@ -1807,12 +1815,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
   // Persist transform after gizmo drag; optional face snap on translate.
   useEffect(() => {
-    const canvas = rendererRef.current?.domElement;
     const tc = transformControlsRef.current;
-    if (!canvas || !tc) return;
+    if (!tc) return;
 
-    const persist = () => {
-      if (!transformDraggingRef.current && !tc.object) return;
+    persistGizmoRef.current = () => {
       const obj = tc.object as THREE.Object3D | undefined;
       if (!obj?.userData.markupId) return;
       const id = obj.userData.markupId as string;
@@ -1837,37 +1843,34 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         obj.scale.set(1, 1, 1);
       }
 
+      // Face snap on release only when SNAP is on — never force Y to floor.
       if (
         store.snapToFaces &&
         store.transformMode === "translate" &&
         shellCloneRef.current
       ) {
-        // Prefer a downward surface pick at the object's XZ — not analysis
-        // cut-plane hits (those used to return (0,0,0)).
         const ray = raycaster.current;
         ray.set(
-          new THREE.Vector3(posX, posY + 80, posZ),
+          new THREE.Vector3(posX, posY + 0.05, posZ),
           new THREE.Vector3(0, -1, 0),
         );
-        const roots = [shellCloneRef.current, markupLayerRef.current?.group].filter(
-          Boolean,
-        ) as THREE.Object3D[];
+        const roots = [
+          shellCloneRef.current,
+          markupLayerRef.current?.group,
+        ].filter(Boolean) as THREE.Object3D[];
         const surface = pickMarkupSurface(ray, roots);
-        if (surface && surface.object !== obj) {
-          const snapped = surface.point
-            .clone()
-            .addScaledVector(surface.normal, 0.015);
-          posX = snapped.x;
-          posY = snapped.y;
-          posZ = snapped.z;
-          if (store.gridSnap) {
-            const g = applyGridSnap(snapped, store.gridSize, ["x", "z"]);
-            posX = g.x;
-            posZ = g.z;
+        if (
+          surface &&
+          surface.object !== obj &&
+          !surface.object.userData?.isMarkupPlacement
+        ) {
+          // Only snap Y onto nearby surface (within 2m), keep XY from the drag.
+          if (Math.abs(surface.point.y - posY) < 2) {
+            posY = surface.point.y + surface.normal.y * 0.015;
           }
-          obj.position.set(posX, posY, posZ);
         }
-      } else if (store.gridSnap && store.transformMode === "translate") {
+      }
+      if (store.gridSnap && store.transformMode === "translate") {
         const g = applyGridSnap(
           new THREE.Vector3(posX, posY, posZ),
           store.gridSize,
@@ -1891,21 +1894,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       });
     };
 
-    const onUp = () => {
-      if (transformDraggingRef.current) {
-        // dragging-changed fires after pointerup sometimes — delay slightly
-        requestAnimationFrame(() => {
-          persist();
-          transformDraggingRef.current = false;
-          if (controlsRef.current) controlsRef.current.enabled = true;
-        });
-      }
+    return () => {
+      persistGizmoRef.current = () => {};
     };
-    canvas.addEventListener("pointerup", onUp);
-    return () => canvas.removeEventListener("pointerup", onUp);
   }, [toolMode]);
 
-  // Camera presets (top / front / side) for floor markup.
+  // Camera presets (top / N S O W) for floor markup.
   useEffect(() => {
     const unsub = useToolMarkupStore.subscribe((s, prev) => {
       if (s.viewPresetToken === prev.viewPresetToken) return;
@@ -1922,15 +1916,24 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const size = box.getSize(new THREE.Vector3());
       const span = Math.max(size.x, size.y, size.z, 8);
       const dist = span * 1.35;
+      const eyeY = center.y + size.y * 0.2;
 
       if (s.viewPreset === "top") {
         camera.position.set(center.x, center.y + dist, center.z + 0.01);
         controls.target.copy(center);
-      } else if (s.viewPreset === "front") {
-        camera.position.set(center.x, center.y + size.y * 0.2, center.z + dist);
+      } else if (s.viewPreset === "north") {
+        // Looking toward -Z (from +Z)
+        camera.position.set(center.x, eyeY, center.z + dist);
         controls.target.copy(center);
-      } else if (s.viewPreset === "right") {
-        camera.position.set(center.x + dist, center.y + size.y * 0.2, center.z);
+      } else if (s.viewPreset === "south") {
+        camera.position.set(center.x, eyeY, center.z - dist);
+        controls.target.copy(center);
+      } else if (s.viewPreset === "east") {
+        // Ost — from +X
+        camera.position.set(center.x + dist, eyeY, center.z);
+        controls.target.copy(center);
+      } else if (s.viewPreset === "west") {
+        camera.position.set(center.x - dist, eyeY, center.z);
         controls.target.copy(center);
       } else {
         camera.position.set(
@@ -2644,7 +2647,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           ? useAppStore.getState().rooms.find((r) => r.id === roomId)?.floorId
           : null) ??
         null;
-      if (!isRoomPickAllowed(roomId, resolvedFloor)) {
+      if (inTool) {
+        // Allow picking any IFC element in Werkzeug; only rooms respect floor filter.
+        if (roomId && !isRoomPickAllowed(roomId, resolvedFloor)) {
+          return;
+        }
+      } else if (!isRoomPickAllowed(roomId, resolvedFloor)) {
         return;
       }
 
@@ -2674,7 +2682,19 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                     ?.floorId
                 : null) ??
               null;
-            if (!isRoomPickAllowed(detailRoomId, detailFloor)) return;
+            if (
+              !inTool &&
+              !isRoomPickAllowed(detailRoomId, detailFloor)
+            ) {
+              return;
+            }
+            if (
+              inTool &&
+              detailRoomId &&
+              !isRoomPickAllowed(detailRoomId, detailFloor)
+            ) {
+              return;
+            }
 
             setSelectedElement(details);
             useAppStore.getState().bumpScenePickToken();
@@ -2986,6 +3006,18 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           if (!armed) {
             markupStore.clearSelection();
             markupStore.setCubeDraw(null);
+            // Select IFC element under cursor (surface pick, not cut-plane hit).
+            if (surface) {
+              applyPickSelection({
+                distance: surface.distance,
+                point: surface.point,
+                object: surface.object,
+                face: null,
+                faceIndex: 0,
+                uv: undefined,
+              } as THREE.Intersection);
+              return;
+            }
           }
         }
       }

@@ -20,7 +20,10 @@ import ModelText from "../common/ModelText";
 import { useModelScene } from "../viewer/ModelSceneContext";
 import ElementInspector from "./ElementInspector";
 import IfcStructureTree from "./IfcStructureTree";
+import ToolModifyPanel from "./ToolModifyPanel";
 import { useIfcStructure } from "./useIfcStructure";
+
+type ToolTab = "elements" | "modify";
 
 function formatBytes(bytes: number | null) {
   const { value, unit } = formatBytesParts(bytes);
@@ -28,8 +31,7 @@ function formatBytes(bytes: number | null) {
 }
 
 /**
- * Werkzeug side panel — IFC spatial tree on top, selected element details below.
- * Replaces the legend while the tool view is active.
+ * Werkzeug side panel — tabs: IFC Elements | Modify (shapes, notes, save).
  */
 export default function ToolSidePanel({
   className = "",
@@ -52,6 +54,7 @@ export default function ToolSidePanel({
   const { shellGroup } = useModelScene();
   const spacesAppliedFor = useRef<IfcStructure | null>(null);
 
+  const [tab, setTab] = useState<ToolTab>("elements");
   const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelTipOpen, setModelTipOpen] = useState(false);
@@ -300,15 +303,46 @@ export default function ToolSidePanel({
         </div>
       </header>
 
-      <IfcStructureTree
-        structure={structure}
-        loading={loading}
-        className="min-h-[8rem] flex-[3]"
-      />
+      <div className="flex shrink-0 gap-1 rounded-xl bg-zinc-100/80 p-0.5">
+        <button
+          type="button"
+          aria-pressed={tab === "elements"}
+          onClick={() => setTab("elements")}
+          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition ${
+            tab === "elements"
+              ? "bg-white text-zinc-900 shadow-sm"
+              : "text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          {t(uiLanguage, "toolTabElements")}
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === "modify"}
+          onClick={() => setTab("modify")}
+          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition ${
+            tab === "modify"
+              ? "bg-white text-zinc-900 shadow-sm"
+              : "text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          {t(uiLanguage, "toolTabModify")}
+        </button>
+      </div>
 
-      <div className="border-t border-[var(--panel-divider)]" />
-
-      <ElementInspector className="min-h-[9rem] flex-[2]" />
+      {tab === "elements" ? (
+        <>
+          <IfcStructureTree
+            structure={structure}
+            loading={loading}
+            className="min-h-[8rem] flex-[3]"
+          />
+          <div className="border-t border-[var(--panel-divider)]" />
+          <ElementInspector className="min-h-[9rem] flex-[2]" />
+        </>
+      ) : (
+        <ToolModifyPanel className="min-h-0 flex-1" />
+      )}
     </div>
   );
 }

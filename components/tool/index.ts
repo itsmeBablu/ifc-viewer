@@ -12,6 +12,7 @@
  * - @/lib/toolMarkup — placement/note types + geometry
  */
 export { default as ToolSidePanel } from "./ToolSidePanel";
+export { default as ToolModifyPanel } from "./ToolModifyPanel";
 export { default as IfcStructureTree } from "./IfcStructureTree";
 export { default as ElementInspector } from "./ElementInspector";
 export { default as MarkupToolbar } from "./MarkupToolbar";

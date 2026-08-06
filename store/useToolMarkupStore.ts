@@ -138,7 +138,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   modelKey: null,
   armedTool: null,
   transformMode: "translate",
-  snapToFaces: true,
+  snapToFaces: false,
   gridSnap: false,
   gridSize: 0.1,
   cubeDraw: null,
