@@ -298,7 +298,9 @@ export default function IfcStructureTree({
               onClick={() => requestToolReveal(node.expressId as number)}
               title={t(uiLanguage, "zoomToElement")}
               aria-label={t(uiLanguage, "zoomToElement")}
-              className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] group-hover:flex"
+              className={`h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] ${
+                selected ? "flex" : "hidden group-hover:flex"
+              }`}
             >
               <IconTarget />
             </button>
@@ -308,7 +310,9 @@ export default function IfcStructureTree({
             onClick={() => isolateElements(node.leafIds)}
             title={t(uiLanguage, "isolateElement")}
             aria-label={t(uiLanguage, "isolateElement")}
-            className="hidden h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] group-hover:flex"
+            className={`h-5 w-5 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] ${
+              selected ? "flex" : "hidden group-hover:flex"
+            }`}
           >
             <IconIsolate />
           </button>

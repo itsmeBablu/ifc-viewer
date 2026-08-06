@@ -1734,6 +1734,19 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         useToolMarkupStore.getState().cancelPendingNote();
         useToolMarkupStore.getState().clearSelection();
       }
+      if (e.key === "i" || e.key === "I") {
+        if (e.altKey || e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().resetElementVisibility();
+          return;
+        }
+        const id = useAppStore.getState().toolSelectedExpressId;
+        if (id != null) {
+          e.preventDefault();
+          useAppStore.getState().isolateElements([id]);
+          useAppStore.getState().requestToolReveal(id);
+        }
+      }
       if (e.key === "g" || e.key === "G") {
         useToolMarkupStore.getState().setTransformMode("translate");
       }
