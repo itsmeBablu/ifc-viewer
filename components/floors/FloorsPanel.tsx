@@ -132,7 +132,6 @@ export default function FloorsPanel({
   );
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
-  const scenePickToken = useAppStore((s) => s.scenePickToken);
 
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
@@ -164,11 +163,16 @@ export default function FloorsPanel({
   const pdfPortalHostRef = useRef<HTMLElement | null>(null);
 
   const [roomsExpanded, setRoomsExpanded] = useState(true);
-  const [leftPanelMode, setLeftPanelMode] = useState<"floors" | "attributes">(
-    "floors",
-  );
-  /** When on, a 3D scene pick jumps to the Attributes tab. */
+  const [manualPanelMode, setManualPanelMode] = useState<
+    "floors" | "attributes"
+  >("floors");
+  /** When on, 3D selection drives the tab: pick → Attributes, clear → Floors. */
   const [autoOpenAttributes, setAutoOpenAttributes] = useState(false);
+  const leftPanelMode: "floors" | "attributes" = autoOpenAttributes
+    ? selectedElement
+      ? "attributes"
+      : "floors"
+    : manualPanelMode;
   const floorsTabRef = useRef<HTMLButtonElement>(null);
   const attributesTabRef = useRef<HTMLButtonElement>(null);
   const underlineRef = useRef<HTMLSpanElement>(null);
@@ -187,12 +191,9 @@ export default function FloorsPanel({
     setRoomsExpanded(Boolean(selectedFloor));
   }, [selectedFloor]);
 
-  useEffect(() => {
-    if (!autoOpenAttributes || scenePickToken === 0) return;
-    if (selectedElement) setLeftPanelMode("attributes");
-  }, [scenePickToken, autoOpenAttributes, selectedElement]);
-
   const underlineReady = useRef(false);
+  const panelBodyRef = useRef<HTMLDivElement>(null);
+  const prevModeRef = useRef(leftPanelMode);
 
   useLayoutEffect(() => {
     const underline = underlineRef.current;
@@ -205,21 +206,60 @@ export default function FloorsPanel({
     const rowBox = row.getBoundingClientRect();
     const tabBox = active.getBoundingClientRect();
     const left = tabBox.left - rowBox.left;
-    const width = tabBox.width;
+    const width = Math.max(tabBox.width, 12);
     killGsap(underline);
     if (!underlineReady.current) {
-      gsap.set(underline, { x: left, width });
+      gsap.set(underline, { x: left, width, scaleY: 1, transformOrigin: "50% 100%" });
       underlineReady.current = true;
       return;
     }
-    gsap.to(underline, {
+    const fromX = Number(gsap.getProperty(underline, "x"));
+    const fromW = Number(gsap.getProperty(underline, "width"));
+    const thin = Math.max(8, Math.min(fromW, width) * 0.22);
+    const midX = fromX + (left - fromX) * 0.5 + (fromW - thin) * 0.5;
+    const tl = gsap.timeline({ overwrite: true });
+    // Squeeze thin while sliding, then thicken under the destination tab.
+    tl.to(underline, {
+      x: midX,
+      width: thin,
+      scaleY: 0.55,
+      duration: gsapDuration.fast * 0.45,
+      ease: gsapEase.iosIn,
+    }).to(underline, {
       x: left,
       width,
-      duration: gsapDuration.fast,
+      scaleY: 1,
+      duration: gsapDuration.fast * 0.7,
       ease: gsapEase.iosOut,
-      overwrite: true,
     });
-  }, [leftPanelMode, uiLanguage]);
+  }, [leftPanelMode, uiLanguage, autoOpenAttributes]);
+
+  useLayoutEffect(() => {
+    const body = panelBodyRef.current;
+    if (!body) return;
+    const prev = prevModeRef.current;
+    prevModeRef.current = leftPanelMode;
+    if (prev === leftPanelMode) return;
+    const toRight = leftPanelMode === "attributes";
+    killGsap(body);
+    gsap.fromTo(
+      body,
+      {
+        autoAlpha: 0.35,
+        x: toRight ? 18 : -18,
+        scaleX: 0.92,
+        transformOrigin: toRight ? "100% 50%" : "0% 50%",
+      },
+      {
+        autoAlpha: 1,
+        x: 0,
+        scaleX: 1,
+        duration: gsapDuration.fast,
+        ease: gsapEase.iosOut,
+        overwrite: true,
+      },
+    );
+  }, [leftPanelMode]);
 
   const updateModelTipPos = () => {
     const el = modelNameBtnRef.current ?? modelBadgeRef.current;
@@ -792,11 +832,14 @@ export default function FloorsPanel({
       {/* === MIDDLE: Floors & Rooms — or Attributes when toggle is on === */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-1.5 px-3 py-2">
-        <div ref={tabRowRef} className="relative flex shrink-0 items-center gap-3 pb-1.5">
+        <div
+          ref={tabRowRef}
+          className="relative flex shrink-0 items-center justify-between gap-2 pb-1.5"
+        >
           <button
             ref={floorsTabRef}
             type="button"
-            onClick={() => setLeftPanelMode("floors")}
+            onClick={() => setManualPanelMode("floors")}
             aria-pressed={leftPanelMode === "floors"}
             className={`pb-0.5 text-[11px] font-semibold tracking-wide transition-colors ${
               leftPanelMode === "floors"
@@ -810,7 +853,7 @@ export default function FloorsPanel({
             <button
               ref={attributesTabRef}
               type="button"
-              onClick={() => setLeftPanelMode("attributes")}
+              onClick={() => setManualPanelMode("attributes")}
               aria-pressed={leftPanelMode === "attributes"}
               className={`pb-0.5 text-[11px] font-semibold tracking-wide transition-colors ${
                 leftPanelMode === "attributes"
@@ -826,7 +869,16 @@ export default function FloorsPanel({
               aria-checked={autoOpenAttributes}
               aria-label={t(uiLanguage, "attributesAutoSelect")}
               title={t(uiLanguage, "attributesAutoSelect")}
-              onClick={() => setAutoOpenAttributes((v) => !v)}
+              onClick={() => {
+                setAutoOpenAttributes((on) => {
+                  if (on) {
+                    setManualPanelMode(
+                      selectedElement ? "attributes" : "floors",
+                    );
+                  }
+                  return !on;
+                });
+              }}
               className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
                 autoOpenAttributes ? "bg-amber-400" : "bg-zinc-300/80"
               }`}
@@ -841,10 +893,14 @@ export default function FloorsPanel({
           <span
             ref={underlineRef}
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 h-[1.5px] w-8 origin-left rounded-full bg-amber-400"
+            className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-8 origin-left rounded-full bg-amber-400"
           />
         </div>
 
+        <div
+          ref={panelBodyRef}
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        >
         {leftPanelMode === "attributes" ? (
           !selectedElement ? (
             <p className="px-1 text-[11px] text-zinc-400">
@@ -1067,6 +1123,7 @@ export default function FloorsPanel({
             )}
           </div>
         )}
+        </div>
       </section>
       </div>
       {/* === END MIDDLE === */}
