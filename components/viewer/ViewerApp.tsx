@@ -259,6 +259,19 @@ export default function ViewerApp() {
           const entry = getModelById(source.modelId);
           if (!entry) throw new Error(`Unknown model: ${source.modelId}`);
           ifcSource = entry.ifcPath;
+          try {
+            const res = await fetch(
+              typeof entry.ifcPath === "string"
+                ? entry.ifcPath
+                : entry.ifcPath.toString(),
+            );
+            if (res.ok) {
+              const ab = await res.arrayBuffer();
+              cacheIfcBytes(id, label, ab);
+            }
+          } catch {
+            /* optional cache for .ifc merge export */
+          }
         } else {
           ifcSource = source.file;
           const ab = await source.file.arrayBuffer();
