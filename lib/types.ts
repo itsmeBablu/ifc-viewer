@@ -75,6 +75,8 @@ export type Floor = {
   expressId: number;
   /** Mean IFC room clear height (m) on this storey, when available. */
   typicalHeight?: number;
+  /** True when this storey's "Building Story" (Revit LEVEL_IS_BUILDING_STORY) property is set. */
+  isBuildingStory?: boolean;
 };
 
 export type ModelEntry = {

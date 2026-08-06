@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "468a202b9a357baafa158eb9a33d4612e7ac1ecb",
-    "indexed_at": "2026-08-04T16:24:01Z",
-    "project": "Users-danielalejandreperez-Documents-Coding-ibviewer",
-    "nodes": 1177,
-    "edges": 3562,
-    "original_size": 4915200,
-    "compressed_size": 1049960,
-    "compression_level": 9
+    "commit": "687c3e214fc61828559b320b1d18a887a554e1f7",
+    "indexed_at": "2026-08-06T05:58:13Z",
+    "project": "C-Users-alejandre-Documents-Coding-ibviewer",
+    "nodes": 1353,
+    "edges": 3990,
+    "original_size": 7340032,
+    "compressed_size": 1344819,
+    "compression_level": 3
 }
