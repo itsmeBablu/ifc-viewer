@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Slider — single source-of-truth range input styled to match the app's
+ * glass UI (see the `ui-slider` CSS class), used by SliceHeightSlider and
+ * other numeric controls.
+ *
+ * Thin controlled wrapper: exposes value/onChange as plain numbers instead
+ * of the native input's string-based event API.
+ */
+
 import type { InputHTMLAttributes } from "react";
 
 type Props = Omit<

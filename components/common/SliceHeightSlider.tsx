@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * SliceHeightSlider — slider that scrubs the horizontal slice plane's
+ * height within the currently selected floor's vertical span.
+ *
+ * Computes the floor's [elevation, next-floor elevation] range from
+ * `floors`/`selectedFloor`, maps 0–100 slider ticks to `sliceProgress` in
+ * useAppStore, and displays the resulting height in meters.
+ */
+
 import { useMemo } from "react";
 import Slider from "./ui/Slider";
 import { useAppStore } from "@/store/useAppStore";

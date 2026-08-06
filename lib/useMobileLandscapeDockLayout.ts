@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * React hook measuring the landscape-mobile dock's top offset and available
+ * height, anchored to the live header element's bounding rect (falling back
+ * to the safe-area inset) and the visualViewport when available. Re-measures
+ * on resize/orientation/visualViewport changes; used to size the mobile dock.
+ */
 import { useLayoutEffect, useState } from "react";
 
 export type MobileLandscapeDockLayout = {

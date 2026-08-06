@@ -1,3 +1,10 @@
+/**
+ * Layout math for Presentation View's floor arrangement.
+ *
+ * Decides stack vs. grid (auto-switches at 5+ floors), computes grid row
+ * sizes/slots per floor index, and defines the spacing constants used to
+ * position exploded floors in the 3D scene. Also holds PDF page-format ids.
+ */
 import type { Floor } from "./types";
 
 export type PresentationLayoutMode = "auto" | "stack" | "grid";

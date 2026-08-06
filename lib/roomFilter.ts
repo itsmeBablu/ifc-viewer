@@ -1,3 +1,7 @@
+/**
+ * Room-visibility filter predicate used by the floor/room browser to narrow
+ * the displayed room list by heat-load range and/or temperature buckets.
+ */
 import type { Room } from "./types";
 
 export type RoomFilter = {

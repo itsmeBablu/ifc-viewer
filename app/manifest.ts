@@ -1,3 +1,10 @@
+/**
+ * Web app manifest for IBV Viewer.
+ *
+ * Declares PWA metadata (name, start URL, display mode, theme colors,
+ * icon set) consumed by browsers/OSes for "install to home screen" and
+ * standalone-window presentation. Next.js serves this as /manifest.webmanifest.
+ */
 import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {

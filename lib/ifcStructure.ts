@@ -1,14 +1,15 @@
-import * as WebIFC from "web-ifc";
-import { debugLog } from "./debugLog";
-import { getOpenIfcModel } from "./ifcClient";
-
 /**
  * IFC spatial tree for the Tool (Werkzeug) view.
  *
  * Project → Site → Building → Storey → [type group] → element, mirroring how
- * desktop BIM viewers present a model. Built lazily from the still-open web-ifc
- * model handle so no second parse is needed.
+ * desktop BIM viewers present a model. `buildIfcStructure` is built lazily
+ * from the still-open web-ifc model handle (via `getOpenIfcModel` from
+ * ifcClient.ts) so no second parse is needed, walking IfcRelAggregates /
+ * IfcRelContainedInSpatialStructure and bucketing elements per IFC type.
  */
+import * as WebIFC from "web-ifc";
+import { debugLog } from "./debugLog";
+import { getOpenIfcModel } from "./ifcClient";
 
 export type IfcTreeNodeKind = "spatial" | "typeGroup" | "element";
 

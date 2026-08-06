@@ -1,3 +1,11 @@
+/**
+ * Off-screen floor-plan thumbnails: renders a top-down, mid-height-clipped
+ * snapshot of one floor's shell + room geometry to a PNG data URL, colored
+ * to match the active data view/legend. Used by the floor browser and PDF
+ * export for plan previews. Shares a single offscreen WebGLRenderer and
+ * memoizes results in `snapshotCache`, keyed by floor/view/palette/range
+ * state; `clearFloorSnapshots` invalidates on model change.
+ */
 import * as THREE from "three";
 import type { Floor, Room } from "./types";
 import {

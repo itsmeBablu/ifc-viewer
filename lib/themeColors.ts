@@ -1,3 +1,9 @@
+/**
+ * Light/dark theme color tokens (page + "liquid glass" surfaces) and the
+ * hex/rgba interpolation + CSS-variable helpers used to animate theme
+ * switches. `applyThemeVars`/`applyThemeBlend` write directly to
+ * document.documentElement's custom properties consumed by the app's CSS.
+ */
 export type ColorTheme = "light" | "dark";
 
 export type ThemePalette = {

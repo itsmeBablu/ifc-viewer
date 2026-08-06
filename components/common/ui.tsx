@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * ui.tsx — small glass-styled UI primitives (buttons, chips, select,
+ * input, panel title) plus a few inline icon components, all built on
+ * top of GlassPanel; re-exports the heading/motion/radius design tokens
+ * for convenience.
+ *
+ * Complements components/common/index.ts's exports — this file holds the
+ * lower-level building blocks used to compose panels/toolbars.
+ */
+
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,

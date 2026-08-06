@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * ElementInspector — tabbed property inspector for the Werkzeug tool panel.
+ * Shows the selected IFC element's attributes, grouped property sets, and
+ * quantities, falling back to Attributes when a tab has no content.
+ *
+ * Reads `selectedElement`, `toolSelectedExpressId`, and `floors` from
+ * useAppStore; the element is set by IfcStructureTree or a 3D pick.
+ */
+
 import { useMemo, useState } from "react";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { humanizeIfcType } from "@/lib/ifcStructure";

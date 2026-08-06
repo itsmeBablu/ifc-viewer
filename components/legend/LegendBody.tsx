@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * LegendBody — shared legend body rendered by LegendPanel and the
+ * presentation dock: heizlast/kuhllast/luftung vs temperature mode toggle,
+ * gradient/chip scale, editable range (LegendRangeInput), palette popover
+ * (LegendPalettePanel), and the ventilation zone panel when in luftung mode.
+ *
+ * Reads/writes color mode, per-mode ranges, active palette, and swatch
+ * overrides from useAppStore and useLegendColorOverrides.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   HEIZLAST_RANGE_PRESETS,

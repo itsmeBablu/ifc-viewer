@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * ViewerContextMenu — right-click context menu for the 3D canvas (distinct
+ * from a drag/pan gesture, which is suppressed). Offers view toggles (compare
+ * both modes, seasonal background, autofocus, fullscreen), a save-view flyout
+ * (name + PDF page format + slice-height slider) and a floor-isolate flyout,
+ * plus loading a new IFC file.
+ *
+ * Reads/writes many useAppStore fields (dataViewMode, floors/rooms,
+ * presentation isolate state, autoSceneBackground, autoFocusSelection) and
+ * calls `viewerRef.current?.getCameraPose()` / `addSavedView` to persist views.
+ */
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { MdKeyboardArrowRight } from "react-icons/md";

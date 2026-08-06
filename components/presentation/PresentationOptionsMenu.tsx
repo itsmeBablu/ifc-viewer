@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * PresentationOptionsMenu — combined view-mode switcher and options
+ * popover shown in the presentation header: data view mode chips, floor
+ * layout mode, isolate-floor toggle, ventilation zone filter, and the
+ * compare-both-modes switch.
+ *
+ * Reads/writes dataViewMode, presentationLayoutMode, presentationIsolate,
+ * compareBothModes, autoFocusSelection, and selectedVentilationZoneKey via
+ * useAppStore.
+ */
+
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import GsapHeightAccordion from "../common/GsapHeightAccordion";

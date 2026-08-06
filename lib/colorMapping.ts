@@ -1,3 +1,11 @@
+/**
+ * Color mapping engine for the Heizlast/Kühllast/Lüftung/temperature legends.
+ *
+ * Defines the built-in color palettes (stops per data mode), default and
+ * adaptive legend ranges fitted to room-value distributions, and the
+ * value→color/gradient functions (heizlastToColor, kuhllastToColor, etc.)
+ * used by the 3D room materials, legend UI, and PDF export.
+ */
 type RGB = [number, number, number];
 
 function hexToRgb(hex: string): RGB {

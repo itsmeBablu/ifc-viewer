@@ -1,5 +1,35 @@
 "use client";
 
+/**
+ * useAppStore — the single Zustand store backing the whole IFC viewer UI.
+ * Highest-fan-in module in the app; most components read and/or write it.
+ *
+ * State slices (grouped, not exhaustive):
+ * - Active model + loaded floors/rooms/selection (activeModelId, floors,
+ *   rooms, selectedFloor, selectedRoomId, selectedElement, hoveredRoom).
+ * - Color legend & palette: dataViewMode (heizlast/luftung/kuhllast),
+ *   per-mode legend ranges, customLegendColors, legendSwatchPresetId,
+ *   activeColorPalette, renderMode/lighting, scene background.
+ * - Presentation (exploded) view: isPresentationView, presentationFloorId,
+ *   presentationIsolate, presentationLayoutMode, compareBothModes.
+ * - Header/panel UI: leftPanelOpen/rightPanelOpen, headerExpanded/collapsed,
+ *   uiLanguage, colorTheme.
+ * - Werkzeug (toolMode) / Bauteil (bauteilMode): whole-model inspection
+ *   modes that each save/restore renderMode + lighting via their own
+ *   toolPrev* / bauteilPrev* fields. Together with dataViewMode they form the
+ *   header's mutually-exclusive view modes (see HeaderMode in
+ *   lib/dataViewMode.ts) — that exclusivity is enforced by callers
+ *   (HeaderActions, ViewerApp), not inside this store, so new entry points
+ *   must turn the others off explicitly. Entering either resets the floor
+ *   slice/selection.
+ * - Saved views (per active model) and PDF capture state (pdfCaptureActive).
+ *
+ * Persistence: most legend ranges/colors/presets, panel open state, palette,
+ * theme, scene background, and auto-focus/auto-background toggles persist to
+ * localStorage (see the *_KEY constants and persist* / initial* helpers below).
+ * Saved views persist per model id (savedViewsKey). Live selection, floors/
+ * rooms, load/scene-busy state, and focus tokens are session-only (in-memory).
+ */
 import { create } from "zustand";
 import type { ColorPaletteId } from "@/lib/colorMapping";
 import {
@@ -227,12 +257,20 @@ type AppState = {
 
   /** Werkzeug — native IFC inspection view (structure tree instead of legend). */
   toolMode: boolean;
+  /** Bauteil — shows the whole IFC model with spaces/rooms/zones hidden. */
+  bauteilMode: boolean;
   /** Shading mode to restore when leaving Werkzeug. */
   toolPrevRenderMode: RenderMode | null;
   /** Space opacity to restore when leaving Werkzeug. */
   toolPrevSpaceTransparency: number | null;
   /** Element opacity to restore when leaving Werkzeug. */
   toolPrevElementTransparency: number | null;
+  /** Shading mode to restore when leaving Bauteil. */
+  bauteilPrevRenderMode: RenderMode | null;
+  /** Space opacity to restore when leaving Bauteil. */
+  bauteilPrevSpaceTransparency: number | null;
+  /** Element opacity to restore when leaving Bauteil. */
+  bauteilPrevElementTransparency: number | null;
   /** Express ids hidden via the IFC structure tree. Tool view only. */
   hiddenElementIds: Set<number>;
   /** Express ids kept visible when isolating; null means "no isolation". */
@@ -334,6 +372,7 @@ type AppState = {
   clearModelData: () => void;
 
   setToolMode: (on: boolean) => void;
+  setBauteilMode: (on: boolean) => void;
   /** Hide / show a whole subtree at once. */
   setElementsVisible: (expressIds: number[], visible: boolean) => void;
   /** Show only these ids (and clear any previous isolation when empty). */
@@ -540,9 +579,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   colorTheme: initialTheme(),
 
   toolMode: false,
+  // Default mode on fresh load — the whole model, spaces hidden.
+  bauteilMode: true,
   toolPrevRenderMode: null,
   toolPrevSpaceTransparency: null,
   toolPrevElementTransparency: null,
+  bauteilPrevRenderMode: null,
+  bauteilPrevSpaceTransparency: null,
+  bauteilPrevElementTransparency: null,
   hiddenElementIds: new Set<number>(),
   isolatedElementIds: null,
   toolSelectedExpressId: null,
@@ -1195,6 +1239,43 @@ export const useAppStore = create<AppState>((set, get) => ({
       isolatedElementIds: null,
       toolSelectedExpressId: null,
       selectedElement: null,
+    });
+  },
+
+  setBauteilMode: (on) => {
+    if (on === get().bauteilMode) return;
+    if (on) {
+      const lighting = get().lighting;
+      set({
+        bauteilMode: true,
+        bauteilPrevRenderMode: get().renderMode,
+        bauteilPrevSpaceTransparency: lighting.spaceTransparency,
+        bauteilPrevElementTransparency: lighting.elementTransparency,
+        renderMode: "realistic",
+        lighting: {
+          ...lighting,
+          // Spaces fully hidden; building elements fully opaque for inspection.
+          spaceTransparency: 0,
+          elementTransparency: 1,
+        },
+        // Bauteil shows the whole model — no floor slice.
+        selectedFloor: null,
+      });
+      return;
+    }
+    const prevSpace = get().bauteilPrevSpaceTransparency;
+    const prevElement = get().bauteilPrevElementTransparency;
+    set({
+      bauteilMode: false,
+      renderMode: get().bauteilPrevRenderMode ?? get().renderMode,
+      bauteilPrevRenderMode: null,
+      bauteilPrevSpaceTransparency: null,
+      bauteilPrevElementTransparency: null,
+      lighting: {
+        ...get().lighting,
+        spaceTransparency: prevSpace ?? 0.8,
+        elementTransparency: prevElement ?? 0.8,
+      },
     });
   },
 

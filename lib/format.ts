@@ -1,3 +1,8 @@
+/**
+ * Small display-formatting helpers shared across the UI.
+ * `formatBytesParts` splits a byte count into a value/unit pair (B/KB/MB/GB)
+ * for tile-style display (e.g. the model summary size tile).
+ */
 export function formatBytesParts(bytes: number | null): {
   value: string;
   unit: string;

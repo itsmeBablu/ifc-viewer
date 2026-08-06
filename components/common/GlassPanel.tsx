@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * GlassPanel — the app's single shared frosted-glass surface primitive.
+ *
+ * Desktop uses @liquidglass/react for real displacement/refraction; touch
+ * devices (phone/tablet, coarse pointer) fall back to a CSS frosted-glass
+ * style since the library's effect reads flat on iOS/iPadOS WebKit.
+ * `variant` picks preset radius/tint (panel/control/menu/chip); `fill`,
+ * `allowOverflow`, and `zIndex` control layout/stacking edge cases.
+ */
+
 import { LiquidGlass } from "@liquidglass/react";
 import {
   useEffect,

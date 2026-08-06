@@ -1,7 +1,6 @@
 /**
- * Heating (Heizlast) — own heating-only UI in this folder.
- *
- * Shared (do not duplicate):
+ * Heating (Heizlast) — intentionally empty barrel; no heating-only
+ * components exist. The mode reuses shared UI instead:
  * - ../common — glass, theme, tips
  * - ../viewer — 3D / 2D / toolbar (ViewerApp composes modes)
  * - ../legend — scale / palette (switches by dataViewMode)

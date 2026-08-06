@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * DebugPanel — floating, collapsible dev-only inspector overlay.
+ *
+ * Dumps live app state (active model, floors/rooms, load progress/errors)
+ * and the selected IFC element's properties into a copyable text snapshot;
+ * also shows a rolling log fed by the useDebugStore debug logger.
+ * Rendered inside a GlassPanel; toggled via its own floating "Debug" button.
+ */
+
 import { useMemo } from "react";
 import { useDebugStore, type DebugLevel } from "@/lib/debugLog";
 import { useAppStore } from "@/store/useAppStore";

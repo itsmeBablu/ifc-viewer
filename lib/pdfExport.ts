@@ -1,3 +1,8 @@
+/**
+ * Builds the exported PDF documents (per-floor and presentation pages)
+ * from captured viewport images (see pdfCapture.ts), drawing legends,
+ * room tables, and mode-specific titles/subtitles via jsPDF/autoTable.
+ */
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import {

@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * ToolSidePanel — root panel for the Werkzeug (native IFC inspection) mode;
+ * composes IfcStructureTree above ElementInspector, replacing the legend
+ * panel while this view is active.
+ *
+ * Reads activeModelLabel from useAppStore, and hides IfcSpace volumes by
+ * default via setElementsVisible once per loaded model.
+ */
+
 import { useEffect, useRef } from "react";
 import { t } from "@/lib/i18n";
 import type { IfcStructure } from "@/lib/ifcStructure";

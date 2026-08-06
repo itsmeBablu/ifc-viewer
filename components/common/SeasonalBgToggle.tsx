@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * SeasonalBgToggle — pill switch for the "auto winter/summer sky" setting,
+ * shared between the lighting panel and the profile menu.
+ *
+ * Reads/writes `autoSceneBackground` in useAppStore; when enabled, the 3D
+ * scene's sky is derived automatically from season/theme instead of a
+ * fixed background.
+ */
+
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 

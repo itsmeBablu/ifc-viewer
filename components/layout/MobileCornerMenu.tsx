@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * MobileCornerMenu — bottom-right "more" chip for compact/mobile layouts that
+ * expands into a glass sheet housing the model title, IFC upload badge/menu,
+ * and a details toggle, with arbitrary panel content passed in via `children`.
+ *
+ * Purely presentational/interaction shell: open/close and animation state
+ * (GSAP scale/fade transitions for chip <-> sheet) are managed locally; the
+ * open flag itself is controlled by the parent via `open`/`onOpenChange`.
+ * Supports a landscape-phone docking layout via `useMobileLandscapeDockLayout`.
+ */
+
 import {
   useLayoutEffect,
   useRef,

@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * GsapPopMenu — mount wrapper for dropdowns/popovers with GSAP enter/exit.
+ *
+ * Mirrors GsapOverlay's mount-until-exit-completes pattern but uses the
+ * menu-specific animateMenuIn/Out easing; forwards mouse enter/leave so
+ * callers can keep a hover-triggered menu open while the pointer is inside.
+ */
+
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { animateMenuIn, animateMenuOut } from "@/lib/gsapMotion";
 
@@ -7,6 +15,7 @@ type Props = {
   show: boolean;
   className?: string;
   children: ReactNode;
+  onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 };
 
@@ -15,6 +24,7 @@ export default function GsapPopMenu({
   show,
   className = "",
   children,
+  onMouseEnter,
   onMouseLeave,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -48,6 +58,7 @@ export default function GsapPopMenu({
       ref={ref}
       className={className}
       style={{ visibility: "hidden" }}
+      onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
       {children}

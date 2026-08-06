@@ -1,5 +1,32 @@
 "use client";
 
+/**
+ * Viewer3D — the core Three.js scene component: loads the IFC shell and room
+ * overlays (cloned from `useModelScene`) into a perspective scene with
+ * OrbitControls, a view cube, PMREM environment lighting and shadows, and
+ * imperatively exposes camera pose / fly-to / fit / capture via
+ * `Viewer3DHandle` (`ref`) for ViewerApp, the toolbar and saved views.
+ *
+ * Reacts to a large slice of useAppStore: `renderMode` + `lighting` (drives
+ * `applyRenderMode`, which also branches on `toolMode` — Werkzeug hides all
+ * room/space overlays and forces full element opacity, BIMvision-style),
+ * `colorMode`/`dataViewMode` + legend ranges/palette (room overlay + shell
+ * coloring, including a side-by-side "compare both modes" twin scene),
+ * `selectedFloor` + `sliceProgress` (horizontal clip-plane slicing via
+ * `ClipSliceController`), `isPresentationView`/`presentationLayoutMode`/
+ * `presentationIsolate` (the exploded floor-grid/stack layout with
+ * GSAP-tweened offsets and iso camera framing), ventilation markers
+ * (`dataViewMode === "luftung"`, also suppressed while `bauteilMode` is on),
+ * and `toolMode`/`hiddenElementIds`/`isolatedElementIds` (Werkzeug per-element
+ * visibility + edge outlines from the IFC structure tree).
+ *
+ * Also owns pointer-based hover/select picking (raycasting against room
+ * meshes, Schnitthöhe clip caps, and shell meshes, with room-vs-element
+ * resolution and `isRoomPickAllowed` gating) and view-cube snap navigation.
+ * This file is intentionally large (~2500 lines) — treat this header as an
+ * orientation map, not an exhaustive spec.
+ */
+
 import {
   forwardRef,
   useEffect,
@@ -555,6 +582,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
   const toolMode = useAppStore((s) => s.toolMode);
+  const bauteilMode = useAppStore((s) => s.bauteilMode);
   const hiddenElementIds = useAppStore((s) => s.hiddenElementIds);
   const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
   const toolRevealToken = useAppStore((s) => s.toolRevealToken);
@@ -1002,7 +1030,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const existing = scene.getObjectByName("ventilation-markers");
     if (existing) scene.remove(existing);
 
-    if (dataViewMode !== "luftung") return;
+    if (dataViewMode !== "luftung" || bauteilMode) return;
 
     const sourceRooms = rooms.length ? rooms : roomsFromStore;
     const endWork = runSceneWork(() => {
@@ -1020,7 +1048,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const markers = scene.getObjectByName("ventilation-markers");
       if (markers) scene.remove(markers);
     };
-  }, [dataViewMode, rooms, roomsFromStore, markerVisibleFloorId]);
+  }, [dataViewMode, bauteilMode, rooms, roomsFromStore, markerVisibleFloorId]);
 
   useEffect(() => {
     syncVentilationMarkerPresentationOffsets(

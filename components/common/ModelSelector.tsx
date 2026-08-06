@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * ModelSelector — dropdown for picking a model from the built-in registry.
+ *
+ * Displays the currently active model (including local uploads and
+ * out-of-registry ids) read-only; never triggers a load on mount/render —
+ * selecting a registry option calls back via `onSelectRegistryModel` so the
+ * caller decides when/how to load it.
+ */
+
 import { getModels } from "@/lib/modelRegistry";
 import { useAppStore } from "@/store/useAppStore";
 import GlassPanel from "./GlassPanel";

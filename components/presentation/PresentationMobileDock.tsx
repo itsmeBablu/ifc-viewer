@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * PresentationMobileDock — bottom-docked glass panel for the presentation
+ * view on mobile/landscape layouts; wraps LegendBody and, when isolate is
+ * on, PresentationSidePanel's floor/room list.
+ *
+ * Reads `presentationIsolate` from useAppStore; sizing/positioning comes
+ * from useMobileLandscapeDockLayout and the layoutTokens helpers.
+ */
+
 import { useAppStore } from "@/store/useAppStore";
 import GlassPanel from "../common/GlassPanel";
 import LegendBody from "../legend/LegendBody";

@@ -1,3 +1,12 @@
+/**
+ * Schnitthöhe / half-section clipping for the 3D viewer.
+ *
+ * `ClipSliceController` applies a THREE.Plane to room/element materials and
+ * builds stencil-based solid cut-face caps (footprint-accurate for rooms)
+ * so the section looks filled rather than hollow. Also exports floor/scene
+ * bounding-box helpers used by Presentation View's floor-explode layout.
+ * Driven by Viewer3D; caps double as pickable meshes for room selection.
+ */
 import * as THREE from "three";
 import { debugLog } from "./debugLog";
 import type { Floor } from "./types";

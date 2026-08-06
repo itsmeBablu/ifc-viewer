@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * RoomTooltip — floating glass popup showing a room's load/temperature/
+ * ventilation metrics. Two usages: cursor-follow hover card (desktop,
+ * `hoveredRoom` from useAppStore) or a fixed-position card for an explicitly
+ * selected room (`room`/`anchor` props, used by the mobile selection popup).
+ *
+ * Reads dataViewMode (heizlast/kuhllast/luftung), legend ranges/palette and
+ * uiLanguage from useAppStore to format values and pick swatch colors;
+ * animates position/size with gsap and adapts to a compact layout on mobile.
+ */
+
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import gsap from "gsap";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, type CustomLegendColors } from "@/lib/colorMapping";

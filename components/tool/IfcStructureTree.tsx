@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * IfcStructureTree — collapsible spatial/type tree for the Werkzeug tool
+ * panel, with per-node visibility toggling, isolation, search, and
+ * "zoom to element". Paginates large branches (PAGE_SIZE) so storeys with
+ * thousands of leaves still render instantly.
+ *
+ * Reads/writes selection and visibility via useAppStore (hiddenElementIds,
+ * isolatedElementIds, toolSelectedExpressId, setElementsVisible,
+ * isolateElements, requestToolReveal).
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { getElementDetails } from "@/lib/ifcClient";

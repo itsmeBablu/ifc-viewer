@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * VentilationZonePanel — compact Nutzungszone (usage-zone) table for the
+ * Lüftung legend: one row per floor+zone, with drill-down into a zone's
+ * rooms and per-room airflow metrics.
+ *
+ * Reads rooms/floors, dataViewMode, and selectedVentilationZoneKey from
+ * useAppStore; renders nothing outside dataViewMode === "luftung".
+ */
+
 import { useMemo, useState } from "react";
 import { heading } from "@/lib/designTokens";
 import { t } from "@/lib/i18n";

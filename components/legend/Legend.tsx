@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * Legend — standalone Heizlast/Temperatur legend widget with a mode toggle
+ * and a simple gradient/chip scale (no editable range or palette picker).
+ * Simpler sibling of LegendBody, used where a lightweight, non-editable
+ * legend is enough.
+ *
+ * Reads/writes `colorMode` via useAppStore; render as bare content via
+ * `embedded`, or as its own titled panel.
+ */
+
 import {
   HEIZLAST_GRADIENT_STOPS,
   TEMPERATURE_STOPS,
