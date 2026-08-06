@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 type TabId = string;
 
 /**
- * Blender-style tab row with a sliding underline indicator (CSS transform).
+ * Underline tab row — amber indicator, theme-aware text.
  */
 export default function ToolUnderlineTabs<T extends TabId>({
   tabs,
@@ -34,7 +34,7 @@ export default function ToolUnderlineTabs<T extends TabId>({
   return (
     <div
       ref={rowRef}
-      className={`relative flex gap-1 border-b border-white/10 pb-0 ${className}`}
+      className={`relative flex gap-1 border-b border-[var(--panel-divider)] ${className}`}
     >
       {tabs.map((tab) => (
         <button
@@ -48,8 +48,8 @@ export default function ToolUnderlineTabs<T extends TabId>({
           onClick={() => onChange(tab.id)}
           className={`relative z-[1] px-2.5 py-2 text-[11px] font-semibold transition-colors duration-150 ${
             value === tab.id
-              ? "text-zinc-100"
-              : "text-zinc-500 hover:text-zinc-300"
+              ? "text-[var(--text-strong)]"
+              : "text-[var(--text-muted)] hover:text-[var(--text-body)]"
           }`}
         >
           {tab.label}

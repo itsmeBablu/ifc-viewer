@@ -19,6 +19,9 @@ import { compareBothModesLabelKey, supportsCompareBothModes } from "@/lib/dataVi
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
+import type { MarkupViewPreset } from "@/lib/toolMarkup";
+import { MARKUP_TOOL_ORDER } from "../tool/MarkupIcons";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import SliceHeightSlider from "../common/SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
 import ModelText from "../common/ModelText";
@@ -35,7 +38,7 @@ type MenuState = {
   y: number;
 };
 
-type SidePanel = "save" | "floor" | null;
+type SidePanel = "save" | "floor" | "shapes" | null;
 
 const ctxMenuSurface =
   "context-menu-surface presentation-menu-surface isolate overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-100/78 via-yellow-50/62 to-amber-200/48 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_32px_rgba(251,191,36,0.28)] backdrop-blur-md";
@@ -94,6 +97,18 @@ export default function ViewerContextMenu({
   const autoFocusSelection = useAppStore((s) => s.autoFocusSelection);
   const setAutoFocusSelection = useAppStore((s) => s.setAutoFocusSelection);
   const addSavedView = useAppStore((s) => s.addSavedView);
+  const toolMode = useAppStore((s) => s.toolMode);
+
+  const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
+  const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
+  const setTransformMode = useToolMarkupStore((s) => s.setTransformMode);
+  const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+  const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
+  const clearSelection = useToolMarkupStore((s) => s.clearSelection);
+  const requestToolReveal = useAppStore((s) => s.requestToolReveal);
+  const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
+
+  const shapesBtnRef = useRef<HTMLButtonElement>(null);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
@@ -306,10 +321,12 @@ export default function ViewerContextMenu({
         ? saveBtnRef.current
         : sidePanel === "floor"
           ? floorBtnRef.current
-          : null;
+          : sidePanel === "shapes"
+            ? shapesBtnRef.current
+            : null;
     if (!btn || !menu) return undefined;
     const r = btn.getBoundingClientRect();
-    const flyoutW = sidePanel === "save" ? 230 : 220;
+    const flyoutW = sidePanel === "save" ? 230 : sidePanel === "shapes" ? 180 : 220;
     const openRight = r.right + 8 + flyoutW < window.innerWidth;
     return {
       position: "fixed",
@@ -319,6 +336,15 @@ export default function ViewerContextMenu({
       zIndex: 132,
     };
   };
+
+  const TOOL_VIEWS: { id: MarkupViewPreset; label: string }[] = [
+    { id: "top", label: "Top" },
+    { id: "north", label: "N" },
+    { id: "south", label: "S" },
+    { id: "east", label: "O" },
+    { id: "west", label: "W" },
+    { id: "free", label: "3D" },
+  ];
 
   const menuNode =
     menu &&
@@ -340,6 +366,119 @@ export default function ViewerContextMenu({
         >
           <div className={ctxMenuSurface}>
             <div className="min-w-[210px] p-1.5">
+              {toolMode ? (
+                <>
+                  <p className={`mb-1 px-2 ${ctxLabel}`}>
+                    {t(uiLanguage, "markupViews")}
+                  </p>
+                  <div className="mb-1.5 flex flex-wrap gap-1 px-1">
+                    {TOOL_VIEWS.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`${ctxChipOff} px-2 py-1 text-[10px] font-bold`}
+                        onClick={() => {
+                          setViewPreset(v.id);
+                          close();
+                        }}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    ref={shapesBtnRef}
+                    type="button"
+                    role="menuitem"
+                    className={itemCls({ open: sidePanel === "shapes" })}
+                    onClick={() =>
+                      setSidePanel((p) => (p === "shapes" ? null : "shapes"))
+                    }
+                    aria-expanded={sidePanel === "shapes"}
+                  >
+                    <span>{t(uiLanguage, "markupShapesMenu")}</span>
+                    <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                  </button>
+
+                  <div className="my-1 border-t border-amber-200/45 dark:border-[var(--panel-divider)]" />
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={itemCls()}
+                    disabled={!selectedPlacementId}
+                    onClick={() => {
+                      setTransformMode("translate");
+                      close();
+                    }}
+                  >
+                    <span>{t(uiLanguage, "markupMove")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={itemCls()}
+                    disabled={!selectedPlacementId}
+                    onClick={() => {
+                      setTransformMode("scale");
+                      close();
+                    }}
+                  >
+                    <span>{t(uiLanguage, "markupScale")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={itemCls()}
+                    disabled={!selectedPlacementId}
+                    onClick={() => {
+                      setTransformMode("rotate");
+                      close();
+                    }}
+                  >
+                    <span>{t(uiLanguage, "markupRotate")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={itemCls()}
+                    disabled={!selectedPlacementId}
+                    onClick={() => {
+                      if (selectedPlacementId) {
+                        void deletePlacement(selectedPlacementId);
+                        clearSelection();
+                      }
+                      close();
+                    }}
+                  >
+                    <span>{t(uiLanguage, "markupDelete")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={itemCls()}
+                    disabled={
+                      !selectedPlacementId && toolSelectedExpressId == null
+                    }
+                    onClick={() => {
+                      if (toolSelectedExpressId != null) {
+                        requestToolReveal(toolSelectedExpressId);
+                      } else if (selectedPlacementId) {
+                        // Focus selection: bump reveal via store selection
+                        useToolMarkupStore
+                          .getState()
+                          .selectPlacement(selectedPlacementId);
+                        viewerRef.current?.fitVisible();
+                      }
+                      close();
+                    }}
+                  >
+                    <span>{t(uiLanguage, "markupFocusSelected")}</span>
+                  </button>
+                </>
+              ) : (
+                <>
               {supportsCompareBothModes(dataViewMode) ? (
                 <button
                   type="button"
@@ -457,11 +596,45 @@ export default function ViewerContextMenu({
               >
                 <span>{t(uiLanguage, "loadNewIfc")}</span>
               </button>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {sidePanel === "save" && (
+        {sidePanel === "shapes" && toolMode && (
+          <div style={flyoutStyle()} className="fixed z-[132]">
+            <div className={ctxMenuSurface}>
+              <div className="max-h-64 min-w-[160px] overflow-y-auto p-1.5 thin-scroll">
+                <p className={`mb-1 px-2 ${ctxLabel}`}>
+                  {t(uiLanguage, "markupShapesMenu")}
+                </p>
+                {MARKUP_TOOL_ORDER.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={itemCls()}
+                    onClick={() => {
+                      setArmedTool(id);
+                      close();
+                    }}
+                  >
+                    <span>
+                      {t(
+                        uiLanguage,
+                        id === "note"
+                          ? "markupHint_note"
+                          : (`markupShape_${id}` as "markupShape_cube"),
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sidePanel === "save" && !toolMode && (
           <div style={flyoutStyle()} className="fixed z-[132]">
             <div className={ctxMenuSurface}>
               <div className="w-56 space-y-2 p-2.5">
@@ -517,7 +690,7 @@ export default function ViewerContextMenu({
           </div>
         )}
 
-        {sidePanel === "floor" && (
+        {sidePanel === "floor" && !toolMode && (
           <div style={flyoutStyle()} className="fixed z-[132]">
             <div className={ctxMenuSurface}>
               <div className="max-h-64 min-w-[210px] overflow-y-auto p-1.5 thin-scroll">

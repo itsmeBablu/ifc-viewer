@@ -47,7 +47,6 @@ import LegendPanel from "../legend/LegendPanel";
 import PresentationMobileDock from "../presentation/PresentationMobileDock";
 import PresentationSidePanel from "../presentation/PresentationSidePanel";
 import MobileCornerMenu from "../layout/MobileCornerMenu";
-import ToolTopBar from "../tool/ToolTopBar";
 import ToolSidePanel from "../tool/ToolSidePanel";
 import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
@@ -83,7 +82,7 @@ function DragSnapHud() {
   const hint = useToolMarkupStore((s) => s.dragSnapHint);
   if (!hint) return null;
   return (
-    <div className="pointer-events-none fixed top-[8.75rem] left-1/2 z-[37] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-[#0f141c]/92 px-3 py-1.5 text-[11px] font-semibold tabular-nums text-emerald-300 shadow-lg backdrop-blur-md md:top-[9.25rem]">
+    <div className="pointer-events-none fixed top-[6.5rem] left-1/2 z-[37] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-[var(--popover-bg)] px-3 py-1.5 text-[11px] font-semibold tabular-nums text-emerald-700 shadow-lg backdrop-blur-md md:top-28">
       {hint}
     </div>
   );
@@ -747,14 +746,7 @@ export default function ViewerApp() {
           );
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
-        {toolMode && (
-          <>
-            <div className="pointer-events-none fixed top-[5.75rem] left-1/2 z-[37] -translate-x-1/2 md:top-[6.25rem]">
-              <ToolTopBar />
-            </div>
-            <DragSnapHud />
-          </>
-        )}
+        {toolMode && <DragSnapHud />}
         <ViewerContextMenu
           viewerRef={viewerRef}
           rootRef={rootRef}
@@ -838,7 +830,6 @@ export default function ViewerApp() {
               zIndex={35}
               fill={toolMode}
               allowOverflow={!toolMode}
-              className={toolMode ? "tool-dock-panel" : ""}
               wrapperClassName={
                 toolMode
                   ? "relative mb-2 flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"

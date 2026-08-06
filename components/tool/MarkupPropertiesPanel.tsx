@@ -24,7 +24,7 @@ function MmField({
 
   return (
     <label className="flex flex-col gap-0.5">
-      <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
+      <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
         {label}
       </span>
       <div className="flex items-center gap-1">
@@ -41,17 +41,15 @@ function MmField({
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
-          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none transition duration-150 focus:border-amber-400/60"
+          className="w-full rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none transition duration-150 focus:border-amber-300"
         />
-        <span className="shrink-0 text-[9px] text-zinc-500">mm</span>
+        <span className="shrink-0 text-[9px] text-[var(--text-muted)]">mm</span>
       </div>
     </label>
   );
 }
 
-/**
- * Dark attribute editor — mm position/size + collapsible color swatch.
- */
+/** Attribute editor — mm position/size + collapsible color swatch. */
 export default function MarkupPropertiesPanel({
   className = "",
 }: {
@@ -86,20 +84,20 @@ export default function MarkupPropertiesPanel({
     if (note) setDraftNote(note.text);
   }, [note?.id, note?.text]);
 
-  const shell = `rounded-xl border border-white/10 bg-[#141820]/80 p-2.5 ${className}`;
+  const shell = `rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/35 p-2.5 ${className}`;
 
   if (pendingNote) {
     return (
       <div className={shell}>
-        <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "markupNote")}
         </p>
         {(pendingNote.elementName ||
           pendingNote.expressId != null ||
           pendingNote.placementId) && (
-          <p className="mb-1.5 truncate text-[9px] text-zinc-500">
+          <p className="mb-1.5 truncate text-[9px] text-[var(--text-muted)]">
             {t(uiLanguage, "markupAttachedTo")}:{" "}
-            <span className="font-semibold text-zinc-200">
+            <span className="font-semibold text-[var(--text-body)]">
               {pendingNote.elementName ??
                 (pendingNote.placementId
                   ? pendingNote.placementId
@@ -113,20 +111,20 @@ export default function MarkupPropertiesPanel({
           onChange={(e) => setDraftNote(e.target.value)}
           rows={3}
           placeholder={t(uiLanguage, "markupNotePlaceholder")}
-          className="mb-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
+          className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
         <div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => void commitPendingNote(draftNote)}
-            className="flex-1 rounded-xl bg-amber-400/90 px-2 py-1.5 text-[11px] font-semibold text-amber-950 transition duration-150"
+            className="flex-1 rounded-xl bg-amber-400/90 px-2 py-1.5 text-[11px] font-semibold text-amber-950"
           >
             {t(uiLanguage, "markupSave")}
           </button>
           <button
             type="button"
             onClick={cancelPendingNote}
-            className="rounded-xl px-2 py-1.5 text-[11px] text-zinc-500 transition duration-150 hover:bg-white/8 hover:text-zinc-200"
+            className="rounded-xl px-2 py-1.5 text-[11px] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
           >
             {t(uiLanguage, "cancel")}
           </button>
@@ -139,24 +137,22 @@ export default function MarkupPropertiesPanel({
     return (
       <div className={shell}>
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+          <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
             {t(uiLanguage, "markupNote")}
           </p>
           <button
             type="button"
             onClick={clearSelection}
-            className="text-[10px] text-zinc-500 transition duration-150 hover:text-zinc-200"
+            className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-body)]"
           >
             {t(uiLanguage, "close")}
           </button>
         </div>
         {(note.elementName || note.expressId != null || note.placementId) && (
-          <p className="mb-1.5 truncate text-[9px] text-zinc-500">
+          <p className="mb-1.5 truncate text-[9px] text-[var(--text-muted)]">
             {t(uiLanguage, "markupAttachedTo")}:{" "}
-            <span className="font-semibold text-zinc-200">
-              {note.elementName ??
-                note.placementId ??
-                `#${note.expressId}`}
+            <span className="font-semibold text-[var(--text-body)]">
+              {note.elementName ?? note.placementId ?? `#${note.expressId}`}
             </span>
           </p>
         )}
@@ -169,12 +165,12 @@ export default function MarkupPropertiesPanel({
             }
           }}
           rows={3}
-          className="mb-2 w-full resize-none rounded-xl border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
+          className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
         <button
           type="button"
           onClick={() => void deleteNote(note.id)}
-          className="w-full rounded-xl bg-red-500/15 px-2 py-1.5 text-[11px] font-semibold text-red-300 transition duration-150 hover:bg-red-500/25"
+          className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
         >
           {t(uiLanguage, "markupDelete")}
         </button>
@@ -184,7 +180,7 @@ export default function MarkupPropertiesPanel({
 
   if (!placement) {
     return (
-      <div className={`${shell} text-[11px] text-zinc-500`}>
+      <div className={`${shell} text-[11px] text-[var(--text-muted)]`}>
         {t(uiLanguage, "markupSelectIfcHint")}
       </div>
     );
@@ -195,13 +191,13 @@ export default function MarkupPropertiesPanel({
   return (
     <div className={shell}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, `markupShape_${placement.type}` as "markupShape_cube")}
         </p>
         <button
           type="button"
           onClick={clearSelection}
-          className="text-[10px] text-zinc-500 transition duration-150 hover:text-zinc-200"
+          className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-body)]"
         >
           {t(uiLanguage, "close")}
         </button>
@@ -222,8 +218,8 @@ export default function MarkupPropertiesPanel({
             onClick={() => setTransformMode(mode)}
             className={`flex-1 rounded-lg px-1 py-1 text-[9px] font-bold transition duration-150 ${
               transformMode === mode
-                ? "bg-sky-400/90 text-sky-950"
-                : "bg-white/6 text-zinc-500 hover:bg-white/10"
+                ? "bg-sky-400/85 text-sky-950"
+                : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
             }`}
           >
             {t(uiLanguage, key)}
@@ -265,7 +261,7 @@ export default function MarkupPropertiesPanel({
       </div>
 
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "markupColor")}
         </span>
         <ColorSwatchPicker
@@ -278,7 +274,7 @@ export default function MarkupPropertiesPanel({
       </div>
 
       <label className="mb-2 flex flex-col gap-0.5">
-        <span className="text-[9px] font-semibold tracking-wide text-zinc-500 uppercase">
+        <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "markupLabel")}
         </span>
         <input
@@ -289,14 +285,14 @@ export default function MarkupPropertiesPanel({
               label: e.target.value || null,
             })
           }
-          className="rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] text-zinc-100 outline-none focus:border-amber-400/60"
+          className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
       </label>
 
       <button
         type="button"
         onClick={() => void deletePlacement(placement.id)}
-        className="w-full rounded-xl bg-red-500/15 px-2 py-1.5 text-[11px] font-semibold text-red-300 transition duration-150 hover:bg-red-500/25"
+        className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
       >
         {t(uiLanguage, "markupDelete")}
       </button>

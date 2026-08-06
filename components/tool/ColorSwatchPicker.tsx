@@ -5,7 +5,6 @@ import { MARKUP_COLOR_PALETTE } from "@/lib/toolMarkup";
 
 /**
  * Single swatch → expands to palette on click; collapses after pick.
- * Same interaction pattern as the collapsed tool flyout.
  */
 export default function ColorSwatchPicker({
   color,
@@ -44,13 +43,13 @@ export default function ColorSwatchPicker({
         aria-label={color}
         title={color}
         onClick={() => setOpen((v) => !v)}
-        className={`${dim} rounded-md border border-white/20 shadow-inner transition-[transform,box-shadow] duration-150 hover:scale-105 ${
+        className={`${dim} rounded-md border border-amber-200/60 shadow-inner transition-[transform,box-shadow] duration-150 hover:scale-105 ${
           open ? "ring-2 ring-amber-400/80" : ""
         }`}
         style={{ backgroundColor: color }}
       />
       {open && (
-        <div className="absolute top-[calc(100%+0.35rem)] left-0 z-30 flex w-max max-w-[11rem] flex-wrap gap-1.5 rounded-xl border border-white/10 bg-[#1a1f2a]/98 p-2 shadow-xl backdrop-blur-md">
+        <div className="absolute top-[calc(100%+0.35rem)] left-0 z-30 flex w-max max-w-[11rem] flex-wrap gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2 shadow-xl backdrop-blur-md">
           {MARKUP_COLOR_PALETTE.map((hex) => (
             <button
               key={hex}
@@ -62,8 +61,8 @@ export default function ColorSwatchPicker({
               }}
               className={`h-5 w-5 rounded-md border transition duration-150 hover:scale-110 ${
                 color.toLowerCase() === hex.toLowerCase()
-                  ? "border-white ring-1 ring-amber-400"
-                  : "border-white/15"
+                  ? "border-zinc-800 ring-1 ring-amber-400"
+                  : "border-black/15"
               }`}
               style={{ backgroundColor: hex }}
             />

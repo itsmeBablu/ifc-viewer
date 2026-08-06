@@ -3046,6 +3046,21 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               { x: p.x, y: p.y, z: p.z },
               ms.cubeDraw.height,
             );
+          } else if (surface && ms.cubeDraw?.phase === "height") {
+            const start = ms.cubeDraw.start;
+            const end = ms.cubeDraw.footprintEnd ?? ms.cubeDraw.current;
+            let h = ms.cubeDraw.height;
+            if (ms.viewPreset === "top" || ms.viewPreset === "free") {
+              if (ms.cubeDraw.heightScreenY != null) {
+                const dy = Math.abs(e.clientY - ms.cubeDraw.heightScreenY);
+                h = Math.max(0.05, dy * 0.012);
+              }
+            }
+            if (ms.viewPreset !== "top") {
+              h = Math.max(0.05, Math.abs(surface.point.y - start.y));
+            }
+            ms.setCubeDraw({ ...ms.cubeDraw, height: h, current: end });
+            layer.setCubeDrawPreview(start, end, h);
           } else if (!ms.cubeDraw) {
             layer.setCubeDrawPreview(null, null);
           }
@@ -3165,24 +3180,56 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
             const floorId =
               markupStore.markupFloorId ?? ids.floorId ?? null;
 
-            // Cube draw-to-place: first click starts footprint.
+            // Cube: 1st click corner · 2nd click width/depth · 3rd click height
             if (armed === "cube") {
               if (!markupStore.cubeDraw) {
                 markupStore.setCubeDraw({
                   start: { x: p.x, y: p.y, z: p.z },
                   current: { x: p.x, y: p.y, z: p.z },
+                  footprintEnd: null,
                   phase: "footprint",
                   height: 0.5,
+                  heightScreenY: null,
                 });
                 return;
               }
               if (markupStore.cubeDraw.phase === "footprint") {
+                markupStore.setCubeDraw({
+                  ...markupStore.cubeDraw,
+                  current: { x: p.x, y: p.y, z: p.z },
+                  footprintEnd: { x: p.x, y: p.y, z: p.z },
+                  phase: "height",
+                  heightScreenY: e.clientY,
+                  height: 0.5,
+                });
+                layer.setCubeDrawPreview(
+                  markupStore.cubeDraw.start,
+                  { x: p.x, y: p.y, z: p.z },
+                  0.5,
+                );
+                return;
+              }
+              if (markupStore.cubeDraw.phase === "height") {
                 const start = markupStore.cubeDraw.start;
-                const w = Math.max(0.05, Math.abs(p.x - start.x));
-                const d = Math.max(0.05, Math.abs(p.z - start.z));
-                const h = 0.5;
-                const cx = (p.x + start.x) / 2;
-                const cz = (p.z + start.z) / 2;
+                const end =
+                  markupStore.cubeDraw.footprintEnd ??
+                  markupStore.cubeDraw.current;
+                let h = markupStore.cubeDraw.height;
+                if (markupStore.viewPreset === "top") {
+                  if (markupStore.cubeDraw.heightScreenY != null) {
+                    h = Math.max(
+                      0.05,
+                      Math.abs(e.clientY - markupStore.cubeDraw.heightScreenY) *
+                        0.012,
+                    );
+                  }
+                } else {
+                  h = Math.max(0.05, Math.abs(p.y - start.y));
+                }
+                const w = Math.max(0.05, Math.abs(end.x - start.x));
+                const d = Math.max(0.05, Math.abs(end.z - start.z));
+                const cx = (end.x + start.x) / 2;
+                const cz = (end.z + start.z) / 2;
                 const cy = start.y + h / 2;
                 void markupStore.placeShape(
                   "cube",

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Werkzeug left dock — dark DCC chrome: IFC Elements / Markup / Floors.
+ * Werkzeug side panel — two tabs: IFC Elements | Editor.
+ * Uses the same glass / sun-moon theme as the rest of the app.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
+import { heading } from "@/lib/designTokens";
 import { formatBytesParts } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { IfcStructure } from "@/lib/ifcStructure";
@@ -23,15 +25,12 @@ import ModelText from "../common/ModelText";
 import { useModelScene } from "../viewer/ModelSceneContext";
 import ElementInspector from "./ElementInspector";
 import IfcStructureTree from "./IfcStructureTree";
-import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
-import MarkupToolsSection from "./MarkupToolsSection";
-import ToolFloorsSection from "./ToolFloorsSection";
+import ToolEditorPanel from "./ToolEditorPanel";
 import ToolUnderlineTabs from "./ToolUnderlineTabs";
 import { useIfcStructure } from "./useIfcStructure";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 
-type ToolTab = "elements" | "markup" | "floors";
-type ElementSub = "outliner" | "modify";
+type ToolTab = "elements" | "editor";
 
 function formatBytes(bytes: number | null) {
   const { value, unit } = formatBytesParts(bytes);
@@ -62,8 +61,7 @@ export default function ToolSidePanel({
   const selectedNoteId = useToolMarkupStore((s) => s.selectedNoteId);
   const pendingNote = useToolMarkupStore((s) => s.pendingNote);
 
-  const [tab, setTab] = useState<ToolTab>("markup");
-  const [elementSub, setElementSub] = useState<ElementSub>("outliner");
+  const [tab, setTab] = useState<ToolTab>("elements");
   const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelTipOpen, setModelTipOpen] = useState(false);
@@ -86,10 +84,9 @@ export default function ToolSidePanel({
     }
   }, [structure, setElementsVisible]);
 
-  // Jump to markup edit when a shape/note is selected or pending.
   useEffect(() => {
     if (!(selectedPlacementId || selectedNoteId || pendingNote)) return;
-    const id = requestAnimationFrame(() => setTab("markup"));
+    const id = requestAnimationFrame(() => setTab("editor"));
     return () => cancelAnimationFrame(id);
   }, [selectedPlacementId, selectedNoteId, pendingNote]);
 
@@ -141,20 +138,14 @@ export default function ToolSidePanel({
 
   const tabs = [
     { id: "elements" as const, label: t(uiLanguage, "toolTabElements") },
-    { id: "markup" as const, label: t(uiLanguage, "toolTabMarkup") },
-    { id: "floors" as const, label: t(uiLanguage, "floors") },
+    { id: "editor" as const, label: t(uiLanguage, "toolTabEditor") },
   ];
 
   return (
-    <div
-      className={`tool-chrome flex min-h-0 flex-col gap-2 p-2.5 text-zinc-200 ${className}`}
-      data-tool-chrome=""
-    >
+    <div className={`flex min-h-0 flex-col gap-1.5 p-3 ${className}`}>
       <header className="shrink-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-            {t(uiLanguage, "tool")}
-          </p>
+          <p className={heading.muted}>{t(uiLanguage, "tool")}</p>
           <div className="relative max-w-[70%]">
             {onFile && (
               <input
@@ -171,7 +162,7 @@ export default function ToolSidePanel({
             )}
             <div
               ref={modelBadgeRef}
-              className="flex max-w-full items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-400/15 py-0.5 pl-2.5 pr-1 text-amber-100"
+              className="flex max-w-full items-center gap-0.5 rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 py-0.5 pl-2.5 pr-1 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-md"
             >
               <button
                 ref={modelNameBtnRef}
@@ -204,7 +195,7 @@ export default function ToolSidePanel({
                 type="button"
                 onClick={() => setModelDetailsOpen((v) => !v)}
                 aria-expanded={modelDetailsOpen}
-                className="flex shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-amber-100/80 transition duration-150 hover:bg-amber-400/20"
+                className="flex shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-amber-950/80 transition duration-150 hover:bg-amber-950/10"
               >
                 {modelDetailsOpen ? (
                   <IoChevronUp className="h-3 w-3" />
@@ -243,18 +234,20 @@ export default function ToolSidePanel({
                 ref={modelMenuRef}
                 className="absolute top-[calc(100%+0.4rem)] right-0 z-[60] w-max min-w-[10.5rem]"
               >
-                <div className="rounded-xl border border-white/10 bg-[#1a1f2a] p-1.5 shadow-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModelMenuOpen(false);
-                      modelFileInputRef.current?.click();
-                    }}
-                    className="w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-zinc-200 transition duration-150 hover:bg-white/8"
-                  >
-                    {t(uiLanguage, "loadOtherIfc")}
-                  </button>
-                </div>
+                <GlassPanel variant="control" zIndex={60}>
+                  <div className="flex flex-col gap-1 p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModelMenuOpen(false);
+                        modelFileInputRef.current?.click();
+                      }}
+                      className="w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-[var(--text-body)] transition duration-150 hover:bg-[var(--surface-muted)]"
+                    >
+                      {t(uiLanguage, "loadOtherIfc")}
+                    </button>
+                  </div>
+                </GlassPanel>
               </div>
             )}
           </div>
@@ -267,7 +260,7 @@ export default function ToolSidePanel({
               : "mt-0 max-h-0 opacity-0"
           }`}
         >
-          <div className="flex w-full items-center text-[11px] text-zinc-500">
+          <div className="flex w-full items-center text-[11px] text-zinc-600">
             {(
               [
                 { label: t(uiLanguage, "floors"), value: String(floors.length) },
@@ -282,10 +275,10 @@ export default function ToolSidePanel({
               <div
                 key={i}
                 className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 ${
-                  i > 0 ? "border-l border-white/10" : ""
+                  i > 0 ? "border-l border-zinc-300/50" : ""
                 }`}
               >
-                <span className="tabular-nums text-[12px] font-semibold text-zinc-200">
+                <span className="tabular-nums text-[12px] font-semibold text-zinc-800">
                   {tile.value}
                 </span>
                 {tile.label ? (
@@ -301,42 +294,18 @@ export default function ToolSidePanel({
 
       <ToolUnderlineTabs tabs={tabs} value={tab} onChange={setTab} />
 
-      {tab === "elements" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-          <ToolUnderlineTabs
-            tabs={[
-              {
-                id: "outliner" as const,
-                label: t(uiLanguage, "toolTabElements"),
-              },
-              { id: "modify" as const, label: t(uiLanguage, "toolTabModify") },
-            ]}
-            value={elementSub}
-            onChange={setElementSub}
+      {tab === "elements" ? (
+        <>
+          <IfcStructureTree
+            structure={structure}
+            loading={loading}
+            className="min-h-[8rem] flex-[3]"
           />
-          {elementSub === "outliner" ? (
-            <IfcStructureTree
-              structure={structure}
-              loading={loading}
-              className="min-h-[8rem] flex-1 tool-tree-dark"
-            />
-          ) : (
-            <ElementInspector className="min-h-[9rem] flex-1" />
-          )}
-        </div>
-      )}
-
-      {tab === "markup" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto thin-scroll">
-          <MarkupToolsSection />
-          <div className="border-t border-white/10 pt-2">
-            <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0" />
-          </div>
-        </div>
-      )}
-
-      {tab === "floors" && (
-        <ToolFloorsSection className="min-h-0 flex-1" />
+          <div className="border-t border-[var(--panel-divider)]" />
+          <ElementInspector className="min-h-[9rem] flex-[2]" />
+        </>
+      ) : (
+        <ToolEditorPanel className="min-h-0 flex-1" />
       )}
     </div>
   );

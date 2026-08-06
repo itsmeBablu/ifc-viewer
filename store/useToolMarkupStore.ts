@@ -29,8 +29,12 @@ import {
 type CubeDrawState = {
   start: { x: number; y: number; z: number };
   current: { x: number; y: number; z: number };
+  /** After footprint locked: opposite corner used for W/D. */
+  footprintEnd: { x: number; y: number; z: number } | null;
   phase: "footprint" | "height";
   height: number;
+  /** Screen Y when height phase started (for Top-view height drag). */
+  heightScreenY: number | null;
 } | null;
 
 type ToolMarkupState = {
