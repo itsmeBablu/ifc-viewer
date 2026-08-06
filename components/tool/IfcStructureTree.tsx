@@ -218,7 +218,7 @@ export default function IfcStructureTree({
       <div key={node.key}>
         <div
           data-express-id={node.expressId ?? undefined}
-          className={`group flex items-center gap-1 rounded-lg pr-1 transition-colors duration-150 ${
+          className={`group flex items-center gap-1 rounded-none border-b border-[var(--panel-divider)]/35 pr-1 transition-colors duration-150 ${
             selected
               ? "bg-[var(--chip-active-bg)] shadow-[inset_0_0_0_1px_var(--panel-divider)]"
               : "hover:bg-[var(--surface-muted)]"

@@ -775,7 +775,11 @@ export default function ViewerApp() {
                 } ${rightPanelOpen ? "" : "pointer-events-none"}`}
               >
                 {toolMode ? (
-                  <ToolSidePanel className="h-full flex-1" />
+                  <ToolSidePanel
+                    className="h-full flex-1"
+                    onFile={handleFile}
+                    isLoadingModel={isLoadingModel}
+                  />
                 ) : isPresentationView ? (
                   <PresentationSidePanel />
                 ) : (
@@ -804,7 +808,11 @@ export default function ViewerApp() {
               >
                 {({ detailsOpen }) =>
                   toolMode ? (
-                    <ToolSidePanel className="h-[70dvh]" />
+                    <ToolSidePanel
+                      className="h-[70dvh]"
+                      onFile={handleFile}
+                      isLoadingModel={isLoadingModel}
+                    />
                   ) : (
                     <>
                       <FloorsPanel
