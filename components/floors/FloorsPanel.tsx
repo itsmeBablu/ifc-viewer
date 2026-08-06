@@ -205,33 +205,56 @@ export default function FloorsPanel({
     if (!underline || !row || !active) return;
     const rowBox = row.getBoundingClientRect();
     const tabBox = active.getBoundingClientRect();
-    const left = tabBox.left - rowBox.left;
-    const width = Math.max(tabBox.width, 12);
+    const toX = tabBox.left - rowBox.left;
+    const toW = Math.max(tabBox.width, 12);
     killGsap(underline);
     if (!underlineReady.current) {
-      gsap.set(underline, { x: left, width, scaleY: 1, transformOrigin: "50% 100%" });
+      gsap.set(underline, {
+        x: toX,
+        width: toW,
+        scaleY: 1,
+        transformOrigin: "50% 100%",
+      });
       underlineReady.current = true;
       return;
     }
     const fromX = Number(gsap.getProperty(underline, "x"));
     const fromW = Number(gsap.getProperty(underline, "width"));
-    const thin = Math.max(8, Math.min(fromW, width) * 0.22);
-    const midX = fromX + (left - fromX) * 0.5 + (fromW - thin) * 0.5;
+    const goingRight = toX + toW / 2 >= fromX + fromW / 2;
+    // Water / rubber: stretch elastic across the gap → pinch droplet → settle line.
+    const stretchX = goingRight ? fromX : toX;
+    const stretchW = Math.max(
+      goingRight ? toX + toW - fromX : fromX + fromW - toX,
+      Math.max(fromW, toW),
+    );
+    const droplet = 10;
     const tl = gsap.timeline({ overwrite: true });
-    // Squeeze thin while sliding, then thicken under the destination tab.
     tl.to(underline, {
-      x: midX,
-      width: thin,
-      scaleY: 0.55,
-      duration: gsapDuration.fast * 0.45,
-      ease: gsapEase.iosIn,
-    }).to(underline, {
-      x: left,
-      width,
-      scaleY: 1,
-      duration: gsapDuration.fast * 0.7,
-      ease: gsapEase.iosOut,
-    });
+      x: stretchX,
+      width: stretchW,
+      scaleY: 0.5,
+      duration: 0.26,
+      ease: "power2.inOut",
+    })
+      .to(underline, {
+        x: toX + (toW - droplet) / 2,
+        width: droplet,
+        scaleY: 1.4,
+        duration: 0.18,
+        ease: "power2.in",
+      })
+      .to(underline, {
+        x: toX,
+        width: toW * 1.08,
+        scaleY: 1,
+        duration: 0.24,
+        ease: "back.out(1.7)",
+      })
+      .to(underline, {
+        width: toW,
+        duration: 0.12,
+        ease: gsapEase.iosOut,
+      });
   }, [leftPanelMode, uiLanguage, autoOpenAttributes]);
 
   useLayoutEffect(() => {
@@ -893,7 +916,8 @@ export default function FloorsPanel({
           <span
             ref={underlineRef}
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-8 origin-left rounded-full bg-amber-400"
+            className="pointer-events-none absolute bottom-0 left-0 h-[2.5px] rounded-full bg-amber-400 will-change-transform"
+            style={{ width: 32 }}
           />
         </div>
 
