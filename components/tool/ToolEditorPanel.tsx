@@ -38,7 +38,7 @@ const chipOn =
   "bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
 
 const saveGloss =
-  "markup-save-gloss flex h-8 w-8 items-center justify-center rounded-lg text-emerald-950 transition duration-150 disabled:opacity-35";
+  "markup-save-gloss flex h-8 w-8 items-center justify-center rounded-lg text-sky-950 transition duration-150 disabled:opacity-35";
 
 /**
  * Editor tab — Save/Snap/Grid/Color · views · shapes · floors · properties.

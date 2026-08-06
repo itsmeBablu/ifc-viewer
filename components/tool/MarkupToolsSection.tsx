@@ -93,16 +93,16 @@ export default function MarkupToolsSection({
                   }
                   setArmedTool(active ? null : id);
                 }}
-                className={`flex h-[3.35rem] w-full min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-xl border px-1 transition duration-150 ${
+                className={`flex h-[3.35rem] w-full min-w-0 flex-col items-center justify-center gap-px overflow-hidden rounded-xl border px-1 pt-0.5 transition duration-150 ${
                   active
                     ? "border-amber-300/80 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
                     : "border-[var(--panel-divider)] bg-[var(--surface-muted)]/50 text-[var(--text-body)] hover:border-amber-200/60 hover:bg-amber-50/80"
                 }`}
               >
-                <span className="shrink-0 [&>svg]:h-5 [&>svg]:w-5">
+                <span className="shrink-0 [&>svg]:h-6 [&>svg]:w-6">
                   <Icon />
                 </span>
-                <span className="w-full truncate text-center text-[9px] font-semibold leading-tight tracking-wide">
+                <span className="w-full truncate text-center text-[8px] font-semibold leading-tight tracking-wide">
                   {label}
                 </span>
               </button>
