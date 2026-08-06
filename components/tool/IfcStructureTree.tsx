@@ -205,11 +205,20 @@ export default function IfcStructureTree({
     (node: IfcTreeNode) => {
       if (node.expressId == null) return;
       setToolSelectedExpressId(node.expressId);
+      // Clear stale details so highlight uses toolSelectedExpressId immediately.
+      setSelectedElement(null);
+      requestToolReveal(node.expressId);
+      useAppStore.getState().bumpScenePickToken();
       void getElementDetails(node.expressId).then((details) => {
-        if (details) setSelectedElement(details);
+        if (
+          details &&
+          useAppStore.getState().toolSelectedExpressId === node.expressId
+        ) {
+          setSelectedElement(details);
+        }
       });
     },
-    [setToolSelectedExpressId, setSelectedElement],
+    [setToolSelectedExpressId, setSelectedElement, requestToolReveal],
   );
 
   const hiddenCount = hiddenElementIds.size;

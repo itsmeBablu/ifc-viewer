@@ -20,7 +20,7 @@ export default function ColorSwatchPicker({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const dim =
-    size === "lg" ? "h-8 w-8" : size === "sm" ? "h-4 w-4" : "h-6 w-6";
+    size === "lg" ? "h-8 w-8" : size === "sm" ? "h-4 w-4" : "h-8 w-8";
 
   useEffect(() => {
     if (!open) return;

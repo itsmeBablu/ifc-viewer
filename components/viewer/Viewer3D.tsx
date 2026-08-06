@@ -609,14 +609,22 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
 
   const fitToVisible = (durationMs = 850) => {
-    const camera = perspectiveCameraRef.current;
     const controls = controlsRef.current;
     const overlays = overlaysRef.current;
     const shell = shellCloneRef.current;
-    if (!camera || !controls) return;
+    if (!controls) return;
 
-    // Fitting always uses the perspective camera — switch back to free 3D if
-    // Werkzeug was in an orthographic plan/elevation view.
+    // In Werkzeug ortho views: reframe the same preset (keep Top when floors change).
+    const inTool = useAppStore.getState().toolMode;
+    const preset = useToolMarkupStore.getState().viewPreset;
+    if (inTool && preset !== "free") {
+      useToolMarkupStore.getState().setViewPreset(preset);
+      return;
+    }
+
+    const camera = perspectiveCameraRef.current;
+    if (!camera) return;
+
     if (cameraRef.current !== camera) {
       cameraRef.current = camera;
       controls.object = camera;
@@ -625,7 +633,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       if (tc) {
         (tc as TransformControls & { camera: THREE.Camera }).camera = camera;
       }
-      useToolMarkupStore.getState().setViewPreset("free");
     }
 
     // Ensure explode / compare offsets are in world matrices before measuring
@@ -1809,10 +1816,35 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   useEffect(() => {
     if (!toolMode) return;
     const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
       if (e.key === "Escape") {
         useToolMarkupStore.getState().setArmedTool(null);
         useToolMarkupStore.getState().cancelPendingNote();
         useToolMarkupStore.getState().clearSelection();
+        useToolMarkupStore.getState().setCubeDraw(null);
+      }
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        !typing &&
+        !e.metaKey &&
+        !e.ctrlKey
+      ) {
+        const s = useToolMarkupStore.getState();
+        if (s.selectedPlacementId) {
+          e.preventDefault();
+          void s.deletePlacement(s.selectedPlacementId);
+          return;
+        }
+        if (s.selectedNoteId) {
+          e.preventDefault();
+          void s.deleteNote(s.selectedNoteId);
+          return;
+        }
       }
       if (e.key === "i" || e.key === "I") {
         if (e.altKey || e.shiftKey) {
@@ -1834,7 +1866,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         useToolMarkupStore.getState().setTransformMode("rotate");
       }
       if (e.key === "t" || e.key === "T") {
-        // scale — avoid conflict with common shortcuts; use S would steal search
         useToolMarkupStore.getState().setTransformMode("scale");
       }
     };
@@ -2538,7 +2569,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const baseOpacity = useAppStore.getState().lighting.spaceTransparency;
       const selectedRoom = useAppStore.getState().selectedRoomId;
       const selectedEl = useAppStore.getState().selectedElement;
-      const selectedExpress = selectedEl?.expressId ?? null;
+      const inTool = useAppStore.getState().toolMode;
+      const toolExpress = useAppStore.getState().toolSelectedExpressId;
+      // In Werkzeug, tree/3D pick sets toolSelectedExpressId sync — prefer it
+      // over a still-loading or stale selectedElement.expressId.
+      const selectedExpress = inTool
+        ? (toolExpress ?? selectedEl?.expressId ?? null)
+        : (selectedEl?.expressId ?? null);
       const selectedElRoomId = selectedEl?.roomId ?? null;
       const lightMode = useAppStore.getState().renderMode === "light";
       const filter = useAppStore.getState().activeFilter;
@@ -2684,16 +2721,43 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       shellCloneRef.current?.traverse((obj) => {
         if (!isShellMesh(obj)) return;
         clearSelectionOutlines(obj);
-        const mat = obj.material as THREE.MeshStandardMaterial;
+        let mat = obj.material as THREE.MeshStandardMaterial;
+        // IFC meshes often share materials — clone so one selection doesn't
+        // tint / clear emissive on every wall that reuses the same mat.
+        if (!mat.userData.selectionClone) {
+          mat = mat.clone();
+          mat.userData.selectionClone = true;
+          if (!mat.userData.baseColorHex) {
+            mat.userData.baseColorHex = `#${mat.color.getHexString()}`;
+          }
+          obj.material = mat;
+        }
         const isSel =
-          hasRoomSelection && obj.userData.expressId === selectedExpress;
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
+          selectedExpress != null &&
+          obj.userData.expressId === selectedExpress;
+        const baseHex =
+          (obj.userData.colorHex as string | undefined) ??
+          (mat.userData.baseColorHex as string | undefined) ??
+          `#${mat.color.getHexString()}`;
+        // Werkzeug: light amber emissive + outline even without a room selection.
         if (isSel) {
-          const hex =
-            (obj.userData.colorHex as string | undefined) ??
-            `#${mat.color.getHexString()}`;
-          attachColorOutline(obj, hex);
+          mat.color.set(baseHex);
+          if (inTool) {
+            attachAlignedOutline(obj, 0xf59e0b, 1.04, 0.9);
+            mat.color.lerp(new THREE.Color(0xfbbf24), 0.18);
+            mat.emissive.setHex(0xfbbf24);
+            mat.emissiveIntensity = 0.55;
+          } else {
+            attachColorOutline(obj, baseHex);
+            mat.emissive.setHex(0xf59e0b);
+            mat.emissiveIntensity = 0.25;
+          }
+          obj.renderOrder = 8;
+        } else {
+          mat.color.set(baseHex);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+          obj.renderOrder = 0;
         }
         mat.needsUpdate = true;
       });
@@ -2704,6 +2768,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   }, [
     selectedRoomId,
     selectedElement,
+    toolSelectedExpressId,
+    toolMode,
     lighting.spaceTransparency,
     isPresentationView,
     activeColorPalette,
@@ -2862,6 +2928,8 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const floorId = ids.floorId ?? null;
       if (inTool) {
         useAppStore.getState().setToolSelectedExpressId(expressId ?? null);
+        // Drop stale inspector payload until getElementDetails resolves.
+        setSelectedElement(null);
       }
 
       // Resolve room by expressId when pick only has the space mesh id
@@ -3046,19 +3114,22 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
               { x: p.x, y: p.y, z: p.z },
               ms.cubeDraw.height,
             );
-          } else if (surface && ms.cubeDraw?.phase === "height") {
+          } else if (ms.cubeDraw?.phase === "height") {
             const start = ms.cubeDraw.start;
             const end = ms.cubeDraw.footprintEnd ?? ms.cubeDraw.current;
-            let h = ms.cubeDraw.height;
-            if (ms.viewPreset === "top" || ms.viewPreset === "free") {
-              if (ms.cubeDraw.heightScreenY != null) {
-                const dy = Math.abs(e.clientY - ms.cubeDraw.heightScreenY);
-                h = Math.max(0.05, dy * 0.012);
-              }
+            let h = 0.5;
+            // Prefer screen-Y drag (works in Top ortho — vertical plane rays don't).
+            // ~20 mm per pixel, always 50 mm steps so the third click feels snappy.
+            if (ms.cubeDraw.heightScreenY != null) {
+              const dy = ms.cubeDraw.heightScreenY - e.clientY; // drag up = taller
+              h = Math.max(0.05, dy * 0.02);
             }
-            if (ms.viewPreset !== "top") {
-              h = Math.max(0.05, Math.abs(surface.point.y - start.y));
+            // In elevation / 3D, also use world Y when the ray hits above the floor.
+            if (ms.viewPreset !== "top" && surface) {
+              const fromY = Math.max(0.05, Math.abs(surface.point.y - start.y));
+              h = Math.max(h, fromY);
             }
+            h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
             ms.setCubeDraw({ ...ms.cubeDraw, height: h, current: end });
             layer.setCubeDrawPreview(start, end, h);
           } else if (!ms.cubeDraw) {
@@ -3215,17 +3286,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
                   markupStore.cubeDraw.footprintEnd ??
                   markupStore.cubeDraw.current;
                 let h = markupStore.cubeDraw.height;
-                if (markupStore.viewPreset === "top") {
-                  if (markupStore.cubeDraw.heightScreenY != null) {
-                    h = Math.max(
-                      0.05,
-                      Math.abs(e.clientY - markupStore.cubeDraw.heightScreenY) *
-                        0.012,
-                    );
-                  }
-                } else {
-                  h = Math.max(0.05, Math.abs(p.y - start.y));
+                if (markupStore.cubeDraw.heightScreenY != null) {
+                  const dy =
+                    markupStore.cubeDraw.heightScreenY - e.clientY;
+                  h = Math.max(0.05, dy * 0.02);
                 }
+                if (markupStore.viewPreset !== "top") {
+                  h = Math.max(h, Math.abs(p.y - start.y));
+                }
+                h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
                 const w = Math.max(0.05, Math.abs(end.x - start.x));
                 const d = Math.max(0.05, Math.abs(end.z - start.z));
                 const cx = (end.x + start.x) / 2;
