@@ -7,17 +7,12 @@
  *
  * Renders as a single animated glass shell (GSAP-driven width/opacity) that
  * expands on hover/pin and collapses on mobile. Dropdowns (mode menu, profile
- * menu, language flyout) are hover-opened with short close-grace timers so
- * the pointer can travel from the trigger button into the portalled menu
- * without it closing prematurely; menus are positioned via `createPortal`
+ * menu) is hover-opened with a short close-grace timer; the mode (Heizung)
+ * menu opens on click only. Menus are positioned via `createPortal`
  * against live `getBoundingClientRect()` measurements rather than CSS anchoring.
  *
- * Coupled to the left FloorsPanel: whenever any header dropdown (mode menu,
- * profile menu, or the "Cargar IFC" hover tip) is open, an effect calls
- * `useAppStore`'s `setLeftPanelOpen(false)` to auto-collapse FloorsPanel so
- * the two don't visually overlap; it restores `setLeftPanelOpen(true)` once
- * all three close. This sync is desktop/tablet only — mobile has its own
- * corner-menu layout (see MobileCornerMenu) and skips the collapse.
+ * Coupled to the left FloorsPanel: header dropdowns no longer auto-collapse
+ * the floors panel — the left panel stays open independently of header hover.
  */
 
 import {
@@ -43,6 +38,7 @@ import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelSummary } from "@/lib/useModelSummary";
 import GsapPopMenu from "../common/GsapPopMenu";
+import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import GlassPanel from "../common/GlassPanel";
 import ThemeToggle from "../common/ThemeToggle";
 import SeasonalBgToggle from "../common/SeasonalBgToggle";
@@ -174,7 +170,7 @@ function HeaderTip({
   return (
     <div
       ref={wrapRef}
-      className="relative flex h-full items-center justify-center self-stretch"
+      className="relative flex h-full w-full min-w-0 items-center justify-center self-stretch"
       onMouseEnter={() => {
         if (suppressed) return;
         updatePos();
@@ -246,10 +242,7 @@ export default function HeaderActions({
 
   const toolMode = useAppStore((s) => s.toolMode);
   const setToolMode = useAppStore((s) => s.setToolMode);
-  const bauteilMode = useAppStore((s) => s.bauteilMode);
-  const setBauteilMode = useAppStore((s) => s.setBauteilMode);
-  const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
-  const mode: HeaderMode = toolMode ? "editor" : bauteilMode ? "bauteil" : dataViewMode;
+  const mode: HeaderMode = toolMode ? "editor" : dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
   /** Cargar IFC hover/focus tip open — mirrored into FloorsPanel's open state. */
   const [dataTipOpen, setDataTipOpen] = useState(false);
@@ -280,11 +273,7 @@ export default function HeaderActions({
   const headerReady = useRef(false);
   const modeBtnRef = useRef<HTMLButtonElement>(null);
   const [modePos, setModePos] = useState({ top: 0, left: 0 });
-  const didSyncFloorsRef = useRef(false);
-  const modeCloseTimer = useRef<number | null>(null);
   const profileCloseTimer = useRef<number | null>(null);
-  const languageRowRef = useRef<HTMLButtonElement>(null);
-  const [langFlyoutPos, setLangFlyoutPos] = useState({ top: 0, left: 0 });
 
   const expanded =
     !isMobileHeader || pinned || hovered || modeOpen || profileOpen;
@@ -392,7 +381,6 @@ export default function HeaderActions({
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (modeCloseTimer.current != null) window.clearTimeout(modeCloseTimer.current);
         if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
         setModeOpen(false);
         setProfileOpen(false);
@@ -421,7 +409,6 @@ export default function HeaderActions({
 
   useEffect(() => {
     return () => {
-      if (modeCloseTimer.current != null) window.clearTimeout(modeCloseTimer.current);
       if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
     };
   }, []);
@@ -444,60 +431,6 @@ export default function HeaderActions({
       window.removeEventListener("scroll", updateModePos, true);
     };
   }, [modeOpen]);
-
-  /** Any header dropdown opening auto-collapses FloorsPanel; closing restores it. */
-  useEffect(() => {
-    if (isMobileHeader) return;
-    if (!didSyncFloorsRef.current) {
-      didSyncFloorsRef.current = true;
-      return;
-    }
-    setLeftPanelOpen(!modeOpen && !dataTipOpen && !profileOpen);
-  }, [modeOpen, dataTipOpen, profileOpen, isMobileHeader, setLeftPanelOpen]);
-
-  /** Language flyout position — anchored to the Sprache row, opening to its right. */
-  const updateLangFlyoutPos = () => {
-    const el = languageRowRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setLangFlyoutPos({ top: r.top, left: r.right + 8 });
-  };
-
-  useLayoutEffect(() => {
-    if (!languageExpanded) return;
-    updateLangFlyoutPos();
-    window.addEventListener("resize", updateLangFlyoutPos);
-    window.addEventListener("scroll", updateLangFlyoutPos, true);
-    return () => {
-      window.removeEventListener("resize", updateLangFlyoutPos);
-      window.removeEventListener("scroll", updateLangFlyoutPos, true);
-    };
-  }, [languageExpanded]);
-
-  const cancelModeMenuClose = () => {
-    if (modeCloseTimer.current != null) {
-      window.clearTimeout(modeCloseTimer.current);
-      modeCloseTimer.current = null;
-    }
-  };
-  /** Hover opens the mode menu — mirrors the Cargar IFC / Profil hover tips. */
-  const openModeMenu = () => {
-    cancelModeMenuClose();
-    setModeOpen(true);
-    setProfileOpen(false);
-    setLanguageExpanded(false);
-    setProfileHoverId(null);
-    setHovered(true);
-  };
-  /** Small grace delay so moving the pointer from the button into the portalled
-   *  menu below it doesn't close the menu before the pointer arrives. */
-  const closeModeMenuSoon = () => {
-    cancelModeMenuClose();
-    modeCloseTimer.current = window.setTimeout(() => {
-      setModeOpen(false);
-      setModeHoverId(null);
-    }, 150);
-  };
 
   const cancelProfileMenuClose = () => {
     if (profileCloseTimer.current != null) {
@@ -522,7 +455,6 @@ export default function HeaderActions({
   };
 
   const modeOptions: { id: HeaderMode; label: string; shortcut: string }[] = [
-    { id: "bauteil", label: t(uiLanguage, "bauteil"), shortcut: "B" },
     { id: "heizlast", label: t(uiLanguage, "heating"), shortcut: "H" },
     { id: "kuhllast", label: t(uiLanguage, "cooling"), shortcut: "K" },
     { id: "luftung", label: t(uiLanguage, "ventilation"), shortcut: "L" },
@@ -547,12 +479,15 @@ export default function HeaderActions({
   const sideActive = `${sideBtn} ${yellowGloss}`;
 
   const showIconLabels = !isMobileHeader;
+  /** Equal-width header icon columns — caption truncates with … when long. */
+  const iconColumn =
+    "flex h-full min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-px px-0.5";
   /** Tight icon→caption gap; fill header height so the pair sits vertically centered. */
   const iconStack =
-    "flex h-full flex-col items-center justify-center gap-px";
-  /** Wraps to 2 lines instead of truncating — some translations (es/en) run long. */
+    "flex h-full w-full min-w-0 flex-col items-center justify-center gap-px";
+  /** Single-line caption under header icons — ellipsis when too long. */
   const iconCaption =
-    "line-clamp-2 max-w-[6.75rem] break-words text-center text-[9px] font-semibold leading-tight tracking-wide text-[var(--text-muted)]";
+    "block w-full min-w-0 truncate text-center text-[9px] font-semibold leading-tight tracking-wide whitespace-nowrap text-[var(--text-muted)]";
 
   function ModeShortcutLabel({
     label,
@@ -578,13 +513,11 @@ export default function HeaderActions({
   const modeLabel =
     mode === "editor"
       ? t(uiLanguage, "tool")
-      : mode === "bauteil"
-        ? t(uiLanguage, "bauteil")
-        : mode === "luftung"
-          ? t(uiLanguage, "ventilation")
-          : mode === "kuhllast"
-            ? t(uiLanguage, "cooling")
-            : t(uiLanguage, "heating");
+      : mode === "luftung"
+        ? t(uiLanguage, "ventilation")
+        : mode === "kuhllast"
+          ? t(uiLanguage, "cooling")
+          : t(uiLanguage, "heating");
 
   return (
     <div
@@ -622,8 +555,6 @@ export default function HeaderActions({
           <div
             className="fixed z-[50]"
             style={{ top: modePos.top, left: modePos.left }}
-            onMouseEnter={cancelModeMenuClose}
-            onMouseLeave={closeModeMenuSoon}
           >
             <GsapPopMenu show={modeOpen} onMouseLeave={() => setModeHoverId(null)}>
               <GlassPanel variant="menu" zIndex={50}>
@@ -644,15 +575,10 @@ export default function HeaderActions({
                             const msg = t(uiLanguage, "werkzeugSaveWork");
                             if (!confirmLeaveWerkzeug(msg)) return;
                           }
-                          if (opt.id === "bauteil") {
+                          if (isDataViewMode(opt.id)) {
                             setToolMode(false);
-                            setBauteilMode(true);
-                          } else if (isDataViewMode(opt.id)) {
-                            setToolMode(false);
-                            setBauteilMode(false);
                             setDataViewMode(opt.id);
                           } else {
-                            setBauteilMode(false);
                             setToolMode(true);
                           }
                           setModeOpen(false);
@@ -701,7 +627,6 @@ export default function HeaderActions({
               </p>
 
               <button
-                ref={languageRowRef}
                 type="button"
                 onClick={() => setLanguageExpanded((v) => !v)}
                 aria-expanded={languageExpanded}
@@ -715,75 +640,70 @@ export default function HeaderActions({
                 }`}
               >
                 <span>{t(uiLanguage, "language")}</span>
-                <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/60 shadow-sm">
-                  <Image
-                    src={`/${uiLanguage}.svg`}
-                    alt={uiLanguage}
-                    width={16}
-                    height={16}
-                    className="h-full w-full object-cover"
-                  />
-                </span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`shrink-0 transition-transform duration-300 ${
+                    languageExpanded ? "rotate-180" : ""
+                  }`}
+                  aria-hidden
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
 
-              {typeof document !== "undefined" &&
-                createPortal(
-                  <div
-                    className="fixed z-[55]"
-                    style={{ top: langFlyoutPos.top, left: langFlyoutPos.left }}
-                    onMouseEnter={cancelProfileMenuClose}
-                    onMouseLeave={closeProfileMenuSoon}
-                  >
-                    <GsapPopMenu show={languageExpanded}>
-                      <GlassPanel variant="menu" zIndex={55}>
-                        <div className="w-max min-w-[9rem] space-y-1 p-1.5">
-                          {(
-                            [
-                              ["en", "langEn"],
-                              ["de", "langDe"],
-                              ["es", "langEs"],
-                            ] as const
-                          ).map(([lang, labelKey]) => {
-                            const selected = uiLanguage === lang;
-                            const highlighted =
-                              profileHoverId != null
-                                ? profileHoverId === lang
-                                : selected;
-                            return (
-                              <button
-                                key={lang}
-                                type="button"
-                                onMouseEnter={() => setProfileHoverId(lang)}
-                                onClick={() => {
-                                  setUiLanguage(lang);
-                                  setProfileHoverId(null);
-                                  setLanguageExpanded(false);
-                                }}
-                                className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
-                                  highlighted
-                                    ? menuRowHighlight
-                                    : `${menuRowIdle} text-[var(--text-body)] ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
-                                }`}
-                              >
-                                <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
-                                  <Image
-                                    src={`/${lang}.svg`}
-                                    alt={lang}
-                                    width={20}
-                                    height={20}
-                                    className="h-full w-full object-cover"
-                                  />
-                                </span>
-                                {t(uiLanguage, labelKey)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </GlassPanel>
-                    </GsapPopMenu>
-                  </div>,
-                  document.body,
-                )}
+              <GsapHeightAccordion
+                open={languageExpanded}
+                innerClassName="flex flex-col gap-1 px-1 pb-1 pt-0.5"
+                contentKey={uiLanguage}
+              >
+                {(
+                  [
+                    ["en", "langEn"],
+                    ["de", "langDe"],
+                    ["es", "langEs"],
+                  ] as const
+                ).map(([lang, labelKey]) => {
+                  const selected = uiLanguage === lang;
+                  const highlighted =
+                    profileHoverId != null
+                      ? profileHoverId === lang
+                      : selected;
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onMouseEnter={() => setProfileHoverId(lang)}
+                      onClick={() => {
+                        setUiLanguage(lang);
+                        setProfileHoverId(null);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
+                        highlighted
+                          ? menuRowHighlight
+                          : `${menuRowIdle} text-[var(--text-body)] ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
+                      }`}
+                    >
+                      <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
+                        <Image
+                          src={`/${lang}.svg`}
+                          alt={lang}
+                          width={20}
+                          height={20}
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                      {t(uiLanguage, labelKey)}
+                    </button>
+                  );
+                })}
+              </GsapHeightAccordion>
 
               <div
                 onMouseEnter={() => setProfileHoverId("theme")}
@@ -861,7 +781,7 @@ export default function HeaderActions({
                 isMobileHeader ? "pr-5" : "pr-3 sm:pr-3.5"
               }`}
             >
-              {/* Logo + mode — fixed left cluster (never shifts on expand) */}
+              {/* Logo — fixed left cluster (never shifts on expand) */}
               <div
                 className={`flex shrink-0 items-center self-stretch pl-3 sm:pl-3.5 ${
                   showIconLabels ? "" : "py-1"
@@ -876,64 +796,84 @@ export default function HeaderActions({
                   priority
                   onLoad={() => setLogoReady(true)}
                 />
-
-                {showMode && (
-                  <>
-                    <span
-                      className={`mx-2.5 w-px shrink-0 self-center bg-amber-400/80 sm:mx-3 ${
-                        showIconLabels ? "h-7" : "h-5 sm:h-6"
-                      }`}
-                      aria-hidden
-                    />
-                    <div className="relative flex h-full items-center justify-center self-stretch">
-                      <button
-                        ref={modeBtnRef}
-                        type="button"
-                        onMouseEnter={openModeMenu}
-                        onMouseLeave={closeModeMenuSoon}
-                        onClick={() => {
-                          cancelModeMenuClose();
-                          setModeOpen((v) => !v);
-                          setProfileOpen(false);
-                          setLanguageExpanded(false);
-                          setProfileHoverId(null);
-                          setModeHoverId(null);
-                          setHovered(true);
-                        }}
-                        aria-expanded={modeOpen}
-                        aria-label={modeLabel}
-                        title={t(uiLanguage, "viewHintWithTool")}
-                        className={
-                          showIconLabels
-                            ? iconStack
-                            : modeOpen
-                              ? roundActive
-                              : roundIdle
-                        }
-                      >
-                        {showIconLabels ? (
-                          <>
-                            <span className={modeOpen ? roundActive : roundIdle}>
-                              <ModeIcon mode={mode} />
-                            </span>
-                            <span className={iconCaption}>{modeLabel}</span>
-                          </>
-                        ) : (
-                          <ModeIcon mode={mode} />
-                        )}
-                      </button>
-                    </div>
-                  </>
-                )}
               </div>
 
-              {showActions && (
+              {(showMode || showActions) && (
                 <div
                   ref={iconsRef}
-                  className={`flex min-w-0 flex-1 items-center justify-evenly self-stretch px-2 sm:px-3 ${
-                    showIconLabels ? "" : "py-1"
+                  className={`flex min-w-0 flex-1 items-stretch self-stretch px-1 sm:px-2 ${
+                    showIconLabels ? "" : "items-center py-1"
                   }`}
                 >
+                  {showMode && (
+                    <>
+                      <span
+                        className={`mx-1.5 w-px shrink-0 self-center bg-amber-400/80 sm:mx-2 ${
+                          showIconLabels ? "h-7" : "h-5 sm:h-6"
+                        }`}
+                        aria-hidden
+                      />
+                      <div
+                        className={
+                          showIconLabels
+                            ? iconColumn
+                            : "relative flex h-full items-center justify-center self-stretch"
+                        }
+                      >
+                        <HeaderTip
+                          label={modeLabel}
+                          hint={t(uiLanguage, "viewHintWithTool")}
+                        >
+                          <button
+                            ref={modeBtnRef}
+                            type="button"
+                            onClick={() => {
+                              setModeOpen((v) => !v);
+                              setProfileOpen(false);
+                              setLanguageExpanded(false);
+                              setProfileHoverId(null);
+                              setModeHoverId(null);
+                              setHovered(true);
+                            }}
+                            aria-expanded={modeOpen}
+                            aria-label={modeLabel}
+                            className={
+                              showIconLabels
+                                ? iconStack
+                                : modeOpen
+                                  ? roundActive
+                                  : roundIdle
+                            }
+                          >
+                            {showIconLabels ? (
+                              <>
+                                <span
+                                  className={modeOpen ? roundActive : roundIdle}
+                                >
+                                  <ModeIcon mode={mode} />
+                                </span>
+                                <span className={iconCaption} title={modeLabel}>
+                                  {modeLabel}
+                                </span>
+                              </>
+                            ) : (
+                              <ModeIcon mode={mode} />
+                            )}
+                          </button>
+                        </HeaderTip>
+                      </div>
+                    </>
+                  )}
+
+                  {showActions && (
+                    <>
+                    <div
+                      className={
+                        showIconLabels
+                          ? iconColumn
+                          : "relative flex h-full items-center justify-center self-stretch"
+                      }
+                    >
                     <HeaderTip
                       label={t(uiLanguage, "data")}
                       hint={t(uiLanguage, "dataHint")}
@@ -990,7 +930,10 @@ export default function HeaderActions({
                             <span className={hasModel ? sideActive : sideIdle}>
                               <UploadIcon />
                             </span>
-                            <span className={iconCaption}>
+                            <span
+                              className={iconCaption}
+                              title={t(uiLanguage, "ifcUpload")}
+                            >
                               {t(uiLanguage, "ifcUpload")}
                             </span>
                           </>
@@ -999,8 +942,15 @@ export default function HeaderActions({
                         )}
                       </button>
                     </HeaderTip>
+                    </div>
 
-                    <div className="relative flex h-full items-center justify-center self-stretch">
+                    <div
+                      className={
+                        showIconLabels
+                          ? iconColumn
+                          : "relative flex h-full items-center justify-center self-stretch"
+                      }
+                    >
                       <button
                         type="button"
                         onMouseEnter={openProfileMenu}
@@ -1033,7 +983,10 @@ export default function HeaderActions({
                             >
                               <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
                             </span>
-                            <span className={iconCaption}>
+                            <span
+                              className={iconCaption}
+                              title={t(uiLanguage, "profile")}
+                            >
                               {t(uiLanguage, "profile")}
                             </span>
                           </>
@@ -1042,6 +995,8 @@ export default function HeaderActions({
                         )}
                       </button>
                     </div>
+                    </>
+                  )}
                 </div>
               )}
 
