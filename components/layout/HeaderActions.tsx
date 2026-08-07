@@ -2,8 +2,8 @@
 
 /**
  * HeaderActions — the app's top-left header bar: logo, mode-selector menu
- * (Bauteile / Heizung / Kälte / Wohnungslüftung / Werkzeuge), the IFC upload
- * button, and a Profil menu (language, theme, seasonal background).
+ * (Heizung / Kälte / Wohnungslüftung), the IFC upload button, and a Profil
+ * menu (language, theme, seasonal background).
  *
  * Renders as a single animated glass shell (GSAP-driven width/opacity) that
  * expands on hover/pin and collapses on mobile. Dropdowns (mode menu, profile
@@ -33,7 +33,6 @@ import {
 } from "@/lib/layoutTokens";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
-import { confirmLeaveWerkzeug } from "@/lib/werkzeugUnsaved";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelSummary } from "@/lib/useModelSummary";
@@ -44,11 +43,11 @@ import ThemeToggle from "../common/ThemeToggle";
 import SeasonalBgToggle from "../common/SeasonalBgToggle";
 import {
   HEADER_MODE_ICON,
-  isDataViewMode,
-  type HeaderMode,
+  type DataViewMode,
 } from "@/lib/dataViewMode";
 
 type ProfileHoverId = "language" | "theme" | "seasonalBg" | "en" | "de" | "es";
+type ModeHoverId = DataViewMode;
 
 const menuRowIdle =
   "box-border border border-transparent transition-[background-color,border-color,box-shadow,color] duration-200";
@@ -73,7 +72,7 @@ function ModeIcon({
   mode,
   className = "h-5 w-5 object-contain sm:h-[1.35rem] sm:w-[1.35rem]",
 }: {
-  mode: HeaderMode;
+  mode: DataViewMode;
   className?: string;
 }) {
   return (
@@ -240,16 +239,14 @@ export default function HeaderActions({
   const { highlight: menuRowHighlight, surfaceHighlight: menuRowSurfaceHighlight } =
     menuRowStyles(isDark);
 
-  const toolMode = useAppStore((s) => s.toolMode);
-  const setToolMode = useAppStore((s) => s.setToolMode);
-  const mode: HeaderMode = toolMode ? "editor" : dataViewMode;
+  const mode = dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
   /** Cargar IFC hover/focus tip open — mirrored into FloorsPanel's open state. */
   const [dataTipOpen, setDataTipOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
   /** Which dropdown row is under the pointer — highlight follows this, not only selection. */
-  const [modeHoverId, setModeHoverId] = useState<HeaderMode | null>(null);
+  const [modeHoverId, setModeHoverId] = useState<ModeHoverId | null>(null);
   /** Which profile dropdown row is under the pointer — highlight follows cursor. */
   const [profileHoverId, setProfileHoverId] = useState<ProfileHoverId | null>(
     null,
@@ -454,11 +451,10 @@ export default function HeaderActions({
     }, 150);
   };
 
-  const modeOptions: { id: HeaderMode; label: string; shortcut: string }[] = [
+  const modeOptions: { id: DataViewMode; label: string; shortcut: string }[] = [
     { id: "heizlast", label: t(uiLanguage, "heating"), shortcut: "H" },
     { id: "kuhllast", label: t(uiLanguage, "cooling"), shortcut: "K" },
     { id: "luftung", label: t(uiLanguage, "ventilation"), shortcut: "L" },
-    { id: "editor", label: t(uiLanguage, "tool"), shortcut: "W" },
   ];
 
   const yellowGloss = isDark
@@ -511,13 +507,11 @@ export default function HeaderActions({
     );
   }
   const modeLabel =
-    mode === "editor"
-      ? t(uiLanguage, "tool")
-      : mode === "luftung"
-        ? t(uiLanguage, "ventilation")
-        : mode === "kuhllast"
-          ? t(uiLanguage, "cooling")
-          : t(uiLanguage, "heating");
+    mode === "luftung"
+      ? t(uiLanguage, "ventilation")
+      : mode === "kuhllast"
+        ? t(uiLanguage, "cooling")
+        : t(uiLanguage, "heating");
 
   return (
     <div
@@ -569,18 +563,7 @@ export default function HeaderActions({
                         type="button"
                         onMouseEnter={() => setModeHoverId(opt.id)}
                         onClick={() => {
-                          const leavingWerkzeug =
-                            toolMode && opt.id !== "editor";
-                          if (leavingWerkzeug) {
-                            const msg = t(uiLanguage, "werkzeugSaveWork");
-                            if (!confirmLeaveWerkzeug(msg)) return;
-                          }
-                          if (isDataViewMode(opt.id)) {
-                            setToolMode(false);
-                            setDataViewMode(opt.id);
-                          } else {
-                            setToolMode(true);
-                          }
+                          setDataViewMode(opt.id);
                           setModeOpen(false);
                           setModeHoverId(null);
                         }}
