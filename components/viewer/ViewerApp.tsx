@@ -20,7 +20,7 @@
  * view (with fullscreen), and 1-6 to apply a legend swatch preset.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import gsap from "gsap";
 import type { Group } from "three";
 import type { LoadedModel } from "@/lib/types";
@@ -36,6 +36,8 @@ import {
   hydratePanelState,
   persistModelId,
   useAppStore,
+  TOOL_RIGHT_PANEL_PEEK_PX,
+  clampToolRightPanelWidth,
 } from "@/store/useAppStore";
 import { ModelSceneContext } from "./ModelSceneContext";
 import Viewer3D, { type Viewer3DHandle } from "./Viewer3D";
@@ -48,12 +50,22 @@ import PresentationMobileDock from "../presentation/PresentationMobileDock";
 import PresentationSidePanel from "../presentation/PresentationSidePanel";
 import MobileCornerMenu from "../layout/MobileCornerMenu";
 import ToolSidePanel from "../tool/ToolSidePanel";
+import ToolTopBar from "../tool/ToolTopBar";
+import ToolLeftPalette from "../tool/ToolLeftPalette";
+import ToolModeCursorHud from "../tool/ToolModeCursorHud";
+import WerkzeugEntryPanel from "../tool/WerkzeugEntryPanel";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
 import { t } from "@/lib/i18n";
-import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
+import {
+  confirmLeaveWerkzeug,
+  hasUnsavedWerkzeugWork,
+} from "@/lib/werkzeugUnsaved";
+import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
+import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent, killGsap } from "@/lib/gsapMotion";
 import { LEGEND_SWATCH_PRESETS } from "@/lib/legendSwatchPresets";
 import {
   OPEN_IFC_FILE_EVENT,
@@ -80,10 +92,44 @@ type LoadSource =
 
 function DragSnapHud() {
   const hint = useToolMarkupStore((s) => s.dragSnapHint);
-  if (!hint) return null;
+  const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const wallHint =
+    wallDraw?.cursor && wallDraw.lengthMm != null
+      ? `${Math.round(wallDraw.lengthMm)} mm${
+          wallDraw.angleDeg != null
+            ? ` · ${wallDraw.angleDeg}°${wallDraw.angleSnapped ? " ✦" : ""}`
+            : ""
+        }`
+      : null;
+  const text = hint?.text ?? wallHint;
+  if (!text) return null;
+  const follow =
+    hint?.clientX != null && hint?.clientY != null
+      ? { left: hint.clientX + 14, top: hint.clientY - 28 }
+      : null;
   return (
-    <div className="pointer-events-none fixed top-[6.5rem] left-1/2 z-[37] -translate-x-1/2 rounded-lg border border-emerald-400/40 bg-[var(--popover-bg)] px-3 py-1.5 text-[11px] font-semibold tabular-nums text-emerald-700 shadow-lg backdrop-blur-md md:top-28">
-      {hint}
+    <div
+      className={`pointer-events-none fixed z-[37] tool-glass rounded-lg px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+        wallDraw?.angleSnapped
+          ? "text-sky-800"
+          : "text-emerald-700"
+      } ${follow ? "" : "top-[calc(4.25rem+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2"}`}
+      style={follow ?? undefined}
+    >
+      {text}
+    </div>
+  );
+}
+
+function SceneHoverTipHud() {
+  const tip = useToolMarkupStore((s) => s.sceneHoverTip);
+  if (!tip) return null;
+  return (
+    <div
+      className="pointer-events-none fixed z-[38] max-w-[16rem] -translate-x-1/2 -translate-y-full rounded-md bg-zinc-900/90 px-2 py-1 text-[10px] font-semibold tracking-wide text-white shadow-lg"
+      style={{ left: tip.clientX, top: tip.clientY - 12 }}
+    >
+      {tip.text}
     </div>
   );
 }
@@ -107,7 +153,12 @@ export default function ViewerApp() {
   const [isDesktop, setIsDesktop] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
+  const [toolPanelResizing, setToolPanelResizing] = useState(false);
   const dragDepthRef = useRef(0);
+  const toolResizeDragRef = useRef<{
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const rooms = useAppStore((s) => s.rooms);
   const isLoadingModel = useAppStore((s) => s.isLoadingModel);
@@ -120,6 +171,7 @@ export default function ViewerApp() {
   const selectedRoomId = useAppStore((s) => s.selectedRoomId);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const toolMode = useAppStore((s) => s.toolMode);
+  const toolRightPanelWidthPx = useAppStore((s) => s.toolRightPanelWidthPx);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const pdfCaptureActive = useAppStore((s) => s.pdfCaptureActive);
 
@@ -142,6 +194,9 @@ export default function ViewerApp() {
   const clearModelData = useAppStore((s) => s.clearModelData);
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const setToolRightPanelWidthPx = useAppStore(
+    (s) => s.setToolRightPanelWidthPx,
+  );
 
   useEffect(() => {
     debugLog("ViewerApp", "mount", "info");
@@ -178,6 +233,17 @@ export default function ViewerApp() {
     setRightPanelOpen(false);
   }, [isPresentationView, isDesktop, setLeftPanelOpen, setRightPanelOpen]);
 
+  useEffect(() => {
+    if (!toolMode) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedWerkzeugWork()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [toolMode]);
+
   useLayoutEffect(() => {
     const bar = progressBarRef.current;
     if (!bar || loadProgress < 0) return;
@@ -189,7 +255,7 @@ export default function ViewerApp() {
   }, [loadProgress]);
 
   useLayoutEffect(() => {
-    if (!isDesktop) return;
+    if (!isDesktop || toolMode) return;
     const aside = leftAsideRef.current;
     if (!aside) return;
     const state = isPresentationView
@@ -226,12 +292,38 @@ export default function ViewerApp() {
         ease: gsapEase.iosOut,
       });
     }
-  }, [isDesktop, leftPanelOpen, isPresentationView]);
+  }, [isDesktop, leftPanelOpen, isPresentationView, toolMode]);
+
+  useLayoutEffect(() => {
+    if (!isDesktop || !toolMode) return;
+    const aside = rightAsideRef.current;
+    if (!aside) return;
+    // Drop any GSAP x from legend mode once when entering Werkzeug.
+    killGsap(aside);
+    gsap.set(aside, { clearProps: "transform,x" });
+    aside.style.opacity = "1";
+  }, [isDesktop, toolMode]);
 
   useLayoutEffect(() => {
     if (!isDesktop) return;
     const aside = rightAsideRef.current;
     if (!aside) return;
+
+    // Werkzeug collapse uses React CSS transform — do not touch aside transform here.
+    if (toolMode) {
+      if (rightContentRef.current) {
+        animateSidebarContent(rightContentRef.current, rightPanelOpen);
+      }
+      if (rightChevronRef.current) {
+        gsap.to(rightChevronRef.current, {
+          rotation: rightPanelOpen ? 0 : 180,
+          duration: gsapDuration.fast,
+          ease: gsapEase.iosOut,
+        });
+      }
+      return;
+    }
+
     const state = rightPanelOpen ? "open" : "peek";
     animateSidebarPanel(aside, state, { side: "right" });
     if (rightContentRef.current) {
@@ -244,7 +336,62 @@ export default function ViewerApp() {
         ease: gsapEase.iosOut,
       });
     }
-  }, [isDesktop, rightPanelOpen]);
+  }, [isDesktop, rightPanelOpen, toolMode]);
+
+  // Keep docked width inside the viewport when the window shrinks.
+  useEffect(() => {
+    if (!toolMode || !isDesktop) return;
+    const onResize = () => {
+      const current = useAppStore.getState().toolRightPanelWidthPx;
+      setToolRightPanelWidthPx(
+        clampToolRightPanelWidth(current, window.innerWidth),
+      );
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [toolMode, isDesktop, setToolRightPanelWidthPx]);
+
+  const onToolPanelResizePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!toolMode || !rightPanelOpen) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
+      toolResizeDragRef.current = {
+        startX: e.clientX,
+        startWidth: toolRightPanelWidthPx,
+      };
+      setToolPanelResizing(true);
+    },
+    [toolMode, rightPanelOpen, toolRightPanelWidthPx],
+  );
+
+  const onToolPanelResizePointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = toolResizeDragRef.current;
+      if (!drag) return;
+      const dx = drag.startX - e.clientX;
+      setToolRightPanelWidthPx(
+        clampToolRightPanelWidth(drag.startWidth + dx, window.innerWidth),
+      );
+    },
+    [setToolRightPanelWidthPx],
+  );
+
+  const onToolPanelResizePointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!toolResizeDragRef.current) return;
+      toolResizeDragRef.current = null;
+      setToolPanelResizing(false);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    },
+    [],
+  );
 
   const runLoad = useCallback(
     async (source: LoadSource) => {
@@ -379,7 +526,44 @@ export default function ViewerApp() {
             for (const n of meta.notes) {
               await idbPutNote(normalizeNote(n));
             }
+            if (meta.layout) {
+              const {
+                idbPutLevel,
+                idbPutWall,
+                idbPutDoor,
+                idbPutWindow,
+                idbPutSlab,
+                idbPutUnderlay,
+              } = await import("@/lib/layoutDrawingDb");
+              for (const l of meta.layout.levels) await idbPutLevel(l);
+              for (const w of meta.layout.walls) await idbPutWall(w);
+              for (const d of meta.layout.doors) await idbPutDoor(d);
+              for (const w of meta.layout.windows) await idbPutWindow(w);
+              for (const s of meta.layout.slabs ?? []) await idbPutSlab(s);
+              for (const u of meta.layout.underlays ?? [])
+                await idbPutUnderlay(u);
+            }
+            if (!ifcBytes || ifcBytes.byteLength === 0) {
+              useAppStore
+                .getState()
+                .setActiveModelId(id, meta.modelLabel ?? file.name, null);
+              if (meta.layout?.levels?.length) {
+                useAppStore.getState().setFloors(
+                  meta.layout.levels.map((l) => ({
+                    id: l.id,
+                    name: l.name,
+                    elevation: l.elevationMm / 1000,
+                    expressId: -1,
+                    typicalHeight: l.heightMm / 1000,
+                    isBuildingStory: true,
+                  })),
+                );
+              }
+            }
             await useToolMarkupStore.getState().loadForModel(id);
+            await useLayoutDrawingStore
+              .getState()
+              .loadForProject(id, id.startsWith("empty:"));
           } catch (err) {
             const message =
               err instanceof Error ? err.message : "Failed to open .frag";
@@ -472,6 +656,25 @@ export default function ViewerApp() {
         return;
       }
 
+      // Werkzeug undo / redo
+      if (
+        store.toolMode &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey
+      ) {
+        const k = e.key.toLowerCase();
+        if (k === "z" && !e.shiftKey) {
+          e.preventDefault();
+          void undoWerkzeug();
+          return;
+        }
+        if (k === "y" || (k === "z" && e.shiftKey)) {
+          e.preventDefault();
+          void redoWerkzeug();
+          return;
+        }
+      }
+
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -480,18 +683,31 @@ export default function ViewerApp() {
       if (key === "w") {
         e.preventDefault();
         const next = !store.toolMode;
+        if (!next) {
+          const msg = t(store.uiLanguage, "werkzeugSaveWork");
+          if (!confirmLeaveWerkzeug(msg)) return;
+        }
         if (next) store.setBauteilMode(false);
         store.setToolMode(next);
+        if (next) store.setLeftPanelOpen(true);
         return;
       }
       if (key === "b") {
         e.preventDefault();
+        if (store.toolMode) {
+          const msg = t(store.uiLanguage, "werkzeugSaveWork");
+          if (!confirmLeaveWerkzeug(msg)) return;
+        }
         store.setToolMode(false);
         store.setBauteilMode(!store.bauteilMode);
         return;
       }
       if (key === "h") {
         e.preventDefault();
+        if (store.toolMode) {
+          const msg = t(store.uiLanguage, "werkzeugSaveWork");
+          if (!confirmLeaveWerkzeug(msg)) return;
+        }
         store.setToolMode(false);
         store.setBauteilMode(false);
         store.setDataViewMode("heizlast");
@@ -499,6 +715,10 @@ export default function ViewerApp() {
       }
       if (key === "l") {
         e.preventDefault();
+        if (store.toolMode) {
+          const msg = t(store.uiLanguage, "werkzeugSaveWork");
+          if (!confirmLeaveWerkzeug(msg)) return;
+        }
         store.setToolMode(false);
         store.setBauteilMode(false);
         store.setDataViewMode("luftung");
@@ -506,6 +726,10 @@ export default function ViewerApp() {
       }
       if (key === "k") {
         e.preventDefault();
+        if (store.toolMode) {
+          const msg = t(store.uiLanguage, "werkzeugSaveWork");
+          if (!confirmLeaveWerkzeug(msg)) return;
+        }
         store.setToolMode(false);
         store.setBauteilMode(false);
         store.setDataViewMode("kuhllast");
@@ -565,14 +789,22 @@ export default function ViewerApp() {
     setPointerOverViewer(false);
   }, []);
 
-  const hasModel = rooms.length > 0 || Boolean(shellGroup);
-  const showEmptyCta = !hasModel && !isLoadingModel && !loadError;
+  const activeModelId = useAppStore((s) => s.activeModelId);
+  const hasModel =
+    rooms.length > 0 || Boolean(shellGroup) || Boolean(activeModelId);
+  const showEmptyCta =
+    !hasModel && !isLoadingModel && !loadError && !toolMode;
+  const showWerkzeugEntry =
+    toolMode && !hasModel && !isLoadingModel && !loadError;
   const showError = Boolean(loadError) && !isLoadingModel;
 
   const progressLabel =
     loadProgress < 0
       ? loadMessage || t(uiLanguage, "working")
       : `${loadMessage || t(uiLanguage, "loading")} (${Math.round(Math.max(0, loadProgress) * 100)}%)`;
+
+  const toolViewerRightInset =
+    isDesktop && toolMode ? TOOL_RIGHT_PANEL_PEEK_PX : 0;
 
   return (
     <ModelSceneContext.Provider value={sceneValue}>
@@ -592,7 +824,15 @@ export default function ViewerApp() {
           isLoadingModel={isLoadingModel}
         />
 
-        <div className="fixed inset-0 z-0">
+        <div
+          className="fixed top-0 bottom-0 left-0 z-0"
+          style={{
+            right: toolViewerRightInset,
+            transition: toolPanelResizing
+              ? "none"
+              : "right 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
           <Viewer3D
             ref={viewerRef}
             onPointerMove={handlePointerMove}
@@ -671,6 +911,13 @@ export default function ViewerApp() {
         </GsapOverlay>
 
         <GsapOverlay
+          show={showWerkzeugEntry}
+          className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6"
+        >
+          <WerkzeugEntryPanel onFile={handleFile} />
+        </GsapOverlay>
+
+        <GsapOverlay
           show={showEmptyCta}
           className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4 sm:p-6"
         >
@@ -746,7 +993,12 @@ export default function ViewerApp() {
           );
         })()}
         <ViewerToolbar viewerRef={viewerRef} targetRef={rootRef} />
+        {toolMode && <ToolTopBar />}
         {toolMode && <DragSnapHud />}
+        {toolMode && <SceneHoverTipHud />}
+        {toolMode && pointerOverViewer && (
+          <ToolModeCursorHud x={pointer.x} y={pointer.y} />
+        )}
         <ViewerContextMenu
           viewerRef={viewerRef}
           rootRef={rootRef}
@@ -754,9 +1006,8 @@ export default function ViewerApp() {
           loadDisabled={isLoadingModel}
         />
 
-        {/* LEFT — Floors & Rooms (kept mounted but hidden in presentation so PDF export can restore framing).
-            Desktop: bottom-aligned above toolbar; top cleared for taller labeled header.
-            Werkzeug has no model-elements panel — the structure tree replaces it. */}
+        {/* LEFT — Floors (analysis) or Werkzeug floating tool strip */}
+        {isDesktop && toolMode && <ToolLeftPalette />}
         {isDesktop && !toolMode && (
           <aside
             ref={leftAsideRef}
@@ -813,29 +1064,66 @@ export default function ViewerApp() {
         )}
 
         {/* RIGHT — Legend: bottom-aligned in basic view; top-right in presentation.
-            Always size to content (max-height caps tall lists); never stretch empty. */}
+            Werkzeug: full-height docked panel; 3D viewport insets so nothing renders behind it. */}
         {isDesktop && (
           <aside
             ref={rightAsideRef}
-            className={`fixed z-[35] flex w-[min(18rem,calc(100vw-1.5rem))] flex-col md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`fixed z-[35] flex flex-col pointer-events-auto ${
               toolMode
-                ? "top-36 bottom-16 max-h-[calc(100dvh-11.5rem)] sm:bottom-[4.5rem] md:top-40"
-                : isPresentationView
-                  ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
-                  : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
-            } right-2 pointer-events-auto md:right-4`}
+                ? "inset-y-0 right-0 h-dvh max-h-dvh overflow-hidden rounded-none"
+                : `w-[min(18rem,calc(100vw-1.5rem))] md:w-[min(22rem,calc(100vw-2rem))] lg:w-[min(24rem,calc(100vw-2rem))] transition-[top,bottom,max-height] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] right-2 md:right-4 ${
+                    isPresentationView
+                      ? "top-32 bottom-auto max-h-[calc(100dvh-10.5rem)] md:top-36 lg:top-40"
+                      : "top-auto bottom-16 max-h-[calc(100dvh-10.5rem)] sm:bottom-[4.5rem]"
+                  }`
+            }`}
+            style={
+              toolMode
+                ? {
+                    width: rightPanelOpen
+                      ? toolRightPanelWidthPx
+                      : TOOL_RIGHT_PANEL_PEEK_PX,
+                    transition: toolPanelResizing
+                      ? "none"
+                      : "width 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                  }
+                : undefined
+            }
           >
             <GlassPanel
               variant="panel"
               zIndex={35}
               fill={toolMode}
+              preferCss={toolMode}
               allowOverflow={!toolMode}
+              wrapperStyle={
+                toolMode
+                  ? {
+                      borderRadius: 0,
+                      background: "var(--surface-muted)",
+                    }
+                  : undefined
+              }
               wrapperClassName={
                 toolMode
-                  ? "relative mb-2 flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
+                  ? "relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden !rounded-none"
                   : "relative mb-2 max-h-[inherit] w-full min-w-0"
               }
+              className={toolMode ? "tool-dock-panel !rounded-none" : ""}
             >
+              {toolMode && rightPanelOpen && (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t(uiLanguage, "resizePanel")}
+                  title={t(uiLanguage, "resizePanel")}
+                  onPointerDown={onToolPanelResizePointerDown}
+                  onPointerMove={onToolPanelResizePointerMove}
+                  onPointerUp={onToolPanelResizePointerUp}
+                  onPointerCancel={onToolPanelResizePointerUp}
+                  className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-full cursor-col-resize touch-none hover:bg-amber-400/35 active:bg-amber-400/50"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
@@ -848,7 +1136,13 @@ export default function ViewerApp() {
                       ? t(uiLanguage, "hideLegend")
                       : t(uiLanguage, "showLegend")
                 }
-                className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center rounded-l-3xl bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45"
+                className={`absolute inset-y-0 left-0 z-30 flex items-center justify-center bg-zinc-400/30 text-zinc-600 transition-colors duration-300 ease-out hover:bg-zinc-400/45 ${
+                  toolMode
+                    ? rightPanelOpen
+                      ? "w-5 rounded-none"
+                      : "w-full rounded-none"
+                    : "w-5 rounded-l-3xl"
+                }`}
               >
                 <svg
                   ref={rightChevronRef}
@@ -869,7 +1163,7 @@ export default function ViewerApp() {
                 ref={rightContentRef}
                 className={`w-full min-w-0 pl-5 pr-1 ${
                   toolMode
-                    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden pt-[calc(3.75rem+env(safe-area-inset-top,0px))]"
                     : "thin-scroll max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain"
                 } ${rightPanelOpen ? "" : "pointer-events-none"}`}
               >

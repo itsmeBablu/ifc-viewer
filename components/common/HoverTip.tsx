@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * HoverTip — hover/focus tooltip styled like the bottom toolbar's tip
- * (glass label + hint text), portaled to <body> (or the fullscreen
- * element) so parent overflow/clipping can't hide it.
- *
- * Tracks the anchor's position on scroll/resize; `placement` flips the
- * tip above or below the anchor. A click suppresses the tip until the
- * pointer leaves, so it doesn't reappear right after a tap/click.
+ * HoverTip — hover/focus tooltip styled like the bottom toolbar tip.
+ * Delayed open (~250ms), immediate close on leave; click suppresses until leave.
  */
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { canHover } from "@/lib/canHover";
 import GlassPanel from "./GlassPanel";
@@ -19,41 +20,54 @@ type Props = {
   label: string;
   hint: string;
   children: ReactNode;
-  /** Prefer tip below the anchor (e.g. legend in a top panel). Default: above. */
   placement?: "above" | "below";
   className?: string;
+  /** Skip tip entirely (e.g. when a child popover is open). */
+  disabled?: boolean;
 };
 
-/**
- * Hover popup matching the bottom toolbar tip style (glass label + hint).
- * Portaled so overflow/clipping parents cannot hide it.
- */
 export default function HoverTip({
   label,
   hint,
   children,
   placement = "above",
   className = "",
+  disabled = false,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const [suppressed, setSuppressed] = useState(false);
   const [pos, setPos] = useState({ top: 0, bottom: 0, left: 0 });
   const hoverCapable = canHover();
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   const updatePos = () => {
     const el = wrapRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     setPos({
-      top: r.bottom + 12,
-      bottom: window.innerHeight - r.top + 12,
+      top: r.bottom + 10,
+      bottom: window.innerHeight - r.top + 10,
       left: r.left + r.width / 2,
     });
   };
 
+  const close = () => {
+    clearTimer();
+    setOpen(false);
+  };
+
+  useEffect(() => () => clearTimer(), []);
+
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || disabled) return;
     updatePos();
     window.addEventListener("resize", updatePos);
     window.addEventListener("scroll", updatePos, true);
@@ -61,40 +75,48 @@ export default function HoverTip({
       window.removeEventListener("resize", updatePos);
       window.removeEventListener("scroll", updatePos, true);
     };
-  }, [open]);
+  }, [open, disabled]);
+
+  const tipVisible = open && !disabled && hoverCapable;
 
   return (
     <div
       ref={wrapRef}
-      className={`relative ${className}`}
+      className={`relative inline-flex ${className}`}
       onMouseEnter={() => {
-        if (!hoverCapable || suppressed) return;
-        updatePos();
-        setOpen(true);
+        if (!hoverCapable || suppressed || disabled) return;
+        clearTimer();
+        timerRef.current = setTimeout(() => {
+          updatePos();
+          setOpen(true);
+        }, 260);
       }}
       onMouseLeave={() => {
+        clearTimer();
         setOpen(false);
         setSuppressed(false);
       }}
       onFocus={() => {
-        if (!hoverCapable || suppressed) return;
+        if (!hoverCapable || suppressed || disabled) return;
         updatePos();
         setOpen(true);
       }}
-      onBlur={() => setOpen(false)}
-      onClick={() => {
+      onBlur={(e) => {
+        if (!wrapRef.current?.contains(e.relatedTarget as Node)) close();
+      }}
+      onPointerDown={() => {
+        clearTimer();
         setOpen(false);
         setSuppressed(true);
       }}
     >
       {children}
-      {open &&
-        hoverCapable &&
+      {tipVisible &&
         typeof document !== "undefined" &&
         createPortal(
           <div
             role="tooltip"
-            className="pointer-events-none fixed z-[200] w-max max-w-[240px] -translate-x-1/2"
+            className="pointer-events-none fixed z-[200] w-max max-w-[220px] -translate-x-1/2"
             style={
               placement === "below"
                 ? { top: pos.top, left: pos.left }
@@ -102,11 +124,11 @@ export default function HoverTip({
             }
           >
             <GlassPanel variant="panel" zIndex={200}>
-              <div className="px-3.5 py-2.5 text-center">
-                <p className="text-[12px] font-semibold tracking-wide text-[var(--text-strong)]">
+              <div className="px-3 py-2 text-center">
+                <p className="text-[11px] font-semibold tracking-wide text-[var(--text-strong)]">
                   {label}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-[var(--text-body)]">
+                <p className="mt-0.5 text-[10px] leading-snug text-[var(--text-body)]">
                   {hint}
                 </p>
               </div>

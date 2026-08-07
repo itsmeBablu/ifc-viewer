@@ -29,6 +29,11 @@ import {
   createIfcMaterial,
 } from "./ifcMaterials";
 import { debugLog } from "./debugLog";
+import {
+  fileLengthToMetres,
+  readLengthUnitToMetres,
+} from "./ifcUnits";
+import { setSceneMetresPerUnit } from "./markupUnits";
 
 /** Prefer these PSet names when looking up heat-load / temperature values. */
 export const HEAT_LOAD_PSET_NAMES = [
@@ -1001,6 +1006,7 @@ async function extractSpaceProps(
   api: WebIFC.IfcAPI,
   modelID: number,
   expressId: number,
+  metresPerFileUnit = 1,
 ): Promise<{
   heatLoad: number;
   heizlast: number | null;
@@ -1109,9 +1115,9 @@ async function extractSpaceProps(
         "Unbounded Height",
         "Clear Height",
       ]) ?? null;
-    // Revit often exports mm (e.g. 2549.9); treat values > 20 as mm → m.
+    // Convert using declared IFC length unit (not a mm/m heuristic).
     if (rawHeight != null && Number.isFinite(rawHeight) && rawHeight > 0) {
-      height = rawHeight > 20 ? rawHeight / 1000 : rawHeight;
+      height = fileLengthToMetres(rawHeight, metresPerFileUnit);
     }
 
     for (const item of flat) {
@@ -1245,6 +1251,16 @@ export async function loadIfcModel(
     setOpenHandle({ api, modelID });
     debugLog("ifcClient", `OpenModel ok — modelID=${modelID}`, "ok");
 
+    const lengthUnit = readLengthUnitToMetres(api, modelID);
+    const metresPerFileUnit = lengthUnit.metresPerFileUnit;
+    debugLog(
+      "ifcClient",
+      `Length unit: ${lengthUnit.label} (×${metresPerFileUnit} → m)`,
+      "ok",
+    );
+    // Scene geometry will be scaled to metres; UI mm helpers assume 1 scene unit = 1 m.
+    setSceneMetresPerUnit(1);
+
     try {
       await yieldToMain();
 
@@ -1268,7 +1284,8 @@ export async function loadIfcModel(
         const id = readString(line.GlobalId) || `storey-${sid}`;
         const name =
           readString(line.Name) || readString(line.LongName) || `Storey ${sid}`;
-        const elevation = readNumber(line.Elevation) ?? 0;
+        const rawElev = readNumber(line.Elevation) ?? 0;
+        const elevation = fileLengthToMetres(rawElev, metresPerFileUnit);
         storeyGuidByExpress.set(sid, id);
         let isBuildingStory = false;
         try {
@@ -1640,7 +1657,12 @@ export async function loadIfcModel(
           readString(line.Name) ||
           `Room ${spaceExpressId}`;
         const tagNumber = readString(line.Name) || readString(line.Tag);
-        const props = await extractSpaceProps(api, modelID, spaceExpressId);
+        const props = await extractSpaceProps(
+          api,
+          modelID,
+          spaceExpressId,
+          metresPerFileUnit,
+        );
 
         if (!sampleLogged && props.propDump.length) {
           sampleLogged = true;
@@ -1789,6 +1811,24 @@ export async function loadIfcModel(
         for (const room of rooms) {
           room.geometry.applyMatrix4(m);
         }
+      }
+
+      // Scale file units → metres so scene units match markupUnits (1 unit = 1 m).
+      if (Math.abs(metresPerFileUnit - 1) > 1e-12) {
+        const s = new THREE.Matrix4().makeScale(
+          metresPerFileUnit,
+          metresPerFileUnit,
+          metresPerFileUnit,
+        );
+        shellGroup.applyMatrix4(s);
+        for (const room of rooms) {
+          room.geometry.applyMatrix4(s);
+        }
+        debugLog(
+          "ifcClient",
+          `Scaled geometry ×${metresPerFileUnit} (${lengthUnit.label} → m)`,
+          "ok",
+        );
       }
 
       report({ phase: "done", progress: 1, message: "Ready" });

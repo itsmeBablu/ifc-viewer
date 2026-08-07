@@ -223,8 +223,8 @@ function makeFaceTexture(label: string, hover = false) {
  */
 export class ViewCube {
   readonly size = VIEW_CUBE_LAYOUT.size;
-  private readonly marginTop = VIEW_CUBE_LAYOUT.marginTop;
-  private readonly marginRight = VIEW_CUBE_LAYOUT.marginRight;
+  private marginTop = VIEW_CUBE_LAYOUT.marginTop;
+  private marginRight = VIEW_CUBE_LAYOUT.marginRight;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
   private root = new THREE.Group();
@@ -476,6 +476,13 @@ export class ViewCube {
       w: this.size,
       h: this.size,
     };
+  }
+
+  /** Live margins (e.g. Werkzeug dock open — keep cube left of the panel). */
+  setMargins(partial: { marginRight?: number; marginTop?: number }) {
+    if (partial.marginRight != null) this.marginRight = partial.marginRight;
+    if (partial.marginTop != null) this.marginTop = partial.marginTop;
+    this.updateViewport(this.canvasCss.w, this.canvasCss.h);
   }
 
   render(renderer: THREE.WebGLRenderer) {

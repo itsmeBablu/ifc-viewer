@@ -25,6 +25,10 @@ import {
   idbPutNote,
   idbPutPlacement,
 } from "@/lib/toolMarkupDb";
+import {
+  clearWerkzeugHistory,
+  pushWerkzeugHistory,
+} from "@/lib/werkzeugHistory";
 
 type CubeDrawState = {
   start: { x: number; y: number; z: number };
@@ -36,6 +40,16 @@ type CubeDrawState = {
   /** Screen Y when height phase started (for Top-view height drag). */
   heightScreenY: number | null;
 } | null;
+
+export type MarkupMeasurement = {
+  id: string;
+  ax: number;
+  ay: number;
+  az: number;
+  bx: number;
+  by: number;
+  bz: number;
+};
 
 type ToolMarkupState = {
   modelKey: string | null;
@@ -49,6 +63,21 @@ type ToolMarkupState = {
   viewPreset: MarkupViewPreset;
   /** Bumped when viewPreset changes so Viewer3D can fly the camera. */
   viewPresetToken: number;
+  /** 2×2 CAD quad view (Werkzeug). */
+  quadView: boolean;
+  /** Per-quadrant presets: TL, TR, BL, BR. */
+  quadPresets: [
+    MarkupViewPreset,
+    MarkupViewPreset,
+    MarkupViewPreset,
+    MarkupViewPreset,
+  ];
+  /** Which quadrant receives orbit / top-bar view chips. */
+  quadActiveIndex: 0 | 1 | 2 | 3;
+  /** Single-view preset restored when leaving quad mode. */
+  preQuadViewPreset: MarkupViewPreset;
+  /** Bumped when a quadrant preset is posed/fitted. */
+  quadPoseToken: number;
   placements: MarkupPlacement[];
   notes: MarkupNote[];
   selectedPlacementId: string | null;
@@ -59,27 +88,65 @@ type ToolMarkupState = {
     posZ: number;
     expressId: number | null;
     placementId: string | null;
+    wallId: string | null;
+    doorId: string | null;
+    windowId: string | null;
+    underlayId: string | null;
     elementName: string | null;
     floorId: string | null;
   } | null;
   defaultColor: string;
   lastSavedAt: number | null;
+  /** Bumped when measurements (or other non-timestamped content) change. */
+  contentTouchedAt: number;
   notePlaceHint: string | null;
-  dragSnapHint: string | null;
+  dragSnapHint: {
+    text: string;
+    clientX?: number;
+    clientY?: number;
+  } | null;
+  /** Lightweight cursor tooltip in Werkzeug (wall / door / shape / IFC). */
+  sceneHoverTip: {
+    text: string;
+    clientX: number;
+    clientY: number;
+  } | null;
   /** Bumped to pin a note onto the current IFC/shape selection (Viewer resolves pose). */
   notePinToken: number;
+  /** Tape-measure tool — click two points for a persistent dimension. */
+  measureMode: boolean;
+  measureDraft: { x: number; y: number; z: number } | null;
+  measurements: MarkupMeasurement[];
 
   setArmedTool: (tool: MarkupToolId | null) => void;
   /** Bump so Viewer pins a notice on the current IFC/shape selection. */
   requestNotePin: () => void;
   setNotePlaceHint: (msg: string | null) => void;
-  setDragSnapHint: (msg: string | null) => void;
+  setDragSnapHint: (
+    tip: {
+      text: string;
+      clientX?: number;
+      clientY?: number;
+    } | null,
+  ) => void;
+  setSceneHoverTip: (
+    tip: { text: string; clientX: number; clientY: number } | null,
+  ) => void;
+  setMeasureMode: (on: boolean) => void;
+  addMeasurePoint: (pos: { x: number; y: number; z: number }) => void;
+  clearMeasurements: () => void;
+  clearMeasureDraft: () => void;
+
   setTransformMode: (mode: MarkupTransformMode) => void;
   setSnapToFaces: (on: boolean) => void;
   setGridSnap: (on: boolean) => void;
   setCubeDraw: (draw: CubeDrawState) => void;
   setMarkupFloorId: (floorId: string | null) => void;
   setViewPreset: (preset: MarkupViewPreset) => void;
+  setQuadView: (on: boolean) => void;
+  setQuadActiveIndex: (index: 0 | 1 | 2 | 3) => void;
+  setQuadPreset: (index: 0 | 1 | 2 | 3, preset: MarkupViewPreset) => void;
+  bumpQuadPoseToken: () => void;
   setDefaultColor: (color: string) => void;
   loadForModel: (modelKey: string | null) => Promise<void>;
   placeShape: (
@@ -91,8 +158,11 @@ type ToolMarkupState = {
       sizeX?: number;
       sizeY?: number;
       sizeZ?: number;
+      color?: string;
+      label?: string | null;
     },
   ) => Promise<MarkupPlacement | null>;
+  duplicatePlacement: (id: string) => Promise<MarkupPlacement | null>;
   updatePlacement: (
     id: string,
     patch: Partial<
@@ -120,6 +190,10 @@ type ToolMarkupState = {
     meta?: {
       expressId?: number | null;
       placementId?: string | null;
+      wallId?: string | null;
+      doorId?: string | null;
+      windowId?: string | null;
+      underlayId?: string | null;
       elementName?: string | null;
       floorId?: string | null;
     },
@@ -138,6 +212,10 @@ type ToolMarkupState = {
         | "posZ"
         | "expressId"
         | "placementId"
+        | "wallId"
+        | "doorId"
+        | "windowId"
+        | "underlayId"
         | "elementName"
         | "floorId"
       >
@@ -161,6 +239,11 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   markupFloorId: null,
   viewPreset: "free",
   viewPresetToken: 0,
+  quadView: false,
+  quadPresets: ["top", "free", "north", "east"],
+  quadActiveIndex: 0,
+  preQuadViewPreset: "free",
+  quadPoseToken: 0,
   placements: [],
   notes: [],
   selectedPlacementId: null,
@@ -168,12 +251,18 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   pendingNote: null,
   defaultColor: DEFAULT_MARKUP_COLOR,
   lastSavedAt: null,
+  contentTouchedAt: 0,
   notePlaceHint: null,
   dragSnapHint: null,
+  sceneHoverTip: null,
   notePinToken: 0,
+  measureMode: false,
+  measureDraft: null,
+  measurements: [],
 
   setNotePlaceHint: (msg) => set({ notePlaceHint: msg }),
   setDragSnapHint: (msg) => set({ dragSnapHint: msg }),
+  setSceneHoverTip: (tip) => set({ sceneHoverTip: tip }),
 
   requestNotePin: () =>
     set((s) => ({
@@ -181,17 +270,67 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       armedTool: null,
       pendingNote: null,
       notePlaceHint: null,
+      measureMode: false,
+      measureDraft: null,
     })),
 
   setArmedTool: (tool) =>
     set({
       armedTool: tool,
       pendingNote: null,
-      notePlaceHint:
-        tool === "note" ? "markupNotePinHint" : null,
+      notePlaceHint: tool === "note" ? "markupNotePinHint" : null,
       selectedPlacementId: tool ? null : get().selectedPlacementId,
       selectedNoteId: tool ? null : get().selectedNoteId,
+      measureMode: tool ? false : get().measureMode,
+      measureDraft: tool ? null : get().measureDraft,
     }),
+
+  setMeasureMode: (on) => {
+    if (on) {
+      set({
+        measureMode: true,
+        measureDraft: null,
+        armedTool: null,
+        cubeDraw: null,
+        pendingNote: null,
+        notePlaceHint: null,
+      });
+      return;
+    }
+    set({ measureMode: false, measureDraft: null });
+  },
+
+  addMeasurePoint: (pos) => {
+    const draft = get().measureDraft;
+    if (!draft) {
+      set({ measureDraft: { x: pos.x, y: pos.y, z: pos.z } });
+      return;
+    }
+    const m: MarkupMeasurement = {
+      id: newMarkupId("meas"),
+      ax: draft.x,
+      ay: draft.y,
+      az: draft.z,
+      bx: pos.x,
+      by: pos.y,
+      bz: pos.z,
+    };
+    set((s) => ({
+      measurements: [...s.measurements, m],
+      measureDraft: null,
+      contentTouchedAt: Date.now(),
+    }));
+  },
+
+  clearMeasurements: () => {
+    pushWerkzeugHistory();
+    set({
+      measurements: [],
+      measureDraft: null,
+      contentTouchedAt: Date.now(),
+    });
+  },
+  clearMeasureDraft: () => set({ measureDraft: null }),
 
   setTransformMode: (mode) => set({ transformMode: mode }),
 
@@ -202,14 +341,68 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   setMarkupFloorId: (floorId) => set({ markupFloorId: floorId }),
 
   setViewPreset: (preset) =>
+    set((s) => {
+      if (s.quadView) {
+        const next = [...s.quadPresets] as typeof s.quadPresets;
+        next[s.quadActiveIndex] = preset;
+        return {
+          viewPreset: preset,
+          viewPresetToken: s.viewPresetToken + 1,
+          quadPresets: next,
+          quadPoseToken: s.quadPoseToken + 1,
+        };
+      }
+      return {
+        viewPreset: preset,
+        viewPresetToken: s.viewPresetToken + 1,
+      };
+    }),
+
+  setQuadView: (on) =>
+    set((s) => {
+      if (on === s.quadView) return s;
+      if (on) {
+        return {
+          quadView: true,
+          preQuadViewPreset: s.viewPreset,
+          quadActiveIndex: 0,
+          viewPreset: s.quadPresets[0],
+          viewPresetToken: s.viewPresetToken + 1,
+          quadPoseToken: s.quadPoseToken + 1,
+        };
+      }
+      return {
+        quadView: false,
+        viewPreset: s.preQuadViewPreset,
+        viewPresetToken: s.viewPresetToken + 1,
+      };
+    }),
+
+  setQuadActiveIndex: (index) =>
     set((s) => ({
-      viewPreset: preset,
-      viewPresetToken: s.viewPresetToken + 1,
+      quadActiveIndex: index,
+      viewPreset: s.quadPresets[index],
     })),
+
+  setQuadPreset: (index, preset) =>
+    set((s) => {
+      const next = [...s.quadPresets] as typeof s.quadPresets;
+      next[index] = preset;
+      return {
+        quadPresets: next,
+        viewPreset: index === s.quadActiveIndex ? preset : s.viewPreset,
+        viewPresetToken: s.viewPresetToken + 1,
+        quadPoseToken: s.quadPoseToken + 1,
+      };
+    }),
+
+  bumpQuadPoseToken: () =>
+    set((s) => ({ quadPoseToken: s.quadPoseToken + 1 })),
 
   setDefaultColor: (color) => set({ defaultColor: color }),
 
   loadForModel: async (modelKey) => {
+    clearWerkzeugHistory();
     if (!modelKey) {
       set({
         modelKey: null,
@@ -220,6 +413,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         pendingNote: null,
         armedTool: null,
         markupFloorId: null,
+        measureMode: false,
+        measureDraft: null,
+        measurements: [],
       });
       return;
     }
@@ -237,6 +433,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         pendingNote: null,
         armedTool: null,
         markupFloorId: null,
+        measureMode: false,
+        measureDraft: null,
+        measurements: [],
       });
     } catch {
       set({
@@ -248,11 +447,15 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         pendingNote: null,
         armedTool: null,
         markupFloorId: null,
+        measureMode: false,
+        measureDraft: null,
+        measurements: [],
       });
     }
   },
 
   placeShape: async (type, pos, meta) => {
+    pushWerkzeugHistory();
     const modelKey = get().modelKey;
     if (!modelKey) return null;
     const sizes = DEFAULT_SHAPE_SIZES[type];
@@ -270,25 +473,47 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       sizeX: meta?.sizeX ?? sizes.sizeX,
       sizeY: meta?.sizeY ?? sizes.sizeY,
       sizeZ: meta?.sizeZ ?? sizes.sizeZ,
-      color: pickRandomMarkupColor(),
-      label: null,
+      color: meta?.color ?? pickRandomMarkupColor(),
+      label: meta?.label ?? null,
       floorId: meta?.floorId ?? get().markupFloorId,
       createdAt: now,
       updatedAt: now,
     };
     await idbPutPlacement(placement);
+    const keepArmed = Boolean(get().armedTool);
     set((s) => ({
       placements: [...s.placements, placement],
-      selectedPlacementId: placement.id,
+      // Continuous placement: stay armed and don't steal focus to the gizmo.
+      selectedPlacementId: keepArmed ? null : placement.id,
       selectedNoteId: null,
-      armedTool: null,
+      armedTool: keepArmed ? s.armedTool : null,
     }));
     return placement;
+  },
+
+  duplicatePlacement: async (id) => {
+    pushWerkzeugHistory();
+    const src = get().placements.find((p) => p.id === id);
+    if (!src) return null;
+    return get().placeShape(
+      src.type,
+      { x: src.posX + 0.4, y: src.posY, z: src.posZ + 0.4 },
+      {
+        floorId: src.floorId,
+        rot: { x: src.rotX, y: src.rotY, z: src.rotZ },
+        sizeX: src.sizeX,
+        sizeY: src.sizeY,
+        sizeZ: src.sizeZ,
+        color: src.color,
+        label: src.label,
+      },
+    );
   },
 
   updatePlacement: async (id, patch) => {
     const current = get().placements.find((p) => p.id === id);
     if (!current) return;
+    pushWerkzeugHistory();
     const next: MarkupPlacement = {
       ...current,
       ...patch,
@@ -328,6 +553,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   },
 
   deletePlacement: async (id) => {
+    pushWerkzeugHistory();
     await idbDeletePlacement(id);
     set((s) => ({
       placements: s.placements.filter((p) => p.id !== id),
@@ -347,7 +573,18 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   beginNoteAt: (pos, meta) => {
     const expressId = meta?.expressId ?? null;
     const placementId = meta?.placementId ?? null;
-    if (expressId == null && !placementId) {
+    const wallId = meta?.wallId ?? null;
+    const doorId = meta?.doorId ?? null;
+    const windowId = meta?.windowId ?? null;
+    const underlayId = meta?.underlayId ?? null;
+    if (
+      expressId == null &&
+      !placementId &&
+      !wallId &&
+      !doorId &&
+      !windowId &&
+      !underlayId
+    ) {
       set({ notePlaceHint: "markupNoteMustAttach" });
       return;
     }
@@ -358,6 +595,10 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         posZ: pos.z,
         expressId,
         placementId,
+        wallId,
+        doorId,
+        windowId,
+        underlayId,
         elementName: meta?.elementName ?? null,
         floorId: meta?.floorId ?? get().markupFloorId,
       },
@@ -379,11 +620,18 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       set({ pendingNote: null });
       return;
     }
-    // Notes must attach to an IFC element or a placed shape.
-    if (pending.expressId == null && !pending.placementId) {
+    if (
+      pending.expressId == null &&
+      !pending.placementId &&
+      !pending.wallId &&
+      !pending.doorId &&
+      !pending.windowId &&
+      !pending.underlayId
+    ) {
       set({ pendingNote: null });
       return;
     }
+    pushWerkzeugHistory();
     const now = Date.now();
     const note: MarkupNote = {
       id: newMarkupId("note"),
@@ -395,6 +643,10 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       author,
       expressId: pending.expressId,
       placementId: pending.placementId,
+      wallId: pending.wallId,
+      doorId: pending.doorId,
+      windowId: pending.windowId,
+      underlayId: pending.underlayId,
       elementName: pending.elementName,
       floorId: pending.floorId,
       createdAt: now,
@@ -409,6 +661,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   },
 
   updateNote: async (id, patch) => {
+    pushWerkzeugHistory();
     const current = get().notes.find((n) => n.id === id);
     if (!current) return;
     const next: MarkupNote = {
@@ -423,6 +676,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   },
 
   deleteNote: async (id) => {
+    pushWerkzeugHistory();
     await idbDeleteNote(id);
     set((s) => ({
       notes: s.notes.filter((n) => n.id !== id),
@@ -455,9 +709,10 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       notes,
     });
     downloadMarkupPackage(pkg);
-    set({ lastSavedAt: Date.now() });
+    set({ lastSavedAt: Date.now(), contentTouchedAt: Date.now() });
     return true;
   },
 
-  markSaved: () => set({ lastSavedAt: Date.now() }),
+  markSaved: () =>
+    set({ lastSavedAt: Date.now(), contentTouchedAt: Date.now() }),
 }));

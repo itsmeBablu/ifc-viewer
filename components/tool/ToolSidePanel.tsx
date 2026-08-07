@@ -29,6 +29,7 @@ import ToolEditorPanel from "./ToolEditorPanel";
 import ToolUnderlineTabs from "./ToolUnderlineTabs";
 import { useIfcStructure } from "./useIfcStructure";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 
 type ToolTab = "elements" | "editor";
 
@@ -60,6 +61,10 @@ export default function ToolSidePanel({
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
   const selectedNoteId = useToolMarkupStore((s) => s.selectedNoteId);
   const pendingNote = useToolMarkupStore((s) => s.pendingNote);
+  const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
+  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
+  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
 
   const [tab, setTab] = useState<ToolTab>("editor");
   const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
@@ -85,10 +90,29 @@ export default function ToolSidePanel({
   }, [structure, setElementsVisible]);
 
   useEffect(() => {
-    if (!(selectedPlacementId || selectedNoteId || pendingNote)) return;
+    if (
+      !(
+        selectedPlacementId ||
+        selectedNoteId ||
+        pendingNote ||
+        selectedWallId ||
+        selectedDoorId ||
+        selectedWindowId ||
+        selectedSlabId
+      )
+    )
+      return;
     const id = requestAnimationFrame(() => setTab("editor"));
     return () => cancelAnimationFrame(id);
-  }, [selectedPlacementId, selectedNoteId, pendingNote]);
+  }, [
+    selectedPlacementId,
+    selectedNoteId,
+    pendingNote,
+    selectedWallId,
+    selectedDoorId,
+    selectedWindowId,
+    selectedSlabId,
+  ]);
 
   const updateModelTipPos = () => {
     const el = modelNameBtnRef.current ?? modelBadgeRef.current;
@@ -232,7 +256,7 @@ export default function ToolSidePanel({
             {modelMenuOpen && onFile && (
               <div
                 ref={modelMenuRef}
-                className="absolute top-[calc(100%+0.4rem)] right-0 z-[60] w-max min-w-[10.5rem]"
+                className="absolute top-[calc(100%+0.4rem)] right-0 z-[60] w-max min-w-[12rem]"
               >
                 <GlassPanel variant="control" zIndex={60}>
                   <div className="flex flex-col gap-1 p-1.5">
@@ -246,6 +270,61 @@ export default function ToolSidePanel({
                     >
                       {t(uiLanguage, "loadOtherIfc")}
                     </button>
+                    <div className="my-0.5 border-t border-[var(--panel-divider)]" />
+                    <p className="px-2 pt-1 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                      {t(uiLanguage, "layoutEmptyProject")}
+                    </p>
+                    <form
+                      className="flex flex-col gap-1 px-1 pb-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.currentTarget);
+                        const name = String(fd.get("name") ?? "").trim();
+                        if (!name) return;
+                        setModelMenuOpen(false);
+                        void (async () => {
+                          const { projectId, level } =
+                            await useLayoutDrawingStore
+                              .getState()
+                              .createEmptyProject(name);
+                          useAppStore
+                            .getState()
+                            .setActiveModelId(projectId, name, null);
+                          useAppStore.getState().setFloors([
+                            {
+                              id: level.id,
+                              name: level.name,
+                              elevation: level.elevationMm / 1000,
+                              expressId: -1,
+                              typicalHeight: level.heightMm / 1000,
+                              isBuildingStory: true,
+                            },
+                          ]);
+                          useAppStore.getState().setSelectedFloor(level.id);
+                          await useToolMarkupStore
+                            .getState()
+                            .loadForModel(projectId);
+                          useToolMarkupStore
+                            .getState()
+                            .setMarkupFloorId(level.id);
+                          useToolMarkupStore.getState().setViewPreset("top");
+                          useAppStore.getState().setToolMode(true);
+                        })();
+                      }}
+                    >
+                      <input
+                        name="name"
+                        required
+                        placeholder={t(uiLanguage, "layoutProjectName")}
+                        className="rounded-lg border border-[var(--panel-divider)] bg-white/80 px-2 py-1.5 text-[11px] outline-none focus:border-sky-300"
+                      />
+                      <button
+                        type="submit"
+                        className="w-full rounded-lg bg-sky-100 px-2.5 py-2 text-left text-[11px] font-semibold text-sky-950 transition duration-150 hover:bg-sky-200/80"
+                      >
+                        {t(uiLanguage, "layoutCreateEmpty")}
+                      </button>
+                    </form>
                   </div>
                 </GlassPanel>
               </div>

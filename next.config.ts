@@ -7,7 +7,10 @@ const nextConfig: NextConfig = {
     "web-ifc",
     "@thatopen/components",
     "@thatopen/fragments",
+    "pdfjs-dist",
   ],
+  // LibreDWG WASM is loaded only via dynamic import (API + client DWG path).
+  serverExternalPackages: ["@mlightcad/libredwg-web"],
 };
 
 export default nextConfig;

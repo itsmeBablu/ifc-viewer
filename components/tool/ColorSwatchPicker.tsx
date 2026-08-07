@@ -12,11 +12,13 @@ export default function ColorSwatchPicker({
   onChange,
   className = "",
   size = "md",
+  onOpenChange,
 }: {
   color: string;
   onChange: (hex: string) => void;
   className?: string;
   size?: "sm" | "md" | "lg";
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, placeAbove: false });
@@ -24,6 +26,11 @@ export default function ColorSwatchPicker({
   const panelRef = useRef<HTMLDivElement>(null);
   const dim =
     size === "lg" ? "h-8 w-8" : size === "sm" ? "h-4 w-4" : "h-8 w-8";
+
+  const setOpenNotify = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
 
   const updatePos = () => {
     const el = rootRef.current;
@@ -58,6 +65,7 @@ export default function ColorSwatchPicker({
       if (rootRef.current?.contains(t)) return;
       if (panelRef.current?.contains(t)) return;
       setOpen(false);
+      onOpenChange?.(false);
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("touchstart", onDoc, { passive: true });
@@ -65,7 +73,7 @@ export default function ColorSwatchPicker({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
     };
-  }, [open]);
+  }, [open, onOpenChange]);
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className}`}>
@@ -76,7 +84,7 @@ export default function ColorSwatchPicker({
         title={color}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpenNotify(!open);
         }}
         className={`${dim} shrink-0 rounded-md border border-amber-200/60 shadow-inner transition-[transform,box-shadow] duration-150 hover:scale-105 ${
           open ? "ring-2 ring-amber-400/80" : ""
@@ -108,7 +116,7 @@ export default function ColorSwatchPicker({
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(hex);
-                  setOpen(false);
+                  setOpenNotify(false);
                 }}
                 className={`h-6 w-6 rounded-md border shadow-sm transition duration-150 hover:scale-110 ${
                   color.toLowerCase() === hex.toLowerCase()

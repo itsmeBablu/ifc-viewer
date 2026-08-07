@@ -79,6 +79,39 @@ import type {
 const LAST_MODEL_KEY = "ifc-viewer:lastModelId";
 const LEFT_PANEL_KEY = "ifc-viewer:leftPanelOpen";
 const RIGHT_PANEL_KEY = "ifc-viewer:rightPanelOpen";
+const TOOL_RIGHT_WIDTH_KEY = "ifc-viewer:toolRightPanelWidthPx";
+
+export const TOOL_RIGHT_PANEL_MIN_PX = 280;
+export const TOOL_RIGHT_PANEL_MAX_PX = 560;
+export const TOOL_RIGHT_PANEL_DEFAULT_PX = 360;
+/** Collapsed Werkzeug strip — matches the toggle button (`w-5` = 20px). */
+export const TOOL_RIGHT_PANEL_PEEK_PX = 20;
+
+export function clampToolRightPanelWidth(
+  px: number,
+  viewportWidth?: number,
+): number {
+  const vw =
+    viewportWidth ??
+    (typeof window !== "undefined" ? window.innerWidth : 1200);
+  const max = Math.min(
+    TOOL_RIGHT_PANEL_MAX_PX,
+    Math.max(TOOL_RIGHT_PANEL_MIN_PX, Math.floor(vw * 0.48)),
+  );
+  return Math.round(Math.min(max, Math.max(TOOL_RIGHT_PANEL_MIN_PX, px)));
+}
+
+function readToolRightPanelWidth(): number {
+  if (typeof window === "undefined") return TOOL_RIGHT_PANEL_DEFAULT_PX;
+  try {
+    const raw = localStorage.getItem(TOOL_RIGHT_WIDTH_KEY);
+    const n = raw != null ? Number(raw) : NaN;
+    if (Number.isFinite(n)) return clampToolRightPanelWidth(n);
+  } catch {
+    // ignore
+  }
+  return TOOL_RIGHT_PANEL_DEFAULT_PX;
+}
 const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
 const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
@@ -257,6 +290,8 @@ type AppState = {
 
   /** Werkzeug — native IFC inspection view (structure tree instead of legend). */
   toolMode: boolean;
+  /** Docked Werkzeug right panel width (px). Analysis/presentation legend ignores this. */
+  toolRightPanelWidthPx: number;
   /** Bauteil — shows the whole IFC model with spaces/rooms/zones hidden. */
   bauteilMode: boolean;
   /** Shading mode to restore when leaving Werkzeug. */
@@ -372,6 +407,7 @@ type AppState = {
   clearModelData: () => void;
 
   setToolMode: (on: boolean) => void;
+  setToolRightPanelWidthPx: (widthPx: number) => void;
   setBauteilMode: (on: boolean) => void;
   /** Hide / show a whole subtree at once. */
   setElementsVisible: (expressIds: number[], visible: boolean) => void;
@@ -579,6 +615,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   colorTheme: initialTheme(),
 
   toolMode: false,
+  toolRightPanelWidthPx: TOOL_RIGHT_PANEL_DEFAULT_PX,
   // Default mode on fresh load — the whole model, spaces hidden.
   bauteilMode: true,
   toolPrevRenderMode: null,
@@ -1104,6 +1141,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistPanel(RIGHT_PANEL_KEY, open);
     set({ rightPanelOpen: open, sidebarOpen: open });
   },
+  setToolRightPanelWidthPx: (widthPx) => {
+    const next = clampToolRightPanelWidth(widthPx);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(TOOL_RIGHT_WIDTH_KEY, String(next));
+      } catch {
+        // ignore
+      }
+    }
+    set({ toolRightPanelWidthPx: next });
+  },
   toggleLeftPanel: () => get().setLeftPanelOpen(!get().leftPanelOpen),
   toggleRightPanel: () => get().setRightPanelOpen(!get().rightPanelOpen),
 
@@ -1311,6 +1359,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 export function hydratePanelState(): void {
   useAppStore.getState().setLeftPanelOpen(readBool(LEFT_PANEL_KEY, false));
   useAppStore.getState().setRightPanelOpen(readBool(RIGHT_PANEL_KEY, false));
+  useAppStore
+    .getState()
+    .setToolRightPanelWidthPx(readToolRightPanelWidth());
 }
 
 export function useEffectiveColorPalette(): ColorPaletteId {

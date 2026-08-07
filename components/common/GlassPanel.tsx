@@ -37,6 +37,8 @@ type Props = {
   fill?: boolean;
   /** Allow dropdowns / absolute menus to paint outside the glass clip. */
   allowOverflow?: boolean;
+  /** Force CSS frosted glass (skip @liquidglass) — clearer on Werkzeug chrome. */
+  preferCss?: boolean;
 };
 
 const RADIUS_CSS: Record<GlassVariant, number> = {
@@ -60,16 +62,19 @@ export default function GlassPanel({
   zIndex = 1,
   fill = false,
   allowOverflow = false,
+  preferCss = false,
 }: Props) {
   const preset = liquidGlass[variant];
-  const [cssGlass, setCssGlass] = useState(false);
+  const [mediaCssGlass, setMediaCssGlass] = useState(false);
+  const cssGlass = preferCss || mediaCssGlass;
 
   useEffect(() => {
+    if (preferCss) return;
     // Phones + iPad / touch: CSS frosted glass. @liquidglass displacement
     // often looks flat or muddy on iOS / iPadOS Safari.
     const widthMq = window.matchMedia("(max-width: 1024px)");
     const touchMq = window.matchMedia("(hover: none) and (pointer: coarse)");
-    const update = () => setCssGlass(widthMq.matches || touchMq.matches);
+    const update = () => setMediaCssGlass(widthMq.matches || touchMq.matches);
     update();
     widthMq.addEventListener("change", update);
     touchMq.addEventListener("change", update);
@@ -77,7 +82,7 @@ export default function GlassPanel({
       widthMq.removeEventListener("change", update);
       touchMq.removeEventListener("change", update);
     };
-  }, []);
+  }, [preferCss]);
 
   const overflowCls = allowOverflow ? "overflow-visible" : "overflow-hidden";
   const contentOverflow = allowOverflow
@@ -94,9 +99,13 @@ export default function GlassPanel({
       <div
         className={`relative ${overflowCls} ${fill ? "h-full min-h-0" : ""} ${motion.base} ${wrapperClassName}`}
         style={{
-          ...wrapperStyle,
           zIndex,
           borderRadius: r,
+          ...wrapperStyle,
+          // Keep caller borderRadius (e.g. Werkzeug dock = 0) after defaults.
+          ...(wrapperStyle?.borderRadius != null
+            ? { borderRadius: wrapperStyle.borderRadius }
+            : {}),
         }}
       >
         <div

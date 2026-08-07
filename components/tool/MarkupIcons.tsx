@@ -104,6 +104,52 @@ export function IconMarkupNote({ className }: IconProps) {
   );
 }
 
+export function IconMarkupWall({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 8h16v10H4z" />
+      <path d="M4 12h16M10 8v10M16 8v10" />
+    </Svg>
+  );
+}
+
+export function IconMarkupDoor({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M7 4h10v16H7z" />
+      <path d="M14 12h1.5" />
+    </Svg>
+  );
+}
+
+export function IconMarkupWindow({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M5 6h14v12H5z" />
+      <path d="M12 6v12M5 12h14" />
+    </Svg>
+  );
+}
+
+export function IconMarkupFloor({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 16h16v3H4z" />
+      <path d="M6 10h12v6H6z" />
+      <path d="M8 7h8v3H8z" />
+    </Svg>
+  );
+}
+
+export function IconMarkupRoof({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 14 12 6l8 8" />
+      <path d="M6 14h12v5H6z" />
+    </Svg>
+  );
+}
+
 export const MARKUP_TOOL_ICONS: Record<
   MarkupToolId,
   (props: IconProps) => React.ReactElement
@@ -117,6 +163,15 @@ export const MARKUP_TOOL_ICONS: Record<
   pyramid: IconMarkupPyramid,
   note: IconMarkupNote,
 };
+
+export const LAYOUT_TOOL_ICONS = {
+  wall: IconMarkupWall,
+  door: IconMarkupDoor,
+  window: IconMarkupWindow,
+  floor: IconMarkupFloor,
+  roof: IconMarkupRoof,
+} as const;
+
 
 export const MARKUP_TOOL_ORDER: MarkupToolId[] = [
   "cube",

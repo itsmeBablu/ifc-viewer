@@ -10,20 +10,20 @@
   --text-muted: #71717a;
   --glass-border: rgba(255, 255, 255, 0.62);
   --glass-inset-bg: rgba(255, 255, 255, 0.28);
-  --glass-tint: rgba(255, 255, 255, 0.72);
-  --glass-menu-tint: rgba(255, 255, 255, 0.88);
+  --glass-tint: rgba(255, 255, 255, 0.42);
+  --glass-menu-tint: rgba(255, 255, 255, 0.55);
   --glass-specular: rgba(255, 255, 255, 0.78);
-  --glass-blur-panel: 52px;
-  --glass-blur-control: 42px;
-  --glass-blur-menu: 48px;
-  --glass-blur-chip: 32px;
-  --glass-saturate: 215%;
+  --glass-blur-panel: 20px;
+  --glass-blur-control: 16px;
+  --glass-blur-menu: 18px;
+  --glass-blur-chip: 14px;
+  --glass-saturate: 180%;
   --panel-muted: #71717a;
   --panel-divider: rgba(113, 113, 122, 0.35);
   --toolbar-icon: #3f3f46;
   --chip-active-bg: rgba(255, 255, 255, 0.92);
   --chip-active-text: #18181b;
-  --popover-bg: rgba(255, 255, 255, 0.96);
+  --popover-bg: rgba(255, 255, 255, 0.45);
   --surface-muted: #f4f4f5;
 }
 
@@ -36,20 +36,20 @@
   --text-muted: #a1a1aa;
   --glass-border: rgba(255, 255, 255, 0.24);
   --glass-inset-bg: rgba(255, 255, 255, 0.12);
-  --glass-tint: rgba(22, 28, 38, 0.88);
-  --glass-menu-tint: rgba(26, 32, 44, 0.94);
+  --glass-tint: rgba(22, 28, 38, 0.5);
+  --glass-menu-tint: rgba(26, 32, 44, 0.62);
   --glass-specular: rgba(255, 255, 255, 0.38);
-  --glass-blur-panel: 56px;
-  --glass-blur-control: 46px;
-  --glass-blur-menu: 52px;
-  --glass-blur-chip: 34px;
-  --glass-saturate: 190%;
+  --glass-blur-panel: 20px;
+  --glass-blur-control: 16px;
+  --glass-blur-menu: 18px;
+  --glass-blur-chip: 14px;
+  --glass-saturate: 160%;
   --panel-muted: #a1a1aa;
   --panel-divider: rgba(255, 255, 255, 0.12);
   --toolbar-icon: #f4f4f5;
   --chip-active-bg: rgba(255, 255, 255, 0.16);
   --chip-active-text: #fafafa;
-  --popover-bg: rgba(18, 24, 34, 0.97);
+  --popover-bg: rgba(18, 24, 34, 0.48);
   --surface-muted: rgba(255, 255, 255, 0.06);
   color-scheme: dark;
 }
@@ -255,6 +255,25 @@ body {
   min-height: 100%;
 }
 
+/* Explicit Werkzeug chrome — always frosted, never opaque flat. */
+.tool-glass {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: saturate(180%) blur(16px) brightness(1.06);
+  backdrop-filter: saturate(180%) blur(16px) brightness(1.06);
+}
+
+[data-theme="dark"] .tool-glass {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(18, 24, 34, 0.45);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
 /* Nested frosted surfaces inside glass panels */
 .glass-inset {
   border: 1px solid var(--glass-border);
@@ -279,7 +298,8 @@ body {
   .ios-glass--menu,
   .ios-glass--chip,
   .glass-inset,
-  .glass-input {
+  .glass-input,
+  .tool-glass {
     background: color-mix(in srgb, var(--glass-tint) 92%, white 8%);
   }
 
@@ -690,12 +710,27 @@ body.pdf-capturing .pdf-capture-hide {
   }
 }
 
-/* Werkzeug DCC chrome — dark dock, slightly lighter than viewport */
+/* Werkzeug DCC chrome — dock fills edge-to-edge; opaque so 3D never reads through */
 .tool-dock-panel.glass-surface,
-.tool-dock-panel.ios-glass {
-  --glass-tint: rgba(18, 22, 30, 0.94);
+.tool-dock-panel.ios-glass,
+.tool-dock-panel {
+  --glass-tint: rgba(250, 250, 250, 0.97);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  border-radius: 0 !important;
+  background: rgba(250, 250, 250, 0.97) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: #18181b;
+}
+.tool-dock-panel .glass-surface-content {
+  border-radius: 0 !important;
+}
+[data-theme="dark"] .tool-dock-panel.glass-surface,
+[data-theme="dark"] .tool-dock-panel.ios-glass,
+[data-theme="dark"] .tool-dock-panel {
+  --glass-tint: rgba(18, 22, 30, 0.97);
   --glass-border: rgba(255, 255, 255, 0.1);
-  background: rgba(16, 20, 28, 0.92) !important;
+  background: rgba(16, 20, 28, 0.97) !important;
   color: #e4e4e7;
 }
 .tool-chrome {

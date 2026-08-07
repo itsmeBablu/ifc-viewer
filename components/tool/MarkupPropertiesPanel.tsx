@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef } from "react";
 import { sizeFieldsFor } from "@/lib/toolMarkup";
 import { fromMm, toMm } from "@/lib/markupUnits";
 import { t } from "@/lib/i18n";
@@ -17,11 +17,6 @@ function MmField({
   sceneValue: number;
   onCommit: (scene: number) => void;
 }) {
-  const [text, setText] = useState(() => String(Math.round(toMm(sceneValue))));
-  useEffect(() => {
-    setText(String(Math.round(toMm(sceneValue))));
-  }, [sceneValue]);
-
   return (
     <label className="flex flex-col gap-0.5">
       <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
@@ -29,14 +24,14 @@ function MmField({
       </span>
       <div className="flex items-center gap-1">
         <input
+          key={sceneValue}
           type="number"
           inputMode="decimal"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => {
-            const n = Number(text);
+          defaultValue={Math.round(toMm(sceneValue))}
+          onBlur={(e) => {
+            const n = Number(e.target.value);
             if (Number.isFinite(n)) onCommit(fromMm(n));
-            else setText(String(Math.round(toMm(sceneValue))));
+            else e.target.value = String(Math.round(toMm(sceneValue)));
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -48,6 +43,46 @@ function MmField({
     </label>
   );
 }
+
+function DegField({
+  label,
+  radians,
+  onCommit,
+}: {
+  label: string;
+  radians: number;
+  onCommit: (rad: number) => void;
+}) {
+  const deg = Math.round((radians * 180) / Math.PI);
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+        {label}
+      </span>
+      <div className="flex items-center gap-1">
+        <input
+          key={radians}
+          type="number"
+          inputMode="decimal"
+          defaultValue={deg}
+          onBlur={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onCommit((n * Math.PI) / 180);
+            else e.target.value = String(deg);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className="w-full rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none transition duration-150 focus:border-amber-300"
+        />
+        <span className="shrink-0 text-[9px] text-[var(--text-muted)]">°</span>
+      </div>
+    </label>
+  );
+}
+
+const modeBtn =
+  "flex flex-1 items-center justify-center rounded-lg px-1 py-1.5 text-[9px] font-bold transition duration-150";
 
 /** Attribute editor — mm position/size + collapsible color swatch. */
 export default function MarkupPropertiesPanel({
@@ -63,6 +98,7 @@ export default function MarkupPropertiesPanel({
   const pendingNote = useToolMarkupStore((s) => s.pendingNote);
   const updatePlacement = useToolMarkupStore((s) => s.updatePlacement);
   const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
+  const duplicatePlacement = useToolMarkupStore((s) => s.duplicatePlacement);
   const updateNote = useToolMarkupStore((s) => s.updateNote);
   const deleteNote = useToolMarkupStore((s) => s.deleteNote);
   const commitPendingNote = useToolMarkupStore((s) => s.commitPendingNote);
@@ -74,15 +110,7 @@ export default function MarkupPropertiesPanel({
   const placement =
     placements.find((p) => p.id === selectedPlacementId) ?? null;
   const note = notes.find((n) => n.id === selectedNoteId) ?? null;
-  const [draftNote, setDraftNote] = useState("");
-
-  useEffect(() => {
-    if (pendingNote) setDraftNote("");
-  }, [pendingNote]);
-
-  useEffect(() => {
-    if (note) setDraftNote(note.text);
-  }, [note?.id, note?.text]);
+  const pendingTextRef = useRef("");
 
   const shell = `rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/35 p-2.5 ${className}`;
 
@@ -106,9 +134,12 @@ export default function MarkupPropertiesPanel({
           </p>
         )}
         <textarea
+          key={`pending-${pendingNote.posX}-${pendingNote.posY}-${pendingNote.posZ}`}
           autoFocus
-          value={draftNote}
-          onChange={(e) => setDraftNote(e.target.value)}
+          defaultValue=""
+          onChange={(e) => {
+            pendingTextRef.current = e.target.value;
+          }}
           rows={3}
           placeholder={t(uiLanguage, "markupNotePlaceholder")}
           className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
@@ -116,7 +147,7 @@ export default function MarkupPropertiesPanel({
         <div className="flex gap-1.5">
           <button
             type="button"
-            onClick={() => void commitPendingNote(draftNote)}
+            onClick={() => void commitPendingNote(pendingTextRef.current)}
             className="flex-1 rounded-xl bg-amber-400/90 px-2 py-1.5 text-[11px] font-semibold text-amber-950"
           >
             {t(uiLanguage, "markupSave")}
@@ -157,23 +188,25 @@ export default function MarkupPropertiesPanel({
           </p>
         )}
         <textarea
-          value={draftNote}
-          onChange={(e) => setDraftNote(e.target.value)}
-          onBlur={() => {
-            if (draftNote.trim() !== note.text) {
-              void updateNote(note.id, { text: draftNote });
+          key={note.id}
+          defaultValue={note.text}
+          onBlur={(e) => {
+            if (e.target.value.trim() !== note.text) {
+              void updateNote(note.id, { text: e.target.value });
             }
           }}
           rows={3}
           className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
-        <button
-          type="button"
-          onClick={() => void deleteNote(note.id)}
-          className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
-        >
-          {t(uiLanguage, "markupDelete")}
-        </button>
+        <div className="mt-3 border-t border-[var(--panel-divider)] pt-2">
+          <button
+            type="button"
+            onClick={() => void deleteNote(note.id)}
+            className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+          >
+            {t(uiLanguage, "markupDelete")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -203,6 +236,9 @@ export default function MarkupPropertiesPanel({
         </button>
       </div>
 
+      <p className="mb-1 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+        {t(uiLanguage, "markupTransform")}
+      </p>
       <div className="mb-2 flex gap-1">
         {(
           [
@@ -216,10 +252,10 @@ export default function MarkupPropertiesPanel({
             type="button"
             aria-pressed={transformMode === mode}
             onClick={() => setTransformMode(mode)}
-            className={`flex-1 rounded-lg px-1 py-1 text-[9px] font-bold transition duration-150 ${
+            className={`${modeBtn} ${
               transformMode === mode
-                ? "bg-sky-400/85 text-sky-950"
-                : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
+                ? "bg-sky-400/85 text-sky-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]"
+                : "bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-sky-50"
             }`}
           >
             {t(uiLanguage, key)}
@@ -242,6 +278,14 @@ export default function MarkupPropertiesPanel({
           label="Z"
           sceneValue={placement.posZ}
           onCommit={(v) => void updatePlacement(placement.id, { posZ: v })}
+        />
+      </div>
+
+      <div className="mb-2">
+        <DegField
+          label={t(uiLanguage, "markupRotY")}
+          radians={placement.rotY}
+          onCommit={(v) => void updatePlacement(placement.id, { rotY: v })}
         />
       </div>
 
@@ -293,11 +337,21 @@ export default function MarkupPropertiesPanel({
 
       <button
         type="button"
-        onClick={() => void deletePlacement(placement.id)}
-        className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+        onClick={() => void duplicatePlacement(placement.id)}
+        className="mb-2 w-full rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold text-[var(--text-body)] transition hover:bg-amber-50"
       >
-        {t(uiLanguage, "markupDelete")}
+        {t(uiLanguage, "layoutDuplicate")}
       </button>
+
+      <div className="border-t border-[var(--panel-divider)] pt-2">
+        <button
+          type="button"
+          onClick={() => void deletePlacement(placement.id)}
+          className="w-full rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+        >
+          {t(uiLanguage, "markupDelete")}
+        </button>
+      </div>
     </div>
   );
 }

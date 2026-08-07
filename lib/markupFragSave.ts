@@ -10,6 +10,14 @@ export type FragSavePayload = {
   modelLabel: string | null;
   placements: MarkupPlacement[];
   notes: MarkupNote[];
+  layout?: {
+    levels: import("./layoutDrawing").LayoutLevel[];
+    walls: import("./layoutDrawing").LayoutWall[];
+    doors: import("./layoutDrawing").LayoutDoor[];
+    windows: import("./layoutDrawing").LayoutWindow[];
+    underlays?: import("./referenceUnderlay").ReferenceUnderlay[];
+    slabs?: import("./layoutDrawing").LayoutSlab[];
+  };
 };
 
 /** Keep last loaded IFC bytes so .frag can embed the source model. */
@@ -58,6 +66,7 @@ export function buildFragBlob(opts: {
   placements: MarkupPlacement[];
   notes: MarkupNote[];
   ifcBytes: Uint8Array | null;
+  layout?: FragSavePayload["layout"];
 }): Blob {
   const meta: FragSavePayload = {
     format: "ibviewer-frag/1",
@@ -66,6 +75,7 @@ export function buildFragBlob(opts: {
     modelLabel: opts.modelLabel,
     placements: opts.placements,
     notes: opts.notes,
+    layout: opts.layout,
   };
   const metaBytes = encodeUtf8(JSON.stringify(meta));
   const ifcBytes = opts.ifcBytes ?? new Uint8Array(0);

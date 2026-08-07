@@ -10,6 +10,7 @@
 export { default as ToolSidePanel } from "./ToolSidePanel";
 export { default as ToolEditorPanel } from "./ToolEditorPanel";
 export { default as ToolTopBar } from "./ToolTopBar";
+export { default as ToolLeftPalette } from "./ToolLeftPalette";
 export { default as ToolModifyPanel } from "./ToolModifyPanel";
 export { default as ToolFloorsSection } from "./ToolFloorsSection";
 export { default as ToolUnderlineTabs } from "./ToolUnderlineTabs";

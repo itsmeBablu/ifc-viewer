@@ -56,6 +56,12 @@ export type MarkupNote = {
   expressId: number | null;
   /** Placed markup shape id — notes follow this mesh when set. */
   placementId: string | null;
+  /** Layout drawing parents (walls / doors / windows). */
+  wallId: string | null;
+  doorId: string | null;
+  windowId: string | null;
+  /** Reference underlay pin (PDF/DWG plan). */
+  underlayId: string | null;
   elementName: string | null;
   floorId: string | null;
   createdAt: number;
@@ -262,6 +268,10 @@ export function normalizeNote(
     author: raw.author ?? null,
     expressId: raw.expressId ?? null,
     placementId: raw.placementId ?? null,
+    wallId: raw.wallId ?? null,
+    doorId: raw.doorId ?? null,
+    windowId: raw.windowId ?? null,
+    underlayId: raw.underlayId ?? null,
     elementName: raw.elementName ?? null,
     floorId: raw.floorId ?? null,
     createdAt: raw.createdAt ?? Date.now(),

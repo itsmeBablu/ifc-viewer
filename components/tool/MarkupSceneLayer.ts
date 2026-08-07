@@ -9,6 +9,8 @@ import {
   type MarkupNote,
   type MarkupPlacement,
 } from "@/lib/toolMarkup";
+import { toMm } from "@/lib/markupUnits";
+import type { MarkupMeasurement } from "@/store/useToolMarkupStore";
 
 /**
  * Imperative Three.js layer for Werkzeug markup meshes + CSS2D notes.
@@ -18,12 +20,15 @@ export class MarkupSceneLayer {
   readonly group = new THREE.Group();
   private meshes = new Map<string, THREE.Mesh>();
   private noteObjects = new Map<string, CSS2DObject>();
+  private measureGroups = new Map<string, THREE.Group>();
   private labelRenderer: CSS2DRenderer | null = null;
   private host: HTMLElement | null = null;
   private scene: THREE.Scene | null = null;
   private selectedId: string | null = null;
   private cubePreview: THREE.Mesh | null = null;
   private snapIndicator: THREE.Mesh | null = null;
+  private measureDraftLine: THREE.Line | null = null;
+  private measureDraftDot: THREE.Mesh | null = null;
   onNoteClick: ((id: string) => void) | null = null;
 
   constructor() {
@@ -272,6 +277,140 @@ export class MarkupSceneLayer {
     el.dataset.noteId = note.id;
   }
 
+  syncMeasurements(
+    measurements: MarkupMeasurement[],
+    draft: { x: number; y: number; z: number } | null,
+    cursor: { x: number; y: number; z: number } | null,
+  ) {
+    const keep = new Set(measurements.map((m) => m.id));
+    for (const [id, g] of this.measureGroups) {
+      if (!keep.has(id)) {
+        this.disposeMeasureGroup(g);
+        this.measureGroups.delete(id);
+      }
+    }
+    for (const m of measurements) {
+      if (this.measureGroups.has(m.id)) continue;
+      const g = this.buildMeasureGroup(m);
+      this.measureGroups.set(m.id, g);
+      this.group.add(g);
+    }
+
+    if (draft && cursor) {
+      if (!this.measureDraftLine) {
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(),
+          new THREE.Vector3(),
+        ]);
+        this.measureDraftLine = new THREE.Line(
+          geo,
+          new THREE.LineBasicMaterial({
+            color: 0x38bdf8,
+            depthTest: false,
+            transparent: true,
+            opacity: 0.85,
+          }),
+        );
+        this.measureDraftLine.renderOrder = 998;
+        this.measureDraftLine.userData.isMarkupPreview = true;
+        this.group.add(this.measureDraftLine);
+      }
+      const pos = this.measureDraftLine.geometry.attributes
+        .position as THREE.BufferAttribute;
+      pos.setXYZ(0, draft.x, draft.y, draft.z);
+      pos.setXYZ(1, cursor.x, cursor.y, cursor.z);
+      pos.needsUpdate = true;
+      this.measureDraftLine.geometry.computeBoundingSphere();
+      this.measureDraftLine.visible = true;
+    } else if (this.measureDraftLine) {
+      this.measureDraftLine.visible = false;
+    }
+
+    if (draft) {
+      if (!this.measureDraftDot) {
+        this.measureDraftDot = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 10, 10),
+          new THREE.MeshBasicMaterial({
+            color: 0x38bdf8,
+            depthTest: false,
+          }),
+        );
+        this.measureDraftDot.renderOrder = 999;
+        this.measureDraftDot.userData.isMarkupPreview = true;
+        this.group.add(this.measureDraftDot);
+      }
+      this.measureDraftDot.visible = true;
+      this.measureDraftDot.position.set(draft.x, draft.y, draft.z);
+    } else if (this.measureDraftDot) {
+      this.measureDraftDot.visible = false;
+    }
+  }
+
+  private buildMeasureGroup(m: MarkupMeasurement): THREE.Group {
+    const g = new THREE.Group();
+    g.userData.isMarkupMeasure = true;
+    const a = new THREE.Vector3(m.ax, m.ay, m.az);
+    const b = new THREE.Vector3(m.bx, m.by, m.bz);
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const distMm = Math.round(toMm(a.distanceTo(b)));
+
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({
+        color: 0x0ea5e9,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+    );
+    line.renderOrder = 997;
+    line.userData.isMarkupPreview = true;
+    g.add(line);
+
+    for (const p of [a, b]) {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0x0284c7, depthTest: false }),
+      );
+      dot.position.copy(p);
+      dot.renderOrder = 998;
+      dot.userData.isMarkupPreview = true;
+      g.add(dot);
+    }
+
+    const el = document.createElement("div");
+    el.style.cssText = [
+      "pointer-events:none",
+      "padding:2px 6px",
+      "border-radius:6px",
+      "background:rgba(14,165,233,0.92)",
+      "color:#fff",
+      "font:700 10px/1.2 system-ui,sans-serif",
+      "box-shadow:0 2px 8px rgba(0,0,0,.2)",
+      "white-space:nowrap",
+      "transform:translate(-50%,-120%)",
+    ].join(";");
+    el.textContent = `${distMm} mm`;
+    const label = new CSS2DObject(el);
+    label.position.copy(mid);
+    g.add(label);
+    return g;
+  }
+
+  private disposeMeasureGroup(g: THREE.Group) {
+    this.group.remove(g);
+    g.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.Line) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+      if (o instanceof CSS2DObject) {
+        o.element.remove();
+      }
+    });
+  }
+
   private clearAll() {
     for (const mesh of this.meshes.values()) {
       this.group.remove(mesh);
@@ -284,6 +423,10 @@ export class MarkupSceneLayer {
       obj.element.remove();
     }
     this.noteObjects.clear();
+    for (const g of this.measureGroups.values()) {
+      this.disposeMeasureGroup(g);
+    }
+    this.measureGroups.clear();
     if (this.cubePreview) {
       this.group.remove(this.cubePreview);
       this.cubePreview.geometry.dispose();
@@ -295,6 +438,18 @@ export class MarkupSceneLayer {
       this.snapIndicator.geometry.dispose();
       (this.snapIndicator.material as THREE.Material).dispose();
       this.snapIndicator = null;
+    }
+    if (this.measureDraftLine) {
+      this.group.remove(this.measureDraftLine);
+      this.measureDraftLine.geometry.dispose();
+      (this.measureDraftLine.material as THREE.Material).dispose();
+      this.measureDraftLine = null;
+    }
+    if (this.measureDraftDot) {
+      this.group.remove(this.measureDraftDot);
+      this.measureDraftDot.geometry.dispose();
+      (this.measureDraftDot.material as THREE.Material).dispose();
+      this.measureDraftDot = null;
     }
   }
 }

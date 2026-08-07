@@ -13,6 +13,7 @@ import {
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useModelScene } from "../viewer/ModelSceneContext";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import {
@@ -70,11 +71,23 @@ export default function ToolModifyPanel({
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+  const updatePlacement = useToolMarkupStore((s) => s.updatePlacement);
   const modelKey = useToolMarkupStore((s) => s.modelKey);
   const placements = useToolMarkupStore((s) => s.placements);
   const notes = useToolMarkupStore((s) => s.notes);
   const markSaved = useToolMarkupStore((s) => s.markSaved);
   const lastSavedAt = useToolMarkupStore((s) => s.lastSavedAt);
+
+  const selectedPlacement =
+    placements.find((p) => p.id === selectedPlacementId) ?? null;
+  const swatchColor = selectedPlacement?.color ?? defaultColor;
+
+  const applyColor = (hex: string) => {
+    setDefaultColor(hex);
+    if (selectedPlacementId) {
+      void updatePlacement(selectedPlacementId, { color: hex });
+    }
+  };
 
   const [hoverTip, setHoverTip] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -100,6 +113,7 @@ export default function ToolModifyPanel({
       .replace(/\.ifc$/i, "")
       .replace(/[^\w.-]+/g, "_");
     if (kind === "frag") {
+      const layout = useLayoutDrawingStore.getState();
       const ifcBytes = getCachedIfcBytes(modelKey);
       const blob = buildFragBlob({
         modelKey,
@@ -107,6 +121,16 @@ export default function ToolModifyPanel({
         placements,
         notes,
         ifcBytes,
+        layout: layout.projectId
+          ? {
+              levels: layout.levels,
+              walls: layout.walls,
+              doors: layout.doors,
+              windows: layout.windows,
+              slabs: layout.slabs,
+              underlays: layout.underlays,
+            }
+          : undefined,
       });
       downloadBlob(blob, `${base}.frag`);
       markSaved();
@@ -217,9 +241,9 @@ export default function ToolModifyPanel({
               key={hex}
               type="button"
               aria-label={hex}
-              onClick={() => setDefaultColor(hex)}
+              onClick={() => applyColor(hex)}
               className={`h-3.5 w-3.5 rounded-full border ${
-                defaultColor.toLowerCase() === hex.toLowerCase()
+                swatchColor.toLowerCase() === hex.toLowerCase()
                   ? "border-zinc-800 ring-1 ring-amber-400"
                   : "border-black/15"
               }`}

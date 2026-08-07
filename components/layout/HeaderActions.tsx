@@ -38,6 +38,7 @@ import {
 } from "@/lib/layoutTokens";
 import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
+import { confirmLeaveWerkzeug } from "@/lib/werkzeugUnsaved";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
 import { useModelSummary } from "@/lib/useModelSummary";
@@ -637,6 +638,12 @@ export default function HeaderActions({
                         type="button"
                         onMouseEnter={() => setModeHoverId(opt.id)}
                         onClick={() => {
+                          const leavingWerkzeug =
+                            toolMode && opt.id !== "editor";
+                          if (leavingWerkzeug) {
+                            const msg = t(uiLanguage, "werkzeugSaveWork");
+                            if (!confirmLeaveWerkzeug(msg)) return;
+                          }
                           if (opt.id === "bauteil") {
                             setToolMode(false);
                             setBauteilMode(true);

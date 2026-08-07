@@ -4,6 +4,7 @@ import HoverTip from "@/components/common/HoverTip";
 import { t, type UiTextKey } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import {
   MARKUP_TOOL_ICONS,
   MARKUP_TOOL_ORDER,
@@ -48,6 +49,7 @@ export default function MarkupToolsSection({
   const requestNotePin = useToolMarkupStore((s) => s.requestNotePin);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
   const notePlaceHint = useToolMarkupStore((s) => s.notePlaceHint);
+  const setArmedLayout = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
 
   const armOrPinNote = () => {
     if (armedTool === "note") {
@@ -91,6 +93,7 @@ export default function MarkupToolsSection({
                     armOrPinNote();
                     return;
                   }
+                  setArmedLayout(null);
                   setArmedTool(active ? null : id);
                 }}
                 className={`flex h-[3.35rem] w-full min-w-0 flex-col items-center justify-center gap-px overflow-hidden rounded-xl border px-1 pt-0.5 transition duration-150 ${
