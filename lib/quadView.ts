@@ -225,7 +225,7 @@ export function applySlotToCameras(
   aspect: number,
   persp: THREE.PerspectiveCamera,
   ortho: THREE.OrthographicCamera,
-): THREE.Camera {
+): THREE.PerspectiveCamera | THREE.OrthographicCamera {
   if (slot.preset === "free") {
     persp.position.copy(slot.position);
     persp.up.copy(slot.up);

@@ -545,7 +545,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const perspectiveCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const controlsRef = useRef<OrbitControls | null>(null);
+  const controlsRef = useRef<OrbitControls<
+    THREE.PerspectiveCamera | THREE.OrthographicCamera
+  > | null>(null);
   const shellCloneRef = useRef<THREE.Group | null>(null);
   const overlaysRef = useRef<THREE.Group | null>(null);
   const compareRootRef = useRef<THREE.Group | null>(null);
@@ -887,7 +889,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     scene.add(sun);
     sunRef.current = sun;
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls<
+      THREE.PerspectiveCamera | THREE.OrthographicCamera
+    >(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI; // allow full orbit — avoids horizon clipping flicker

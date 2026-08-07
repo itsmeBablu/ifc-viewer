@@ -342,7 +342,7 @@ async function rasterizeDwgWithLibreDwg(
   const ptr = libredwg.dwg_read_data(buf, Dwg_File_Type.DWG);
   if (ptr == null) throw new Error("DWG parse failed");
   try {
-    const db = libredwg.convert(ptr) as {
+    const db = libredwg.convert(ptr) as unknown as {
       entities?: unknown[];
       tables?: {
         BLOCK_RECORD?:
