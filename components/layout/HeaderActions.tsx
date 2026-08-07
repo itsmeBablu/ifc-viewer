@@ -35,7 +35,6 @@ import { gsapDuration, gsapEase, killGsap } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { useAppStore } from "@/store/useAppStore";
-import { useModelSummary } from "@/lib/useModelSummary";
 import GsapPopMenu from "../common/GsapPopMenu";
 import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import GlassPanel from "../common/GlassPanel";
@@ -231,7 +230,6 @@ export default function HeaderActions({
 }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
-  const { modelLabel, tiles: modelTiles } = useModelSummary();
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -241,8 +239,6 @@ export default function HeaderActions({
 
   const mode = dataViewMode;
   const [modeOpen, setModeOpen] = useState(false);
-  /** Cargar IFC hover/focus tip open — mirrored into FloorsPanel's open state. */
-  const [dataTipOpen, setDataTipOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [languageExpanded, setLanguageExpanded] = useState(false);
   /** Which dropdown row is under the pointer — highlight follows this, not only selection. */
@@ -857,74 +853,33 @@ export default function HeaderActions({
                           : "relative flex h-full items-center justify-center self-stretch"
                       }
                     >
-                    <HeaderTip
-                      label={t(uiLanguage, "data")}
-                      hint={t(uiLanguage, "dataHint")}
-                      wide={hasModel}
-                      onOpenChange={setDataTipOpen}
-                      content={
-                        hasModel ? (
-                          <div className="w-56 px-3 py-2.5">
-                            <p className="mb-1.5 truncate text-center text-[11px] font-semibold text-[var(--text-strong)]">
-                              {modelLabel}
-                            </p>
-                            <div className="flex items-stretch gap-1.5">
-                              {modelTiles.map((tile, i) => (
-                                <div
-                                  key={i}
-                                  className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-1 py-1.5 text-center"
-                                >
-                                  <span className="tabular-nums text-[13px] font-semibold text-[var(--text-strong)]">
-                                    {tile.value}
-                                  </span>
-                                  <span className="truncate text-[9px] font-medium text-[var(--text-muted)]">
-                                    {tile.unit}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            <p className="mt-1.5 text-center text-[10px] font-medium tracking-wide text-amber-700/90">
-                              {t(uiLanguage, "loadOtherIfcShortcut")}
-                            </p>
-                          </div>
-                        ) : undefined
-                      }
+                    <button
+                      type="button"
+                      disabled={isLoadingModel}
+                      onClick={() => {
+                        setModeOpen(false);
+                        setProfileOpen(false);
+                        setLanguageExpanded(false);
+                        fileInputRef.current?.click();
+                      }}
+                      aria-label={t(uiLanguage, "loadIfc")}
+                      className={`${
+                        showIconLabels ? iconStack : sideIdle
+                      } disabled:opacity-45`}
                     >
-                      <button
-                        type="button"
-                        disabled={isLoadingModel}
-                        onClick={() => {
-                          setModeOpen(false);
-                          setProfileOpen(false);
-                          setLanguageExpanded(false);
-                          fileInputRef.current?.click();
-                        }}
-                        aria-label={t(uiLanguage, "loadIfc")}
-                        className={`${
-                          showIconLabels
-                            ? iconStack
-                            : hasModel
-                              ? sideActive
-                              : sideIdle
-                        } disabled:opacity-45`}
-                      >
-                        {showIconLabels ? (
-                          <>
-                            <span className={hasModel ? sideActive : sideIdle}>
-                              <UploadIcon />
-                            </span>
-                            <span
-                              className={iconCaption}
-                              title={t(uiLanguage, "ifcUpload")}
-                            >
-                              {t(uiLanguage, "ifcUpload")}
-                            </span>
-                          </>
-                        ) : (
-                          <UploadIcon />
-                        )}
-                      </button>
-                    </HeaderTip>
+                      {showIconLabels ? (
+                        <>
+                          <span className={sideIdle}>
+                            <UploadIcon />
+                          </span>
+                          <span className={iconCaption}>
+                            {t(uiLanguage, "ifcUpload")}
+                          </span>
+                        </>
+                      ) : (
+                        <UploadIcon />
+                      )}
+                    </button>
                     </div>
 
                     <div
