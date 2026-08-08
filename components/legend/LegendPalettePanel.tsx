@@ -75,12 +75,15 @@ export default function LegendPalettePanel({
       <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
         {t(uiLanguage, "editSwatchColors")}
       </p>
-      <div className="flex flex-nowrap items-end justify-between gap-0.5">
+      <div
+        className="grid w-full gap-0.5"
+        style={{ gridTemplateColumns: `repeat(${stops.length}, minmax(0, 1fr))` }}
+      >
         {stops.map((s) => (
           <label
             key={s.value}
             title={`${s.value}${unitSuffix}`}
-            className={`flex min-w-0 flex-1 cursor-pointer flex-col items-center ${
+            className={`flex min-w-0 cursor-pointer flex-col items-center ${
               compact ? "gap-0.5" : "gap-1"
             }`}
           >

@@ -56,9 +56,11 @@ export default function Legend({ embedded = false }: Props) {
                 className="h-3 w-full rounded-2xl"
                 style={{ background: `linear-gradient(to right, ${gradient})` }}
               />
-              <div className="mt-1.5 flex justify-between text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
+              <div className="mt-1.5 grid w-full grid-cols-6 gap-0.5 text-[10px] font-medium tracking-wide text-[var(--text-muted)]">
                 {ticks.map((t) => (
-                  <span key={t}>{t}</span>
+                  <span key={t} className="min-w-0 text-center">
+                    {t}
+                  </span>
                 ))}
               </div>
             </div>

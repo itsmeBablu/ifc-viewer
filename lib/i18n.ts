@@ -449,6 +449,17 @@ const dict = {
     globalId: "GlobalId",
     noSearchResults: "Keine Treffer",
     toolHint: "Natives IFC-Modell prüfen (W)",
+    welcomeTitle: "Willkommen im IFC Viewer",
+    welcomeSubtitle:
+      "Geben Sie Ihren Namen ein, wählen Sie Design und Hintergrund — die Vorschau links zeigt die Wirkung live.",
+    welcomeNameLabel: "Ihr Name",
+    welcomeNamePlaceholder: "Ihr Name",
+    welcomeSeasonalHint:
+      "Hintergrund und Licht folgen der aktuellen Jahreszeit (Kalender)",
+    welcomeLanguageHint: "Gilt für die gesamte Anwendung",
+    welcomeLetsGo: "Los geht's",
+    welcomeGoWerkzeug: "Zu Werkzeug",
+    home: "Startseite",
   },
   en: {
     appTitle: "Heating Load Presentation",
@@ -885,6 +896,17 @@ const dict = {
     globalId: "GlobalId",
     noSearchResults: "No matches",
     toolHint: "Inspect the native IFC model (W)",
+    welcomeTitle: "Welcome to IFC Viewer",
+    welcomeSubtitle:
+      "Enter your name and pick theme and background — the preview panel updates live as you choose.",
+    welcomeNameLabel: "Your name",
+    welcomeNamePlaceholder: "Your name",
+    welcomeSeasonalHint:
+      "Background and lighting follow the current calendar season",
+    welcomeLanguageHint: "Applies across the entire app",
+    welcomeLetsGo: "Let's Go",
+    welcomeGoWerkzeug: "Go to Werkzeug",
+    home: "Home",
   },
   es: {
     appTitle: "Presentación de Carga Térmica",
@@ -1323,6 +1345,17 @@ const dict = {
     globalId: "GlobalId",
     noSearchResults: "Sin resultados",
     toolHint: "Inspeccionar el modelo IFC nativo (W)",
+    welcomeTitle: "Bienvenido al visor IFC",
+    welcomeSubtitle:
+      "Introduce tu nombre y elige tema y fondo — el panel de vista previa se actualiza al instante.",
+    welcomeNameLabel: "Tu nombre",
+    welcomeNamePlaceholder: "Tu nombre",
+    welcomeSeasonalHint:
+      "El fondo y la luz siguen la estación del calendario actual",
+    welcomeLanguageHint: "Se aplica en toda la aplicación",
+    welcomeLetsGo: "Empezar",
+    welcomeGoWerkzeug: "Ir a Werkzeug",
+    home: "Inicio",
   },
 } as const;
 

@@ -470,9 +470,10 @@ export default function LegendBody({
               </button>
             </HoverTip>
             <div
-              className={`flex items-end justify-between gap-0.5 tabular-nums text-[var(--text-muted)] ${
+              className={`grid w-full gap-0.5 tabular-nums text-[var(--text-muted)] ${
                 compact ? "text-[9px]" : "text-[10px]"
               }`}
+              style={{ gridTemplateColumns: `repeat(${loadRange.length}, minmax(0, 1fr))` }}
             >
               {loadRange.map((v) => (
                 <span key={v} className="min-w-0 truncate text-center">
@@ -528,12 +529,13 @@ export default function LegendBody({
                 onClick={openTempPalette}
                 aria-expanded={paletteOpen && paletteContext === "temperature"}
                 aria-label={t(uiLanguage, "changePalette")}
-                className="flex w-full flex-nowrap items-center justify-between gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+                className="grid w-full gap-0.5 rounded-xl p-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/50"
+                style={{ gridTemplateColumns: `repeat(${tempStops.length}, minmax(0, 1fr))` }}
               >
               {tempStops.map((s) => (
                 <div
                   key={s.value}
-                  className={`flex min-w-0 flex-1 flex-col items-center rounded-lg bg-white/45 ${
+                  className={`flex min-w-0 flex-col items-center rounded-lg bg-white/45 ${
                     compact
                       ? "gap-0.5 px-0.5 py-0.5"
                       : "gap-1 px-0.5 py-1.5 rounded-xl"

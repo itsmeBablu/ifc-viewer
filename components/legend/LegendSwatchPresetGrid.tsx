@@ -38,7 +38,7 @@ export default function LegendSwatchPresetGrid({
       : LEGEND_SWATCH_PRESETS;
 
   return (
-    <div className={`grid grid-cols-3 ${compact ? "gap-1" : "gap-1.5"}`}>
+    <div className={`grid w-full grid-cols-3 ${compact ? "gap-1" : "gap-1.5"}`}>
       {presets.map((preset, index) => {
         const colors =
           mode === "temperature"
@@ -83,7 +83,7 @@ function SwatchPresetButton({
       type="button"
       title={`${name} (${shortcut})`}
       onClick={onSelect}
-      className={`rounded-lg border text-left transition-all hover:brightness-105 active:scale-[0.98] ${
+      className={`w-full rounded-lg border text-left transition-all hover:brightness-105 active:scale-[0.98] ${
         compact ? "p-1" : "p-1.5"
       } ${
         active

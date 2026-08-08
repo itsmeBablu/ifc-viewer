@@ -1,11 +1,13 @@
 /**
- * Home — the root route ("/") entry point.
- *
- * Thin server component whose only job is to render `<ViewerAppClient>`,
- * the client-side app shell that owns the actual IFC viewer UI and state.
+ * Home — H/L/K analysis viewer, gated by the welcome screen on first visit.
  */
 import ViewerAppClient from "@/components/viewer/ViewerAppClient";
+import { WelcomeGate } from "@/components/welcome";
 
 export default function Home() {
-  return <ViewerAppClient />;
+  return (
+    <WelcomeGate>
+      <ViewerAppClient />
+    </WelcomeGate>
+  );
 }

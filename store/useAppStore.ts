@@ -45,6 +45,11 @@ import type {
   SavedView,
   SelectedElement,
 } from "@/lib/types";
+import type { UiLanguage } from "@/lib/i18n";
+import {
+  patchWelcomePreferences,
+  readWelcomePreferences,
+} from "@/lib/welcomePreferences";
 
 const LAST_MODEL_KEY = "ifc-viewer:lastModelId";
 const LEFT_PANEL_KEY = "ifc-viewer:leftPanelOpen";
@@ -224,6 +229,10 @@ type AppState = {
   uiLanguage: import("@/lib/i18n").UiLanguage;
   /** Day (light) vs night (dark) UI theme. */
   colorTheme: import("@/lib/themeColors").ColorTheme;
+  /** Welcome screen dismissed this session (Let's Go / Go to Werkzeug). */
+  welcomeAppEntered: boolean;
+  /** Show welcome screen again (Home in mode menu). */
+  welcomeScreenRequested: boolean;
 
   /** Werkzeug — native IFC inspection view (structure tree instead of legend). */
   toolMode: boolean;
@@ -323,6 +332,8 @@ type AppState = {
   toggleHeaderCollapsed: () => void;
   setUiLanguage: (lang: import("@/lib/i18n").UiLanguage) => void;
   setColorTheme: (theme: import("@/lib/themeColors").ColorTheme) => void;
+  openWelcomeScreen: () => void;
+  completeWelcomeScreen: () => void;
   addSavedView: (
     name: string,
     position: [number, number, number],
@@ -469,6 +480,11 @@ function initialTheme(): import("@/lib/themeColors").ColorTheme {
   return "light";
 }
 
+function initialUiLanguage(): UiLanguage {
+  if (typeof window === "undefined") return "de";
+  return readWelcomePreferences().language;
+}
+
 let sceneWorkDepth = 0;
 /** Only show spinner if work lasts longer than this (avoids flash on quick updates). */
 const SCENE_BUSY_SHOW_DELAY_MS = 200;
@@ -536,8 +552,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: false,
   headerExpanded: true,
   isHeaderCollapsed: false,
-  uiLanguage: "de",
+  uiLanguage: initialUiLanguage(),
   colorTheme: initialTheme(),
+  welcomeAppEntered: false,
+  welcomeScreenRequested: false,
 
   toolMode: false,
   toolPrevRenderMode: null,
@@ -1070,7 +1088,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   setHeaderCollapsed: (collapsed) => set({ isHeaderCollapsed: collapsed }),
   toggleHeaderCollapsed: () =>
     set({ isHeaderCollapsed: !get().isHeaderCollapsed }),
-  setUiLanguage: (lang) => set({ uiLanguage: lang }),
+  setUiLanguage: (lang) => {
+    if (typeof window !== "undefined") {
+      patchWelcomePreferences({ language: lang });
+    }
+    set({ uiLanguage: lang });
+  },
+  openWelcomeScreen: () =>
+    set({ welcomeScreenRequested: true, welcomeAppEntered: false }),
+  completeWelcomeScreen: () =>
+    set({ welcomeScreenRequested: false, welcomeAppEntered: true }),
   setColorTheme: (theme) => {
     if (typeof window !== "undefined") {
       try {

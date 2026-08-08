@@ -23,9 +23,11 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import Image from "next/image";
 import { MdOutlineAccountCircle } from "react-icons/md";
+import { PiHouseThin } from "react-icons/pi";
 import {
   headerCollapsedMinWidthPx,
   isCompactMobileViewport,
@@ -46,7 +48,7 @@ import {
 } from "@/lib/dataViewMode";
 
 type ProfileHoverId = "language" | "theme" | "seasonalBg" | "en" | "de" | "es";
-type ModeHoverId = DataViewMode;
+type ModeHoverId = DataViewMode | "home";
 
 const menuRowIdle =
   "box-border border border-transparent transition-[background-color,border-color,box-shadow,color] duration-200";
@@ -232,6 +234,8 @@ export default function HeaderActions({
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const setDataViewMode = useAppStore((s) => s.setDataViewMode);
+  const openWelcomeScreen = useAppStore((s) => s.openWelcomeScreen);
+  const router = useRouter();
   const colorTheme = useAppStore((s) => s.colorTheme);
   const isDark = colorTheme === "dark";
   const { highlight: menuRowHighlight, surfaceHighlight: menuRowSurfaceHighlight } =
@@ -582,6 +586,26 @@ export default function HeaderActions({
                       </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    onMouseEnter={() => setModeHoverId("home")}
+                    onClick={() => {
+                      openWelcomeScreen();
+                      setModeOpen(false);
+                      setModeHoverId(null);
+                      router.push("/");
+                    }}
+                    className={`flex w-full items-center whitespace-nowrap rounded-xl px-2.5 py-1.5 text-left ${
+                      modeHoverId === "home"
+                        ? menuRowHighlight
+                        : `${menuRowIdle} text-[var(--text-body)]`
+                    }`}
+                  >
+                    <span className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--chip-active-bg)] text-[var(--text-body)]">
+                      <PiHouseThin className="h-4 w-4" aria-hidden />
+                    </span>
+                    {t(uiLanguage, "home")}
+                  </button>
                 </div>
               </GlassPanel>
             </GsapPopMenu>

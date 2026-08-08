@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - **Never ask for confirmation on tool permissions** — Bash, MCP tools (`codebase-memory-mcp`, etc.), file edits. `defaultMode` is `bypassPermissions` both globally and in this repo's `.claude/settings.local.json`; that setting is the approval. Don't pause to confirm a `git`, `npm`, `gh`, or MCP call just because it's the kind of thing that could theoretically prompt — proceed.
 - **Do ask** when the answer is genuinely the user's to make and isn't derivable from the repo or this file — product/design intent, ambiguous UX tradeoffs, which of several valid approaches they want, or a destructive/hard-to-reverse git action (force-push, `reset --hard` on unbacked-up work, merging into `upstream`, deleting a branch) that wasn't explicitly requested in the moment. The line is: tool mechanics never need a question; decisions only the user has the context for always might.
-- A prior approval doesn't carry forward automatically — e.g. "merge Dani into main" today doesn't imply the same for a future unrelated task; ask again if it's a fresh instance of a risky action, not because the tool itself needs permission.
+- A prior approval doesn't carry forward automatically — e.g. "merge Babu into main" today doesn't imply the same for a future unrelated task; ask again if it's a fresh instance of a risky action, not because the tool itself needs permission.
 
 ## Code exploration (codebase-memory-mcp)
 
@@ -32,13 +32,13 @@ This MCP is installed **globally for the user's Claude Code**, not part of this 
 ## Development workflow
 
 - **Dev server always on**: when starting development work, check `localhost:3000` first (`lsof -i :3000` + a `curl` for a 200). If it's already up, leave it running. If not, launch `npm run dev` and keep it running for the rest of the session so changes are visible live in the browser — don't kill it between tasks.
-- **Work branch**: develop on `Dani`, never directly on `main`.
-  - A `SessionStart` hook already runs `git checkout Dani` — confirm that's where you are, don't assume.
-  - Two remotes exist: `origin` (the personal fork, `danielalejandreperez/ibviewer`) and `upstream` (`itsmeBablu/IBV-Viewer`, the shared repo). Default to reading/pushing against `origin` only. **Never push, merge, or fetch-and-fast-forward into `upstream` (either `upstream/Dani` or `upstream/main`) unless explicitly asked to in that moment** — it's shared with other collaborators.
-- **All changes stay on `Dani` until told otherwise**: commit and push there. Never merge `Dani` into `main` (on either remote) unless the user explicitly asks for it for that specific task — a prior merge approval does not carry forward to the next one.
-- **After a merge into `main`**: reset `Dani` to match (`git checkout Dani && git reset --hard main`, then push if it's a fast-forward) rather than trying to reconcile a diverged branch — only do this when asked, per above.
+- **Work branch**: develop on `Babu`, never directly on `main`.
+  - Confirm where you are with `git rev-parse --abbrev-ref HEAD`; don't assume.
+  - Remote `origin` is `itsmeBablu/ifc_revit_heizlast` (GitHub may also list it as `ifc-viewer`). Default to reading/pushing against `origin` only.
+- **All changes stay on `Babu` until told otherwise**: commit and push there. Never merge `Babu` into `main` unless the user explicitly asks for that specific task — use the `merge-babu` skill when they do.
+- **After a merge into `main`**: reset `Babu` to match (`git checkout Babu && git reset --hard main`, then push if it's a fast-forward) — only when asked.
 - **End-of-task loop** — run automatically, without asking, whenever a coding task is finished:
   1. Run `npm run lint`. There is no `typecheck`/`test`/`test:e2e` script in this repo yet (no test suite is wired up) — if the user adds one later, fold it into this loop instead of running raw `tsc`/test binaries ad hoc.
-  2. Commit and push `Dani` to `origin`.
+  2. Commit and push `Babu` to `origin`.
   3. If lint is clean: tell the user the branch is ready and stop — do not open a PR or touch `main`/`upstream` unless asked.
   4. If lint fails: review the failure, fix the code, and repeat from step 1.
