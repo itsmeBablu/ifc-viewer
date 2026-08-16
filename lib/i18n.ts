@@ -467,6 +467,9 @@ const dict = {
     passwordIncorrect: "Falsches Passwort",
     next: "Weiter",
     cancel: "Abbrechen",
+    step1Title: "Profil & Sprache",
+    step2Title: "Design & Umwelt",
+    back: "Zurück",
   },
   en: {
     appTitle: "Heating Load Presentation",
@@ -921,6 +924,9 @@ const dict = {
     passwordIncorrect: "Incorrect password",
     next: "Next",
     cancel: "Cancel",
+    step1Title: "Profile & Language",
+    step2Title: "Theme & Environment",
+    back: "Back",
   },
   es: {
     appTitle: "Presentación de Carga Térmica",
@@ -1377,6 +1383,9 @@ const dict = {
     passwordIncorrect: "Contraseña incorrecta",
     next: "Siguiente",
     cancel: "Cancelar",
+    step1Title: "Perfil e Idioma",
+    step2Title: "Diseño y Entorno",
+    back: "Atrás",
   },
 } as const;
 

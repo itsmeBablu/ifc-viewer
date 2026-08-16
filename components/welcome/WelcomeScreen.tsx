@@ -50,6 +50,7 @@ export default function WelcomeScreen({ onContinue }: Props) {
   const [userName, setUserName] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [layout, setLayout] = useState<WelcomeLayoutConfig>(DEFAULT_LAYOUT);
+  const [mobileStep, setMobileStep] = useState<1 | 2>(1);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -141,8 +142,41 @@ export default function WelcomeScreen({ onContinue }: Props) {
   const btnMotion = `${motion.base} ${radius.control}`;
   const showHints = layout.tier === "splitSpacious";
 
-  const mobileFields = (
-    <div className={layout.fieldsClass}>
+  const mobileStepTabs = (
+    <div className="flex w-full shrink-0 items-center gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-1 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={() => setMobileStep(1)}
+        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 px-2 text-[11px] font-semibold transition-all ${
+          mobileStep === 1
+            ? "bg-amber-300/85 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_2px_8px_rgba(251,191,36,0.25)]"
+            : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+        }`}
+      >
+        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/30 text-[9px] font-bold">
+          1
+        </span>
+        <span className="truncate">{t(uiLanguage, "step1Title")}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setMobileStep(2)}
+        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 px-2 text-[11px] font-semibold transition-all ${
+          mobileStep === 2
+            ? "bg-amber-300/85 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_2px_8px_rgba(251,191,36,0.25)]"
+            : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+        }`}
+      >
+        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/30 text-[9px] font-bold">
+          2
+        </span>
+        <span className="truncate">{t(uiLanguage, "step2Title")}</span>
+      </button>
+    </div>
+  );
+
+  const mobileStep1Fields = (
+    <div className="flex flex-1 min-h-0 flex-col justify-center gap-2 overflow-y-auto py-0.5">
       <label className="shrink-0">
         <span className={layout.labelClass}>{t(uiLanguage, "welcomeNameLabel")}</span>
         <input
@@ -157,14 +191,49 @@ export default function WelcomeScreen({ onContinue }: Props) {
 
       <div className={layout.cardClass}>
         <p className={layout.bodyTextClass}>{t(uiLanguage, "language")}</p>
-        <div className={layout.isMobileLandscape ? "welcome-mobile-lang-inner mt-1" : "mt-2"}>
-          <LanguageSelect wide compact={layout.languageCompact} />
+        <div className="mt-2">
+          <LanguageSelect wide compact={false} />
         </div>
       </div>
+    </div>
+  );
 
+  const mobileStep1Actions = (
+    <div className={layout.actionsClass}>
+      {showWerkzeugLink && (
+        <button
+          type="button"
+          onClick={() => {
+            setPasswordInput("");
+            setPasswordError(false);
+            setShowPasswordModal(true);
+          }}
+          className={`${btnMotion} ${layout.secondaryBtnClass}`}
+        >
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <span>{t(uiLanguage, "welcomeGoWerkzeug")}</span>
+            <PiLockKeyFill className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setMobileStep(2)}
+        className={`${btnMotion} ${layout.primaryBtnClass}`}
+      >
+        <span className="inline-flex items-center justify-center gap-1.5">
+          <span>{t(uiLanguage, "next")}</span>
+          <span className="text-base font-bold">→</span>
+        </span>
+      </button>
+    </div>
+  );
+
+  const mobileStep2Fields = (
+    <div className="flex flex-1 min-h-0 flex-col justify-center gap-2 overflow-y-auto py-0.5">
       <div className={`welcome-mobile-theme ${layout.themeCardClass}`}>
-        <p className={layout.bodyTextClass}>{t(uiLanguage, "theme")}</p>
-        <div className="welcome-mobile-theme-toggle">
+        <div className="flex items-center justify-between gap-2">
+          <p className={layout.bodyTextClass}>{t(uiLanguage, "theme")}</p>
           <ThemeToggle />
         </div>
       </div>
@@ -176,6 +245,28 @@ export default function WelcomeScreen({ onContinue }: Props) {
         </div>
         <p className={layout.seasonalHintClass}>{t(uiLanguage, "welcomeSeasonalHint")}</p>
       </div>
+    </div>
+  );
+
+  const mobileStep2Actions = (
+    <div className={layout.actionsClass}>
+      <button
+        type="button"
+        onClick={() => setMobileStep(1)}
+        className={`${btnMotion} ${layout.secondaryBtnClass}`}
+      >
+        <span className="inline-flex items-center justify-center gap-1">
+          <span className="text-base font-bold">←</span>
+          <span>{t(uiLanguage, "back")}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={handleContinue}
+        className={`${btnMotion} ${layout.primaryBtnClass}`}
+      >
+        {t(uiLanguage, "welcomeLetsGo")}
+      </button>
     </div>
   );
 
@@ -218,34 +309,6 @@ export default function WelcomeScreen({ onContinue }: Props) {
           <SeasonalBgToggle />
         </div>
       </div>
-    </div>
-  );
-
-  const mobileActions = (
-    <div className={layout.actionsClass}>
-      {showWerkzeugLink && (
-        <button
-          type="button"
-          onClick={() => {
-            setPasswordInput("");
-            setPasswordError(false);
-            setShowPasswordModal(true);
-          }}
-          className={`${btnMotion} ${layout.secondaryBtnClass}`}
-        >
-          <span className="inline-flex items-center justify-center gap-1.5">
-            <span>{t(uiLanguage, "welcomeGoWerkzeug")}</span>
-            <PiLockKeyFill className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
-          </span>
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={handleContinue}
-        className={`${btnMotion} ${layout.primaryBtnClass}`}
-      >
-        {t(uiLanguage, "welcomeLetsGo")}
-      </button>
     </div>
   );
 
@@ -320,8 +383,18 @@ export default function WelcomeScreen({ onContinue }: Props) {
                 )}
               </header>
 
-              {layout.isMobileForm ? mobileFields : desktopFields}
-              {layout.isMobileForm ? mobileActions : desktopActions}
+              {layout.isMobileForm ? (
+                <>
+                  {mobileStepTabs}
+                  {mobileStep === 1 ? mobileStep1Fields : mobileStep2Fields}
+                  {mobileStep === 1 ? mobileStep1Actions : mobileStep2Actions}
+                </>
+              ) : (
+                <>
+                  {desktopFields}
+                  {desktopActions}
+                </>
+              )}
             </div>
           </div>
         </GlassPanel>
