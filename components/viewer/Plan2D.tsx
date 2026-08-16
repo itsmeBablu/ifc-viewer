@@ -366,33 +366,8 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       const passes =
         !activeFilter || !room || roomPassesFilter(room, activeFilter);
       const isSel = id === selectedRoomId;
-      mat.opacity = !passes
-        ? 0.1
-        : selectedRoomId
-          ? isSel
-            ? 0.8
-            : 0.1
-          : 0.6;
-      if (isSel && passes && room) {
-        const sel = roomColor(
-          room,
-          colorMode,
-          dataViewMode,
-          activeColorPalette,
-          heizlastRange,
-          kuhllastRange,
-          luftungRange,
-            activeTemperatureRange,
-          customLegendColors,
-        );
-        mat.color.set(sel);
-        mat.emissive.set(new THREE.Color(sel));
-        mat.emissiveIntensity = 0.45;
-      } else if (selectedRoomId && passes) {
-        mat.color.setHex(OTHER_GRAY);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
-      } else if (room && passes) {
+      mat.opacity = !passes ? 0.1 : isSel ? 0.85 : 0.65;
+      if (room && passes) {
         const hex = roomColor(
           room,
           colorMode,
@@ -401,12 +376,17 @@ export default function Plan2D({ onPointerMove, className }: Props) {
           heizlastRange,
           kuhllastRange,
           luftungRange,
-            activeTemperatureRange,
+          activeTemperatureRange,
           customLegendColors,
         );
         mat.color.set(hex);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
+        if (isSel) {
+          mat.emissive.set(new THREE.Color(hex));
+          mat.emissiveIntensity = 0.5;
+        } else {
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+        }
       } else {
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;

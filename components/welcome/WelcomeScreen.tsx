@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { PiLockKeyFill } from "react-icons/pi";
 import GlassPanel from "@/components/common/GlassPanel";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import SeasonalBgToggle from "@/components/common/SeasonalBgToggle";
@@ -49,6 +50,10 @@ export default function WelcomeScreen({ onContinue }: Props) {
   const [userName, setUserName] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [layout, setLayout] = useState<WelcomeLayoutConfig>(DEFAULT_LAYOUT);
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -105,6 +110,24 @@ export default function WelcomeScreen({ onContinue }: Props) {
     writeWelcomePreferences(prefs);
     completeWelcomeScreen();
     router.push("/werkzeug");
+  };
+
+  const handlePasswordSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (passwordInput.trim() === "3202") {
+      setShowPasswordModal(false);
+      setPasswordInput("");
+      setPasswordError(false);
+      handleGoWerkzeug();
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setShowPasswordModal(false);
+    setPasswordInput("");
+    setPasswordError(false);
   };
 
   if (!hydrated) {
@@ -203,10 +226,17 @@ export default function WelcomeScreen({ onContinue }: Props) {
       {showWerkzeugLink && (
         <button
           type="button"
-          onClick={handleGoWerkzeug}
+          onClick={() => {
+            setPasswordInput("");
+            setPasswordError(false);
+            setShowPasswordModal(true);
+          }}
           className={`${btnMotion} ${layout.secondaryBtnClass}`}
         >
-          {t(uiLanguage, "welcomeGoWerkzeug")}
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <span>{t(uiLanguage, "welcomeGoWerkzeug")}</span>
+            <PiLockKeyFill className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+          </span>
         </button>
       )}
       <button
@@ -231,10 +261,17 @@ export default function WelcomeScreen({ onContinue }: Props) {
       {showWerkzeugLink && (
         <button
           type="button"
-          onClick={handleGoWerkzeug}
+          onClick={() => {
+            setPasswordInput("");
+            setPasswordError(false);
+            setShowPasswordModal(true);
+          }}
           className={`${btnMotion} ${layout.secondaryBtnClass}`}
         >
-          {t(uiLanguage, "welcomeGoWerkzeug")}
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <span>{t(uiLanguage, "welcomeGoWerkzeug")}</span>
+            <PiLockKeyFill className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+          </span>
         </button>
       )}
     </div>
@@ -289,6 +326,66 @@ export default function WelcomeScreen({ onContinue }: Props) {
           </div>
         </GlassPanel>
       </div>
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <GlassPanel
+            variant="panel"
+            className="w-full max-w-sm overflow-hidden p-5 shadow-2xl rounded-2xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)]"
+          >
+            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                  <PiLockKeyFill className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--text-strong)]">
+                    {t(uiLanguage, "enterPasswordTitle")}
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {t(uiLanguage, "enterPasswordPrompt")}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    if (passwordError) setPasswordError(false);
+                  }}
+                  placeholder={t(uiLanguage, "passwordPlaceholder")}
+                  autoFocus
+                  className="w-full rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 text-xs font-medium text-[var(--text-strong)] placeholder:text-[var(--text-muted)] focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
+                />
+                {passwordError && (
+                  <p className="mt-1.5 text-[11px] font-medium text-red-500 dark:text-red-400">
+                    {t(uiLanguage, "passwordIncorrect")}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handlePasswordCancel}
+                  className="rounded-xl border border-[var(--panel-divider)] bg-transparent px-3 py-1.5 text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] transition-all active:scale-[0.98]"
+                >
+                  {t(uiLanguage, "cancel")}
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 px-4 py-1.5 text-xs font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] transition-all active:scale-[0.98]"
+                >
+                  {t(uiLanguage, "next")}
+                </button>
+              </div>
+            </form>
+          </GlassPanel>
+        </div>
+      )}
     </div>
   );
 }

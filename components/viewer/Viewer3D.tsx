@@ -227,10 +227,100 @@ function clearSelectionOutlines(root: THREE.Object3D | null | undefined) {
 }
 
 /**
- * Back-face shell outline scaled around the geometry bbox center.
- * IFC room meshes keep world coords in the buffer (mesh.position ≈ 0), so a
- * plain scale expands from the origin and misaligns the highlight.
+ * Multi-color rainbow selection outline shader matching the liquid glass loading spinner:
+ * #0050ff (Blue) -> #1f8a70 (Teal) -> #4caf50 (Green) -> #ffdc00 (Yellow) -> #ff8c00 (Orange) -> #dc0000 (Red)
  */
+function createRainbowOutlineMaterial(
+  bboxMin: THREE.Vector3,
+  bboxMax: THREE.Vector3,
+  inflate = 1.08,
+  opacity = 0.95,
+) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      opacity: { value: opacity },
+      inflate: { value: inflate },
+      bboxMin: { value: bboxMin.clone() },
+      bboxMax: { value: bboxMax.clone() },
+    },
+    vertexShader: `
+      varying vec3 vPosition;
+      uniform float inflate;
+      uniform vec3 bboxMin;
+      uniform vec3 bboxMax;
+
+      void main() {
+        vPosition = position;
+        vec3 boxCenter = (bboxMin + bboxMax) * 0.5;
+        vec3 inflatedPos = position * inflate + boxCenter * (1.0 - inflate);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(inflatedPos, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vPosition;
+      uniform float time;
+      uniform float opacity;
+      uniform vec3 bboxMin;
+      uniform vec3 bboxMax;
+
+      vec3 getRainbowColor(float t) {
+        t = fract(t);
+        vec3 c0 = vec3(0.0, 0.314, 1.0);    // #0050ff (Blue)
+        vec3 c1 = vec3(0.122, 0.541, 0.439); // #1f8a70 (Teal)
+        vec3 c2 = vec3(0.298, 0.686, 0.314); // #4caf50 (Green)
+        vec3 c3 = vec3(1.0, 0.863, 0.0);    // #ffdc00 (Yellow)
+        vec3 c4 = vec3(1.0, 0.549, 0.0);    // #ff8c00 (Orange)
+        vec3 c5 = vec3(0.863, 0.0, 0.0);    // #dc0000 (Red)
+
+        if (t < 0.2) return mix(c0, c1, t / 0.2);
+        if (t < 0.4) return mix(c1, c2, (t - 0.2) / 0.2);
+        if (t < 0.6) return mix(c2, c3, (t - 0.4) / 0.2);
+        if (t < 0.8) return mix(c3, c4, (t - 0.6) / 0.2);
+        return mix(c4, c5, (t - 0.8) / 0.2);
+      }
+
+      void main() {
+        float rangeY = max(bboxMax.y - bboxMin.y, 0.05);
+        float rangeX = max(bboxMax.x - bboxMin.x, 0.05);
+        float normY = (vPosition.y - bboxMin.y) / rangeY;
+        float normX = (vPosition.x - bboxMin.x) / rangeX;
+        float t = normY * 0.7 + normX * 0.3 + time * 0.25;
+        vec3 col = getRainbowColor(t);
+        gl_FragColor = vec4(col, opacity);
+      }
+    `,
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+  });
+}
+
+function attachRainbowOutline(
+  mesh: THREE.Mesh,
+  inflate = 1.09,
+  opacity = 0.95,
+  clearFirst = true,
+) {
+  if (clearFirst) clearSelectionOutlines(mesh);
+  const geom = mesh.geometry;
+  if (!geom.boundingBox) geom.computeBoundingBox();
+  const box = geom.boundingBox;
+  if (!box || box.isEmpty()) return;
+
+  const center = box.getCenter(new THREE.Vector3());
+  const mat = createRainbowOutlineMaterial(box.min, box.max, inflate, opacity);
+  const outline = new THREE.Mesh(geom, mat);
+  outline.scale.setScalar(inflate);
+  outline.position.copy(center).multiplyScalar(1 - inflate);
+  outline.userData.isSelectionOutline = true;
+  outline.userData.isRainbowOutline = true;
+  outline.renderOrder = (mesh.renderOrder ?? 0) + 20;
+  mesh.add(outline);
+}
+
+/** Back-face shell outline scaled around the geometry bbox center. */
 function attachAlignedOutline(
   mesh: THREE.Mesh,
   color: THREE.ColorRepresentation,
@@ -263,9 +353,9 @@ function attachAlignedOutline(
   mesh.add(outline);
 }
 
-/** Color-matched rim — shared by basic 3D and presentation selection. */
-function attachColorOutline(mesh: THREE.Mesh, hex: string) {
-  attachAlignedOutline(mesh, hex, 1.09, 0.92, true);
+/** Color-matched rim — shared by basic 3D and presentation selection (now with rainbow liquid spinner gradient). */
+function attachColorOutline(mesh: THREE.Mesh, _hex?: string) {
+  attachRainbowOutline(mesh, 1.09, 0.95, true);
 }
 
 function applySurfaceOpacity(
@@ -821,6 +911,18 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       viewCube.syncFromCamera(camera, controls.target);
       const now = performance.now();
       lastTickRef.current = now;
+
+      // Animate selection outline rainbow gradient
+      const elapsedSec = now * 0.001;
+      scene.traverse((obj) => {
+        if (obj.userData.isRainbowOutline && obj instanceof THREE.Mesh) {
+          const m = obj.material as THREE.ShaderMaterial;
+          if (m.uniforms?.time) {
+            m.uniforms.time.value = elapsedSec;
+          }
+        }
+      });
+
       const sz = new THREE.Vector2();
       renderer.getSize(sz);
       renderer.setScissorTest(false);
@@ -2090,12 +2192,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
         const nextOpacity = !passes
           ? 0.1
-          : hasRoomSelection
-            ? isSel
-              ? SEL_OPACITY
-              : OTHER_OPACITY
-            : zoneFocus && !inZone
-              ? 0.12
+          : zoneFocus && !inZone
+            ? 0.12
+            : isSel
+              ? Math.max(SEL_OPACITY, baseOpacity)
               : baseOpacity;
 
         applySurfaceOpacity(mat, nextOpacity, true);
@@ -2106,13 +2206,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           `#${mat.color.getHexString()}`;
 
         if (hasRoomSelection && passes) {
-          // Selected keeps load color; others go gray (all shading / Modell options).
+          mat.color.set(baseHex);
           if (isSel) {
-            mat.color.set(baseHex);
             mat.emissive.set(baseHex);
-            mat.emissiveIntensity = lightMode ? 0.4 : 0.55;
+            mat.emissiveIntensity = lightMode ? 0.45 : 0.6;
           } else {
-            mat.color.setHex(OTHER_GRAY);
             mat.emissive.setHex(0x000000);
             mat.emissiveIntensity = 0;
           }
