@@ -26,7 +26,7 @@ import {
   LuLayoutGrid,
   LuMagnet,
   LuPrinter,
-  LuMoreHorizontal,
+  LuEllipsis,
   LuX,
   LuCornerUpLeft,
   LuAlignCenter,
@@ -1015,7 +1015,7 @@ export default function ToolRibbon({
                   {overflowOpen ? (
                     <LuX className="h-4 w-4" />
                   ) : (
-                    <LuMoreHorizontal className="h-4 w-4" />
+                    <LuEllipsis className="h-4 w-4" />
                   )}
                   <span className="text-[9px]">More</span>
                 </button>
