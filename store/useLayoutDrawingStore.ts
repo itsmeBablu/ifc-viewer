@@ -332,7 +332,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   windows: [],
     layoutRooms: [],
     drawingScale: "1:100",
-    unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as any) || "metric" : "metric",
+    unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
