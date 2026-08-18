@@ -64,6 +64,7 @@ export default function ToolRightPanel({
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [browserTab, setBrowserTab] = useState<BrowserTab>("all");
+  const [floorsOpen, setFloorsOpen] = useState(true);
   const [isFloating, setIsFloating] = useState(false);
 
   useEffect(() => {
