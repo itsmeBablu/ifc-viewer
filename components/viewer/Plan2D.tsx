@@ -468,6 +468,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       const passes =
         !activeFilter || !room || roomPassesFilter(room, activeFilter);
       const isSel = id === selectedRoomId;
+      // eslint-disable-next-line react-hooks/immutability
       mat.opacity = !passes ? 0.1 : 0.65;
       if (room && passes) {
         const hasRoomSelection = Boolean(selectedRoomId);

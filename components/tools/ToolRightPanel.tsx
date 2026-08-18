@@ -58,6 +58,7 @@ export default function ToolRightPanel({
   // -- Panel open/width state ------------------------------------------------
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [browserTab, setBrowserTab] = useState<BrowserTab>("all");
   const [isFloating, setIsFloating] = useState(false);
@@ -567,17 +568,19 @@ export default function ToolRightPanel({
                       
                       {/* View Shortcuts */}
                       <div className="flex items-center justify-between gap-2 mt-3">
-                        {['N', 'O', 'S', 'W', '3D'].map(v => (
+                        {[
+                          { id: 'north', label: 'N' },
+                          { id: 'east', label: 'O' },
+                          { id: 'south', label: 'S' },
+                          { id: 'west', label: 'W' },
+                          { id: 'free', label: '3D' }
+                        ].map(v => (
                           <button 
-                            key={v} 
-                            onClick={() => {
-                              // If viewerRef exists in this scope, call setCameraView. 
-                              // Since we don't have viewerRef directly here in the same way, we can dispatch an event or use store.
-                              // Actually ToolRightPanel has no viewerRef currently passed in, but the prompt says "Add N/O/W/S/3D view shortcuts". 
-                            }} 
+                            key={v.id} 
+                            onClick={() => setViewPreset(v.id as any)} 
                             className="flex-1 bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)] rounded-lg py-1.5 text-xs font-bold text-[var(--text-strong)] hover:bg-amber-500 hover:text-slate-900 hover:border-amber-400 transition-colors shadow-sm"
                           >
-                            {v}
+                            {v.label}
                           </button>
                         ))}
                       </div>

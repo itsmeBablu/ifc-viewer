@@ -193,7 +193,7 @@ export function flyToProgress(
     onComplete?.();
   };
   const state = { t: 0 };
-  tween = gsap.to(state, {
+  const tween = gsap.to(state, {
     t: 1,
     duration: Math.max(0.001, durationMs / 1000),
     ease: gsapEase.camera,

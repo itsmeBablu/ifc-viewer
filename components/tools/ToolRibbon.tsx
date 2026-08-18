@@ -259,7 +259,45 @@ export default function ToolRibbon({
   const [saveMenuOpen, setSaveMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [isTouchMode, setIsTouchMode] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | null>(null);
 
+  // Draggable Ribbon State
+  const [ribbonPos, setRibbonPos] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  const handleRibbonPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, input, select, .no-drag")) return;
+    isDragging.current = true;
+    dragStart.current = {
+      x: e.clientX - ribbonPos.x,
+      y: e.clientY - ribbonPos.y,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const handleRibbonPointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    setRibbonPos({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y,
+    });
+  };
+  const handleRibbonPointerUp = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!activeDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const el = document.getElementById("ribbon-dropdown-container");
+      if (el && !el.contains(e.target as Node)) setActiveDropdown(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [activeDropdown]);
   useEffect(() => {
     const checkTouch = () => {
       setIsTouchMode(window.innerWidth < 1024 || ('ontouchstart' in window));
@@ -385,110 +423,93 @@ export default function ToolRibbon({
   // -- V Studio tab content clusters ------------------------------------------
   const buildCluster = (
     <Cluster label="Build">
-      <RibbonBtn
-        large
-        active={armedLayoutTool === "wall"}
-        onClick={() => handleSelectLayoutTool("wall")}
-        title="Wall (W)"
-      >
-        <IconMarkupWall className="h-5 w-5" />
-        <span className="text-[10px]">Wall (W)</span>
-      </RibbonBtn>
-    </Cluster>
-  );
-
-  const openingsCluster = (
-    <Cluster label="Openings">
-      <RibbonBtn
-        large
-        active={armedLayoutTool === "door"}
-        onClick={() => handleSelectLayoutTool("door")}
-        title="Door (D)"
-      >
-        <IconMarkupDoor className="h-5 w-5" />
-        <span className="text-[10px]">Door (D)</span>
-      </RibbonBtn>
-      <RibbonBtn
-        large
-        active={armedLayoutTool === "window"}
-        onClick={() => handleSelectLayoutTool("window")}
-        title="Window"
-      >
-        <IconMarkupWindow className="h-5 w-5" />
-        <span className="text-[10px]">Window</span>
-      </RibbonBtn>
-    </Cluster>
-  );
-
-  const structureCluster = (
-    <Cluster label="Structure">
-      <RibbonBtn
-        large
-        active={armedLayoutTool === "floor"}
-        onClick={() => handleSelectLayoutTool("floor")}
-        title="Floor"
-      >
-        <IconMarkupFloor className="h-5 w-5" />
-        <span className="text-[10px]">Floor</span>
-      </RibbonBtn>
-      <RibbonBtn
-        large
-        active={armedLayoutTool === "roof"}
-        onClick={() => handleSelectLayoutTool("roof")}
-        title="Roof"
-      >
-        <IconMarkupRoof className="h-5 w-5" />
-        <span className="text-[10px]">Roof</span>
-      </RibbonBtn>
+      <div className="relative">
+        <RibbonBtn
+          large
+          active={["wall", "door", "window", "floor", "roof"].includes(armedLayoutTool || "")}
+          onClick={() => setActiveDropdown(activeDropdown === "build" ? null : "build")}
+          title="Build Elements"
+        >
+          <IconMarkupWall className="h-5 w-5" />
+          <span className="text-[10px] flex items-center gap-1">Build <LuChevronDown className="h-3 w-3" /></span>
+        </RibbonBtn>
+        {activeDropdown === "build" && (
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("wall"); setActiveDropdown(null); }}>
+              <IconMarkupWall className="h-4 w-4 text-amber-500" /> <span className="text-xs">Wall (W)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("door"); setActiveDropdown(null); }}>
+              <IconMarkupDoor className="h-4 w-4 text-amber-500" /> <span className="text-xs">Door (D)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("window"); setActiveDropdown(null); }}>
+              <IconMarkupWindow className="h-4 w-4 text-amber-500" /> <span className="text-xs">Window</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("floor"); setActiveDropdown(null); }}>
+              <IconMarkupFloor className="h-4 w-4 text-amber-500" /> <span className="text-xs">Floor</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("roof"); setActiveDropdown(null); }}>
+              <IconMarkupRoof className="h-4 w-4 text-amber-500" /> <span className="text-xs">Roof</span>
+            </button>
+          </div>
+        )}
+      </div>
     </Cluster>
   );
 
   const roomsCluster = (
     <Cluster label="Rooms">
-      <RibbonBtn
-        large
-        onClick={() => {
-          setArmedLayoutTool(null);
-          setArmedTool(null);
-          onOpenRoomSchedule?.();
-        }}
-        title="Room (RM)"
-      >
-        <LuTable className="h-5 w-5 text-amber-500" />
-        <span className="text-[10px]">Room</span>
-      </RibbonBtn>
-      <RibbonBtn large onClick={() => onOpenRoomSchedule?.()} title="Schedule">
-        <LuFileSpreadsheet className="h-5 w-5 text-emerald-500" />
-        <span className="text-[10px]">Schedule</span>
-      </RibbonBtn>
+      <div className="relative">
+        <RibbonBtn
+          large
+          onClick={() => setActiveDropdown(activeDropdown === "rooms" ? null : "rooms")}
+          title="Rooms"
+        >
+          <LuTable className="h-5 w-5 text-amber-500" />
+          <span className="text-[10px] flex items-center gap-1">Rooms <LuChevronDown className="h-3 w-3" /></span>
+        </RibbonBtn>
+        {activeDropdown === "rooms" && (
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { setArmedLayoutTool(null); setArmedTool(null); onOpenRoomSchedule?.(); setActiveDropdown(null); }}>
+              <LuTable className="h-4 w-4 text-amber-500" /> <span className="text-xs">Room (RM)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { onOpenRoomSchedule?.(); setActiveDropdown(null); }}>
+              <LuFileSpreadsheet className="h-4 w-4 text-emerald-500" /> <span className="text-xs">Schedule</span>
+            </button>
+          </div>
+        )}
+      </div>
     </Cluster>
   );
 
   const shapesCluster = (
     <Cluster label="Shapes">
-      {(
-        [
-          { id: "cube" as const, label: "Cube", icon: IconMarkupCube },
-          { id: "cylinder" as const, label: "Cyl", icon: IconMarkupCylinder },
-          { id: "sphere" as const, label: "Sphere", icon: IconMarkupSphere },
-          { id: "cone" as const, label: "Cone", icon: IconMarkupCone },
-          { id: "torus" as const, label: "Torus", icon: IconMarkupTorus },
-          { id: "pyramid" as const, label: "Pyr", icon: IconMarkupPyramid },
-        ] as const
-      ).map((item) => {
-        const Icon = item.icon;
-        return (
-          <RibbonBtn
-            key={item.id}
-            active={armedTool === item.id}
-            onClick={() => handleSelectShape(item.id)}
-            title={item.label}
-          >
-            <Icon className="h-4 w-4" />
-            <span className="text-[9px]">{item.label}</span>
-          </RibbonBtn>
-        );
-      })}
+      <div className="relative">
+        <RibbonBtn
+          large
+          active={Boolean(armedTool && ["cube", "cylinder", "sphere", "cone", "torus", "pyramid"].includes(armedTool))}
+          onClick={() => setActiveDropdown(activeDropdown === "shapes" ? null : "shapes")}
+          title="Shapes"
+        >
+          <IconMarkupCube className="h-5 w-5" />
+          <span className="text-[10px] flex items-center gap-1">Shapes <LuChevronDown className="h-3 w-3" /></span>
+        </RibbonBtn>
+        {activeDropdown === "shapes" && (
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+            {([
+              { id: "cube" as const, label: "Cube", icon: IconMarkupCube },
+              { id: "cylinder" as const, label: "Cyl", icon: IconMarkupCylinder },
+              { id: "sphere" as const, label: "Sphere", icon: IconMarkupSphere },
+              { id: "cone" as const, label: "Cone", icon: IconMarkupCone },
+              { id: "torus" as const, label: "Torus", icon: IconMarkupTorus },
+              { id: "pyramid" as const, label: "Pyr", icon: IconMarkupPyramid },
+            ]).map((item) => (
+              <button key={item.id} type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectShape(item.id); setActiveDropdown(null); }}>
+                <item.icon className="h-4 w-4 text-[var(--text-muted)]" /> <span className="text-xs">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Cluster>
   );
 
@@ -902,6 +923,24 @@ export default function ToolRibbon({
           >
             <LuPrinter className="h-3.5 w-3.5" />
           </button>
+          {/* Theme & Fullscreen */}
+          <div className="h-4 w-px bg-[var(--panel-divider)]" />
+          <button
+            type="button"
+            onClick={() => setColorTheme(isDark ? "light" : "dark")}
+            title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
+            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            {isDark ? <LuSun className="h-3.5 w-3.5 text-amber-400" /> : <LuMoon className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
+          </button>
         </div>
 
         {/* Center: Active Model Name */}
@@ -912,42 +951,21 @@ export default function ToolRibbon({
           </span>
         </div>
 
-        {/* Right: Theme Toggle & Fullscreen */}
-        <div className="absolute top-14 right-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setColorTheme(isDark ? "light" : "dark")}
-            title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            {isDark ? <LuSun className="h-3.5 w-3.5 text-amber-400" /> : <LuMoon className="h-3.5 w-3.5" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRibbonCollapsed(!ribbonCollapsed)}
-            title={ribbonCollapsed ? "Expand Ribbon" : "Minimize Ribbon"}
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            <LuChevronDown
-              className={`h-3.5 w-3.5 transition-transform duration-200 ${ribbonCollapsed ? "" : "rotate-180"}`}
-            />
-          </button>
-        </div>
-
-
       {/* -- Main Tool Island --------------------------------------- */}
-      <header className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto overflow-hidden">
+      <header 
+        className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto overflow-hidden touch-none"
+        style={{
+          top: `calc(1rem + ${ribbonPos.y}px)`,
+          left: `calc(50% + ${ribbonPos.x}px)`,
+          transform: `translateX(-50%)`,
+        }}
+        onPointerDown={handleRibbonPointerDown}
+        onPointerMove={handleRibbonPointerMove}
+        onPointerUp={handleRibbonPointerUp}
+        onPointerCancel={handleRibbonPointerUp}
+      >
       {/* -- Tab Bar ---------------------------------------------------------- */}
-      <div className="flex items-center gap-2 p-2">
+      <div className="flex items-center gap-2 p-2 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
         {/* V Studio (home tab) */}
         <button
           type="button"
@@ -961,6 +979,53 @@ export default function ToolRibbon({
           V Studio
         </button>
 
+        {/* Manage */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("manage")}
+          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
+            activeTab === "manage"
+              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
+              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          }`}
+        >
+          Manage
+        </button>
+
+        {/* Modify (Contextual) */}
+        {hasSelection && (
+          <>
+            <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
+            <button
+              type="button"
+              onClick={() => setActiveTab("modify")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
+                activeTab === "modify"
+                  ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
+                  : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              }`}
+            >
+              {contextualModifyTitle}
+            </button>
+          </>
+        )}
+
+        {/* Ribbon collapse chevron */}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setRibbonCollapsed(!ribbonCollapsed)}
+            title={ribbonCollapsed ? "Expand Ribbon" : "Minimize Ribbon"}
+            className="rounded-md p-1.5 no-drag text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            <LuChevronDown
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${ribbonCollapsed ? "" : "rotate-180"}`}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div id="ribbon-dropdown-container">
         {/* Manage */}
         <button
           type="button"

@@ -161,6 +161,7 @@ export default function ToolStatusBar({
   const { mode, hint } = getToolStatusAndHints();
 
   const [attachOpen, setAttachOpen] = useState(false);
+  const [shadingOpen, setShadingOpen] = useState(false);
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
@@ -213,22 +214,38 @@ export default function ToolStatusBar({
       {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
       <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
         {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
-        <div className="flex items-center rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] overflow-hidden">
-          {RENDER_MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setRenderMode(m.id)}
-              title={`Shading: ${m.label}`}
-              className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                renderMode === m.id
-                  ? "bg-amber-500/30 text-amber-600 dark:text-amber-400"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShadingOpen(!shadingOpen)}
+            title="Shading Options"
+            className="flex items-center gap-1 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+          >
+            <LuLayers className="h-3 w-3" />
+            <span>{RENDER_MODES.find(m => m.id === renderMode)?.label || "Shaded"}</span>
+          </button>
+          
+          {shadingOpen && (
+            <div className="absolute bottom-full mb-2 right-0 w-32 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
+              {RENDER_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setRenderMode(m.id);
+                    setShadingOpen(false);
+                  }}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left transition-colors ${
+                    renderMode === m.id
+                      ? "bg-amber-500/20 text-amber-500"
+                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+                  }`}
+                >
+                  <LuLayers className="h-3 w-3 opacity-70" /> {m.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="h-3 w-px bg-[var(--panel-divider)]" />

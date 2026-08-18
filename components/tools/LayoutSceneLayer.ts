@@ -229,7 +229,7 @@ export default class LayoutSceneLayer {
         this.doorMeshes.set(door.id, g);
         this.group.add(g);
       }
-      this.stripOpeningLabels(g);
+      // this.stripOpeningLabels(g);
       this.syncDoorPlanSymbol(g, wall, door, elev, planMode);
       g.visible = visible;
       this.tintOpening(g, door.id === opts.selectedDoorId);
@@ -258,7 +258,7 @@ export default class LayoutSceneLayer {
         this.windowMeshes.set(win.id, g);
         this.group.add(g);
       }
-      this.stripOpeningLabels(g);
+      // this.stripOpeningLabels(g);
       this.syncWindowPlanSymbol(g, wall, win, elev, planMode);
       g.visible = visible;
       this.tintOpening(g, win.id === opts.selectedWindowId);
