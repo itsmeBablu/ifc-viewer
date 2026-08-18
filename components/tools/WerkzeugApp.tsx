@@ -150,6 +150,7 @@ export default function WerkzeugApp() {
   const selectDoor = useLayoutDrawingStore((s) => s.selectDoor);
   const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
   const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
+  const projectId = useLayoutDrawingStore((s) => s.projectId);
 
   // Markup Tool Store
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
@@ -419,7 +420,7 @@ export default function WerkzeugApp() {
 
   const sceneValue = useMemo(() => ({ shellGroup, rooms }), [shellGroup, rooms]);
 
-  const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup;
+  const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
   const showError = Boolean(loadError && !isLoadingModel);
   const progressLabel = loadMessage?.trim() || `${Math.round(loadProgress * 100)}%`;
 
