@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
@@ -162,9 +162,21 @@ export default function ToolStatusBar({
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [shadingOpen, setShadingOpen] = useState(false);
+  const statusBarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (statusBarRef.current && !statusBarRef.current.contains(e.target as Node)) {
+        setAttachOpen(false);
+        setShadingOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
+    <div ref={statusBarRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
       {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
       <div className="flex items-center gap-2 font-medium min-w-0">
         {/* Mode badge */}

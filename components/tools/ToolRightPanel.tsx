@@ -271,11 +271,21 @@ export default function ToolRightPanel({
   // -------------------------------------------------------------------------
   return (
     <>
+      {!rightPanelOpen && (
+        <button
+          className="fixed right-4 top-[88px] z-30 flex h-10 w-10 items-center justify-center rounded-full liquid-glass-panel hover:bg-amber-500/10 text-[var(--text-strong)] transition-all shadow-xl border border-[var(--panel-divider)]"
+          onClick={() => setRightPanelOpen(true)}
+          title="Expand Panel"
+        >
+          <LuChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+
       <aside
-        className={`fixed right-4 top-[88px] bottom-16 z-30 flex flex-col liquid-glass-panel transition-all duration-300 select-none overflow-hidden ${
-          !rightPanelOpen ? "w-10 h-10 rounded-full !border-0 flex items-center justify-center cursor-pointer" : ""
+        className={`fixed right-4 top-[88px] bottom-16 z-30 flex flex-col liquid-glass-panel transition-transform duration-300 select-none overflow-hidden ${
+          rightPanelOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
         }`}
-        style={rightPanelOpen ? { width: panelWidth } : undefined}
+        style={{ width: panelWidth }}
       >
         {/* -- Left resize handle -------------------------------------------- */}
         {!isFloating && rightPanelOpen && (
@@ -290,29 +300,20 @@ export default function ToolRightPanel({
         <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3">
           <button
             type="button"
-            onClick={() => setRightPanelOpen(!rightPanelOpen)}
-            title={rightPanelOpen ? "Collapse Panel" : "Expand Panel"}
+            onClick={() => setRightPanelOpen(false)}
+            title="Collapse Panel"
             className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
           >
-            {rightPanelOpen ? (
-              <LuChevronRight className="h-4 w-4" />
-            ) : (
-              <LuChevronLeft className="h-4 w-4" />
-            )}
+            <LuChevronRight className="h-4 w-4" />
           </button>
 
-          {rightPanelOpen && (
-            <div className="flex items-center gap-1.5 ml-1">
+          <div className="flex items-center gap-1.5 ml-1">
               <LuSlidersHorizontal className="h-3.5 w-3.5 text-amber-500" />
               <span className="font-black text-[11px] text-[var(--text-strong)] tracking-widest uppercase font-mono">
                 Project Layout
               </span>
             </div>
-          )}
         </div>
-
-        {rightPanelOpen && (
-          <>
             {/* -- PROPERTIES (top portion) ----------------------------------- */}
             {hasSelection && (
               <>
@@ -594,8 +595,6 @@ export default function ToolRightPanel({
                 )}
               </div>
             </div>
-          </>
-        )}
       </aside>
 
       {/* Edit Type Dialog */}

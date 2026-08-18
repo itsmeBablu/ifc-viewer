@@ -1,6 +1,7 @@
 "use client";
 import gsap from "gsap";
 import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import Image from "next/image";
 import {
   LuChevronDown,
   LuFolderOpen,
@@ -411,13 +412,20 @@ export default function ToolRibbon({
 
   // Close overflow on outside click
   useEffect(() => {
-    if (!overflowOpen) return;
-    const handler = (e: MouseEvent) => {
-      const el = document.getElementById("ribbon-overflow-menu");
-      if (el && !el.contains(e.target as Node)) setOverflowOpen(false);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ribbonContentRef.current && !ribbonContentRef.current.contains(e.target as Node)) {
+        setOverflowOpen(false);
+      }
+      
+      const target = e.target as HTMLElement;
+      if (!target.closest('.save-menu-container')) {
+        setSaveMenuOpen(false);
+      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, [overflowOpen]);
 
   // -- V Studio tab content clusters ------------------------------------------
@@ -820,7 +828,7 @@ export default function ToolRibbon({
           title="Back to Viewer"
           className="flex items-center justify-center rounded-full w-8 h-8 hover:bg-[var(--glass-inset-bg)] transition-colors"
         >
-          <IoHomeOutline className="h-4 w-4 text-amber-500" />
+          <Image src="/ibv_logo.svg" alt="IBV" width={24} height={24} className="w-5 h-auto object-contain" />
         </a>
 
         <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
@@ -849,7 +857,7 @@ export default function ToolRibbon({
           </button>
 
           {/* Save Dropdown */}
-          <div className="relative">
+          <div className="relative save-menu-container">
             <button
               type="button"
               onClick={() => setSaveMenuOpen(!saveMenuOpen)}
@@ -951,7 +959,8 @@ export default function ToolRibbon({
 
       {/* -- Main Tool Island --------------------------------------- */}
       <header 
-        className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto overflow-hidden touch-none"
+        id="ribbon-dropdown-container"
+        className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto touch-none"
         style={{
           top: `calc(1rem + ${ribbonPos.y}px)`,
           left: `calc(50% + ${ribbonPos.x}px)`,
@@ -1023,44 +1032,12 @@ export default function ToolRibbon({
         </div>
       </div>
 
-      <div id="ribbon-dropdown-container">
-        {/* Manage */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("manage")}
-          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-            activeTab === "manage"
-              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
-              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-          }`}
-        >
-          Manage
-        </button>
-
-        {/* Contextual Modify */}
-        {hasSelection && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("modify")}
-            className={`relative ml-2 flex items-center gap-1 rounded-t-lg px-4 py-1 font-bold transition-all border-t-2 ${
-              activeTab === "modify"
-                ? "bg-amber-500/15 text-amber-500 border-amber-500 shadow-sm"
-                : "bg-[var(--glass-inset-bg)] text-amber-600 dark:text-amber-400 border-transparent hover:bg-amber-500/10"
-            }`}
-          >
-            <span>{contextualModifyTitle || "Modify"}</span>
-            {activeTab === "modify" && (
-              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-amber-500" />
-            )}
-          </button>
-        )}
-      </div>
 
       {/* -- Ribbon Content Panel --------------------------------------------- */}
       {!ribbonCollapsed && (
         <div
           ref={ribbonContentRef}
-          className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative"
+          className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[420px]"
         >
           {/* V Studio tab: all clusters in a scrollable row with overflow button */}
           {activeTab === "vstudio" && (
