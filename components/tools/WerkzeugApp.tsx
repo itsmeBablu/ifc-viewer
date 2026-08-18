@@ -38,8 +38,7 @@ import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
-import ToolPropertiesDock from "./ToolPropertiesDock";
-import ToolProjectBrowserDock from "./ToolProjectBrowserDock";
+import ToolRightPanel from "./ToolRightPanel";
 import ToolStatusBar from "./ToolStatusBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
@@ -155,14 +154,25 @@ export default function WerkzeugApp() {
 
   useEffect(() => {
     document.title = activeModelLabel?.trim()
-      ? `Autodesk Revit Studio - ${activeModelLabel.trim()}`
-      : "Autodesk Revit Studio";
+      ? `V Studio — ${activeModelLabel.trim()}`
+      : "V Studio";
   }, [activeModelLabel]);
 
   useEffect(() => {
     document.body.classList.toggle("pdf-capturing", pdfCaptureActive);
     return () => document.body.classList.remove("pdf-capturing");
   }, [pdfCaptureActive]);
+
+  useEffect(() => {
+    // Auto initialize project & default Level 1 so drawing/placement works instantly
+    const pId = activeModelLabel || "studio-project";
+    void useLayoutDrawingStore.getState().loadForProject(pId, true).then(() => {
+      const store = useLayoutDrawingStore.getState();
+      if (store.levels.length === 0) {
+        void store.addLevel({ name: "Level 1", elevationMm: 0, heightMm: 3000 });
+      }
+    });
+  }, [activeModelLabel]);
 
   useEffect(() => {
     hydratePanelState();
@@ -449,12 +459,9 @@ export default function WerkzeugApp() {
           active={pointerOverViewer}
         />
 
-        {/* Left Dock: Properties Palette */}
-        {isDesktop && <ToolPropertiesDock />}
-
-        {/* Right Dock: Project Browser & IFC Structure Tree */}
+        {/* Right Panel: Properties + Project Browser (unified) */}
         {isDesktop && (
-          <ToolProjectBrowserDock
+          <ToolRightPanel
             onFile={handleFile}
             isLoadingModel={isLoadingModel}
           />
@@ -464,7 +471,15 @@ export default function WerkzeugApp() {
         <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
 
         {/* Bottom CAD Status Bar */}
-        <ToolStatusBar pointer={pointer} />
+        <ToolStatusBar
+          pointer={pointer}
+          onAttachIfc={handleFile}
+          onAttachDwgPdf={(file) => {
+            // DWG/PDF underlay attachment — full per-floor alignment wired in Section 11
+            // For now, pass to the existing handleFile flow for IFC, or handle DWG separately
+            console.log("DWG/PDF attached:", file.name);
+          }}
+        />
 
         {/* Drag Snap & Hover Tooltip HUDs */}
         <DragSnapHud />
@@ -559,7 +574,7 @@ export default function WerkzeugApp() {
             landscapeMobile={isLandscape}
           >
             {() => (
-              <ToolProjectBrowserDock
+              <ToolRightPanel
                 onFile={handleFile}
                 isLoadingModel={isLoadingModel}
               />

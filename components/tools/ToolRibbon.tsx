@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, type RefObject } from "react";
+import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import {
+  LuChevronDown,
   LuFolderOpen,
   LuSave,
   LuUndo2,
@@ -21,12 +22,12 @@ import {
   LuArrowLeftRight,
   LuRotateCw,
   LuTable,
-  LuBox,
   LuFileSpreadsheet,
-  LuEye,
-  LuSearch,
   LuLayoutGrid,
   LuMagnet,
+  LuPrinter,
+  LuMoreHorizontal,
+  LuX,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -67,13 +68,99 @@ import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { RenderMode } from "@/lib/types";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
 
-export type RibbonTab = "architecture" | "shapes" | "annotate" | "view" | "manage" | "modify";
+// Two primary tabs plus contextual modify
+export type RibbonTab = "vstudio" | "manage" | "modify";
 
 interface ToolRibbonProps {
   viewerRef: RefObject<WerkzeugViewer3DHandle | null>;
   onFile: (file: File) => void;
   isLoadingModel: boolean;
   onOpenRoomSchedule?: () => void;
+}
+
+// ─── Cluster wrapper helpers ───────────────────────────────────────────────────
+
+function Cluster({
+  label,
+  children,
+  border = true,
+}: {
+  label: string;
+  children: React.ReactNode;
+  border?: boolean;
+}) {
+  return (
+    <div
+      className={`flex flex-col items-center gap-1 ${border ? "border-r border-[var(--panel-divider)]/60 pr-3" : ""}`}
+    >
+      <div className="flex items-center gap-1">{children}</div>
+      <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function RibbonBtn({
+  active,
+  onClick,
+  title,
+  children,
+  danger,
+  large,
+}: {
+  active?: boolean;
+  onClick?: () => void;
+  title?: string;
+  children: React.ReactNode;
+  danger?: boolean;
+  large?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`flex flex-col items-center justify-center gap-1 rounded-xl transition-all ${
+        large ? "p-2 min-w-[50px]" : "p-1.5 min-w-[44px]"
+      } ${
+        danger
+          ? "text-red-500 hover:bg-red-500/10"
+          : active
+          ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
+          : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ToggleBtn({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border transition-all ${
+        active
+          ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
+          : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function ToolRibbon({
@@ -88,9 +175,6 @@ export default function ToolRibbon({
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const renderMode = useAppStore((s) => s.renderMode);
   const setRenderMode = useAppStore((s) => s.setRenderMode);
-  const selectedFloor = useAppStore((s) => s.selectedFloor);
-  const floors = useAppStore((s) => s.floors);
-  const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
 
@@ -130,13 +214,17 @@ export default function ToolRibbon({
   const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
   const duplicatePlacement = useToolMarkupStore((s) => s.duplicatePlacement);
 
-  const [activeTab, setActiveTab] = useState<RibbonTab>("architecture");
-  const [previousTab, setPreviousTab] = useState<RibbonTab>("architecture");
+  const [activeTab, setActiveTab] = useState<RibbonTab>("vstudio");
+  const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
+  const [previousTab, setPreviousTab] = useState<RibbonTab>("vstudio");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saveMenuOpen, setSaveMenuOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
-  // Determine what is currently selected for Contextual Modify Tab (Section 2)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const ribbonContentRef = useRef<HTMLDivElement>(null);
+
+  // Determine what is currently selected for contextual Modify tab
   const hasSelection = Boolean(
     selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId
   );
@@ -162,9 +250,10 @@ export default function ToolRibbon({
       }
     } else {
       if (activeTab === "modify") {
-        setActiveTab(previousTab || "architecture");
+        setActiveTab(previousTab || "vstudio");
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSelection]);
 
   const handleSelectLayoutTool = (id: LayoutToolId) => {
@@ -190,7 +279,7 @@ export default function ToolRibbon({
         notes,
         ifcBytes: getCachedIfcBytes(key),
       });
-      downloadBlob(blob, `${activeModelLabel || "werkzeug-model"}.frag`);
+      downloadBlob(blob, `${activeModelLabel || "vstudio-model"}.frag`);
     } catch (err) {
       console.error(err);
     }
@@ -212,6 +301,10 @@ export default function ToolRibbon({
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -230,19 +323,425 @@ export default function ToolRibbon({
     selectPlacement(null);
   };
 
+  // Close overflow on outside click
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handler = (e: MouseEvent) => {
+      const el = document.getElementById("ribbon-overflow-menu");
+      if (el && !el.contains(e.target as Node)) setOverflowOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [overflowOpen]);
+
+  // ── V Studio tab content clusters ──────────────────────────────────────────
+  const buildCluster = (
+    <Cluster label="Build">
+      <RibbonBtn
+        large
+        active={armedLayoutTool === "wall"}
+        onClick={() => handleSelectLayoutTool("wall")}
+        title="Wall (W)"
+      >
+        <IconMarkupWall className="h-5 w-5" />
+        <span className="text-[10px]">Wall (W)</span>
+      </RibbonBtn>
+    </Cluster>
+  );
+
+  const openingsCluster = (
+    <Cluster label="Openings">
+      <RibbonBtn
+        large
+        active={armedLayoutTool === "door"}
+        onClick={() => handleSelectLayoutTool("door")}
+        title="Door (D)"
+      >
+        <IconMarkupDoor className="h-5 w-5" />
+        <span className="text-[10px]">Door (D)</span>
+      </RibbonBtn>
+      <RibbonBtn
+        large
+        active={armedLayoutTool === "window"}
+        onClick={() => handleSelectLayoutTool("window")}
+        title="Window"
+      >
+        <IconMarkupWindow className="h-5 w-5" />
+        <span className="text-[10px]">Window</span>
+      </RibbonBtn>
+    </Cluster>
+  );
+
+  const structureCluster = (
+    <Cluster label="Structure">
+      <RibbonBtn
+        large
+        active={armedLayoutTool === "floor"}
+        onClick={() => handleSelectLayoutTool("floor")}
+        title="Floor"
+      >
+        <IconMarkupFloor className="h-5 w-5" />
+        <span className="text-[10px]">Floor</span>
+      </RibbonBtn>
+      <RibbonBtn
+        large
+        active={armedLayoutTool === "roof"}
+        onClick={() => handleSelectLayoutTool("roof")}
+        title="Roof"
+      >
+        <IconMarkupRoof className="h-5 w-5" />
+        <span className="text-[10px]">Roof</span>
+      </RibbonBtn>
+    </Cluster>
+  );
+
+  const roomsCluster = (
+    <Cluster label="Rooms">
+      <RibbonBtn
+        large
+        onClick={() => {
+          setArmedLayoutTool(null);
+          setArmedTool(null);
+          onOpenRoomSchedule?.();
+        }}
+        title="Room (RM)"
+      >
+        <LuTable className="h-5 w-5 text-amber-500" />
+        <span className="text-[10px]">Room</span>
+      </RibbonBtn>
+      <RibbonBtn large onClick={() => onOpenRoomSchedule?.()} title="Schedule">
+        <LuFileSpreadsheet className="h-5 w-5 text-emerald-500" />
+        <span className="text-[10px]">Schedule</span>
+      </RibbonBtn>
+    </Cluster>
+  );
+
+  const shapesCluster = (
+    <Cluster label="Shapes">
+      {(
+        [
+          { id: "cube" as const, label: "Cube", icon: IconMarkupCube },
+          { id: "cylinder" as const, label: "Cyl", icon: IconMarkupCylinder },
+          { id: "sphere" as const, label: "Sphere", icon: IconMarkupSphere },
+          { id: "cone" as const, label: "Cone", icon: IconMarkupCone },
+          { id: "torus" as const, label: "Torus", icon: IconMarkupTorus },
+          { id: "pyramid" as const, label: "Pyr", icon: IconMarkupPyramid },
+        ] as const
+      ).map((item) => {
+        const Icon = item.icon;
+        return (
+          <RibbonBtn
+            key={item.id}
+            active={armedTool === item.id}
+            onClick={() => handleSelectShape(item.id)}
+            title={item.label}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="text-[9px]">{item.label}</span>
+          </RibbonBtn>
+        );
+      })}
+    </Cluster>
+  );
+
+  const annotateCluster = (
+    <Cluster label="Annotate">
+      <RibbonBtn
+        large
+        active={armedTool === "note"}
+        onClick={() => {
+          setArmedLayoutTool(null);
+          setArmedTool(armedTool === "note" ? null : "note");
+        }}
+        title="Sticky Tag"
+      >
+        <IconMarkupNote className="h-5 w-5" />
+        <span className="text-[10px]">Tag</span>
+      </RibbonBtn>
+      <RibbonBtn
+        large
+        onClick={() => {
+          setArmedLayoutTool(null);
+          setArmedTool(armedTool === "cube" ? null : "cube");
+        }}
+        title="Measure (M)"
+      >
+        <LuRuler className="h-5 w-5 text-amber-500" />
+        <span className="text-[10px]">Measure</span>
+      </RibbonBtn>
+      {measurements.length > 0 && (
+        <RibbonBtn large danger onClick={clearMeasurements} title="Clear Measurements">
+          <LuTrash2 className="h-5 w-5" />
+          <span className="text-[10px]">Clear ({measurements.length})</span>
+        </RibbonBtn>
+      )}
+    </Cluster>
+  );
+
+  const cameraCluster = (
+    <Cluster label="Views">
+      {(
+        [
+          { id: "free" as const, label: "3D Iso" },
+          { id: "top" as const, label: "Top" },
+          { id: "north" as const, label: "N" },
+          { id: "south" as const, label: "S" },
+          { id: "east" as const, label: "E" },
+          { id: "west" as const, label: "W" },
+        ] as const
+      ).map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          onClick={() => setViewPreset(v.id as MarkupViewPreset)}
+          className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 text-[10px] font-semibold border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-[var(--text-strong)] hover:border-amber-400 transition-all min-w-[34px]"
+        >
+          <span>{v.label}</span>
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => viewerRef.current?.fitVisible?.()}
+        className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 text-[10px] font-semibold border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-amber-400 hover:text-[var(--text-strong)] transition-all"
+        title="Fit to Extents"
+      >
+        <MdZoomInMap className="h-4 w-4 text-amber-500" />
+        <span>Fit</span>
+      </button>
+    </Cluster>
+  );
+
+  const snapsCluster = (
+    <Cluster label="Snaps" border={false}>
+      <ToggleBtn active={snapToFaces} onClick={() => setSnapToFaces(!snapToFaces)} title="Face Snap">
+        <LuMagnet className="h-4 w-4" />
+        <span className="text-[9px]">Face</span>
+      </ToggleBtn>
+      <ToggleBtn active={gridSnap} onClick={() => setGridSnap(!gridSnap)} title="Grid Snap (100mm)">
+        <LuLayoutGrid className="h-4 w-4" />
+        <span className="text-[9px]">Grid</span>
+      </ToggleBtn>
+    </Cluster>
+  );
+
+  // ── Manage tab content ─────────────────────────────────────────────────────
+  const manageTabContent = (
+    <div className="flex items-center gap-3">
+      <Cluster label="Structure">
+        <button
+          type="button"
+          onClick={() => setRightPanelOpen(!rightPanelOpen)}
+          className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[60px] border transition-all ${
+            rightPanelOpen
+              ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
+              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
+          }`}
+        >
+          <LuLayers className="h-5 w-5" />
+          <span className="text-[10px]">IFC Tree</span>
+        </button>
+      </Cluster>
+
+      <Cluster label="Export" border={false}>
+        <button
+          type="button"
+          onClick={handleSaveFrag}
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-all font-semibold"
+        >
+          <LuSave className="h-4 w-4" />
+          <span className="text-[10px]">.frag</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveIfc}
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all font-semibold"
+        >
+          <LuSave className="h-4 w-4" />
+          <span className="text-[10px]">.ifc</span>
+        </button>
+      </Cluster>
+    </div>
+  );
+
+  // ── Contextual Modify tab content ──────────────────────────────────────────
+  const modifyTabContent = hasSelection && (
+    <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
+      {/* Universal Modify Tools */}
+      <Cluster label="Modify Tools">
+        {(
+          [
+            { id: "translate" as const, label: "Move", icon: LuMove },
+            { id: "rotate" as const, label: "Rotate", icon: LuRotate3D },
+            { id: "scale" as const, label: "Scale", icon: LuScaling },
+          ] as const
+        ).map((m) => {
+          const Icon = m.icon;
+          return (
+            <RibbonBtn
+              key={m.id}
+              active={transformMode === m.id}
+              onClick={() => setTransformMode(m.id)}
+              title={m.label}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="text-[9px]">{m.label}</span>
+            </RibbonBtn>
+          );
+        })}
+
+        <RibbonBtn
+          onClick={() => {
+            if (selectedWallId) duplicateWall(selectedWallId);
+            if (selectedPlacementId) duplicatePlacement(selectedPlacementId);
+          }}
+          title="Copy / Duplicate (CO)"
+        >
+          <LuCopy className="h-4 w-4" />
+          <span className="text-[9px]">Copy</span>
+        </RibbonBtn>
+
+        <RibbonBtn
+          danger
+          onClick={() => {
+            if (selectedWallId) deleteWall(selectedWallId);
+            if (selectedDoorId) deleteDoor(selectedDoorId);
+            if (selectedWindowId) deleteWindow(selectedWindowId);
+            if (selectedSlabId) deleteSlab(selectedSlabId);
+            if (selectedPlacementId) deletePlacement(selectedPlacementId);
+          }}
+          title="Delete element (DE)"
+        >
+          <LuTrash2 className="h-4 w-4" />
+          <span className="text-[9px]">Delete</span>
+        </RibbonBtn>
+      </Cluster>
+
+      {/* Category-specific controls */}
+      <Cluster label="Element Controls">
+        {selectedWallId && (
+          <RibbonBtn
+            onClick={() => {
+              const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
+              if (wall) {
+                useLayoutDrawingStore.getState().updateWall(wall.id, {
+                  startXmm: wall.endXmm,
+                  startYmm: wall.endYmm,
+                  endXmm: wall.startXmm,
+                  endYmm: wall.startYmm,
+                });
+              }
+            }}
+            title="Flip wall direction (Spacebar)"
+          >
+            <MdOutlineFlip className="h-4 w-4 text-amber-500" />
+            <span className="text-[9px]">Flip Wall</span>
+          </RibbonBtn>
+        )}
+
+        {selectedDoorId && (
+          <>
+            <RibbonBtn
+              onClick={() => {
+                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                if (door) {
+                  useLayoutDrawingStore.getState().updateDoor(door.id, {
+                    hinge: door.hinge === "start" ? "end" : "start",
+                  });
+                }
+              }}
+              title="Flip hinge hand"
+            >
+              <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Flip Hand</span>
+            </RibbonBtn>
+            <RibbonBtn
+              onClick={() => {
+                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                if (door) {
+                  useLayoutDrawingStore.getState().updateDoor(door.id, {
+                    swing: door.swing === 1 ? -1 : 1,
+                  });
+                }
+              }}
+              title="Flip swing direction"
+            >
+              <LuRotateCw className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Flip Swing</span>
+            </RibbonBtn>
+          </>
+        )}
+
+        {selectedWindowId && (
+          <RibbonBtn
+            onClick={() => {
+              const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
+              if (win) {
+                useLayoutDrawingStore.getState().updateWindow(win.id, { positionMm: win.positionMm });
+              }
+            }}
+            title="Flip window"
+          >
+            <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
+            <span className="text-[9px]">Flip Window</span>
+          </RibbonBtn>
+        )}
+
+        {selectedPlacementId && (
+          <RibbonBtn
+            onClick={() => duplicatePlacement(selectedPlacementId)}
+            title="Duplicate shape"
+          >
+            <LuCopy className="h-4 w-4 text-amber-500" />
+            <span className="text-[9px]">Duplicate</span>
+          </RibbonBtn>
+        )}
+      </Cluster>
+
+      {/* Deselect */}
+      <div className="flex flex-col items-center gap-1">
+        <button
+          type="button"
+          onClick={clearCurrentSelection}
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all"
+        >
+          <span className="text-xs font-bold">Esc</span>
+          <span className="text-[10px]">Deselect</span>
+        </button>
+        <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+          Finish
+        </span>
+      </div>
+    </div>
+  );
+
+  // ── All V Studio clusters in order ─────────────────────────────────────────
+  const vstudioClusters = [
+    { key: "build", node: buildCluster },
+    { key: "openings", node: openingsCluster },
+    { key: "structure", node: structureCluster },
+    { key: "rooms", node: roomsCluster },
+    { key: "shapes", node: shapesCluster },
+    { key: "annotate", node: annotateCluster },
+    { key: "camera", node: cameraCluster },
+    { key: "snaps", node: snapsCluster },
+  ];
+
   return (
     <header className="relative z-40 flex w-full flex-col border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)] shadow-md backdrop-blur-xl select-none">
-      {/* Top Quick Access Toolbar (QAT) */}
+      {/* ── Quick Access Toolbar (QAT) ─────────────────────────────────────── */}
       <div className="flex h-9 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 text-xs">
-        {/* Left: App Title & Quick Action Icons */}
-        <div className="flex items-center gap-2">
+        {/* Left: V Studio brand + Quick Actions */}
+        <div className="flex items-center gap-1.5">
+          {/* V Studio home logo */}
           <a
             href="/"
             title="Back to Viewer"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-bold text-amber-500 hover:bg-[var(--glass-inset-bg)] transition-colors"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-bold hover:bg-[var(--glass-inset-bg)] transition-colors"
           >
-            <IoHomeOutline className="h-4 w-4" />
-            <span className="tracking-wide uppercase font-mono text-[11px]">Revit BIM Studio</span>
+            <IoHomeOutline className="h-4 w-4 text-amber-500" />
+            <span className="tracking-widest uppercase font-mono text-[11px] bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent font-black">
+              V Studio
+            </span>
           </a>
 
           <div className="h-4 w-px bg-[var(--panel-divider)]" />
@@ -267,7 +766,7 @@ export default function ToolRibbon({
             className="flex items-center gap-1 rounded-md px-2 py-1 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors disabled:opacity-40"
           >
             <LuFolderOpen className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline text-[11px]">{t(uiLanguage, "loadNewIfc") || "Open"}</span>
+            <span className="hidden sm:inline text-[11px]">Open</span>
           </button>
 
           {/* Save Dropdown */}
@@ -275,11 +774,12 @@ export default function ToolRibbon({
             <button
               type="button"
               onClick={() => setSaveMenuOpen(!saveMenuOpen)}
-              title={t(uiLanguage, "markupSaveAs") || "Save .frag / .ifc"}
+              title="Save .frag / .ifc"
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
             >
               <LuSave className="h-3.5 w-3.5 text-amber-500" />
               <span className="hidden sm:inline text-[11px]">Save</span>
+              <LuChevronDown className="h-3 w-3 text-[var(--text-muted)]" />
             </button>
 
             {saveMenuOpen && (
@@ -313,9 +813,8 @@ export default function ToolRibbon({
             )}
           </div>
 
-          <div className="h-4 w-px bg-[var(--panel-divider)]" />
-
           {/* Undo / Redo */}
+          <div className="h-4 w-px bg-[var(--panel-divider)]" />
           <button
             type="button"
             onClick={undoWerkzeug}
@@ -331,6 +830,17 @@ export default function ToolRibbon({
             className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
           >
             <LuRedo2 className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Print */}
+          <div className="h-4 w-px bg-[var(--panel-divider)]" />
+          <button
+            type="button"
+            onClick={handlePrint}
+            title="Print (Ctrl+P)"
+            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            <LuPrinter className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -361,36 +871,54 @@ export default function ToolRibbon({
           >
             {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
           </button>
+          <button
+            type="button"
+            onClick={() => setRibbonCollapsed(!ribbonCollapsed)}
+            title={ribbonCollapsed ? "Expand Ribbon" : "Minimize Ribbon"}
+            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            <LuChevronDown
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${ribbonCollapsed ? "" : "rotate-180"}`}
+            />
+          </button>
         </div>
       </div>
 
-      {/* Main Ribbon Tabs Header */}
+      {/* ── Tab Bar ────────────────────────────────────────────────────────── */}
       <div className="flex h-8 items-center gap-1 border-b border-[var(--panel-divider)]/40 px-3 text-xs">
-        {[
-          { id: "architecture", label: "Architecture" },
-          { id: "shapes", label: "3D Shapes" },
-          { id: "annotate", label: "Annotate" },
-          { id: "view", label: "View" },
-          { id: "manage", label: "Manage" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id as RibbonTab)}
-            className={`relative px-3.5 py-1 font-semibold transition-colors ${
-              activeTab === tab.id
-                ? "text-amber-500 font-bold"
-                : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-            }`}
-          >
-            {tab.label}
-            {activeTab === tab.id && (
-              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-            )}
-          </button>
-        ))}
+        {/* V Studio (home tab) */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("vstudio")}
+          className={`relative px-4 py-1 font-semibold transition-colors ${
+            activeTab === "vstudio"
+              ? "text-amber-500 font-black"
+              : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          }`}
+        >
+          V Studio
+          {activeTab === "vstudio" && (
+            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+          )}
+        </button>
 
-        {/* Section 2: Contextual Modify Tab if Selection Exists */}
+        {/* Manage */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("manage")}
+          className={`relative px-3.5 py-1 font-semibold transition-colors ${
+            activeTab === "manage"
+              ? "text-amber-500 font-bold"
+              : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          }`}
+        >
+          Manage
+          {activeTab === "manage" && (
+            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+          )}
+        </button>
+
+        {/* Contextual Modify */}
         {hasSelection && (
           <button
             type="button"
@@ -409,611 +937,66 @@ export default function ToolRibbon({
         )}
       </div>
 
-      {/* Ribbon Content Panel for Active Tab — Standardized Uniform Cluster Layout */}
-      <div className="flex h-20 items-center gap-3 overflow-x-auto px-4 py-2 thin-scroll">
-        {/* TAB 1: ARCHITECTURE / BUILD */}
-        {activeTab === "architecture" && (
-          <div className="flex items-center gap-3">
-            {/* Cluster: BUILD */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleSelectLayoutTool("wall")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedLayoutTool === "wall"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupWall className="h-5 w-5" />
-                  <span className="text-[10px]">Wall (W)</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Build</span>
-            </div>
-
-            {/* Cluster: OPENINGS */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleSelectLayoutTool("door")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedLayoutTool === "door"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupDoor className="h-5 w-5" />
-                  <span className="text-[10px]">Door (D)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectLayoutTool("window")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedLayoutTool === "window"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupWindow className="h-5 w-5" />
-                  <span className="text-[10px]">Window</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Openings</span>
-            </div>
-
-            {/* Cluster: STRUCTURE */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleSelectLayoutTool("floor")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedLayoutTool === "floor"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupFloor className="h-5 w-5" />
-                  <span className="text-[10px]">Floor</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectLayoutTool("roof")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedLayoutTool === "roof"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupRoof className="h-5 w-5" />
-                  <span className="text-[10px]">Roof</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Structure</span>
-            </div>
-
-            {/* Cluster: ROOMS & SPACES (Section 4) */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Room tool trigger
-                    setArmedLayoutTool(null);
-                    setArmedTool(null);
-                    onOpenRoomSchedule?.();
-                  }}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-                >
-                  <LuTable className="h-5 w-5 text-amber-500" />
-                  <span className="text-[10px]">Room (RM)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenRoomSchedule?.()}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-                >
-                  <LuFileSpreadsheet className="h-5 w-5 text-emerald-500" />
-                  <span className="text-[10px]">Schedule</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Rooms</span>
-            </div>
-
-            {/* Cluster: CONSTRAINTS */}
-            <div className="flex flex-col items-start gap-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-[var(--text-muted)]">Active Level:</span>
-                <select
-                  value={selectedFloor || ""}
-                  onChange={(e) => setSelectedFloor(e.target.value || null)}
-                  className="rounded-lg border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
-                >
-                  <option value="">All Levels (Building)</option>
-                  {floors.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.elevation != null ? `${(f.elevation).toFixed(2)} m` : "Level"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Level Constraint</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: 3D SHAPES & PRIMITIVES */}
-        {activeTab === "shapes" && (
-          <div className="flex items-center gap-3">
-            {/* Cluster: 3D PRIMITIVES */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                {[
-                  { id: "cube" as const, label: "Cube", icon: IconMarkupCube },
-                  { id: "cylinder" as const, label: "Cylinder", icon: IconMarkupCylinder },
-                  { id: "sphere" as const, label: "Sphere", icon: IconMarkupSphere },
-                  { id: "cone" as const, label: "Cone", icon: IconMarkupCone },
-                  { id: "torus" as const, label: "Torus", icon: IconMarkupTorus },
-                  { id: "pyramid" as const, label: "Pyramid", icon: IconMarkupPyramid },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const isSel = armedTool === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleSelectShape(item.id)}
-                      className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[48px] transition-all ${
-                        isSel
-                          ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                          : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="text-[9px]">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Primitives</span>
-            </div>
-
-            {/* Cluster: TRANSFORM */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                {[
-                  { id: "translate" as const, label: "Move", icon: LuMove },
-                  { id: "rotate" as const, label: "Rotate", icon: LuRotate3D },
-                  { id: "scale" as const, label: "Scale", icon: LuScaling },
-                ].map((m) => {
-                  const Icon = m.icon;
-                  const isSel = transformMode === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setTransformMode(m.id)}
-                      className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] transition-all ${
-                        isSel
-                          ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                          : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="text-[9px]">{m.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Transform</span>
-            </div>
-
-            {/* Cluster: SNAPPING */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSnapToFaces(!snapToFaces)}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border transition-all ${
-                    snapToFaces
-                      ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
-                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
-                  }`}
-                >
-                  <LuMagnet className="h-4 w-4" />
-                  <span className="text-[9px]">Face Snap</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGridSnap(!gridSnap)}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border transition-all ${
-                    gridSnap
-                      ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
-                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
-                  }`}
-                >
-                  <LuLayoutGrid className="h-4 w-4" />
-                  <span className="text-[9px]">Grid Snap</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Precision</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: ANNOTATE & MEASURE */}
-        {activeTab === "annotate" && (
-          <div className="flex items-center gap-3">
-            {/* Cluster: DIMENSIONS & MEASURE */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setArmedLayoutTool(null);
-                    setArmedTool(armedTool === "cube" ? null : "cube");
-                  }}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-                >
-                  <LuRuler className="h-5 w-5 text-amber-500" />
-                  <span className="text-[10px]">Measure (M)</span>
-                </button>
-                {measurements.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearMeasurements}
-                    className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-red-500 hover:bg-red-500/10 transition-colors"
-                  >
-                    <LuTrash2 className="h-5 w-5" />
-                    <span className="text-[10px]">Clear ({measurements.length})</span>
-                  </button>
-                )}
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Dimension</span>
-            </div>
-
-            {/* Cluster: TAGS & TEXT */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setArmedLayoutTool(null);
-                    setArmedTool(armedTool === "note" ? null : "note");
-                  }}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] transition-all ${
-                    armedTool === "note"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <IconMarkupNote className="h-5 w-5" />
-                  <span className="text-[10px]">Sticky Tag</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Tags</span>
-            </div>
-
-            {/* Cluster: INSPECTOR */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setRightPanelOpen(true)}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-                >
-                  <LuSlidersHorizontal className="h-5 w-5 text-indigo-400" />
-                  <span className="text-[10px]">Inspector</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Property Sets</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: VIEW & CAMERA */}
-        {activeTab === "view" && (
-          <div className="flex items-center gap-3">
-            {/* Cluster: CAMERA VIEWS */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                {[
-                  { id: "free" as const, label: "3D Iso" },
-                  { id: "top" as const, label: "Top (Plan)" },
-                  { id: "north" as const, label: "North" },
-                  { id: "south" as const, label: "South" },
-                  { id: "east" as const, label: "East" },
-                  { id: "west" as const, label: "West" },
-                ].map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => setViewPreset(v.id as MarkupViewPreset)}
-                    className="flex flex-col items-center justify-center rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-[var(--text-strong)] hover:border-amber-400 transition-all min-w-[42px]"
-                  >
-                    <span>{v.label}</span>
-                  </button>
+      {/* ── Ribbon Content Panel ───────────────────────────────────────────── */}
+      {!ribbonCollapsed && (
+        <div
+          ref={ribbonContentRef}
+          className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative"
+        >
+          {/* V Studio tab: all clusters in a scrollable row with overflow button */}
+          {activeTab === "vstudio" && (
+            <>
+              <div className="flex items-center gap-3 overflow-x-hidden min-w-0 flex-1">
+                {vstudioClusters.map((c) => (
+                  <div key={c.key} className="flex-shrink-0">
+                    {c.node}
+                  </div>
                 ))}
               </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Cameras</span>
-            </div>
 
-            {/* Cluster: SHADING STYLES */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                {(["realistic", "fullColor", "light", "wireframe"] as RenderMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setRenderMode(mode)}
-                    className={`flex flex-col items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-semibold capitalize border transition-all min-w-[50px] ${
-                      renderMode === mode
-                        ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                        : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
-                    }`}
-                  >
-                    <span>{mode === "fullColor" ? "Shaded" : mode}</span>
-                  </button>
-                ))}
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Shading</span>
-            </div>
-
-            {/* Cluster: FRAMING */}
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={() => viewerRef.current?.fitVisible?.()}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-              >
-                <MdZoomInMap className="h-5 w-5 text-amber-500" />
-                <span className="text-[10px]">Extents</span>
-              </button>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Framing</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 5: MANAGE / IFC TREE */}
-        {activeTab === "manage" && (
-          <div className="flex items-center gap-3">
-            {/* Cluster: PROJECT BROWSER */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <button
-                type="button"
-                onClick={() => setRightPanelOpen(!rightPanelOpen)}
-                className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[60px] border transition-all ${
-                  rightPanelOpen
-                    ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
-                    : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                }`}
-              >
-                <LuLayers className="h-5 w-5" />
-                <span className="text-[10px]">IFC Tree</span>
-              </button>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Structure</span>
-            </div>
-
-            {/* Cluster: EXPORT */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="flex items-center gap-1.5">
+              {/* Overflow: More button at compact widths */}
+              <div className="relative ml-auto flex-shrink-0" id="ribbon-overflow-menu">
                 <button
                   type="button"
-                  onClick={handleSaveFrag}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-all font-semibold"
-                >
-                  <LuSave className="h-4 w-4" />
-                  <span className="text-[10px]">.frag</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveIfc}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all font-semibold"
-                >
-                  <LuSave className="h-4 w-4" />
-                  <span className="text-[10px]">.ifc</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Export</span>
-            </div>
-          </div>
-        )}
-
-        {/* SECTION 2: CONTEXTUAL MODIFY TAB BODY */}
-        {activeTab === "modify" && hasSelection && (
-          <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
-            {/* Cluster: UNIVERSAL MODIFY TOOLS (Move, Copy, Rotate, Mirror, Scale, Delete) */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setTransformMode("translate")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] transition-all ${
-                    transformMode === "translate"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+                  onClick={() => setOverflowOpen(!overflowOpen)}
+                  className={`flex flex-col items-center justify-center rounded-xl p-1.5 border transition-all text-xs min-w-[40px] ${
+                    overflowOpen
+                      ? "border-amber-400 bg-amber-500/20 text-amber-500"
+                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                   }`}
-                  title="Move element (MV)"
+                  title="More tools"
                 >
-                  <LuMove className="h-4 w-4" />
-                  <span className="text-[9px]">Move</span>
+                  {overflowOpen ? (
+                    <LuX className="h-4 w-4" />
+                  ) : (
+                    <LuMoreHorizontal className="h-4 w-4" />
+                  )}
+                  <span className="text-[9px]">More</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedWallId) duplicateWall(selectedWallId);
-                    if (selectedPlacementId) duplicatePlacement(selectedPlacementId);
-                  }}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-all"
-                  title="Copy / Duplicate (CO)"
-                >
-                  <LuCopy className="h-4 w-4" />
-                  <span className="text-[9px]">Copy</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTransformMode("rotate")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] transition-all ${
-                    transformMode === "rotate"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                  title="Rotate element (RO)"
-                >
-                  <LuRotate3D className="h-4 w-4" />
-                  <span className="text-[9px]">Rotate</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTransformMode("scale")}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] transition-all ${
-                    transformMode === "scale"
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                  title="Scale element (RE)"
-                >
-                  <LuScaling className="h-4 w-4" />
-                  <span className="text-[9px]">Scale</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedWallId) deleteWall(selectedWallId);
-                    if (selectedDoorId) deleteDoor(selectedDoorId);
-                    if (selectedWindowId) deleteWindow(selectedWindowId);
-                    if (selectedSlabId) deleteSlab(selectedSlabId);
-                    if (selectedPlacementId) deletePlacement(selectedPlacementId);
-                  }}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[44px] text-red-500 hover:bg-red-500/10 transition-all font-semibold"
-                  title="Delete element (DE)"
-                >
-                  <LuTrash2 className="h-4 w-4" />
-                  <span className="text-[9px]">Delete</span>
-                </button>
-              </div>
-              <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wider">Modify Tools</span>
-            </div>
-
-            {/* Cluster: CATEGORY-SPECIFIC CONTROLS */}
-            <div className="flex flex-col items-center gap-1 border-r border-[var(--panel-divider)]/60 pr-3">
-              <div className="flex items-center gap-1.5">
-                {selectedWallId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Flip wall
-                      const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
-                      if (wall) {
-                        useLayoutDrawingStore.getState().updateWall(wall.id, {
-                          startXmm: wall.endXmm,
-                          startYmm: wall.endYmm,
-                          endXmm: wall.startXmm,
-                          endYmm: wall.startYmm,
-                        });
-                      }
-                    }}
-                    className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:border-amber-400 text-[var(--text-strong)] transition-all font-semibold"
-                    title="Flip wall direction (Spacebar)"
-                  >
-                    <MdOutlineFlip className="h-4 w-4 text-amber-500" />
-                    <span className="text-[9px]">Flip Wall</span>
-                  </button>
-                )}
-
-                {selectedDoorId && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                        if (door) {
-                          useLayoutDrawingStore.getState().updateDoor(door.id, {
-                            hinge: door.hinge === "start" ? "end" : "start",
-                          });
-                        }
-                      }}
-                      className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:border-amber-400 text-[var(--text-strong)] transition-all font-semibold"
-                      title="Flip hinge hand"
-                    >
-                      <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-                      <span className="text-[9px]">Flip Hand</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                        if (door) {
-                          useLayoutDrawingStore.getState().updateDoor(door.id, {
-                            swing: door.swing === 1 ? -1 : 1,
-                          });
-                        }
-                      }}
-                      className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:border-amber-400 text-[var(--text-strong)] transition-all font-semibold"
-                      title="Flip swing direction"
-                    >
-                      <LuRotateCw className="h-4 w-4 text-amber-500" />
-                      <span className="text-[9px]">Flip Swing</span>
-                    </button>
-                  </>
-                )}
-
-                {selectedWindowId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
-                      if (win) {
-                        useLayoutDrawingStore.getState().updateWindow(win.id, {
-                          positionMm: win.positionMm,
-                        });
-                      }
-                    }}
-                    className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:border-amber-400 text-[var(--text-strong)] transition-all font-semibold"
-                  >
-                    <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-                    <span className="text-[9px]">Flip Window</span>
-                  </button>
-                )}
-
-                {selectedPlacementId && (
-                  <button
-                    type="button"
-                    onClick={() => duplicatePlacement(selectedPlacementId)}
-                    className="flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:border-amber-400 text-[var(--text-strong)] transition-all font-semibold"
-                  >
-                    <LuCopy className="h-4 w-4 text-amber-500" />
-                    <span className="text-[9px]">Duplicate</span>
-                  </button>
+                {overflowOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">All Tools</div>
+                    <div className="flex flex-wrap gap-2">
+                      {vstudioClusters.map((c) => (
+                        <div key={c.key} className="flex-shrink-0">
+                          {c.node}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Element Controls</span>
-            </div>
+            </>
+          )}
 
-            {/* Cluster: SELECTION CLOSE */}
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={clearCurrentSelection}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all"
-              >
-                <span className="text-xs font-bold">Esc</span>
-                <span className="text-[10px]">Deselect</span>
-              </button>
-              <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Finish</span>
-            </div>
-          </div>
-        )}
-      </div>
+          {/* Manage tab content */}
+          {activeTab === "manage" && manageTabContent}
+
+          {/* Modify tab content */}
+          {activeTab === "modify" && modifyTabContent}
+        </div>
+      )}
     </header>
   );
 }

@@ -1,15 +1,38 @@
 "use client";
 
+import { useRef } from "react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
-import { LuCompass, LuLayers, LuScale, LuKeyboard } from "react-icons/lu";
+import {
+  LuCompass,
+  LuLayers,
+  LuScale,
+  LuKeyboard,
+  LuPaperclip,
+  LuFileImage,
+} from "react-icons/lu";
+import type { RenderMode } from "@/lib/types";
+
+const RENDER_MODES: { id: RenderMode; label: string }[] = [
+  { id: "realistic", label: "Realistic" },
+  { id: "fullColor", label: "Shaded" },
+  { id: "light", label: "Light" },
+  { id: "wireframe", label: "Wire" },
+];
 
 export default function ToolStatusBar({
   pointer,
+  onAttachDwgPdf,
+  onAttachIfc,
 }: {
   pointer: { x: number; y: number };
+  onAttachDwgPdf?: (file: File) => void;
+  onAttachIfc?: (file: File) => void;
 }) {
+  const dwgInputRef = useRef<HTMLInputElement>(null);
+  const ifcInputRef = useRef<HTMLInputElement>(null);
+
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
   const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
@@ -27,6 +50,8 @@ export default function ToolStatusBar({
 
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const floors = useAppStore((s) => s.floors);
+  const renderMode = useAppStore((s) => s.renderMode);
+  const setRenderMode = useAppStore((s) => s.setRenderMode);
 
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
@@ -57,13 +82,13 @@ export default function ToolStatusBar({
     }
     if (armedLayoutTool === "floor") {
       return {
-        mode: "Floor Slab Active",
-        hint: "Click 1st corner, then opposite diagonal corner in Top View • Esc: cancel",
+        mode: "Floor Sketch Active",
+        hint: "Click corners to define floor boundary • Close loop or Enter to finish • Inner loop = hole • Esc: cancel",
       };
     }
     if (armedLayoutTool === "roof") {
       return {
-        mode: "Roof Tool Active",
+        mode: "Roof Sketch Active",
         hint: "Click corners to define roof boundary polygon • Enter: finish • Esc: cancel",
       };
     }
@@ -93,6 +118,12 @@ export default function ToolStatusBar({
         hint: "Drag along wall to reposition • Space: flip swing • Tab: flip hand • Del: delete",
       };
     }
+    if (selectedSlabId) {
+      return {
+        mode: "Modify | Slab Selected",
+        hint: "Edit boundary in Properties panel • Del: delete • Esc: deselect",
+      };
+    }
     if (selectedPlacementId) {
       return {
         mode: "Modify | 3D Shape Selected",
@@ -110,21 +141,91 @@ export default function ToolStatusBar({
 
   return (
     <footer className="fixed bottom-0 inset-x-0 z-40 flex h-7 items-center justify-between border-t border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 px-3 text-[11px] text-[var(--text-muted)] select-none backdrop-blur-xl">
-      {/* Left: Mode Badge & Dynamic Contextual Keyboard Guidance */}
-      <div className="flex items-center gap-2 font-medium truncate max-w-[65%]">
+      {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
+      <div className="flex items-center gap-2 font-medium min-w-0">
+        {/* Mode badge */}
         <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
         <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
           {mode}
         </span>
-        <span className="text-[var(--text-strong)] font-semibold truncate flex items-center gap-1">
+        <span className="text-[var(--text-strong)] font-semibold truncate hidden lg:flex items-center gap-1 max-w-[380px]">
           <LuKeyboard className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
           <span className="truncate">{hint}</span>
         </span>
+
+        {/* Divider */}
+        <div className="h-3 w-px bg-[var(--panel-divider)] shrink-0 mx-0.5" />
+
+        {/* ── File Attach Actions (Section 3) ────────────────────────────── */}
+        {/* Attach DWG/PDF underlay */}
+        <input
+          ref={dwgInputRef}
+          type="file"
+          accept=".dwg,.dxf,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onAttachDwgPdf?.(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => dwgInputRef.current?.click()}
+          title="Attach DWG / PDF underlay"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent hover:border-[var(--panel-divider)] transition-all"
+        >
+          <LuFileImage className="h-3 w-3 text-sky-400 shrink-0" />
+          <span className="hidden sm:inline">Attach DWG/PDF</span>
+        </button>
+
+        {/* Attach IFC */}
+        <input
+          ref={ifcInputRef}
+          type="file"
+          accept=".ifc,.frag"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onAttachIfc?.(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => ifcInputRef.current?.click()}
+          title="Attach IFC model"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent hover:border-[var(--panel-divider)] transition-all"
+        >
+          <LuPaperclip className="h-3 w-3 text-emerald-400 shrink-0" />
+          <span className="hidden sm:inline">Attach IFC</span>
+        </button>
       </div>
 
-      {/* Right: Metric Scale Selector, Snap, Level & Units */}
-      <div className="flex items-center gap-2.5 font-mono text-[10px]">
-        {/* Metric Scale Selector (Section 5) */}
+      {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
+      <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
+        {/* ── Shading Style Toggle (Section 3) ──────────────────────────── */}
+        <div className="flex items-center rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] overflow-hidden">
+          {RENDER_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setRenderMode(m.id)}
+              title={`Shading: ${m.label}`}
+              className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                renderMode === m.id
+                  ? "bg-amber-500/30 text-amber-600 dark:text-amber-400"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-3 w-px bg-[var(--panel-divider)]" />
+
+        {/* Scale Selector */}
         <div className="flex items-center gap-1 bg-[var(--glass-inset-bg)] px-1.5 py-0.5 rounded border border-[var(--panel-divider)]">
           <LuScale className="h-3 w-3 text-amber-500" />
           <span className="text-[var(--text-muted)]">Scale:</span>
@@ -154,13 +255,15 @@ export default function ToolStatusBar({
         {/* Snap Indicator */}
         <div className="flex items-center gap-1 text-[var(--text-body)]">
           <LuCompass className="h-3 w-3 text-sky-400" />
-          <span>Snap: {gridSnap ? "Grid (100mm)" : "Angle (45°)"}{snapToFaces ? "+Face" : ""}</span>
+          <span>
+            Snap: {gridSnap ? "Grid" : "Angle"}{snapToFaces ? "+Face" : ""}
+          </span>
         </div>
 
         <div className="h-3 w-px bg-[var(--panel-divider)]" />
 
-        {/* Unit Scale Metric */}
-        <span className="text-emerald-500 font-sans font-bold">Metric (m / mm)</span>
+        {/* Unit */}
+        <span className="text-emerald-500 font-sans font-bold">m / mm</span>
       </div>
     </footer>
   );

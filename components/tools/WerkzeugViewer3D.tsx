@@ -4346,7 +4346,22 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const roots: THREE.Object3D[] = [];
           if (shellCloneRef.current) roots.push(shellCloneRef.current);
           roots.push(layer.group);
+          const layoutLyr = layoutLayerRef.current;
+          if (layoutLyr) roots.push(layoutLyr.group);
           let surface = pickMarkupSurface(raycaster.current, roots);
+          if (!surface) {
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const groundPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(groundPlane, groundPt)) {
+              surface = {
+                point: groundPt,
+                normal: new THREE.Vector3(0, 1, 0),
+                object: layoutLyr?.group ?? layer.group,
+                distance: raycaster.current.ray.origin.distanceTo(groundPt),
+                snappedVertex: null,
+              };
+            }
+          }
           if (surface && ms.armedTool === "note") {
             surface = enhanceHitWithVertexSnap(
               surface,
@@ -4577,10 +4592,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
-                const levelId =
+                let levelId =
                   markupStore.markupFloorId ??
                   layoutStore.levels[0]?.id ??
                   null;
+                if (!levelId) {
+                  levelId = "default-level";
+                }
                 if (levelId) {
                   if (!layoutStore.wallDraw) {
                     layoutStore.beginWallDraw(levelId, plan);
@@ -4631,10 +4649,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
-                const levelId =
+                let levelId =
                   markupStore.markupFloorId ??
                   layoutStore.levels[0]?.id ??
                   null;
+                if (!levelId) {
+                  levelId = "default-level";
+                }
                 const kind = layoutStore.armedLayoutTool;
                 if (levelId && (kind === "floor" || kind === "roof")) {
                   if (!layoutStore.slabDraw) {
@@ -4801,7 +4822,22 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const roots: THREE.Object3D[] = [];
           if (shellCloneRef.current) roots.push(shellCloneRef.current);
           roots.push(layer.group);
+          const layoutLyr = layoutLayerRef.current;
+          if (layoutLyr) roots.push(layoutLyr.group);
           let surface = pickMarkupSurface(raycaster.current, roots);
+          if (!surface) {
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const groundPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(groundPlane, groundPt)) {
+              surface = {
+                point: groundPt,
+                normal: new THREE.Vector3(0, 1, 0),
+                object: layoutLyr?.group ?? layer.group,
+                distance: raycaster.current.ray.origin.distanceTo(groundPt),
+                snappedVertex: null,
+              };
+            }
+          }
 
           const armed = markupStore.armedTool;
           if (armed && surface) {
