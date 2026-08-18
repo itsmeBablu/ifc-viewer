@@ -23,6 +23,7 @@ import {
   type ReferenceUnderlay,
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 
 const WALL_COLOR = 0xd6d3d1;
 const WALL_SEL = 0xf59e0b;
