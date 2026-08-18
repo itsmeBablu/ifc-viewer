@@ -169,9 +169,9 @@ export default function WerkzeugApp() {
   }, [pdfCaptureActive]);
 
   useEffect(() => {
+    if (!activeModelLabel) return;
     // Auto initialize project & default Level 1 so drawing/placement works instantly
-    const pId = activeModelLabel || "studio-project";
-    void useLayoutDrawingStore.getState().loadForProject(pId, true).then(() => {
+    void useLayoutDrawingStore.getState().loadForProject(activeModelLabel, true).then(() => {
       const store = useLayoutDrawingStore.getState();
       if (store.levels.length === 0) {
         void store.addLevel({ name: "Level 1", elevationMm: 0, heightMm: 3000 });
