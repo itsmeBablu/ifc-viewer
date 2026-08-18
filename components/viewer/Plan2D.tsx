@@ -607,7 +607,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     <div className={`relative ${className ?? ""}`}>
       <div ref={containerRef} className="h-full w-full" />
       {selectedFloorObj && (
-        <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center rounded-full border border-white/20 bg-black/25 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur-md">
+        <div className="pointer-events-none absolute left-3 top-3 z-10 text-xs font-semibold text-[var(--text-strong)] select-none">
           {selectedFloorObj.name}
         </div>
       )}
