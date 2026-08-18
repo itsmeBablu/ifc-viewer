@@ -335,8 +335,9 @@ export default function ViewerContextMenu({
       ? ((document.fullscreenElement as HTMLElement | null) ?? document.body)
       : null) ?? document.body;
 
-  /** Place flyout beside the triggering button, never clipped by glass overflow. */
-  const flyoutStyle = (): CSSProperties | undefined => {
+  const [flyoutStyleAttr, setFlyoutStyleAttr] = useState<CSSProperties | undefined>(undefined);
+
+  useEffect(() => {
     const btn =
       sidePanel === "save"
         ? saveBtnRef.current
@@ -345,18 +346,21 @@ export default function ViewerContextMenu({
           : sidePanel === "shapes"
             ? shapesBtnRef.current
             : null;
-    if (!btn || !menu) return undefined;
+    if (!btn || !menu) {
+      setFlyoutStyleAttr(undefined);
+      return;
+    }
     const r = btn.getBoundingClientRect();
     const flyoutW = sidePanel === "save" ? 230 : sidePanel === "shapes" ? 180 : 220;
     const openRight = r.right + 8 + flyoutW < window.innerWidth;
-    return {
+    setFlyoutStyleAttr({
       position: "fixed",
       top: Math.min(r.top, window.innerHeight - 280),
       left: openRight ? r.right + 8 : undefined,
       right: openRight ? undefined : window.innerWidth - r.left + 8,
       zIndex: 132,
-    };
-  };
+    });
+  }, [sidePanel, menu]);
 
   const TOOL_VIEWS: { id: MarkupViewPreset; label: string }[] = [
     { id: "top", label: "Top" },
@@ -764,7 +768,7 @@ export default function ViewerContextMenu({
         </div>
 
         {sidePanel === "shapes" && toolMode && (
-          <div style={flyoutStyle()} className="fixed z-[132]">
+          <div style={flyoutStyleAttr} className="fixed z-[132]">
             <div className={ctxMenuSurface}>
               <div className="max-h-64 min-w-[160px] overflow-y-auto p-1.5 thin-scroll">
                 <p className={`mb-1 px-2 ${ctxLabel}`}>
@@ -796,7 +800,7 @@ export default function ViewerContextMenu({
         )}
 
         {sidePanel === "save" && !toolMode && (
-          <div style={flyoutStyle()} className="fixed z-[132]">
+          <div style={flyoutStyleAttr} className="fixed z-[132]">
             <div className={ctxMenuSurface}>
               <div className="w-56 space-y-2 p-2.5">
                 <p className={`px-0.5 ${ctxLabel}`}>
@@ -852,7 +856,7 @@ export default function ViewerContextMenu({
         )}
 
         {sidePanel === "floor" && !toolMode && (
-          <div style={flyoutStyle()} className="fixed z-[132]">
+          <div style={flyoutStyleAttr} className="fixed z-[132]">
             <div className={ctxMenuSurface}>
               <div className="max-h-64 min-w-[210px] overflow-y-auto p-1.5 thin-scroll">
                 <p className={`mb-1 px-2 ${ctxLabel}`}>

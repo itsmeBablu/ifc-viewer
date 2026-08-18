@@ -454,7 +454,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
       child.visible = selectedFloor == null || floorId === selectedFloor;
     });
     requestAnimationFrame(() => fitOrtho());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedFloor, shellGroup, rooms]);
 
   useEffect(() => {

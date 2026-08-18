@@ -1,6 +1,6 @@
 "use client";
-
-import { useState, useRef, useEffect, useCallback, type RefObject } from "react";
+import gsap from "gsap";
+import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import {
   LuChevronDown,
   LuFolderOpen,
@@ -121,22 +121,40 @@ function RibbonBtn({
   danger?: boolean;
   large?: boolean;
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  
+  useEffect(() => {
+    if (active && btnRef.current) {
+      gsap.fromTo(
+        btnRef.current,
+        { scale: 0.9, backgroundColor: "rgba(245, 158, 11, 0)" },
+        { scale: 1, backgroundColor: "#f59e0b", duration: 0.4, ease: "elastic.out(1, 0.5)", overwrite: "auto" }
+      );
+    } else if (btnRef.current) {
+      gsap.to(btnRef.current, { scale: 1, backgroundColor: "transparent", duration: 0.2, ease: "power2.out", overwrite: "auto" });
+    }
+  }, [active]);
+
   return (
     <button
+      ref={btnRef}
       type="button"
       onClick={onClick}
       title={title}
-      className={`flex flex-col items-center justify-center gap-1 rounded-xl transition-all ${
+      className={`relative overflow-hidden flex flex-col items-center justify-center gap-1 rounded-xl transition-colors ${
         large ? "p-2 min-w-[50px]" : "p-1.5 min-w-[44px]"
       } ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
-          ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20"
+          ? "text-slate-950 font-bold shadow-md shadow-amber-500/20"
           : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
       }`}
     >
-      {children}
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child) && child.type === "span") return null;
+        return child;
+      })}
     </button>
   );
 }
@@ -163,7 +181,10 @@ function ToggleBtn({
           : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
       }`}
     >
-      {children}
+      {React.Children.map(children, (child) => {
+        if (React.isValidElement(child) && child.type === "span") return null;
+        return child;
+      })}
     </button>
   );
 }
@@ -771,24 +792,19 @@ export default function ToolRibbon({
   ];
 
   return (
-    <header className="relative z-40 flex w-full flex-col border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)] shadow-md backdrop-blur-xl select-none">
-      {/* ── Quick Access Toolbar (QAT) ─────────────────────────────────────── */}
-      <div className="flex h-9 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 text-xs">
-        {/* Left: V Studio brand + Quick Actions */}
-        <div className="flex items-center gap-1.5">
-          {/* V Studio home logo */}
-          <a
-            href="/"
-            title="Back to Viewer"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-bold hover:bg-[var(--glass-inset-bg)] transition-colors"
-          >
-            <IoHomeOutline className="h-4 w-4 text-amber-500" />
-            <span className="tracking-widest uppercase font-mono text-[11px] bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent font-black">
-              V Studio
-            </span>
-          </a>
+    <>
+      {/* ── Quick Access Floating Cluster ─────────────────────────────────────── */}
+      <div className="absolute top-4 left-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
+        {/* V Studio home logo */}
+        <a
+          href="/"
+          title="Back to Viewer"
+          className="flex items-center justify-center rounded-full w-8 h-8 hover:bg-[var(--glass-inset-bg)] transition-colors"
+        >
+          <IoHomeOutline className="h-4 w-4 text-amber-500" />
+        </a>
 
-          <div className="h-4 w-px bg-[var(--panel-divider)]" />
+        <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
 
           {/* Open IFC */}
           <input
@@ -928,38 +944,34 @@ export default function ToolRibbon({
         </div>
       </div>
 
+      {/* ── Main Tool Island ─────────────────────────────────────── */}
+      <header className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto overflow-hidden">
       {/* ── Tab Bar ────────────────────────────────────────────────────────── */}
-      <div className="flex h-8 items-center gap-1 border-b border-[var(--panel-divider)]/40 px-3 text-xs">
+      <div className="flex items-center gap-2 p-2">
         {/* V Studio (home tab) */}
         <button
           type="button"
           onClick={() => setActiveTab("vstudio")}
-          className={`relative px-4 py-1 font-semibold transition-colors ${
+          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
             activeTab === "vstudio"
-              ? "text-amber-500 font-black"
-              : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
+              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
           }`}
         >
           V Studio
-          {activeTab === "vstudio" && (
-            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-          )}
         </button>
 
         {/* Manage */}
         <button
           type="button"
           onClick={() => setActiveTab("manage")}
-          className={`relative px-3.5 py-1 font-semibold transition-colors ${
+          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
             activeTab === "manage"
-              ? "text-amber-500 font-bold"
-              : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
+              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
           }`}
         >
           Manage
-          {activeTab === "manage" && (
-            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-          )}
         </button>
 
         {/* Contextual Modify */}
@@ -992,7 +1004,7 @@ export default function ToolRibbon({
             <>
               <div className="flex items-center gap-3 overflow-x-hidden min-w-0 flex-1">
                 {vstudioClusters
-                  .filter((c) => !isTouchMode || c.key === "build" || c.key === "structure")
+                  .filter((c) => c.key === "build" || c.key === "structure" || c.key === "rooms")
                   .map((c) => (
                     <div key={c.key} className="flex-shrink-0">
                       {c.node}
@@ -1023,11 +1035,11 @@ export default function ToolRibbon({
                 {overflowOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[70dvh] overflow-y-auto thin-scroll">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
-                      {isTouchMode ? "Advanced Tools" : "All Tools"}
+                      Tools & Settings
                     </div>
                     <div className="flex flex-col gap-3">
                       {vstudioClusters
-                        .filter((c) => !isTouchMode || (c.key !== "build" && c.key !== "structure"))
+                        .filter((c) => c.key !== "build" && c.key !== "structure" && c.key !== "rooms")
                         .map((c) => (
                           <div key={c.key} className="border-b border-[var(--panel-divider)]/40 pb-2 last:border-0 last:pb-0">
                             {c.node}
@@ -1048,5 +1060,6 @@ export default function ToolRibbon({
         </div>
       )}
     </header>
+    </>
   );
 }

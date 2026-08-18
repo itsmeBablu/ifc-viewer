@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
@@ -160,8 +160,10 @@ export default function ToolStatusBar({
 
   const { mode, hint } = getToolStatusAndHints();
 
+  const [attachOpen, setAttachOpen] = useState(false);
+
   return (
-    <footer className="fixed bottom-0 inset-x-0 z-40 flex h-7 items-center justify-between border-t border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 px-3 text-[11px] text-[var(--text-muted)] select-none backdrop-blur-xl">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
       {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
       <div className="flex items-center gap-2 font-medium min-w-0">
         {/* Mode badge */}
@@ -177,50 +179,35 @@ export default function ToolStatusBar({
         {/* Divider */}
         <div className="h-3 w-px bg-[var(--panel-divider)] shrink-0 mx-0.5" />
 
-        {/* ── File Attach Actions (Section 3) ────────────────────────────── */}
-        {/* Attach DWG/PDF underlay */}
-        <input
-          ref={dwgInputRef}
-          type="file"
-          accept=".dwg,.dxf,.pdf"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onAttachDwgPdf?.(file);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => dwgInputRef.current?.click()}
-          title="Attach DWG / PDF underlay"
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent hover:border-[var(--panel-divider)] transition-all"
-        >
-          <LuFileImage className="h-3 w-3 text-sky-400 shrink-0" />
-          <span className="hidden sm:inline">Attach DWG/PDF</span>
-        </button>
-
-        {/* Attach IFC */}
-        <input
-          ref={ifcInputRef}
-          type="file"
-          accept=".ifc,.frag"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onAttachIfc?.(file);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => ifcInputRef.current?.click()}
-          title="Attach IFC model"
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent hover:border-[var(--panel-divider)] transition-all"
-        >
-          <LuPaperclip className="h-3 w-3 text-emerald-400 shrink-0" />
-          <span className="hidden sm:inline">Attach IFC</span>
-        </button>
+        {/* ── File Attach Actions ────────────────────────────── */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAttachOpen(!attachOpen)}
+            title="Attach Files"
+            className={`flex items-center justify-center rounded-full w-6 h-6 transition-all ${
+              attachOpen 
+                ? "bg-amber-500/20 text-amber-500 border border-amber-400"
+                : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent"
+            }`}
+          >
+            <LuPaperclip className="h-3.5 w-3.5" />
+          </button>
+          
+          {attachOpen && (
+            <div className="absolute bottom-full mb-2 left-0 w-36 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
+              <input ref={dwgInputRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachDwgPdf?.(file); e.target.value = ""; }} />
+              <input ref={ifcInputRef} type="file" accept=".ifc,.frag" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachIfc?.(file); e.target.value = ""; }} />
+              
+              <button onClick={() => { setAttachOpen(false); dwgInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-sky-400">
+                 <LuFileImage className="h-3.5 w-3.5" /> DWG/PDF
+              </button>
+              <button onClick={() => { setAttachOpen(false); ifcInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-emerald-400">
+                 <LuPaperclip className="h-3.5 w-3.5" /> IFC Model
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
@@ -295,6 +282,6 @@ export default function ToolStatusBar({
           {unitSystem === "metric" ? "m ↔ ft" : "ft ↔ m"}
         </button>
       </div>
-    </footer>
+    </div>
   );
 }

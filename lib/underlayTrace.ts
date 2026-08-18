@@ -161,7 +161,7 @@ function findWallPairsNearPoint(
       const face = segLength(a) >= segLength(b) ? a : b;
       let dx = face.bx - face.ax;
       let dy = face.by - face.ay;
-      let len = Math.hypot(dx, dy);
+      const len = Math.hypot(dx, dy);
       if (len < 1e-6) continue;
       dx /= len;
       dy /= len;
@@ -340,10 +340,10 @@ function rasterEdgeSegsNearCursor(
 
   const cx = uv.u * underlay.pixelWidth;
   const cy = uv.v * underlay.pixelHeight;
-  let x0 = Math.max(0, Math.floor(cx - padPx));
-  let y0 = Math.max(0, Math.floor(cy - padPx));
-  let x1 = Math.min(underlay.pixelWidth, Math.ceil(cx + padPx));
-  let y1 = Math.min(underlay.pixelHeight, Math.ceil(cy + padPx));
+  const x0 = Math.max(0, Math.floor(cx - padPx));
+  const y0 = Math.max(0, Math.floor(cy - padPx));
+  const x1 = Math.min(underlay.pixelWidth, Math.ceil(cx + padPx));
+  const y1 = Math.min(underlay.pixelHeight, Math.ceil(cy + padPx));
   const cw = x1 - x0;
   const ch = y1 - y0;
   if (cw < 16 || ch < 16) return [];
@@ -462,10 +462,10 @@ async function opencvSegsNearCursor(
     const uv = worldToUnderlayUv(underlay, cursor.xMm, cursor.yMm);
     const cx = uv.u * underlay.pixelWidth;
     const cy = uv.v * underlay.pixelHeight;
-    let x0 = Math.max(0, Math.floor(cx - padPx));
-    let y0 = Math.max(0, Math.floor(cy - padPx));
-    let x1 = Math.min(underlay.pixelWidth, Math.ceil(cx + padPx));
-    let y1 = Math.min(underlay.pixelHeight, Math.ceil(cy + padPx));
+    const x0 = Math.max(0, Math.floor(cx - padPx));
+    const y0 = Math.max(0, Math.floor(cy - padPx));
+    const x1 = Math.min(underlay.pixelWidth, Math.ceil(cx + padPx));
+    const y1 = Math.min(underlay.pixelHeight, Math.ceil(cy + padPx));
     const cw = x1 - x0;
     const ch = y1 - y0;
     if (cw < 8 || ch < 8) return [];

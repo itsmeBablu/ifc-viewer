@@ -44,6 +44,7 @@ export function useMobileLandscapeDockLayout(enabled: boolean) {
 
   useLayoutEffect(() => {
     if (!enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLayout(null);
       return;
     }

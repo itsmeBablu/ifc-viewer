@@ -438,18 +438,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     clearWerkzeugHistory();
 
     const projectId = emptyProjectKey(name);
-    const level: LayoutLevel = {
+    const levelEG: LayoutLevel = {
       id: newLayoutId("lvl"),
       projectId,
-      name: "EG",
+      name: "Erdgeschoss",
       elevationMm: 0,
       heightMm: DEFAULT_LEVEL_HEIGHT_MM,
       createdAt: Date.now(),
     };
-    await idbPutLevel(level);
+    const levelUG: LayoutLevel = {
+      id: newLayoutId("lvl"),
+      projectId,
+      name: "Untergeschoss",
+      elevationMm: -DEFAULT_LEVEL_HEIGHT_MM,
+      heightMm: DEFAULT_LEVEL_HEIGHT_MM,
+      createdAt: Date.now() + 1,
+    };
+    await idbPutLevel(levelEG);
+    await idbPutLevel(levelUG);
     await idbPutPresets(projectId, { ...EMPTY_LAYOUT_PRESETS });
     await get().loadForProject(projectId, true);
-    return { projectId, level };
+    return { projectId, level: levelEG };
   },
 
   addLevel: async (opts) => {

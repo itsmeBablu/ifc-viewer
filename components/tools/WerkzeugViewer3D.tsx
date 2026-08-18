@@ -2020,7 +2020,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       );
     });
     // Keep camera pose when switching floors — user can Fit model manually.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [
     selectedFloor,
     colorMode,
@@ -2975,7 +2975,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (isPresentationView || floorFocusToken === 0) return;
     const id = requestAnimationFrame(() => fitToVisible(850));
     return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [floorFocusToken, isPresentationView]);
 
   useEffect(() => {
@@ -3282,7 +3282,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       explodeTweenRef.current?.kill();
       if (refreshTimer != null) window.clearTimeout(refreshTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [
     isPresentationView,
     presentationLayoutMode,

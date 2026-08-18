@@ -448,7 +448,7 @@ export default function WerkzeugApp() {
         <ToolOptionsBar />
 
         {/* 3D CAD Viewport Canvas */}
-        <main className="fixed top-[116px] bottom-7 left-0 right-0 z-0 bg-[#0c0d12]">
+        <main className="fixed inset-0 z-0 bg-[#0c0d12]">
           <WerkzeugViewer3D
             ref={viewerRef}
             onPointerMove={handlePointerMove}
@@ -584,11 +584,18 @@ export default function WerkzeugApp() {
         {!isDesktop && (
           <button
             type="button"
-            onClick={() => setRightPanelOpen(!rightPanelOpen)}
-            className="fixed right-4 bottom-10 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-lg hover:bg-amber-600 transition-colors"
+            onClick={() => {
+               // Swap logic
+               if (!rightPanelOpen) {
+                 setRightPanelOpen(true);
+               } else {
+                 setRightPanelOpen(false);
+               }
+            }}
+            className="fixed right-4 bottom-20 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-lg hover:bg-amber-600 transition-colors"
             title="Toggle Panel"
           >
-            <LuLayers className="h-5 w-5" />
+            <LuLayers className="h-6 w-6" />
           </button>
         )}
       </div>

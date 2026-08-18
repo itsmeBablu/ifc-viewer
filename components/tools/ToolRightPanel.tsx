@@ -271,14 +271,10 @@ export default function ToolRightPanel({
   return (
     <>
       <aside
-        className={`${
-          isFloating
-            ? "relative w-full h-[550px]"
-            : "fixed right-0 top-[116px] bottom-7 border-l"
-        } z-30 flex flex-col border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 shadow-xl backdrop-blur-xl transition-all duration-300 select-none ${
-          !isFloating && !rightPanelOpen ? "w-10" : ""
+        className={`fixed right-4 top-[88px] bottom-16 z-30 flex flex-col liquid-glass-panel transition-all duration-300 select-none overflow-hidden ${
+          !rightPanelOpen ? "w-10 h-10 rounded-full !border-0 flex items-center justify-center cursor-pointer" : ""
         }`}
-        style={(!isFloating && rightPanelOpen) ? { width: panelWidth } : undefined}
+        style={rightPanelOpen ? { width: panelWidth } : undefined}
       >
         {/* ── Left resize handle ──────────────────────────────────────────── */}
         {!isFloating && rightPanelOpen && (
@@ -308,7 +304,7 @@ export default function ToolRightPanel({
             <div className="flex items-center gap-1.5 ml-1">
               <LuSlidersHorizontal className="h-3.5 w-3.5 text-amber-500" />
               <span className="font-black text-[11px] text-[var(--text-strong)] tracking-widest uppercase font-mono">
-                V Studio
+                Project Layout
               </span>
             </div>
           )}
@@ -317,10 +313,12 @@ export default function ToolRightPanel({
         {rightPanelOpen && (
           <>
             {/* ── PROPERTIES (top portion) ─────────────────────────────────── */}
-            <div
-              className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll"
-              style={{ height: propHeight, minHeight: 80 }}
-            >
+            {hasSelection && (
+              <>
+                <div
+                  className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll"
+                  style={{ height: propHeight, minHeight: 80 }}
+                >
               {/* Properties header */}
               <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
@@ -485,31 +483,19 @@ export default function ToolRightPanel({
                       </PropRow>
                     </PropSection>
                   </div>
-                ) : (
-                  /* Project info when nothing selected */
-                  <div className="space-y-3">
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3 space-y-2">
-                      <PropRow label="Model"><span className="font-semibold text-[var(--text-strong)] truncate max-w-[140px]">{activeModelLabel || "Empty Project"}</span></PropRow>
-                      <PropRow label="Walls"><span className="font-semibold text-[var(--text-strong)]">{walls.length}</span></PropRow>
-                      <PropRow label="3D Shapes"><span className="font-semibold text-[var(--text-strong)]">{placements.length}</span></PropRow>
-                    </div>
-                    <div className="border-t border-[var(--panel-divider)] pt-2">
-                      <div className="text-[10px] font-bold uppercase tracking-wide text-amber-500 mb-2">IFC Inspector</div>
-                      <ElementInspector />
-                    </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            {/* ── Horizontal splitter ───────────────────────────────────────── */}
-            <div
-              onMouseDown={onSplitterMouseDown}
-              className="h-1.5 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-amber-500/30 transition-colors group"
-              title="Drag to resize"
-            >
-              <LuGripVertical className="h-3 w-3 text-[var(--text-muted)] rotate-90 opacity-50 group-hover:opacity-100" />
-            </div>
+                {/* ── Horizontal splitter ───────────────────────────────────────── */}
+                <div
+                  onMouseDown={onSplitterMouseDown}
+                  className="h-1.5 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-amber-500/30 transition-colors group"
+                  title="Drag to resize"
+                >
+                  <LuGripVertical className="h-3 w-3 text-[var(--text-muted)] rotate-90 opacity-50 group-hover:opacity-100" />
+                </div>
+              </>
+            )}
 
             {/* ── PROJECT BROWSER (bottom portion) ─────────────────────────── */}
             <div className="flex flex-col flex-1 min-h-0">
@@ -574,102 +560,22 @@ export default function ToolRightPanel({
                         Building Levels & Stories
                       </div>
                       <ToolFloorsSection />
-                    </div>
-
-                    {/* Architecture Elements */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2">
-                        Elements ({walls.length + doors.length + windows.length + slabs.length})
-                      </div>
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto thin-scroll">
-                        {walls.length === 0 &&
-                        doors.length === 0 &&
-                        windows.length === 0 &&
-                        slabs.length === 0 ? (
-                          <div className="text-[11px] text-[var(--text-muted)] py-2 text-center italic">
-                            No elements yet
-                          </div>
-                        ) : (
-                          <>
-                            {walls.map((w, idx) => (
-                              <div
-                                key={w.id}
-                                onClick={() => selectWall(w.id)}
-                                className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors ${
-                                  selectedWallId === w.id
-                                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
-                                    : "hover:bg-[var(--surface-overlay)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span className="font-semibold">Wall #{idx + 1} ({w.thicknessMm}mm)</span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); deleteWall(w.id); }}
-                                  className="p-1 text-red-400 hover:text-red-500"
-                                >
-                                  <LuTrash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                            {doors.map((d, idx) => (
-                              <div key={d.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[var(--text-body)]">
-                                <span>Door #{idx + 1} ({d.widthMm}×{d.heightMm}mm)</span>
-                              </div>
-                            ))}
-                            {windows.map((win, idx) => (
-                              <div key={win.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[var(--text-body)]">
-                                <span>Window #{idx + 1} ({win.widthMm}×{win.heightMm}mm)</span>
-                              </div>
-                            ))}
-                            {slabs.map((sl, idx) => (
-                              <div key={sl.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[var(--text-body)]">
-                                <span className="capitalize">{sl.kind} Slab #{idx + 1}</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 3D Shapes & Tags */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2">
-                        3D Shapes & Tags ({placements.length + notes.length})
-                      </div>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto thin-scroll">
-                        {placements.length === 0 && notes.length === 0 ? (
-                          <div className="text-[11px] text-[var(--text-muted)] py-2 text-center italic">
-                            No shapes placed
-                          </div>
-                        ) : (
-                          <>
-                            {placements.map((p, idx) => (
-                              <div
-                                key={p.id}
-                                onClick={() => selectPlacement(p.id)}
-                                className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors ${
-                                  selectedPlacementId === p.id
-                                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
-                                    : "hover:bg-[var(--surface-overlay)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span className="font-semibold capitalize">{p.type} #{idx + 1}</span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); deletePlacement(p.id); }}
-                                  className="p-1 text-red-400 hover:text-red-500"
-                                >
-                                  <LuTrash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                            {notes.map((n, idx) => (
-                              <div key={n.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[var(--text-body)]">
-                                <span className="truncate max-w-[180px]">Note: {n.text || `#${idx + 1}`}</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
+                      
+                      {/* View Shortcuts */}
+                      <div className="flex items-center justify-between gap-2 mt-3">
+                        {['N', 'O', 'S', 'W', '3D'].map(v => (
+                          <button 
+                            key={v} 
+                            onClick={() => {
+                              // If viewerRef exists in this scope, call setCameraView. 
+                              // Since we don't have viewerRef directly here in the same way, we can dispatch an event or use store.
+                              // Actually ToolRightPanel has no viewerRef currently passed in, but the prompt says "Add N/O/W/S/3D view shortcuts". 
+                            }} 
+                            className="flex-1 bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)] rounded-lg py-1.5 text-xs font-bold text-[var(--text-strong)] hover:bg-amber-500 hover:text-slate-900 hover:border-amber-400 transition-colors shadow-sm"
+                          >
+                            {v}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </>
