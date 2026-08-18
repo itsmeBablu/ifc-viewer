@@ -803,8 +803,6 @@ export default function ToolRibbon({
   // -- All V Studio clusters in order -----------------------------------------
   const vstudioClusters = [
     { key: "build", node: buildCluster },
-    { key: "openings", node: openingsCluster },
-    { key: "structure", node: structureCluster },
     { key: "rooms", node: roomsCluster },
     { key: "shapes", node: shapesCluster },
     { key: "annotate", node: annotateCluster },
