@@ -21,6 +21,7 @@ import {
   type LayoutDoor,
   type LayoutLevel,
   type LayoutPresets,
+  type LayoutRoom,
   type LayoutSlab,
   type LayoutToolId,
   type LayoutWall,
@@ -106,6 +107,8 @@ type LayoutDrawingState = {
   doors: LayoutDoor[];
   windows: LayoutWindow[];
   slabs: LayoutSlab[];
+  layoutRooms: LayoutRoom[];
+  drawingScale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500";
   underlays: ReferenceUnderlay[];
   presets: LayoutPresets;
   armedLayoutTool: LayoutToolId | null;
@@ -140,6 +143,10 @@ type LayoutDrawingState = {
     patch: Partial<Pick<LayoutLevel, "name" | "elevationMm" | "heightMm">>,
   ) => Promise<void>;
   deleteLevel: (id: string) => Promise<void>;
+  setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
+  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
+  updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
+  deleteRoom: (id: string) => void;
 
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
   setDraftWallThicknessMm: (mm: number) => void;
@@ -296,6 +303,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   doors: [],
   windows: [],
   slabs: [],
+    layoutRooms: [],
+    drawingScale: "1:100",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
@@ -330,6 +339,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         doors: [],
         windows: [],
         slabs: [],
+    layoutRooms: [],
+    drawingScale: "1:100",
         underlays: [],
         presets: { ...EMPTY_LAYOUT_PRESETS },
         armedLayoutTool: null,
@@ -488,6 +499,35 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           : get().selectedSlabId,
       lastMutatedAt: Date.now(),
     });
+  },
+
+  setDrawingScale: (scale) => set({ drawingScale: scale }),
+  addRoom: (r) => {
+    const activeLevelId = get().levels[0]?.id || "default-level";
+    const room: LayoutRoom = {
+      id: newLayoutId("rm"),
+      projectId: get().projectId || "default",
+      levelId: activeLevelId,
+      name: r.name,
+      number: r.number,
+      areaSqM: r.areaSqM,
+      boundaryPoints: r.boundaryPoints,
+      tagPosMm: r.tagPosMm,
+      createdAt: Date.now(),
+    };
+    set((s) => ({ layoutRooms: [...(s.layoutRooms || []), room] }));
+  },
+  updateRoom: (id, patch) => {
+    set((s) => ({
+      layoutRooms: (s.layoutRooms || []).map((r) =>
+        r.id === id ? { ...r, ...patch } : r
+      ),
+    }));
+  },
+  deleteRoom: (id) => {
+    set((s) => ({
+      layoutRooms: (s.layoutRooms || []).filter((r) => r.id !== id),
+    }));
   },
 
   setArmedLayoutTool: (tool) => {

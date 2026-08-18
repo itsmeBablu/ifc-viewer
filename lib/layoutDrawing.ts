@@ -611,3 +611,117 @@ export function emptyProjectKey(name: string): string {
   const safe = name.trim().replace(/[^\w.-]+/g, "_") || "project";
   return `${EMPTY_PROJECT_PREFIX}${safe}`;
 }
+
+export type LayoutRoom = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  name: string;
+  number: string;
+  areaSqM: number;
+  boundaryPoints: { xMm: number; yMm: number }[];
+  tagPosMm: { xMm: number; yMm: number };
+  createdAt: number;
+};
+
+/** Compute polygon area in m² from mm vertices using Shoelace formula */
+export function computePolygonAreaSqM(points: { xMm: number; yMm: number }[]): number {
+  if (points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p1 = points[i];
+    const p2 = points[(i + 1) % points.length];
+    sum += (p1.xMm * p2.yMm - p2.xMm * p1.yMm);
+  }
+  return Math.abs(sum) * 0.5 * 1e-6;
+}
+
+/** Ray-wall intersection helper */
+function raySegmentIntersect(
+  ox: number,
+  oy: number,
+  dx: number,
+  dy: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): { dist: number; x: number; y: number } | null {
+  const v1x = ox - x1;
+  const v1y = oy - y1;
+  const v2x = x2 - x1;
+  const v2y = y2 - y1;
+  const v3x = -dy;
+  const v3y = dx;
+
+  const dot = v2x * v3x + v2y * v3y;
+  if (Math.abs(dot) < 1e-6) return null;
+
+  const t1 = (v2x * v1y - v2y * v1x) / dot;
+  const t2 = (v1x * v3x + v1y * v3y) / dot;
+
+  if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
+    return { dist: t1, x: ox + dx * t1, y: oy + dy * t1 };
+  }
+  return null;
+}
+
+/** Detect enclosed room polygon around seed point (px, py) using radial ray-casting */
+export function detectEnclosedRoomBoundary(
+  px: number,
+  py: number,
+  walls: LayoutWall[]
+): { boundary: { xMm: number; yMm: number }[]; areaSqM: number } | null {
+  if (walls.length < 3) {
+    // Default 4x4m room boundary if not enclosed by walls
+    const half = 2000;
+    const boundary = [
+      { xMm: px - half, yMm: py - half },
+      { xMm: px + half, yMm: py - half },
+      { xMm: px + half, yMm: py + half },
+      { xMm: px - half, yMm: py + half },
+    ];
+    return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
+  }
+
+  const numRays = 24;
+  const hits: { xMm: number; yMm: number }[] = [];
+
+  for (let i = 0; i < numRays; i++) {
+    const angle = (i / numRays) * Math.PI * 2;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+
+    let closestDist = Infinity;
+    let closestHit: { x: number; y: number } | null = null;
+
+    for (const w of walls) {
+      const hit = raySegmentIntersect(px, py, dx, dy, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
+      if (hit && hit.dist < closestDist && hit.dist > 10) {
+        closestDist = hit.dist;
+        closestHit = { x: hit.x, y: hit.y };
+      }
+    }
+
+    if (closestHit && closestDist < 30000) {
+      hits.push({ xMm: closestHit.x, yMm: closestHit.y });
+    }
+  }
+
+  if (hits.length >= 3) {
+    const area = computePolygonAreaSqM(hits);
+    if (area > 1 && area < 10000) {
+      return { boundary: hits, areaSqM: area };
+    }
+  }
+
+  // Fallback room boundary 4x4m
+  const half = 2000;
+  const boundary = [
+    { xMm: px - half, yMm: py - half },
+    { xMm: px + half, yMm: py - half },
+    { xMm: px + half, yMm: py + half },
+    { xMm: px - half, yMm: py + half },
+  ];
+  return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
+}

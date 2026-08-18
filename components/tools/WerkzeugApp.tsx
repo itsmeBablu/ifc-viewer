@@ -41,6 +41,7 @@ import ToolOptionsBar from "./ToolOptionsBar";
 import ToolPropertiesDock from "./ToolPropertiesDock";
 import ToolProjectBrowserDock from "./ToolProjectBrowserDock";
 import ToolStatusBar from "./ToolStatusBar";
+import RoomScheduleDialog from "./RoomScheduleDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
 import ToolModeCursorHud from "./ToolModeCursorHud";
 import WerkzeugEntryPanel from "./WerkzeugEntryPanel";
@@ -117,6 +118,7 @@ export default function WerkzeugApp() {
   const [isDesktop, setIsDesktop] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
+  const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
   const dragDepthRef = useRef(0);
 
   const rooms = useAppStore((s) => s.rooms);
@@ -424,6 +426,7 @@ export default function WerkzeugApp() {
           viewerRef={viewerRef}
           onFile={handleFile}
           isLoadingModel={isLoadingModel}
+          onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
         />
 
         {/* Contextual Ribbon Options Bar */}
@@ -456,6 +459,9 @@ export default function WerkzeugApp() {
             isLoadingModel={isLoadingModel}
           />
         )}
+
+        {/* Room & Area Take-off Schedule Modal */}
+        <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
 
         {/* Bottom CAD Status Bar */}
         <ToolStatusBar pointer={pointer} />
