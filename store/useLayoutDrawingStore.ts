@@ -21,6 +21,7 @@ import {
   type LayoutDoor,
   type LayoutLevel,
   type LayoutPresets,
+  type LayoutRoom,
   type LayoutSlab,
   type LayoutToolId,
   type LayoutWall,
@@ -76,6 +77,8 @@ export type WallDrawState = {
   angleDeg: number | null;
   angleSnapped: boolean;
   lengthMm: number | null;
+  /** Active snap type indicator shown in HUD. */
+  snapType?: "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "extension" | null;
 } | null;
 
 export type SlabDrawState = {
@@ -106,6 +109,9 @@ type LayoutDrawingState = {
   doors: LayoutDoor[];
   windows: LayoutWindow[];
   slabs: LayoutSlab[];
+  layoutRooms: LayoutRoom[];
+  drawingScale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500";
+  unitSystem: "metric" | "imperial";
   underlays: ReferenceUnderlay[];
   presets: LayoutPresets;
   armedLayoutTool: LayoutToolId | null;
@@ -140,6 +146,11 @@ type LayoutDrawingState = {
     patch: Partial<Pick<LayoutLevel, "name" | "elevationMm" | "heightMm">>,
   ) => Promise<void>;
   deleteLevel: (id: string) => Promise<void>;
+  setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
+  setUnitSystem: (system: "metric" | "imperial") => void;
+  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
+  updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
+  deleteRoom: (id: string) => void;
 
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
   setDraftWallThicknessMm: (mm: number) => void;
@@ -167,12 +178,26 @@ type LayoutDrawingState = {
         | "endYmm"
         | "thicknessMm"
         | "heightMm"
+        | "curved"
+        | "arcCenterXmm"
+        | "arcCenterYmm"
+        | "arcRadiusMm"
+        | "arcStartAngleDeg"
+        | "arcEndAngleDeg"
+        | "color"
+        | "material"
       >
     >,
   ) => Promise<void>;
   deleteWall: (id: string) => Promise<void>;
   selectWall: (id: string | null) => void;
   duplicateWall: (id: string) => Promise<LayoutWall | null>;
+  /** Set a straight wall to follow an arc. */
+  setWallCurved: (
+    wallId: string,
+    arcCenter: { xMm: number; yMm: number },
+    arcRadiusMm: number,
+  ) => void;
 
   placeDoorOnWall: (
     wallId: string,
@@ -211,7 +236,12 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutWindow,
-        "positionMm" | "widthMm" | "heightMm" | "sillHeightMm"
+        | "positionMm"
+        | "widthMm"
+        | "heightMm"
+        | "sillHeightMm"
+        | "headShape"
+        | "color"
       >
     >,
   ) => Promise<void>;
@@ -248,6 +278,11 @@ type LayoutDrawingState = {
         | "maxYmm"
         | "thicknessMm"
         | "elevationOffsetMm"
+        | "boundary"
+        | "holes"
+        | "edgeSlopes"
+        | "color"
+        | "material"
       >
     >,
   ) => Promise<void>;
@@ -296,6 +331,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   doors: [],
   windows: [],
   slabs: [],
+    layoutRooms: [],
+    drawingScale: "1:100",
+    unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
@@ -330,6 +368,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         doors: [],
         windows: [],
         slabs: [],
+    layoutRooms: [],
+    drawingScale: "1:100",
         underlays: [],
         presets: { ...EMPTY_LAYOUT_PRESETS },
         armedLayoutTool: null,
@@ -398,18 +438,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     clearWerkzeugHistory();
 
     const projectId = emptyProjectKey(name);
-    const level: LayoutLevel = {
+    const levelEG: LayoutLevel = {
       id: newLayoutId("lvl"),
       projectId,
-      name: "EG",
+      name: "Erdgeschoss",
       elevationMm: 0,
       heightMm: DEFAULT_LEVEL_HEIGHT_MM,
       createdAt: Date.now(),
     };
-    await idbPutLevel(level);
+    const levelUG: LayoutLevel = {
+      id: newLayoutId("lvl"),
+      projectId,
+      name: "Untergeschoss",
+      elevationMm: -DEFAULT_LEVEL_HEIGHT_MM,
+      heightMm: DEFAULT_LEVEL_HEIGHT_MM,
+      createdAt: Date.now() + 1,
+    };
+    await idbPutLevel(levelEG);
+    await idbPutLevel(levelUG);
     await idbPutPresets(projectId, { ...EMPTY_LAYOUT_PRESETS });
     await get().loadForProject(projectId, true);
-    return { projectId, level };
+    return { projectId, level: levelEG };
   },
 
   addLevel: async (opts) => {
@@ -488,6 +537,41 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           : get().selectedSlabId,
       lastMutatedAt: Date.now(),
     });
+  },
+
+  setDrawingScale: (scale) => set({ drawingScale: scale }),
+  setUnitSystem: (system) => {
+    set({ unitSystem: system });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vstudio:unitSystem", system);
+    }
+  },
+  addRoom: (r) => {
+    const activeLevelId = get().levels[0]?.id || "default-level";
+    const room: LayoutRoom = {
+      id: newLayoutId("rm"),
+      projectId: get().projectId || "default",
+      levelId: activeLevelId,
+      name: r.name,
+      number: r.number,
+      areaSqM: r.areaSqM,
+      boundaryPoints: r.boundaryPoints,
+      tagPosMm: r.tagPosMm,
+      createdAt: Date.now(),
+    };
+    set((s) => ({ layoutRooms: [...(s.layoutRooms || []), room] }));
+  },
+  updateRoom: (id, patch) => {
+    set((s) => ({
+      layoutRooms: (s.layoutRooms || []).map((r) =>
+        r.id === id ? { ...r, ...patch } : r
+      ),
+    }));
+  },
+  deleteRoom: (id) => {
+    set((s) => ({
+      layoutRooms: (s.layoutRooms || []).filter((r) => r.id !== id),
+    }));
   },
 
   setArmedLayoutTool: (tool) => {
@@ -1084,7 +1168,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return clone;
   },
 
-  placeDoorOnWall: async (wallId, positionMm, opts) => {
+  setWallCurved: (wallId, arcCenter, arcRadiusMm) => {
+    const wall = get().walls.find((w) => w.id === wallId);
+    if (!wall) return;
+    const startAngleDeg =
+      (Math.atan2(wall.startYmm - arcCenter.yMm, wall.startXmm - arcCenter.xMm) * 180) / Math.PI;
+    const endAngleDeg =
+      (Math.atan2(wall.endYmm - arcCenter.yMm, wall.endXmm - arcCenter.xMm) * 180) / Math.PI;
+    const updated: LayoutWall = {
+      ...wall,
+      curved: true,
+      arcCenterXmm: arcCenter.xMm,
+      arcCenterYmm: arcCenter.yMm,
+      arcRadiusMm,
+      arcStartAngleDeg: startAngleDeg,
+      arcEndAngleDeg: endAngleDeg,
+    };
+    set({ walls: get().walls.map((w) => (w.id === wallId ? updated : w)) });
+    idbPutWall(updated);
+  },
+
+ placeDoorOnWall: async (wallId, positionMm, opts) => {
     pushWerkzeugHistory();
 
     const projectId = get().projectId;
@@ -1440,9 +1544,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       pts[0]!,
       pts[1]!,
       distanceMm,
+      underlay.levelId,
     );
     pushWerkzeugHistory();
-    const next = { ...underlay, ...patch };
+    const levelCalibrations = {
+      ...(underlay.levelCalibrations || {}),
+      [underlay.levelId]: {
+        mmPerPixel: patch.mmPerPixel,
+        offsetXmm: patch.offsetXmm,
+        offsetYmm: patch.offsetYmm,
+        rotationDeg: underlay.rotationDeg,
+      },
+    };
+    const next: ReferenceUnderlay = {
+      ...underlay,
+      ...patch,
+      levelCalibrations,
+    };
     await idbPutUnderlay(next);
     set({
       underlays: get().underlays.map((u) => (u.id === id ? next : u)),

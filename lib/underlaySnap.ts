@@ -230,8 +230,8 @@ export function extractRasterSnapSegments(
 /** Debug: underlay size helpers kept available for snap UI. */
 export function underlayPlanSizeMm(u: ReferenceUnderlay) {
   return {
-    w: underlayWidthMm(u),
-    h: underlayHeightMm(u),
-    mmPerPx: effectiveMmPerPixel(u),
+    w: underlayWidthMm(u, u.levelId),
+    h: underlayHeightMm(u, u.levelId),
+    mmPerPx: effectiveMmPerPixel(u, u.levelId),
   };
 }

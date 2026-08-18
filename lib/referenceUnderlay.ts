@@ -43,22 +43,47 @@ export type ReferenceUnderlay = {
   sourceName: string;
   /** Vector/edge snap lines in UV (DWG strokes or PDF edges). */
   snapSegments?: UnderlaySnapSegment[];
+  /** Per-level calibration overrides. Key is levelId. */
+  levelCalibrations?: Record<string, {
+    mmPerPixel: number;
+    offsetXmm: number;
+    offsetYmm: number;
+    rotationDeg: number;
+  }>;
   createdAt: number;
 };
 
 export const DEFAULT_UNDERLAY_DISPLAY_WIDTH_MM = 20000;
 
-export function effectiveMmPerPixel(u: ReferenceUnderlay): number {
-  if (u.mmPerPixel > 0) return u.mmPerPixel;
+export function resolveUnderlayCalibration(u: ReferenceUnderlay, levelId?: string | null): {
+  mmPerPixel: number;
+  offsetXmm: number;
+  offsetYmm: number;
+  rotationDeg: number;
+} {
+  if (levelId && u.levelCalibrations?.[levelId]) {
+    return u.levelCalibrations[levelId];
+  }
+  return {
+    mmPerPixel: u.mmPerPixel,
+    offsetXmm: u.offsetXmm,
+    offsetYmm: u.offsetYmm,
+    rotationDeg: u.rotationDeg,
+  };
+}
+
+export function effectiveMmPerPixel(u: ReferenceUnderlay, levelId: string | null = u.levelId): number {
+  const cal = resolveUnderlayCalibration(u, levelId);
+  if (cal.mmPerPixel > 0) return cal.mmPerPixel;
   return DEFAULT_UNDERLAY_DISPLAY_WIDTH_MM / Math.max(1, u.pixelWidth);
 }
 
-export function underlayWidthMm(u: ReferenceUnderlay): number {
-  return u.pixelWidth * effectiveMmPerPixel(u);
+export function underlayWidthMm(u: ReferenceUnderlay, levelId: string | null = u.levelId): number {
+  return u.pixelWidth * effectiveMmPerPixel(u, levelId);
 }
 
-export function underlayHeightMm(u: ReferenceUnderlay): number {
-  return u.pixelHeight * effectiveMmPerPixel(u);
+export function underlayHeightMm(u: ReferenceUnderlay, levelId: string | null = u.levelId): number {
+  return u.pixelHeight * effectiveMmPerPixel(u, levelId);
 }
 
 /** World plan mm → UV on underlay (0–1). */
@@ -66,14 +91,16 @@ export function worldToUnderlayUv(
   u: ReferenceUnderlay,
   xMm: number,
   yMm: number,
+  levelId: string | null = u.levelId,
 ): { u: number; v: number } {
-  const w = underlayWidthMm(u);
-  const h = underlayHeightMm(u);
-  const rad = (u.rotationDeg * Math.PI) / 180;
+  const cal = resolveUnderlayCalibration(u, levelId);
+  const w = underlayWidthMm(u, levelId);
+  const h = underlayHeightMm(u, levelId);
+  const rad = (cal.rotationDeg * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  const dx = xMm - u.offsetXmm;
-  const dy = yMm - u.offsetYmm;
+  const dx = xMm - cal.offsetXmm;
+  const dy = yMm - cal.offsetYmm;
   const localX = dx * cos + dy * sin;
   const localY = -dx * sin + dy * cos;
   return {
@@ -86,17 +113,19 @@ export function underlayUvToWorld(
   underlay: ReferenceUnderlay,
   u: number,
   v: number,
+  levelId: string | null = underlay.levelId,
 ): { xMm: number; yMm: number } {
-  const w = underlayWidthMm(underlay);
-  const h = underlayHeightMm(underlay);
+  const cal = resolveUnderlayCalibration(underlay, levelId);
+  const w = underlayWidthMm(underlay, levelId);
+  const h = underlayHeightMm(underlay, levelId);
   const localX = (u - 0.5) * w;
   const localY = (v - 0.5) * h;
-  const rad = (underlay.rotationDeg * Math.PI) / 180;
+  const rad = (cal.rotationDeg * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   return {
-    xMm: underlay.offsetXmm + localX * cos - localY * sin,
-    yMm: underlay.offsetYmm + localX * sin + localY * cos,
+    xMm: cal.offsetXmm + localX * cos - localY * sin,
+    yMm: cal.offsetYmm + localX * sin + localY * cos,
   };
 }
 
@@ -109,24 +138,26 @@ export function calibrateUnderlayFromWorldPoints(
   a: { xMm: number; yMm: number },
   b: { xMm: number; yMm: number },
   realDistanceMm: number,
+  levelId?: string | null,
 ): Pick<ReferenceUnderlay, "mmPerPixel" | "offsetXmm" | "offsetYmm"> {
   const distWorld = Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
+  const cal = resolveUnderlayCalibration(underlay, levelId);
   if (distWorld < 1e-6 || realDistanceMm < 1) {
     return {
-      mmPerPixel: underlay.mmPerPixel,
-      offsetXmm: underlay.offsetXmm,
-      offsetYmm: underlay.offsetYmm,
+      mmPerPixel: cal.mmPerPixel,
+      offsetXmm: cal.offsetXmm,
+      offsetYmm: cal.offsetYmm,
     };
   }
-  const oldMmPerPx = effectiveMmPerPixel(underlay);
+  const oldMmPerPx = effectiveMmPerPixel(underlay, levelId);
   const pixelDist = distWorld / oldMmPerPx;
   const mmPerPixel = realDistanceMm / Math.max(1e-6, pixelDist);
   // Scale about segment midpoint so that point stays put in world.
   const midX = (a.xMm + b.xMm) / 2;
   const midY = (a.yMm + b.yMm) / 2;
   const scale = mmPerPixel / oldMmPerPx;
-  const offsetXmm = midX + (underlay.offsetXmm - midX) * scale;
-  const offsetYmm = midY + (underlay.offsetYmm - midY) * scale;
+  const offsetXmm = midX + (cal.offsetXmm - midX) * scale;
+  const offsetYmm = midY + (cal.offsetYmm - midY) * scale;
   return { mmPerPixel, offsetXmm, offsetYmm };
 }
 

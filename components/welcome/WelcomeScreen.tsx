@@ -69,9 +69,13 @@ export default function WelcomeScreen({ onContinue }: Props) {
 
   useEffect(() => {
     const saved = readWelcomePreferences();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUserName(saved.userName);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUiLanguage(saved.language);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setColorTheme(saved.theme);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAutoSceneBackground(saved.seasonalBackground);
     applyThemeVars(saved.theme, {
       sceneBackground: getSceneCssHex(

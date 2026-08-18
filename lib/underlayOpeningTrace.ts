@@ -98,10 +98,10 @@ async function detectSwingArcsNearWall(
   const padPx = Math.ceil(padMm / mpp) + 24;
   const cxPx = uv.u * underlay.pixelWidth;
   const cyPx = uv.v * underlay.pixelHeight;
-  let x0 = Math.max(0, Math.floor(cxPx - padPx));
-  let y0 = Math.max(0, Math.floor(cyPx - padPx));
-  let x1 = Math.min(underlay.pixelWidth, Math.ceil(cxPx + padPx));
-  let y1 = Math.min(underlay.pixelHeight, Math.ceil(cyPx + padPx));
+  const x0 = Math.max(0, Math.floor(cxPx - padPx));
+  const y0 = Math.max(0, Math.floor(cyPx - padPx));
+  const x1 = Math.min(underlay.pixelWidth, Math.ceil(cxPx + padPx));
+  const y1 = Math.min(underlay.pixelHeight, Math.ceil(cyPx + padPx));
   const cw = x1 - x0;
   const ch = y1 - y0;
   if (cw < 24 || ch < 24) return [];

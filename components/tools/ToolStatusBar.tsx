@@ -1,67 +1,290 @@
 "use client";
 
+import { useRef, useState, useEffect } from "react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
-import { LuCompass, LuLayers } from "react-icons/lu";
+import {
+  LuCompass,
+  LuLayers,
+  LuScale,
+  LuKeyboard,
+  LuPaperclip,
+  LuFileImage,
+} from "react-icons/lu";
+import type { RenderMode } from "@/lib/types";
+
+const RENDER_MODES: { id: RenderMode; label: string }[] = [
+  { id: "realistic", label: "Realistic" },
+  { id: "fullColor", label: "Shaded" },
+  { id: "light", label: "Light" },
+  { id: "wireframe", label: "Wire" },
+];
 
 export default function ToolStatusBar({
   pointer,
+  onAttachDwgPdf,
+  onAttachIfc,
 }: {
   pointer: { x: number; y: number };
+  onAttachDwgPdf?: (file: File) => void;
+  onAttachIfc?: (file: File) => void;
 }) {
+  const dwgInputRef = useRef<HTMLInputElement>(null);
+  const ifcInputRef = useRef<HTMLInputElement>(null);
+
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
+  const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
+
+  const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
+  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
+  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const unitSystem = useLayoutDrawingStore((s) => s.unitSystem);
+  const setUnitSystem = useLayoutDrawingStore((s) => s.setUnitSystem);
+
   const armedTool = useToolMarkupStore((s) => s.armedTool);
   const snapToFaces = useToolMarkupStore((s) => s.snapToFaces);
   const gridSnap = useToolMarkupStore((s) => s.gridSnap);
+  const snapEndpoint = useToolMarkupStore((s) => s.snapEndpoint);
+  const snapMidpoint = useToolMarkupStore((s) => s.snapMidpoint);
+  const snapCenter = useToolMarkupStore((s) => s.snapCenter);
+  const snapIntersection = useToolMarkupStore((s) => s.snapIntersection);
+  const snapPerpendicular = useToolMarkupStore((s) => s.snapPerpendicular);
+  const snapExtension = useToolMarkupStore((s) => s.snapExtension);
+  const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+
+  // Build compact snap active summary
+  const activeSnaps = [
+    snapEndpoint && "Endpt",
+    snapMidpoint && "Mid",
+    snapCenter && "Ctr",
+    snapIntersection && "Int",
+    snapPerpendicular && "Perp",
+    snapExtension && "Ext",
+    snapToFaces && "Face",
+    gridSnap && "Grid",
+  ].filter(Boolean).join("+") || "Off";
+  const wallSnapType = useLayoutDrawingStore((s) => s.wallDraw?.snapType);
+
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const floors = useAppStore((s) => s.floors);
+  const renderMode = useAppStore((s) => s.renderMode);
+  const setRenderMode = useAppStore((s) => s.setRenderMode);
 
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
-  const getPromptHint = () => {
+  const getToolStatusAndHints = () => {
     if (armedLayoutTool === "wall") {
       if (wallDraw) {
-        return "Click to place next wall endpoint • Enter to finish chain • Esc to cancel";
+        return {
+          mode: "Wall Drawing Active",
+          hint: "Click next point • Shift: 45° angle snap • Tab: switch direction • Enter: complete chain • Esc: cancel",
+        };
       }
-      return "Wall Tool: Click in 2D Top View or 3D floor plane to start drawing wall";
+      return {
+        mode: "Wall Tool Active",
+        hint: "Click in 2D Top View or 3D floor plane to start wall • Space: flip wall alignment",
+      };
     }
     if (armedLayoutTool === "door") {
-      return "Door Tool: Hover over any drawn wall and click to insert door";
+      return {
+        mode: "Door Tool Active",
+        hint: "Hover over any wall and click to place door • Space: flip swing • Tab: flip hand",
+      };
     }
     if (armedLayoutTool === "window") {
-      return "Window Tool: Hover over any drawn wall and click to insert window";
+      return {
+        mode: "Window Tool Active",
+        hint: "Hover over any wall and click to insert window • Tab: cycle snap point",
+      };
     }
     if (armedLayoutTool === "floor") {
-      return "Floor Slab: Click 1st corner, then click opposite diagonal corner";
+      return {
+        mode: "Floor Sketch Active",
+        hint: "Click corners to define floor boundary • Close loop or Enter to finish • Inner loop = hole • Esc: cancel",
+      };
     }
     if (armedLayoutTool === "roof") {
-      return "Roof Tool: Click corners to define roof footprint";
+      return {
+        mode: "Roof Sketch Active",
+        hint: "Click corners to define roof boundary polygon • Enter: finish • Esc: cancel",
+      };
     }
     if (armedTool && armedTool !== "note") {
-      return `3D ${armedTool.toUpperCase()} Tool: Click & drag on floor/face to place shape`;
+      return {
+        mode: `${armedTool.toUpperCase()} Shape Tool`,
+        hint: "Click & drag on ground or IFC face to size shape • Shift: constrain proportions",
+      };
     }
     if (armedTool === "note") {
-      return "Sticky Note: Click on any 3D element to attach an annotation pin";
+      return {
+        mode: "Sticky Tag Active",
+        hint: "Click on any 3D geometry element or wall to attach a pin annotation tag",
+      };
     }
-    return "Select Mode: Click element to inspect properties • Orbit: Right Drag • Pan: Shift+Right Drag";
+
+    // Selection Modes
+    if (selectedWallId) {
+      return {
+        mode: "Modify | Wall Selected",
+        hint: "Drag endpoints to stretch • Space: flip direction • Ctrl+C: copy • Del: delete • Esc: deselect",
+      };
+    }
+    if (selectedDoorId || selectedWindowId) {
+      return {
+        mode: "Modify | Opening Selected",
+        hint: "Drag along wall to reposition • Space: flip swing • Tab: flip hand • Del: delete",
+      };
+    }
+    if (selectedSlabId) {
+      return {
+        mode: "Modify | Slab Selected",
+        hint: "Edit boundary in Properties panel • Del: delete • Esc: deselect",
+      };
+    }
+    if (selectedPlacementId) {
+      return {
+        mode: "Modify | 3D Shape Selected",
+        hint: "Use Transform Gizmo to Move / Rotate / Scale • Del: delete • Esc: deselect",
+      };
+    }
+
+    return {
+      mode: "Select Mode",
+      hint: "Click element to inspect • Right Drag: Orbit 3D • Shift + Right Drag: Pan • Scroll: Zoom",
+    };
   };
 
+  const { mode, hint } = getToolStatusAndHints();
+
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [shadingOpen, setShadingOpen] = useState(false);
+  const statusBarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (statusBarRef.current && !statusBarRef.current.contains(e.target as Node)) {
+        setAttachOpen(false);
+        setShadingOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   return (
-    <footer className="fixed bottom-0 inset-x-0 z-40 flex h-7 items-center justify-between border-t border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 px-3 text-[11px] text-[var(--text-muted)] select-none backdrop-blur-xl">
-      {/* Left: Active Tool Prompt / Instructions */}
-      <div className="flex items-center gap-2 font-medium truncate max-w-[60%]">
-        <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-        <span className="text-[var(--text-strong)] font-semibold truncate">{getPromptHint()}</span>
+    <div ref={statusBarRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
+      {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
+      <div className="flex items-center gap-2 font-medium min-w-0">
+        {/* Mode badge */}
+        <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+          {mode}
+        </span>
+        <span className="text-[var(--text-strong)] font-semibold truncate hidden lg:flex items-center gap-1 max-w-[380px]">
+          <LuKeyboard className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
+          <span className="truncate">{hint}</span>
+        </span>
+
+        {/* Divider */}
+        <div className="h-3 w-px bg-[var(--panel-divider)] shrink-0 mx-0.5" />
+
+        {/* -- File Attach Actions ------------------------------ */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAttachOpen(!attachOpen)}
+            title="Attach Files"
+            className={`flex items-center justify-center rounded-full w-6 h-6 transition-all ${
+              attachOpen 
+                ? "bg-amber-500/20 text-amber-500 border border-amber-400"
+                : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent"
+            }`}
+          >
+            <LuPaperclip className="h-3.5 w-3.5" />
+          </button>
+          
+          {attachOpen && (
+            <div className="absolute bottom-full mb-2 left-0 w-36 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
+              <input ref={dwgInputRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachDwgPdf?.(file); e.target.value = ""; }} />
+              <input ref={ifcInputRef} type="file" accept=".ifc,.frag" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachIfc?.(file); e.target.value = ""; }} />
+              
+              <button onClick={() => { setAttachOpen(false); dwgInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-sky-400">
+                 <LuFileImage className="h-3.5 w-3.5" /> DWG/PDF
+              </button>
+              <button onClick={() => { setAttachOpen(false); ifcInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-emerald-400">
+                 <LuPaperclip className="h-3.5 w-3.5" /> IFC Model
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Right: Snap, Level, Coordinates & Unit Readout */}
-      <div className="flex items-center gap-3 font-mono text-[10px]">
+      {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
+      <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
+        {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShadingOpen(!shadingOpen)}
+            title="Shading Options"
+            className="flex items-center gap-1 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+          >
+            <LuLayers className="h-3 w-3" />
+            <span>{RENDER_MODES.find(m => m.id === renderMode)?.label || "Shaded"}</span>
+          </button>
+          
+          {shadingOpen && (
+            <div className="absolute bottom-full mb-2 right-0 w-32 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
+              {RENDER_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setRenderMode(m.id);
+                    setShadingOpen(false);
+                  }}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left transition-colors ${
+                    renderMode === m.id
+                      ? "bg-amber-500/20 text-amber-500"
+                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+                  }`}
+                >
+                  <LuLayers className="h-3 w-3 opacity-70" /> {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="h-3 w-px bg-[var(--panel-divider)]" />
+
+        {/* Scale Selector */}
+        <div className="flex items-center gap-1 bg-[var(--glass-inset-bg)] px-1.5 py-0.5 rounded border border-[var(--panel-divider)]">
+          <LuScale className="h-3 w-3 text-amber-500" />
+          <span className="text-[var(--text-muted)]">Scale:</span>
+          <select
+            value={drawingScale}
+            onChange={(e) => setDrawingScale(e.target.value as any)}
+            className="bg-transparent font-bold text-[var(--text-strong)] focus:outline-none cursor-pointer"
+          >
+            <option value="1:20">1:20</option>
+            <option value="1:50">1:50</option>
+            <option value="1:100">1:100</option>
+            <option value="1:200">1:200</option>
+            <option value="1:500">1:500</option>
+          </select>
+        </div>
+
+        <div className="h-3 w-px bg-[var(--panel-divider)]" />
+
         {/* Active Level */}
         <div className="flex items-center gap-1 text-[var(--text-body)]">
           <LuLayers className="h-3 w-3 text-amber-500" />
-          <span>{currentFloorObj ? currentFloorObj.name : "All Levels"}</span>
+          <span>{currentFloorObj ? currentFloorObj.name : "Level 1"}</span>
         </div>
 
         <div className="h-3 w-px bg-[var(--panel-divider)]" />
@@ -69,14 +292,25 @@ export default function ToolStatusBar({
         {/* Snap Indicator */}
         <div className="flex items-center gap-1 text-[var(--text-body)]">
           <LuCompass className="h-3 w-3 text-sky-400" />
-          <span>Snap: {gridSnap ? "Grid (100mm)" : "Angle (45°)"}{snapToFaces ? " + Face" : ""}</span>
+          <span>
+            {wallSnapType ? (
+              <span className="text-amber-400 font-bold">{wallSnapType}</span>
+            ) : (
+              <span>Snap: {activeSnaps}</span>
+            )}
+          </span>
         </div>
 
-        <div className="h-3 w-px bg-[var(--panel-divider)]" />
-
-        {/* Unit Scale */}
-        <span className="text-[var(--text-muted)] font-sans">mm (1:100)</span>
+        {/* Unit */}
+        <button
+          type="button"
+          onClick={() => setUnitSystem(unitSystem === "metric" ? "imperial" : "metric")}
+          title="Toggle Unit System (Metric / Imperial)"
+          className="text-emerald-500 font-sans font-bold hover:text-emerald-600 transition-colors bg-[var(--glass-inset-bg)] px-2 py-0.5 rounded border border-[var(--panel-divider)]"
+        >
+          {unitSystem === "metric" ? "m ↔ ft" : "ft ↔ m"}
+        </button>
       </div>
-    </footer>
+    </div>
   );
 }

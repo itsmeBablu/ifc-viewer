@@ -38,9 +38,10 @@ import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
-import ToolPropertiesDock from "./ToolPropertiesDock";
-import ToolProjectBrowserDock from "./ToolProjectBrowserDock";
+import ToolRightPanel from "./ToolRightPanel";
+import DraggablePanel from "./DraggablePanel";
 import ToolStatusBar from "./ToolStatusBar";
+import RoomScheduleDialog from "./RoomScheduleDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
 import ToolModeCursorHud from "./ToolModeCursorHud";
 import WerkzeugEntryPanel from "./WerkzeugEntryPanel";
@@ -52,6 +53,8 @@ import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { isTypingTarget } from "@/lib/viewerHotkeys";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { formatLength } from "@/lib/unitFormat";
+import { LuLayers } from "react-icons/lu";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import SceneBusyOverlay from "@/components/common/SceneBusyOverlay";
 import SceneBusyCursor from "@/components/common/SceneBusyCursor";
@@ -66,9 +69,10 @@ type LoadSource =
 function DragSnapHud() {
   const hint = useToolMarkupStore((s) => s.dragSnapHint);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const unitSystem = useLayoutDrawingStore((s) => s.unitSystem);
   const wallHint =
     wallDraw?.cursor && wallDraw.lengthMm != null
-      ? `${Math.round(wallDraw.lengthMm)} mm${
+      ? `${formatLength(wallDraw.lengthMm, unitSystem)}${
           wallDraw.angleDeg != null
             ? ` · ${wallDraw.angleDeg}°${wallDraw.angleSnapped ? " ✦" : ""}`
             : ""
@@ -117,6 +121,7 @@ export default function WerkzeugApp() {
   const [isDesktop, setIsDesktop] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
+  const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
   const dragDepthRef = useRef(0);
 
   const rooms = useAppStore((s) => s.rooms);
@@ -145,6 +150,7 @@ export default function WerkzeugApp() {
   const selectDoor = useLayoutDrawingStore((s) => s.selectDoor);
   const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
   const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
+  const projectId = useLayoutDrawingStore((s) => s.projectId);
 
   // Markup Tool Store
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
@@ -153,14 +159,25 @@ export default function WerkzeugApp() {
 
   useEffect(() => {
     document.title = activeModelLabel?.trim()
-      ? `Autodesk Revit Studio - ${activeModelLabel.trim()}`
-      : "Autodesk Revit Studio";
+      ? `V Studio — ${activeModelLabel.trim()}`
+      : "V Studio";
   }, [activeModelLabel]);
 
   useEffect(() => {
     document.body.classList.toggle("pdf-capturing", pdfCaptureActive);
     return () => document.body.classList.remove("pdf-capturing");
   }, [pdfCaptureActive]);
+
+  useEffect(() => {
+    if (!activeModelLabel) return;
+    // Auto initialize project & default Level 1 so drawing/placement works instantly
+    void useLayoutDrawingStore.getState().loadForProject(activeModelLabel, true).then(() => {
+      const store = useLayoutDrawingStore.getState();
+      if (store.levels.length === 0) {
+        void store.addLevel({ name: "Level 1", elevationMm: 0, heightMm: 3000 });
+      }
+    });
+  }, [activeModelLabel]);
 
   useEffect(() => {
     hydratePanelState();
@@ -403,7 +420,7 @@ export default function WerkzeugApp() {
 
   const sceneValue = useMemo(() => ({ shellGroup, rooms }), [shellGroup, rooms]);
 
-  const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup;
+  const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
   const showError = Boolean(loadError && !isLoadingModel);
   const progressLabel = loadMessage?.trim() || `${Math.round(loadProgress * 100)}%`;
 
@@ -424,13 +441,14 @@ export default function WerkzeugApp() {
           viewerRef={viewerRef}
           onFile={handleFile}
           isLoadingModel={isLoadingModel}
+          onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
         />
 
         {/* Contextual Ribbon Options Bar */}
         <ToolOptionsBar />
 
         {/* 3D CAD Viewport Canvas */}
-        <main className="fixed top-[116px] bottom-7 left-0 right-0 z-0 bg-[#0c0d12]">
+        <main className="fixed inset-0 z-0 bg-[#0c0d12]">
           <WerkzeugViewer3D
             ref={viewerRef}
             onPointerMove={handlePointerMove}
@@ -446,19 +464,27 @@ export default function WerkzeugApp() {
           active={pointerOverViewer}
         />
 
-        {/* Left Dock: Properties Palette */}
-        {isDesktop && <ToolPropertiesDock />}
-
-        {/* Right Dock: Project Browser & IFC Structure Tree */}
+        {/* Right Panel: Properties + Project Browser (unified) */}
         {isDesktop && (
-          <ToolProjectBrowserDock
+          <ToolRightPanel
             onFile={handleFile}
             isLoadingModel={isLoadingModel}
           />
         )}
 
+        {/* Room & Area Take-off Schedule Modal */}
+        <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
+
         {/* Bottom CAD Status Bar */}
-        <ToolStatusBar pointer={pointer} />
+        <ToolStatusBar
+          pointer={pointer}
+          onAttachIfc={handleFile}
+          onAttachDwgPdf={(file) => {
+            // DWG/PDF underlay attachment — full per-floor alignment wired in Section 11
+            // For now, pass to the existing handleFile flow for IFC, or handle DWG separately
+            console.log("DWG/PDF attached:", file.name);
+          }}
+        />
 
         {/* Drag Snap & Hover Tooltip HUDs */}
         <DragSnapHud />
@@ -541,24 +567,36 @@ export default function WerkzeugApp() {
           </GlassPanel>
         </GsapOverlay>
 
-        {/* Mobile menu support */}
-        {!isDesktop && (
-          <MobileCornerMenu
-            open={rightPanelOpen}
-            onOpenChange={setRightPanelOpen}
-            title="Project Browser"
-            subtitle={activeModelLabel}
-            onLoadIfc={handleFile}
-            isLoadingModel={isLoadingModel}
-            landscapeMobile={isLandscape}
+        {/* Mobile/Tablet Floating Draggable Panel */}
+        {!isDesktop && rightPanelOpen && (
+          <DraggablePanel
+            className="w-80 bg-[var(--surface-overlay)] border border-[var(--panel-divider)] rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl"
+            defaultPosition={{ x: 20, y: 130 }}
           >
-            {() => (
-              <ToolProjectBrowserDock
-                onFile={handleFile}
-                isLoadingModel={isLoadingModel}
-              />
-            )}
-          </MobileCornerMenu>
+            <ToolRightPanel
+              onFile={handleFile}
+              isLoadingModel={isLoadingModel}
+            />
+          </DraggablePanel>
+        )}
+
+        {/* Floating panel toggle button on mobile/tablet */}
+        {!isDesktop && (
+          <button
+            type="button"
+            onClick={() => {
+               // Swap logic
+               if (!rightPanelOpen) {
+                 setRightPanelOpen(true);
+               } else {
+                 setRightPanelOpen(false);
+               }
+            }}
+            className="fixed right-4 bottom-20 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-lg hover:bg-amber-600 transition-colors"
+            title="Toggle Panel"
+          >
+            <LuLayers className="h-6 w-6" />
+          </button>
         )}
       </div>
     </WerkzeugModelSceneContext.Provider>

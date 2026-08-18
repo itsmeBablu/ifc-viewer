@@ -8,6 +8,7 @@ import {
   joinedWallCenterlines,
   pointOnWallMm,
   wallAngleRad,
+  wallAngleAtPositionRad,
   type LayoutDoor,
   type LayoutLevel,
   type LayoutSlab,
@@ -18,9 +19,11 @@ import {
 import {
   underlayHeightMm,
   underlayWidthMm,
+  resolveUnderlayCalibration,
   type ReferenceUnderlay,
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 
 const WALL_COLOR = 0xd6d3d1;
 const WALL_SEL = 0xf59e0b;
@@ -193,9 +196,15 @@ export default class LayoutSceneLayer {
       }
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.setHex(wall.id === opts.selectedWallId ? WALL_SEL : WALL_COLOR);
-      mat.emissive.setHex(wall.id === opts.selectedWallId ? 0x92400e : 0x000000);
-      mat.emissiveIntensity = wall.id === opts.selectedWallId ? 0.25 : 0;
+      if (wall.id === opts.selectedWallId) {
+        mat.color.setHex(WALL_SEL);
+        mat.emissive.setHex(0x92400e);
+        mat.emissiveIntensity = 0.25;
+      } else {
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+        this.applyMaterialAndColor(mat, wall.color, wall.material);
+      }
     }
 
     const doorKeep = new Set(doors.map((d) => d.id));
@@ -221,7 +230,7 @@ export default class LayoutSceneLayer {
         this.doorMeshes.set(door.id, g);
         this.group.add(g);
       }
-      this.stripOpeningLabels(g);
+      // this.stripOpeningLabels(g);
       this.syncDoorPlanSymbol(g, wall, door, elev, planMode);
       g.visible = visible;
       this.tintOpening(g, door.id === opts.selectedDoorId);
@@ -250,7 +259,7 @@ export default class LayoutSceneLayer {
         this.windowMeshes.set(win.id, g);
         this.group.add(g);
       }
-      this.stripOpeningLabels(g);
+      // this.stripOpeningLabels(g);
       this.syncWindowPlanSymbol(g, wall, win, elev, planMode);
       g.visible = visible;
       this.tintOpening(g, win.id === opts.selectedWindowId);
@@ -283,11 +292,20 @@ export default class LayoutSceneLayer {
       mesh.visible = visible;
       const selected = slab.id === opts.selectedSlabId;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      const base = slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR;
-      const sel = slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL;
-      mat.color.setHex(selected ? sel : base);
-      mat.emissive.setHex(selected ? 0x92400e : 0x000000);
-      mat.emissiveIntensity = selected ? 0.2 : 0;
+      if (selected) {
+        const sel = slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL;
+        mat.color.setHex(sel);
+        mat.emissive.setHex(0x92400e);
+        mat.emissiveIntensity = 0.2;
+      } else {
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+        const defaultColor = slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR;
+        this.applyMaterialAndColor(mat, slab.color, slab.material);
+        if (!slab.color && !slab.material) {
+          mat.color.setHex(defaultColor);
+        }
+      }
     }
 
     this.syncEndpointHandles(
@@ -379,15 +397,16 @@ export default class LayoutSceneLayer {
           this.loadUnderlayTexture(u.id, u.imageDataUrl, mat);
         }
       }
-      const w = fromMm(underlayWidthMm(u));
-      const h = fromMm(underlayHeightMm(u));
+      const cal = resolveUnderlayCalibration(u, u.levelId);
+      const w = fromMm(underlayWidthMm(u, u.levelId));
+      const h = fromMm(underlayHeightMm(u, u.levelId));
       mesh.scale.set(w, h, 1);
       mesh.position.set(
-        fromMm(u.offsetXmm),
+        fromMm(cal.offsetXmm),
         fromMm(elev) - 0.004,
-        fromMm(u.offsetYmm),
+        fromMm(cal.offsetYmm),
       );
-      mesh.rotation.set(-Math.PI / 2, 0, (-u.rotationDeg * Math.PI) / 180);
+      mesh.rotation.set(-Math.PI / 2, 0, (-cal.rotationDeg * Math.PI) / 180);
       mesh.visible = show;
       mesh.userData.layoutUnderlayId = u.id;
       mesh.userData.locked = u.locked;
@@ -867,15 +886,99 @@ export default class LayoutSceneLayer {
     this.group.clear();
   }
 
+  private buildSlabGeometry(slab: LayoutSlab): THREE.BufferGeometry {
+    const boundary = slab.boundary && slab.boundary.length >= 3 ? slab.boundary : [
+      { xMm: slab.minXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.maxYmm },
+      { xMm: slab.minXmm, yMm: slab.maxYmm },
+    ];
+
+    const shape = new THREE.Shape();
+    shape.moveTo(fromMm(boundary[0].xMm), fromMm(boundary[0].yMm));
+    for (let i = 1; i < boundary.length; i++) {
+      shape.lineTo(fromMm(boundary[i].xMm), fromMm(boundary[i].yMm));
+    }
+    shape.closePath();
+
+    if (slab.holes) {
+      for (const hole of slab.holes) {
+        if (hole.length < 3) continue;
+        const holePath = new THREE.Path();
+        holePath.moveTo(fromMm(hole[0].xMm), fromMm(hole[0].yMm));
+        for (let i = 1; i < hole.length; i++) {
+          holePath.lineTo(fromMm(hole[i].xMm), fromMm(hole[i].yMm));
+        }
+        holePath.closePath();
+        shape.holes.push(holePath);
+      }
+    }
+
+    const thickness = fromMm(Math.max(50, slab.thicknessMm));
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: false,
+    });
+
+    // Section 8: Roof per-edge slope controls
+    if (slab.kind === "roof") {
+      const pos = geo.attributes.position;
+      const distPointToSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len2 = dx * dx + dy * dy;
+        if (len2 < 1e-9) return Math.hypot(px - ax, py - ay);
+        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+      };
+
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vy = pos.getY(i);
+        const vz = pos.getZ(i);
+
+        // Only warp vertices on the top face of extrusion (vz ~ thickness)
+        if (vz > thickness * 0.9) {
+          let minDist = Infinity;
+          let pitchDeg = 30; // default pitch
+          let isSloped = false;
+
+          for (let j = 0; j < boundary.length; j++) {
+            const p1 = boundary[j];
+            const p2 = boundary[(j + 1) % boundary.length];
+            const dVal = distPointToSegment(vx, vy, fromMm(p1.xMm), fromMm(p1.yMm), fromMm(p2.xMm), fromMm(p2.yMm));
+            if (dVal < minDist) {
+              minDist = dVal;
+              const slopeInfo = slab.edgeSlopes?.find((s) => s.edgeIdx === j);
+              isSloped = slopeInfo ? slopeInfo.isSloped : true; // default sloped
+              pitchDeg = slopeInfo ? slopeInfo.pitchDeg : 30;
+            }
+          }
+
+          if (isSloped) {
+            const pitchRad = (pitchDeg * Math.PI) / 180;
+            pos.setZ(i, vz + minDist * Math.tan(pitchRad));
+          }
+        }
+      }
+      geo.computeVertexNormals();
+    }
+
+    return geo;
+  }
+
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const geo = this.buildSlabGeometry(slab);
     const mat = new THREE.MeshStandardMaterial({
-      color: slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
       roughness: 0.9,
       metalness: 0.02,
       transparent: true,
       opacity: 0.85,
     });
+    this.applyMaterialAndColor(mat, slab.color, slab.material);
+    if (!slab.color && !slab.material) {
+      mat.color.setHex(slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR);
+    }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutSlabId = slab.id;
     mesh.userData.kind = "layout-slab";
@@ -888,21 +991,98 @@ export default class LayoutSceneLayer {
     slab: LayoutSlab,
     elevMm: number,
   ) {
-    const w = fromMm(Math.max(50, slab.maxXmm - slab.minXmm));
-    const d = fromMm(Math.max(50, slab.maxYmm - slab.minYmm));
-    const t = fromMm(Math.max(50, slab.thicknessMm));
     mesh.geometry.dispose();
-    mesh.geometry = new THREE.BoxGeometry(w, t, d);
+    mesh.geometry = this.buildSlabGeometry(slab);
+
+    const thickness = fromMm(Math.max(50, slab.thicknessMm));
+    
+    // Position mesh and rotate extrusion: Extrusion local Z maps to global Y pointing up
+    mesh.position.set(0, 0, 0);
+    mesh.rotation.set(-Math.PI / 2, 0, 0);
+
     const baseY = fromMm(elevMm + slab.elevationOffsetMm);
-    // Floor grows up from level; roof hangs down from offset elevation.
-    const y =
-      slab.kind === "roof" ? baseY - t / 2 : baseY + t / 2;
-    mesh.position.set(
-      fromMm((slab.minXmm + slab.maxXmm) / 2),
-      y,
-      fromMm((slab.minYmm + slab.maxYmm) / 2),
-    );
+    if (slab.kind === "roof") {
+      mesh.position.y = baseY;
+    } else {
+      mesh.position.y = baseY - thickness;
+    }
     mesh.userData.layoutSlabId = slab.id;
+  }
+
+  private applyMaterialAndColor(mat: THREE.MeshStandardMaterial, colorStr?: string, matType?: string) {
+    // Reset defaults first
+    mat.roughness = 0.85;
+    mat.metalness = 0.05;
+    mat.transparent = false;
+    mat.opacity = 1.0;
+    
+    let baseColor = 0xd6d3d1; // default wall color
+    if (matType === "concrete") {
+      baseColor = 0x878683;
+      mat.roughness = 0.8;
+    } else if (matType === "brick") {
+      baseColor = 0xa0522d;
+      mat.roughness = 0.9;
+    } else if (matType === "wood") {
+      baseColor = 0x8b5a2b;
+      mat.roughness = 0.7;
+    } else if (matType === "glass") {
+      baseColor = 0xe0f2fe;
+      mat.roughness = 0.1;
+      mat.metalness = 0.1;
+      mat.transparent = true;
+      mat.opacity = 0.3;
+    } else if (matType === "metal") {
+      baseColor = 0x94a3b8;
+      mat.roughness = 0.2;
+      mat.metalness = 0.9;
+    } else if (matType === "plaster") {
+      baseColor = 0xf8fafc;
+      mat.roughness = 0.95;
+    }
+    
+    if (colorStr) {
+      mat.color.setStyle(colorStr);
+    } else {
+      mat.color.setHex(baseColor);
+    }
+  }
+
+  private buildWallGeometry(wall: LayoutWall, cl: WallCenterlineMm): THREE.BufferGeometry {
+    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcStartAngleDeg != null && wall.arcEndAngleDeg != null) {
+      const r = fromMm(wall.arcRadiusMm);
+      const thick = fromMm(wall.thicknessMm);
+      const height = fromMm(wall.heightMm);
+      
+      const startRad = (wall.arcStartAngleDeg * Math.PI) / 180;
+      const endRad = (wall.arcEndAngleDeg * Math.PI) / 180;
+      
+      const rInner = r - thick / 2;
+      const rOuter = r + thick / 2;
+      
+      const shape = new THREE.Shape();
+      const x0 = rInner * Math.cos(startRad);
+      const y0 = rInner * Math.sin(startRad);
+      shape.moveTo(x0, y0);
+      shape.absarc(0, 0, rInner, startRad, endRad, false);
+      shape.lineTo(rOuter * Math.cos(endRad), rOuter * Math.sin(endRad));
+      shape.absarc(0, 0, rOuter, endRad, startRad, true);
+      shape.lineTo(x0, y0);
+      
+      const extrudeSettings = {
+        depth: height,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 32,
+      };
+      
+      return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    } else {
+      const dx = cl.endXmm - cl.startXmm;
+      const dy = cl.endYmm - cl.startYmm;
+      const len = Math.max(50, Math.hypot(dx, dy));
+      return new THREE.BoxGeometry(fromMm(len), fromMm(wall.heightMm), fromMm(wall.thicknessMm));
+    }
   }
 
   private createWallMesh(
@@ -910,18 +1090,12 @@ export default class LayoutSceneLayer {
     elevMm: number,
     cl: WallCenterlineMm,
   ): THREE.Mesh {
-    const len = Math.max(
-      fromMm(50),
-      fromMm(Math.hypot(cl.endXmm - cl.startXmm, cl.endYmm - cl.startYmm)),
-    );
-    const thick = fromMm(wall.thicknessMm);
-    const height = fromMm(wall.heightMm);
-    const geo = new THREE.BoxGeometry(len, height, thick);
+    const geo = this.buildWallGeometry(wall, cl);
     const mat = new THREE.MeshStandardMaterial({
-      color: WALL_COLOR,
       roughness: 0.85,
       metalness: 0.05,
     });
+    this.applyMaterialAndColor(mat, wall.color, wall.material);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutWallId = wall.id;
     mesh.userData.kind = "layout-wall";
@@ -935,47 +1109,30 @@ export default class LayoutSceneLayer {
     elevMm: number,
     cl: WallCenterlineMm,
   ) {
-    const len = Math.max(
-      fromMm(50),
-      fromMm(Math.hypot(cl.endXmm - cl.startXmm, cl.endYmm - cl.startYmm)),
-    );
-    const thick = fromMm(wall.thicknessMm);
-    const height = fromMm(wall.heightMm);
     mesh.geometry.dispose();
-    mesh.geometry = new THREE.BoxGeometry(len, height, thick);
-    const midX = fromMm((cl.startXmm + cl.endXmm) / 2);
-    const midZ = fromMm((cl.startYmm + cl.endYmm) / 2);
-    const y = fromMm(elevMm) + height / 2;
-    mesh.position.set(midX, y, midZ);
-    mesh.rotation.set(
-      0,
-      -Math.atan2(cl.endYmm - cl.startYmm, cl.endXmm - cl.startXmm),
-      0,
-    );
+    mesh.geometry = this.buildWallGeometry(wall, cl);
+    
+    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null) {
+      mesh.position.set(fromMm(wall.arcCenterXmm), fromMm(elevMm), fromMm(wall.arcCenterYmm));
+      mesh.rotation.set(-Math.PI / 2, 0, 0);
+    } else {
+      const height = fromMm(wall.heightMm);
+      const midX = fromMm((cl.startXmm + cl.endXmm) / 2);
+      const midZ = fromMm((cl.startYmm + cl.endYmm) / 2);
+      const y = fromMm(elevMm) + height / 2;
+      mesh.position.set(midX, y, midZ);
+      mesh.rotation.set(
+        0,
+        -Math.atan2(cl.endYmm - cl.startYmm, cl.endXmm - cl.startXmm),
+        0,
+      );
+    }
     mesh.userData.layoutWallId = wall.id;
   }
 
   private createOpeningGroup(_label: string, color: number): THREE.Group {
     const g = new THREE.Group();
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.6,
-      metalness: 0.1,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = "opening-box";
-    g.add(mesh);
     return g;
-  }
-
-  /** Drop legacy floating Door/Window CSS2D tags if still present. */
-  private stripOpeningLabels(g: THREE.Group) {
-    const stale = g.children.filter((c) => c.userData.isLayoutLabel);
-    for (const c of stale) {
-      g.remove(c);
-      if (c instanceof CSS2DObject) c.element.remove();
-    }
   }
 
   private placeOpening(
@@ -987,36 +1144,166 @@ export default class LayoutSceneLayer {
     elevMm: number,
     sillMm: number,
   ) {
-    const mesh = g.children.find(
-      (c) => c instanceof THREE.Mesh && c.name === "opening-box",
-    ) as THREE.Mesh | undefined;
-    if (!mesh) return;
+    // Determine category and details
+    const state = useLayoutDrawingStore.getState();
+    const door = g.userData.layoutDoorId ? state.doors.find((d) => d.id === g.userData.layoutDoorId) : null;
+    const win = g.userData.layoutWindowId ? state.windows.find((w) => w.id === g.userData.layoutWindowId) : null;
+    
+    const category = door ? "door" : "window";
+    const style = door?.style ?? "wood";
+    const headShape = door?.headShape ?? win?.headShape ?? "flat";
+    const colorStr = door?.color ?? win?.color;
+
+    // Clear old 3D representations
+    const oldBox = g.children.find((c) => c.name === "opening-box");
+    if (oldBox) {
+      g.remove(oldBox);
+      this.disposeObject(oldBox);
+    }
+
     const w = fromMm(widthMm);
     const h = fromMm(heightMm);
-    // Slightly deeper than the wall so the placeholder pokes through both
-    // faces (avoids z-fighting with coplanar wall surfaces).
-    const depthMm = Math.max(wall.thicknessMm + 40, wall.thicknessMm * 1.15);
-    const d = fromMm(depthMm);
-    mesh.geometry.dispose();
-    mesh.geometry = new THREE.BoxGeometry(w, h, d);
+    const d = fromMm(wall.thicknessMm);
+
+    // Build outline shapes
+    const buildOutlineShape = (sw: number, sh: number, shapeType: string): THREE.Shape => {
+      const shape = new THREE.Shape();
+      const halfW = sw / 2;
+      
+      if (shapeType === "arched") {
+        const rectH = Math.max(0.01, sh - halfW);
+        shape.moveTo(-halfW, 0);
+        shape.lineTo(-halfW, rectH);
+        shape.absarc(0, rectH, halfW, Math.PI, 0, false);
+        shape.lineTo(halfW, 0);
+      } else if (shapeType === "triangular") {
+        const rectH = Math.max(0.01, sh - halfW / 2);
+        shape.moveTo(-halfW, 0);
+        shape.lineTo(-halfW, rectH);
+        shape.lineTo(0, sh);
+        shape.lineTo(halfW, rectH);
+        shape.lineTo(halfW, 0);
+      } else {
+        shape.moveTo(-halfW, 0);
+        shape.lineTo(-halfW, sh);
+        shape.lineTo(halfW, sh);
+        shape.lineTo(halfW, 0);
+      }
+      shape.closePath();
+      return shape;
+    };
+
+    const boxGroup = new THREE.Group();
+    boxGroup.name = "opening-box";
+
+    const frameThick = 0.05; // 50mm
+    const outer = buildOutlineShape(w, h, headShape);
+    const inner = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+    outer.holes.push(inner);
+
+    const { frameMat, panelMat } = this.getOpeningMaterials(category, style, colorStr);
+
+    // 1. Frame Mesh
+    const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: d, bevelEnabled: false });
+    frameGeo.translate(0, 0, -d / 2);
+    const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+    frameMesh.name = "opening-frame";
+    boxGroup.add(frameMesh);
+
+    // 2. Panel Mesh (door leaf or window glass pane)
+    const panelThick = category === "door" ? 0.04 : 0.012; // 40mm leaf, 12mm glass
+    if (style === "double" && category === "door") {
+      const leafW = (w - frameThick * 2) / 2;
+      const leafShape = buildOutlineShape(leafW, Math.max(0.01, h - frameThick), headShape);
+      
+      const leftGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
+      leftGeo.translate(0, 0, -panelThick / 2);
+      const leftMesh = new THREE.Mesh(leftGeo, panelMat);
+      leftMesh.position.set(-leafW / 2, 0, 0);
+      leftMesh.name = "opening-panel-left";
+      
+      const rightGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
+      rightGeo.translate(0, 0, -panelThick / 2);
+      const rightMesh = new THREE.Mesh(rightGeo, panelMat);
+      rightMesh.position.set(leafW / 2, 0, 0);
+      rightMesh.name = "opening-panel-right";
+
+      boxGroup.add(leftMesh, rightMesh);
+    } else {
+      const panelShape = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+      const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
+      panelGeo.translate(0, 0, -panelThick / 2);
+      const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+      panelMesh.name = "opening-panel";
+      boxGroup.add(panelMesh);
+    }
+
+    g.add(boxGroup);
+
+    // Position group in world coords
     const pt = pointOnWallMm(wall, positionMm);
-    const y = fromMm(elevMm + sillMm) + h / 2;
-    // Pose the box mesh in world space — group stays at origin so the CAD
-    // plan symbol (sibling) can coexist without fighting transforms.
+    const y = fromMm(elevMm + sillMm);
     g.position.set(0, 0, 0);
     g.rotation.set(0, 0, 0);
-    mesh.position.set(fromMm(pt.xMm), y, fromMm(pt.yMm));
-    mesh.rotation.set(0, -wallAngleRad(wall), 0);
+    boxGroup.position.set(fromMm(pt.xMm), y, fromMm(pt.yMm));
+    boxGroup.rotation.set(0, -wallAngleAtPositionRad(wall, positionMm), 0);
+  }
+
+  private getOpeningMaterials(category: "door" | "window", style?: string, colorStr?: string) {
+    const frameMat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.1 });
+    const panelMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
+    
+    if (colorStr) {
+      frameMat.color.setStyle(colorStr);
+    } else {
+      frameMat.color.setHex(category === "door" ? 0x78716c : 0x0284c7);
+    }
+    
+    if (style === "wood") {
+      panelMat.color.setHex(0x8b5a2b);
+      panelMat.roughness = 0.8;
+    } else if (style === "metal") {
+      panelMat.color.setHex(0xd1d5db);
+      panelMat.roughness = 0.3;
+      panelMat.metalness = 0.9;
+    } else if (style === "glass" || category === "window") {
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xbae6fd,
+        transparent: true,
+        opacity: 0.4,
+        roughness: 0.1,
+        metalness: 0.1,
+        transmission: 0.9,
+        thickness: 0.02,
+      });
+      return { frameMat, panelMat: glassMat };
+    } else {
+      panelMat.color.copy(frameMat.color);
+      panelMat.roughness = 0.7;
+    }
+    
+    return { frameMat, panelMat };
   }
 
   private tintOpening(g: THREE.Group, selected: boolean) {
-    const mesh = g.children.find(
-      (c) => c instanceof THREE.Mesh && c.name === "opening-box",
-    ) as THREE.Mesh | undefined;
-    if (!mesh) return;
-    const mat = mesh.material as THREE.MeshStandardMaterial;
-    mat.emissive.setHex(selected ? 0xf59e0b : 0x000000);
-    mat.emissiveIntensity = selected ? 0.35 : 0;
+    const box = g.children.find((c) => c.name === "opening-box");
+    if (!box) return;
+    box.traverse((c) => {
+      if (c instanceof THREE.Mesh) {
+        const mat = c.material as THREE.MeshStandardMaterial;
+        if (mat && mat.emissive) {
+          mat.emissive.setHex(selected ? 0xf59e0b : 0x000000);
+          mat.emissiveIntensity = selected ? 0.35 : 0;
+        }
+      }
+    });
+  }
+
+  private applyOpeningDisplay(g: THREE.Group, planMode: boolean) {
+    const box = g.children.find((c) => c.name === "opening-box");
+    const plan = g.children.find((c) => c.name === "plan-symbol");
+    if (box) box.visible = !planMode;
+    if (plan) plan.visible = planMode;
   }
 
   /**

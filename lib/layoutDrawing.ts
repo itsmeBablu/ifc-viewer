@@ -34,6 +34,17 @@ export type LayoutWall = {
   thicknessMm: number;
   heightMm: number;
   createdAt: number;
+  // -- Section 5: Curved wall (arc) --------------------------------------
+  /** If true, wall follows an arc defined by arcCenter + arcRadius. */
+  curved?: boolean;
+  arcCenterXmm?: number;
+  arcCenterYmm?: number;
+  arcRadiusMm?: number;
+  arcStartAngleDeg?: number;
+  arcEndAngleDeg?: number;
+  // -- Section 9: Material & color ---------------------------------------
+  color?: string;
+  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };
 
 export type LayoutDoor = {
@@ -49,6 +60,10 @@ export type LayoutDoor = {
   /** Which side of the wall the leaf swings into (+1 / −1). */
   swing: 1 | -1;
   createdAt: number;
+  // -- Section 6: Door style, head shape, color --------------------------
+  style?: "wood" | "metal" | "glass" | "double";
+  headShape?: "flat" | "arched" | "triangular";
+  color?: string;
 };
 
 export type LayoutWindow = {
@@ -61,15 +76,19 @@ export type LayoutWindow = {
   /** Sill height above level floor, mm. */
   sillHeightMm: number;
   createdAt: number;
+  // -- Section 6: Head shape + color -------------------------------------
+  headShape?: "flat" | "arched" | "triangular";
+  color?: string;
 };
 
-/** Horizontal slab — floor plate or roof plate (axis-aligned rectangle in plan). */
+/** Horizontal slab — floor plate or roof plate. */
 export type LayoutSlab = {
   id: string;
   projectId: string;
   levelId: string;
   kind: "floor" | "roof";
-  /** Plan rectangle (mm). Scene: X → X, Y → Z. */
+  // -- Legacy rectangle fields (kept for backwards compatibility) ---------
+  /** Plan rectangle AABB (mm). Computed from boundary if polygon mode. */
   minXmm: number;
   minYmm: number;
   maxXmm: number;
@@ -82,6 +101,16 @@ export type LayoutSlab = {
    */
   elevationOffsetMm: number;
   createdAt: number;
+  // -- Section 7: Sketch-based polygon boundary + holes ------------------
+  /** Outer boundary polygon (plan mm). When present, supersedes the AABB. */
+  boundary?: { xMm: number; yMm: number }[];
+  /** Inner hole polygons (plan mm). */
+  holes?: { xMm: number; yMm: number }[][];
+  // -- Section 8: Roof per-edge slope control ----------------------------
+  edgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[];
+  // -- Section 9: Material & color ---------------------------------------
+  color?: string;
+  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };
 
 export const DEFAULT_SLAB_THICKNESS_MM = 200;
@@ -121,12 +150,34 @@ export function newLayoutId(prefix: string): string {
 }
 
 export function wallLengthMm(w: LayoutWall): number {
+  if (w.curved && w.arcRadiusMm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const deltaAngle = Math.abs(w.arcEndAngleDeg - w.arcStartAngleDeg);
+    return w.arcRadiusMm * (deltaAngle * Math.PI) / 180;
+  }
   const dx = w.endXmm - w.startXmm;
   const dy = w.endYmm - w.startYmm;
   return Math.hypot(dx, dy);
 }
 
 export function wallAngleRad(w: LayoutWall): number {
+  if (w.curved && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    // Tangent angle at the midpoint of the arc
+    const midAngleDeg = (w.arcStartAngleDeg + w.arcEndAngleDeg) / 2;
+    const midAngleRad = (midAngleDeg * Math.PI) / 180;
+    return midAngleRad + Math.PI / 2; // Tangent direction
+  }
+  return Math.atan2(w.endYmm - w.startYmm, w.endXmm - w.startXmm);
+}
+
+export function wallAngleAtPositionRad(w: LayoutWall, positionMm: number): number {
+  if (w.curved && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const len = wallLengthMm(w);
+    const t = len > 0 ? Math.max(0, Math.min(1, positionMm / len)) : 0;
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const angle = startRad + (endRad - startRad) * t;
+    return angle + Math.PI / 2;
+  }
   return Math.atan2(w.endYmm - w.startYmm, w.endXmm - w.startXmm);
 }
 
@@ -467,9 +518,18 @@ export function pointOnWallMm(
 ): { xMm: number; yMm: number } {
   const len = wallLengthMm(w);
   const t = len > 0 ? Math.max(0, Math.min(1, offsetMm / len)) : 0;
+  if (w.curved && w.arcRadiusMm != null && w.arcCenterXmm != null && w.arcCenterYmm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const angle = startRad + (endRad - startRad) * t;
+    return {
+      xMm: Math.round(w.arcCenterXmm + w.arcRadiusMm * Math.cos(angle)),
+      yMm: Math.round(w.arcCenterYmm + w.arcRadiusMm * Math.sin(angle)),
+    };
+  }
   return {
-    xMm: w.startXmm + (w.endXmm - w.startXmm) * t,
-    yMm: w.startYmm + (w.endYmm - w.startYmm) * t,
+    xMm: Math.round(w.startXmm + (w.endXmm - w.startXmm) * t),
+    yMm: Math.round(w.startYmm + (w.endYmm - w.startYmm) * t),
   };
 }
 
@@ -479,6 +539,20 @@ export function nearestOffsetOnWallMm(
   xMm: number,
   yMm: number,
 ): number {
+  if (w.curved && w.arcRadiusMm != null && w.arcCenterXmm != null && w.arcCenterYmm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const dx = xMm - w.arcCenterXmm;
+    const dy = yMm - w.arcCenterYmm;
+    const angleRad = Math.atan2(dy, dx);
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const diff = ((angleRad - startRad + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const totalDiff = endRad - startRad;
+    let t = 0;
+    if (Math.abs(totalDiff) > 1e-5) {
+      t = Math.max(0, Math.min(1, diff / totalDiff));
+    }
+    return t * wallLengthMm(w);
+  }
   const dx = w.endXmm - w.startXmm;
   const dy = w.endYmm - w.startYmm;
   const len2 = dx * dx + dy * dy;
@@ -610,4 +684,118 @@ export function isEmptyProjectKey(modelKey: string | null): boolean {
 export function emptyProjectKey(name: string): string {
   const safe = name.trim().replace(/[^\w.-]+/g, "_") || "project";
   return `${EMPTY_PROJECT_PREFIX}${safe}`;
+}
+
+export type LayoutRoom = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  name: string;
+  number: string;
+  areaSqM: number;
+  boundaryPoints: { xMm: number; yMm: number }[];
+  tagPosMm: { xMm: number; yMm: number };
+  createdAt: number;
+};
+
+/** Compute polygon area in m² from mm vertices using Shoelace formula */
+export function computePolygonAreaSqM(points: { xMm: number; yMm: number }[]): number {
+  if (points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p1 = points[i];
+    const p2 = points[(i + 1) % points.length];
+    sum += (p1.xMm * p2.yMm - p2.xMm * p1.yMm);
+  }
+  return Math.abs(sum) * 0.5 * 1e-6;
+}
+
+/** Ray-wall intersection helper */
+function raySegmentIntersect(
+  ox: number,
+  oy: number,
+  dx: number,
+  dy: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): { dist: number; x: number; y: number } | null {
+  const v1x = ox - x1;
+  const v1y = oy - y1;
+  const v2x = x2 - x1;
+  const v2y = y2 - y1;
+  const v3x = -dy;
+  const v3y = dx;
+
+  const dot = v2x * v3x + v2y * v3y;
+  if (Math.abs(dot) < 1e-6) return null;
+
+  const t1 = (v2x * v1y - v2y * v1x) / dot;
+  const t2 = (v1x * v3x + v1y * v3y) / dot;
+
+  if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
+    return { dist: t1, x: ox + dx * t1, y: oy + dy * t1 };
+  }
+  return null;
+}
+
+/** Detect enclosed room polygon around seed point (px, py) using radial ray-casting */
+export function detectEnclosedRoomBoundary(
+  px: number,
+  py: number,
+  walls: LayoutWall[]
+): { boundary: { xMm: number; yMm: number }[]; areaSqM: number } | null {
+  if (walls.length < 3) {
+    // Default 4x4m room boundary if not enclosed by walls
+    const half = 2000;
+    const boundary = [
+      { xMm: px - half, yMm: py - half },
+      { xMm: px + half, yMm: py - half },
+      { xMm: px + half, yMm: py + half },
+      { xMm: px - half, yMm: py + half },
+    ];
+    return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
+  }
+
+  const numRays = 24;
+  const hits: { xMm: number; yMm: number }[] = [];
+
+  for (let i = 0; i < numRays; i++) {
+    const angle = (i / numRays) * Math.PI * 2;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+
+    let closestDist = Infinity;
+    let closestHit: { x: number; y: number } | null = null;
+
+    for (const w of walls) {
+      const hit = raySegmentIntersect(px, py, dx, dy, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
+      if (hit && hit.dist < closestDist && hit.dist > 10) {
+        closestDist = hit.dist;
+        closestHit = { x: hit.x, y: hit.y };
+      }
+    }
+
+    if (closestHit && closestDist < 30000) {
+      hits.push({ xMm: closestHit.x, yMm: closestHit.y });
+    }
+  }
+
+  if (hits.length >= 3) {
+    const area = computePolygonAreaSqM(hits);
+    if (area > 1 && area < 10000) {
+      return { boundary: hits, areaSqM: area };
+    }
+  }
+
+  // Fallback room boundary 4x4m
+  const half = 2000;
+  const boundary = [
+    { xMm: px - half, yMm: py - half },
+    { xMm: px + half, yMm: py - half },
+    { xMm: px + half, yMm: py + half },
+    { xMm: px - half, yMm: py + half },
+  ];
+  return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
 }

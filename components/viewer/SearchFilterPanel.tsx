@@ -89,7 +89,9 @@ export default function SearchFilterPanel({
   }, [rooms]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMinHeat(heatBounds.min);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMaxHeat(heatBounds.max);
   }, [heatBounds.min, heatBounds.max]);
 
@@ -100,6 +102,7 @@ export default function SearchFilterPanel({
   }, [open, mode]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!open) setQuery("");
   }, [open]);
 

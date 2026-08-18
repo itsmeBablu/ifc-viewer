@@ -185,6 +185,7 @@ export function flyToProgress(
 ): gsap.core.Tween {
   killFlyTween();
   let settled = false;
+  // eslint-disable-next-line prefer-const
   let tween: gsap.core.Tween;
   const done = () => {
     if (settled) return;

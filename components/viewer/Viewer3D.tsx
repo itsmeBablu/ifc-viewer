@@ -539,7 +539,7 @@ function applyRenderMode(
 
         if (isGlass) {
           // Keep a visible glazing fill (never near-invisible).
-          let glassColor = fill.clone();
+          const glassColor = fill.clone();
           const lum =
             0.2126 * glassColor.r +
             0.7152 * glassColor.g +
@@ -1714,7 +1714,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       );
     });
     // Keep camera pose when switching floors — user can Fit model manually.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [
     selectedFloor,
     colorMode,
@@ -1842,7 +1842,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (isPresentationView || floorFocusToken === 0) return;
     const id = requestAnimationFrame(() => fitToVisible(850));
     return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [floorFocusToken, isPresentationView]);
 
   useEffect(() => {
@@ -2149,7 +2149,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       explodeTweenRef.current?.kill();
       if (refreshTimer != null) window.clearTimeout(refreshTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [
     isPresentationView,
     presentationLayoutMode,
