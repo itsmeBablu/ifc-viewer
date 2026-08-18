@@ -861,9 +861,9 @@ export default function ToolRibbon({
         <a
           href="/"
           title="Back to Viewer"
-          className="flex items-center justify-center rounded-full w-8 h-8 hover:bg-[var(--glass-inset-bg)] transition-colors"
+          className="flex items-center justify-center rounded-md px-2 py-1 hover:bg-[var(--glass-inset-bg)] transition-colors"
         >
-          <Image src="/ibv_logo.svg" alt="IBV" width={24} height={24} className="w-5 h-auto object-contain" />
+          <Image src="/ibv_logo.svg" alt="IBV" width={100} height={24} className="h-6 w-auto object-contain" priority />
         </a>
 
         <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
