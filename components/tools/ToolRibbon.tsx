@@ -34,6 +34,7 @@ import {
   LuCrosshair,
   LuMinus,
   LuArrowRight,
+  LuCheck,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -523,35 +524,55 @@ export default function ToolRibbon({
 
   const annotateCluster = (
     <Cluster label="Annotate">
-      <RibbonBtn
-        large
-        active={armedTool === "note"}
-        onClick={() => {
-          setArmedLayoutTool(null);
-          setArmedTool(armedTool === "note" ? null : "note");
-        }}
-        title="Sticky Tag"
-      >
-        <IconMarkupNote className="h-5 w-5" />
-        <span className="text-[10px]">Tag</span>
-      </RibbonBtn>
-      <RibbonBtn
-        large
-        onClick={() => {
-          setArmedLayoutTool(null);
-          setArmedTool(armedTool === "cube" ? null : "cube");
-        }}
-        title="Measure (M)"
-      >
-        <LuRuler className="h-5 w-5 text-amber-500" />
-        <span className="text-[10px]">Measure</span>
-      </RibbonBtn>
-      {measurements.length > 0 && (
-        <RibbonBtn large danger onClick={clearMeasurements} title="Clear Measurements">
-          <LuTrash2 className="h-5 w-5" />
-          <span className="text-[10px]">Clear ({measurements.length})</span>
+      <div className="relative">
+        <RibbonBtn
+          large
+          active={armedTool === "note"}
+          onClick={() => setActiveDropdown(activeDropdown === "annotate" ? null : "annotate")}
+          title="Annotate"
+        >
+          <IconMarkupNote className="h-5 w-5 text-amber-500" />
+          <span className="text-[10px] flex items-center gap-1">Note <LuChevronDown className="h-3 w-3" /></span>
         </RibbonBtn>
-      )}
+        {activeDropdown === "annotate" && (
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+            <button 
+              type="button" 
+              className={`flex items-center gap-2 p-1.5 rounded-lg text-[var(--text-body)] ${armedTool === "note" ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-[var(--glass-inset-bg)]'}`}
+              onClick={() => {
+                setArmedLayoutTool(null);
+                setArmedTool(armedTool === "note" ? null : "note");
+                setActiveDropdown(null);
+              }}
+            >
+              <IconMarkupNote className="h-4 w-4" /> <span className="text-xs">Sticky Tag</span>
+            </button>
+            <button 
+              type="button" 
+              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
+              onClick={() => {
+                setArmedLayoutTool(null);
+                setArmedTool(armedTool === "cube" ? null : "cube");
+                setActiveDropdown(null);
+              }}
+            >
+              <LuRuler className="h-4 w-4 text-[var(--text-muted)]" /> <span className="text-xs">Measure</span>
+            </button>
+            {measurements.length > 0 && (
+              <button 
+                type="button" 
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-red-500/20 text-red-500 mt-1 border-t border-[var(--panel-divider)]/40 pt-2"
+                onClick={() => {
+                  clearMeasurements();
+                  setActiveDropdown(null);
+                }}
+              >
+                <LuTrash2 className="h-4 w-4" /> <span className="text-xs">Clear ({measurements.length})</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </Cluster>
   );
 
@@ -590,31 +611,45 @@ export default function ToolRibbon({
 
   const snapsCluster = (
     <Cluster label="Snaps" border={false}>
-      {/* Full CAD snap suite — all combinable */}
-      {[
-        { key: "endpoint", label: "Endpt", active: snapEndpoint, set: setSnapEndpoint, title: "Endpoint snap" },
-        { key: "midpoint", label: "Mid", active: snapMidpoint, set: setSnapMidpoint, title: "Midpoint snap" },
-        { key: "center", label: "Ctr", active: snapCenter, set: setSnapCenter, title: "Center point snap" },
-        { key: "intersection", label: "Int", active: snapIntersection, set: setSnapIntersection, title: "Intersection snap" },
-        { key: "perp", label: "Perp", active: snapPerpendicular, set: setSnapPerpendicular, title: "Perpendicular snap" },
-        { key: "ext", label: "Ext", active: snapExtension, set: setSnapExtension, title: "Extension snap" },
-        { key: "face", label: "Face", active: snapToFaces, set: setSnapToFaces, title: "Face snap (3D)" },
-        { key: "grid", label: "Grid", active: gridSnap, set: setGridSnap, title: "Grid snap (100mm)" },
-      ].map((s) => (
-        <button
-          key={s.key}
-          type="button"
-          onClick={() => s.set(!s.active)}
-          title={s.title}
-          className={`flex items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold border transition-all min-w-[28px] ${
-            s.active
-              ? "border-amber-400 bg-amber-500/25 text-amber-600 dark:text-amber-400"
-              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-          }`}
+      <div className="relative">
+        <RibbonBtn
+          large
+          onClick={() => setActiveDropdown(activeDropdown === "snaps" ? null : "snaps")}
+          title="Snaps"
         >
-          {s.label}
-        </button>
-      ))}
+          <LuMagnet className="h-5 w-5 text-amber-500" />
+          <span className="text-[10px] flex items-center gap-1">Snaps <LuChevronDown className="h-3 w-3" /></span>
+        </RibbonBtn>
+        {activeDropdown === "snaps" && (
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-40 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+            {[
+              { key: "endpoint", label: "Endpoint", active: snapEndpoint, set: setSnapEndpoint },
+              { key: "midpoint", label: "Midpoint", active: snapMidpoint, set: setSnapMidpoint },
+              { key: "center", label: "Center", active: snapCenter, set: setSnapCenter },
+              { key: "intersection", label: "Intersection", active: snapIntersection, set: setSnapIntersection },
+              { key: "perp", label: "Perpendicular", active: snapPerpendicular, set: setSnapPerpendicular },
+              { key: "ext", label: "Extension", active: snapExtension, set: setSnapExtension },
+              { key: "face", label: "Face (3D)", active: snapToFaces, set: setSnapToFaces },
+              { key: "grid", label: "Grid", active: gridSnap, set: setGridSnap },
+            ].map((s) => (
+              <button 
+                key={s.key} 
+                type="button" 
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  s.set(!s.active);
+                }}
+              >
+                <div className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${s.active ? 'bg-amber-500 border-amber-500 text-slate-900' : 'border-[var(--panel-divider)] text-transparent'}`}>
+                  <LuCheck className="h-3 w-3" />
+                </div>
+                <span className="text-xs font-semibold">{s.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Cluster>
   );
 
@@ -1039,57 +1074,14 @@ export default function ToolRibbon({
           ref={ribbonContentRef}
           className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[420px]"
         >
-          {/* V Studio tab: all clusters in a scrollable row with overflow button */}
           {activeTab === "vstudio" && (
-            <>
-              <div className="flex items-center gap-3 overflow-x-hidden min-w-0 flex-1">
-                {vstudioClusters
-                  .filter((c) => c.key === "build" || c.key === "structure" || c.key === "rooms")
-                  .map((c) => (
-                    <div key={c.key} className="flex-shrink-0">
-                      {c.node}
-                    </div>
-                  ))}
-              </div>
-
-              {/* Overflow: More button at compact widths / iPad mode */}
-              <div className="relative ml-auto flex-shrink-0" id="ribbon-overflow-menu">
-                <button
-                  type="button"
-                  onClick={() => setOverflowOpen(!overflowOpen)}
-                  className={`flex flex-col items-center justify-center rounded-xl p-1.5 border transition-all text-xs min-w-[40px] ${
-                    overflowOpen
-                      ? "border-amber-400 bg-amber-500/20 text-amber-500"
-                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                  }`}
-                  title="More tools"
-                >
-                  {overflowOpen ? (
-                    <LuX className="h-4 w-4" />
-                  ) : (
-                    <LuEllipsis className="h-4 w-4" />
-                  )}
-                  <span className="text-[9px]">More</span>
-                </button>
-
-                {overflowOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[70dvh] overflow-y-auto thin-scroll">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
-                      Tools & Settings
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      {vstudioClusters
-                        .filter((c) => c.key !== "build" && c.key !== "structure" && c.key !== "rooms")
-                        .map((c) => (
-                          <div key={c.key} className="border-b border-[var(--panel-divider)]/40 pb-2 last:border-0 last:pb-0">
-                            {c.node}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
+            <div className="flex items-center gap-3">
+              {vstudioClusters.map((c) => (
+                <div key={c.key} className="flex-shrink-0">
+                  {c.node}
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Manage tab content */}
