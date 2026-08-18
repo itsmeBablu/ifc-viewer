@@ -58,6 +58,13 @@ type ToolMarkupState = {
   snapToFaces: boolean;
   gridSnap: boolean;
   gridSize: number;
+  /** Full CAD snap suite — all combinable, all default on */
+  snapEndpoint: boolean;
+  snapMidpoint: boolean;
+  snapCenter: boolean;
+  snapIntersection: boolean;
+  snapPerpendicular: boolean;
+  snapExtension: boolean;
   cubeDraw: CubeDrawState;
   markupFloorId: string | null;
   viewPreset: MarkupViewPreset;
@@ -140,6 +147,12 @@ type ToolMarkupState = {
   setTransformMode: (mode: MarkupTransformMode) => void;
   setSnapToFaces: (on: boolean) => void;
   setGridSnap: (on: boolean) => void;
+  setSnapEndpoint: (on: boolean) => void;
+  setSnapMidpoint: (on: boolean) => void;
+  setSnapCenter: (on: boolean) => void;
+  setSnapIntersection: (on: boolean) => void;
+  setSnapPerpendicular: (on: boolean) => void;
+  setSnapExtension: (on: boolean) => void;
   setCubeDraw: (draw: CubeDrawState) => void;
   setMarkupFloorId: (floorId: string | null) => void;
   setViewPreset: (preset: MarkupViewPreset) => void;
@@ -235,6 +248,13 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   snapToFaces: false,
   gridSnap: false,
   gridSize: 0.1,
+  // Full CAD snap suite
+  snapEndpoint: true,
+  snapMidpoint: true,
+  snapCenter: true,
+  snapIntersection: true,
+  snapPerpendicular: true,
+  snapExtension: true,
   cubeDraw: null,
   markupFloorId: null,
   viewPreset: "free",
@@ -336,6 +356,12 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
 
   setSnapToFaces: (on) => set({ snapToFaces: on }),
   setGridSnap: (on) => set({ gridSnap: on }),
+  setSnapEndpoint: (on) => set({ snapEndpoint: on }),
+  setSnapMidpoint: (on) => set({ snapMidpoint: on }),
+  setSnapCenter: (on) => set({ snapCenter: on }),
+  setSnapIntersection: (on) => set({ snapIntersection: on }),
+  setSnapPerpendicular: (on) => set({ snapPerpendicular: on }),
+  setSnapExtension: (on) => set({ snapExtension: on }),
   setCubeDraw: (draw) => set({ cubeDraw: draw }),
 
   setMarkupFloorId: (floorId) => set({ markupFloorId: floorId }),

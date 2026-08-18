@@ -46,7 +46,26 @@ export default function ToolStatusBar({
   const armedTool = useToolMarkupStore((s) => s.armedTool);
   const snapToFaces = useToolMarkupStore((s) => s.snapToFaces);
   const gridSnap = useToolMarkupStore((s) => s.gridSnap);
+  const snapEndpoint = useToolMarkupStore((s) => s.snapEndpoint);
+  const snapMidpoint = useToolMarkupStore((s) => s.snapMidpoint);
+  const snapCenter = useToolMarkupStore((s) => s.snapCenter);
+  const snapIntersection = useToolMarkupStore((s) => s.snapIntersection);
+  const snapPerpendicular = useToolMarkupStore((s) => s.snapPerpendicular);
+  const snapExtension = useToolMarkupStore((s) => s.snapExtension);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+
+  // Build compact snap active summary
+  const activeSnaps = [
+    snapEndpoint && "Endpt",
+    snapMidpoint && "Mid",
+    snapCenter && "Ctr",
+    snapIntersection && "Int",
+    snapPerpendicular && "Perp",
+    snapExtension && "Ext",
+    snapToFaces && "Face",
+    gridSnap && "Grid",
+  ].filter(Boolean).join("+") || "Off";
+  const wallSnapType = useLayoutDrawingStore((s) => s.wallDraw?.snapType);
 
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const floors = useAppStore((s) => s.floors);
@@ -256,7 +275,11 @@ export default function ToolStatusBar({
         <div className="flex items-center gap-1 text-[var(--text-body)]">
           <LuCompass className="h-3 w-3 text-sky-400" />
           <span>
-            Snap: {gridSnap ? "Grid" : "Angle"}{snapToFaces ? "+Face" : ""}
+            {wallSnapType ? (
+              <span className="text-amber-400 font-bold">{wallSnapType}</span>
+            ) : (
+              <span>Snap: {activeSnaps}</span>
+            )}
           </span>
         </div>
 

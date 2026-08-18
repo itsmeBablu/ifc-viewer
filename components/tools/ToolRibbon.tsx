@@ -28,6 +28,11 @@ import {
   LuPrinter,
   LuMoreHorizontal,
   LuX,
+  LuCornerUpLeft,
+  LuAlignCenter,
+  LuCrosshair,
+  LuMinus,
+  LuArrowRight,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -206,6 +211,18 @@ export default function ToolRibbon({
   const setSnapToFaces = useToolMarkupStore((s) => s.setSnapToFaces);
   const gridSnap = useToolMarkupStore((s) => s.gridSnap);
   const setGridSnap = useToolMarkupStore((s) => s.setGridSnap);
+  const snapEndpoint = useToolMarkupStore((s) => s.snapEndpoint);
+  const setSnapEndpoint = useToolMarkupStore((s) => s.setSnapEndpoint);
+  const snapMidpoint = useToolMarkupStore((s) => s.snapMidpoint);
+  const setSnapMidpoint = useToolMarkupStore((s) => s.setSnapMidpoint);
+  const snapCenter = useToolMarkupStore((s) => s.snapCenter);
+  const setSnapCenter = useToolMarkupStore((s) => s.setSnapCenter);
+  const snapIntersection = useToolMarkupStore((s) => s.snapIntersection);
+  const setSnapIntersection = useToolMarkupStore((s) => s.setSnapIntersection);
+  const snapPerpendicular = useToolMarkupStore((s) => s.snapPerpendicular);
+  const setSnapPerpendicular = useToolMarkupStore((s) => s.setSnapPerpendicular);
+  const snapExtension = useToolMarkupStore((s) => s.snapExtension);
+  const setSnapExtension = useToolMarkupStore((s) => s.setSnapExtension);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const measurements = useToolMarkupStore((s) => s.measurements);
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
@@ -513,14 +530,31 @@ export default function ToolRibbon({
 
   const snapsCluster = (
     <Cluster label="Snaps" border={false}>
-      <ToggleBtn active={snapToFaces} onClick={() => setSnapToFaces(!snapToFaces)} title="Face Snap">
-        <LuMagnet className="h-4 w-4" />
-        <span className="text-[9px]">Face</span>
-      </ToggleBtn>
-      <ToggleBtn active={gridSnap} onClick={() => setGridSnap(!gridSnap)} title="Grid Snap (100mm)">
-        <LuLayoutGrid className="h-4 w-4" />
-        <span className="text-[9px]">Grid</span>
-      </ToggleBtn>
+      {/* Full CAD snap suite — all combinable */}
+      {[
+        { key: "endpoint", label: "Endpt", active: snapEndpoint, set: setSnapEndpoint, title: "Endpoint snap" },
+        { key: "midpoint", label: "Mid", active: snapMidpoint, set: setSnapMidpoint, title: "Midpoint snap" },
+        { key: "center", label: "Ctr", active: snapCenter, set: setSnapCenter, title: "Center point snap" },
+        { key: "intersection", label: "Int", active: snapIntersection, set: setSnapIntersection, title: "Intersection snap" },
+        { key: "perp", label: "Perp", active: snapPerpendicular, set: setSnapPerpendicular, title: "Perpendicular snap" },
+        { key: "ext", label: "Ext", active: snapExtension, set: setSnapExtension, title: "Extension snap" },
+        { key: "face", label: "Face", active: snapToFaces, set: setSnapToFaces, title: "Face snap (3D)" },
+        { key: "grid", label: "Grid", active: gridSnap, set: setGridSnap, title: "Grid snap (100mm)" },
+      ].map((s) => (
+        <button
+          key={s.key}
+          type="button"
+          onClick={() => s.set(!s.active)}
+          title={s.title}
+          className={`flex items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold border transition-all min-w-[28px] ${
+            s.active
+              ? "border-amber-400 bg-amber-500/25 text-amber-600 dark:text-amber-400"
+              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          }`}
+        >
+          {s.label}
+        </button>
+      ))}
     </Cluster>
   );
 

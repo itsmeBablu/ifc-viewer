@@ -77,6 +77,8 @@ export type WallDrawState = {
   angleDeg: number | null;
   angleSnapped: boolean;
   lengthMm: number | null;
+  /** Active snap type indicator shown in HUD. */
+  snapType?: "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "extension" | null;
 } | null;
 
 export type SlabDrawState = {
