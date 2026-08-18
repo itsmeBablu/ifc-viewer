@@ -537,11 +537,11 @@ export default function ToolRightPanel({
               </div>
 
               {/* Browser body */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-3 thin-scroll text-xs space-y-3">
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 thin-scroll text-xs space-y-2">
                 {browserTab === "all" ? (
                   <>
                     {/* Active Level selector — lives here, NOT in the ribbon */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
+                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
                         Active Level
                       </div>
@@ -560,7 +560,7 @@ export default function ToolRightPanel({
                     </div>
 
                     {/* Levels & Stories tree */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
+                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
                         <LuLayers className="h-3 w-3 text-amber-500" />
                         Building Levels & Stories

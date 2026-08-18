@@ -10,8 +10,8 @@
   --text-muted: #71717a;
   --glass-border: rgba(255, 255, 255, 0.62);
   --glass-inset-bg: rgba(255, 255, 255, 0.28);
-  --glass-tint: rgba(255, 255, 255, 0.42);
-  --glass-menu-tint: rgba(255, 255, 255, 0.55);
+  --glass-tint: rgba(255, 255, 255, 0.85);
+  --glass-menu-tint: rgba(255, 255, 255, 0.90);
   --glass-specular: rgba(255, 255, 255, 0.78);
   --glass-blur-panel: 20px;
   --glass-blur-control: 16px;
@@ -36,8 +36,8 @@
   --text-muted: #a1a1aa;
   --glass-border: rgba(255, 255, 255, 0.24);
   --glass-inset-bg: rgba(255, 255, 255, 0.12);
-  --glass-tint: rgba(22, 28, 38, 0.5);
-  --glass-menu-tint: rgba(26, 32, 44, 0.62);
+  --glass-tint: rgba(22, 28, 38, 0.85);
+  --glass-menu-tint: rgba(26, 32, 44, 0.90);
   --glass-specular: rgba(255, 255, 255, 0.38);
   --glass-blur-panel: 20px;
   --glass-blur-control: 16px;
