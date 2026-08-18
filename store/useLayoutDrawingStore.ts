@@ -111,6 +111,7 @@ type LayoutDrawingState = {
   slabs: LayoutSlab[];
   layoutRooms: LayoutRoom[];
   drawingScale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500";
+  unitSystem: "metric" | "imperial";
   underlays: ReferenceUnderlay[];
   presets: LayoutPresets;
   armedLayoutTool: LayoutToolId | null;
@@ -146,6 +147,7 @@ type LayoutDrawingState = {
   ) => Promise<void>;
   deleteLevel: (id: string) => Promise<void>;
   setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
+  setUnitSystem: (system: "metric" | "imperial") => void;
   addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
@@ -328,9 +330,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   walls: [],
   doors: [],
   windows: [],
-  slabs: [],
     layoutRooms: [],
     drawingScale: "1:100",
+    unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as any) || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
@@ -528,6 +530,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setDrawingScale: (scale) => set({ drawingScale: scale }),
+  setUnitSystem: (system) => {
+    set({ unitSystem: system });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vstudio:unitSystem", system);
+    }
+  },
   addRoom: (r) => {
     const activeLevelId = get().levels[0]?.id || "default-level";
     const room: LayoutRoom = {
@@ -1526,9 +1534,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       pts[0]!,
       pts[1]!,
       distanceMm,
+      underlay.levelId,
     );
     pushWerkzeugHistory();
-    const next = { ...underlay, ...patch };
+    const levelCalibrations = {
+      ...(underlay.levelCalibrations || {}),
+      [underlay.levelId]: {
+        mmPerPixel: patch.mmPerPixel,
+        offsetXmm: patch.offsetXmm,
+        offsetYmm: patch.offsetYmm,
+        rotationDeg: underlay.rotationDeg,
+      },
+    };
+    const next: ReferenceUnderlay = {
+      ...underlay,
+      ...patch,
+      levelCalibrations,
+    };
     await idbPutUnderlay(next);
     set({
       underlays: get().underlays.map((u) => (u.id === id ? next : u)),

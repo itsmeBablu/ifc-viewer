@@ -42,6 +42,8 @@ export default function ToolStatusBar({
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const unitSystem = useLayoutDrawingStore((s) => s.unitSystem);
+  const setUnitSystem = useLayoutDrawingStore((s) => s.setUnitSystem);
 
   const armedTool = useToolMarkupStore((s) => s.armedTool);
   const snapToFaces = useToolMarkupStore((s) => s.snapToFaces);
@@ -283,10 +285,15 @@ export default function ToolStatusBar({
           </span>
         </div>
 
-        <div className="h-3 w-px bg-[var(--panel-divider)]" />
-
         {/* Unit */}
-        <span className="text-emerald-500 font-sans font-bold">m / mm</span>
+        <button
+          type="button"
+          onClick={() => setUnitSystem(unitSystem === "metric" ? "imperial" : "metric")}
+          title="Toggle Unit System (Metric / Imperial)"
+          className="text-emerald-500 font-sans font-bold hover:text-emerald-600 transition-colors bg-[var(--glass-inset-bg)] px-2 py-0.5 rounded border border-[var(--panel-divider)]"
+        >
+          {unitSystem === "metric" ? "m ↔ ft" : "ft ↔ m"}
+        </button>
       </div>
     </footer>
   );

@@ -19,6 +19,7 @@ import {
 import {
   underlayHeightMm,
   underlayWidthMm,
+  resolveUnderlayCalibration,
   type ReferenceUnderlay,
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
@@ -395,15 +396,16 @@ export default class LayoutSceneLayer {
           this.loadUnderlayTexture(u.id, u.imageDataUrl, mat);
         }
       }
-      const w = fromMm(underlayWidthMm(u));
-      const h = fromMm(underlayHeightMm(u));
+      const cal = resolveUnderlayCalibration(u, u.levelId);
+      const w = fromMm(underlayWidthMm(u, u.levelId));
+      const h = fromMm(underlayHeightMm(u, u.levelId));
       mesh.scale.set(w, h, 1);
       mesh.position.set(
-        fromMm(u.offsetXmm),
+        fromMm(cal.offsetXmm),
         fromMm(elev) - 0.004,
-        fromMm(u.offsetYmm),
+        fromMm(cal.offsetYmm),
       );
-      mesh.rotation.set(-Math.PI / 2, 0, (-u.rotationDeg * Math.PI) / 180);
+      mesh.rotation.set(-Math.PI / 2, 0, (-cal.rotationDeg * Math.PI) / 180);
       mesh.visible = show;
       mesh.userData.layoutUnderlayId = u.id;
       mesh.userData.locked = u.locked;

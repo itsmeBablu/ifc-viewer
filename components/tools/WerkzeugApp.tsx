@@ -52,6 +52,7 @@ import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { isTypingTarget } from "@/lib/viewerHotkeys";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { formatLength } from "@/lib/unitFormat";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import SceneBusyOverlay from "@/components/common/SceneBusyOverlay";
 import SceneBusyCursor from "@/components/common/SceneBusyCursor";
@@ -66,9 +67,10 @@ type LoadSource =
 function DragSnapHud() {
   const hint = useToolMarkupStore((s) => s.dragSnapHint);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const unitSystem = useLayoutDrawingStore((s) => s.unitSystem);
   const wallHint =
     wallDraw?.cursor && wallDraw.lengthMm != null
-      ? `${Math.round(wallDraw.lengthMm)} mm${
+      ? `${formatLength(wallDraw.lengthMm, unitSystem)}${
           wallDraw.angleDeg != null
             ? ` · ${wallDraw.angleDeg}°${wallDraw.angleSnapped ? " ✦" : ""}`
             : ""
