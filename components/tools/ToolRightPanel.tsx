@@ -60,6 +60,16 @@ export default function ToolRightPanel({
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [browserTab, setBrowserTab] = useState<BrowserTab>("all");
+  const [isFloating, setIsFloating] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsFloating(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // ── Splitter between Properties and Browser ───────────────────────────────
   const [propHeight, setPropHeight] = useState(220); // px
@@ -261,13 +271,17 @@ export default function ToolRightPanel({
   return (
     <>
       <aside
-        className={`fixed right-0 top-[116px] bottom-7 z-30 flex flex-col border-l border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 shadow-xl backdrop-blur-xl transition-all duration-300 select-none ${
-          rightPanelOpen ? "" : "w-10"
+        className={`${
+          isFloating
+            ? "relative w-full h-[550px]"
+            : "fixed right-0 top-[116px] bottom-7 border-l"
+        } z-30 flex flex-col border-[var(--panel-divider)] bg-[var(--surface-overlay)]/95 shadow-xl backdrop-blur-xl transition-all duration-300 select-none ${
+          !isFloating && !rightPanelOpen ? "w-10" : ""
         }`}
-        style={rightPanelOpen ? { width: panelWidth } : undefined}
+        style={(!isFloating && rightPanelOpen) ? { width: panelWidth } : undefined}
       >
         {/* ── Left resize handle ──────────────────────────────────────────── */}
-        {rightPanelOpen && (
+        {!isFloating && rightPanelOpen && (
           <div
             onMouseDown={onResizeMouseDown}
             className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group hover:bg-amber-500/40 transition-colors"

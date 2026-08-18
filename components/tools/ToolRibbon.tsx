@@ -237,6 +237,16 @@ export default function ToolRibbon({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [saveMenuOpen, setSaveMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [isTouchMode, setIsTouchMode] = useState(false);
+
+  useEffect(() => {
+    const checkTouch = () => {
+      setIsTouchMode(window.innerWidth < 1024 || ('ontouchstart' in window));
+    };
+    checkTouch();
+    window.addEventListener("resize", checkTouch);
+    return () => window.removeEventListener("resize", checkTouch);
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ribbonContentRef = useRef<HTMLDivElement>(null);
@@ -981,14 +991,16 @@ export default function ToolRibbon({
           {activeTab === "vstudio" && (
             <>
               <div className="flex items-center gap-3 overflow-x-hidden min-w-0 flex-1">
-                {vstudioClusters.map((c) => (
-                  <div key={c.key} className="flex-shrink-0">
-                    {c.node}
-                  </div>
-                ))}
+                {vstudioClusters
+                  .filter((c) => !isTouchMode || c.key === "build" || c.key === "structure")
+                  .map((c) => (
+                    <div key={c.key} className="flex-shrink-0">
+                      {c.node}
+                    </div>
+                  ))}
               </div>
 
-              {/* Overflow: More button at compact widths */}
+              {/* Overflow: More button at compact widths / iPad mode */}
               <div className="relative ml-auto flex-shrink-0" id="ribbon-overflow-menu">
                 <button
                   type="button"
@@ -1009,14 +1021,18 @@ export default function ToolRibbon({
                 </button>
 
                 {overflowOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">All Tools</div>
-                    <div className="flex flex-wrap gap-2">
-                      {vstudioClusters.map((c) => (
-                        <div key={c.key} className="flex-shrink-0">
-                          {c.node}
-                        </div>
-                      ))}
+                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[70dvh] overflow-y-auto thin-scroll">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
+                      {isTouchMode ? "Advanced Tools" : "All Tools"}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      {vstudioClusters
+                        .filter((c) => !isTouchMode || (c.key !== "build" && c.key !== "structure"))
+                        .map((c) => (
+                          <div key={c.key} className="border-b border-[var(--panel-divider)]/40 pb-2 last:border-0 last:pb-0">
+                            {c.node}
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}

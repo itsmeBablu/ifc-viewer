@@ -39,6 +39,7 @@ import { GlassButton, IconAlert } from "@/components/common/ui";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
+import DraggablePanel from "./DraggablePanel";
 import ToolStatusBar from "./ToolStatusBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
@@ -53,6 +54,7 @@ import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { isTypingTarget } from "@/lib/viewerHotkeys";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { formatLength } from "@/lib/unitFormat";
+import { LuLayers } from "react-icons/lu";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import SceneBusyOverlay from "@/components/common/SceneBusyOverlay";
 import SceneBusyCursor from "@/components/common/SceneBusyCursor";
@@ -564,24 +566,29 @@ export default function WerkzeugApp() {
           </GlassPanel>
         </GsapOverlay>
 
-        {/* Mobile menu support */}
-        {!isDesktop && (
-          <MobileCornerMenu
-            open={rightPanelOpen}
-            onOpenChange={setRightPanelOpen}
-            title="Project Browser"
-            subtitle={activeModelLabel}
-            onLoadIfc={handleFile}
-            isLoadingModel={isLoadingModel}
-            landscapeMobile={isLandscape}
+        {/* Mobile/Tablet Floating Draggable Panel */}
+        {!isDesktop && rightPanelOpen && (
+          <DraggablePanel
+            className="w-80 bg-[var(--surface-overlay)] border border-[var(--panel-divider)] rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl"
+            defaultPosition={{ x: 20, y: 130 }}
           >
-            {() => (
-              <ToolRightPanel
-                onFile={handleFile}
-                isLoadingModel={isLoadingModel}
-              />
-            )}
-          </MobileCornerMenu>
+            <ToolRightPanel
+              onFile={handleFile}
+              isLoadingModel={isLoadingModel}
+            />
+          </DraggablePanel>
+        )}
+
+        {/* Floating panel toggle button on mobile/tablet */}
+        {!isDesktop && (
+          <button
+            type="button"
+            onClick={() => setRightPanelOpen(!rightPanelOpen)}
+            className="fixed right-4 bottom-10 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-lg hover:bg-amber-600 transition-colors"
+            title="Toggle Panel"
+          >
+            <LuLayers className="h-5 w-5" />
+          </button>
         )}
       </div>
     </WerkzeugModelSceneContext.Provider>
