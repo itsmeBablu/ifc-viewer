@@ -83,7 +83,7 @@ interface ToolRibbonProps {
   onOpenRoomSchedule?: () => void;
 }
 
-// ─── Cluster wrapper helpers ───────────────────────────────────────────────────
+// --- Cluster wrapper helpers ---------------------------------------------------
 
 function Cluster({
   label,
@@ -382,7 +382,7 @@ export default function ToolRibbon({
     return () => document.removeEventListener("mousedown", handler);
   }, [overflowOpen]);
 
-  // ── V Studio tab content clusters ──────────────────────────────────────────
+  // -- V Studio tab content clusters ------------------------------------------
   const buildCluster = (
     <Cluster label="Build">
       <RibbonBtn
@@ -589,7 +589,7 @@ export default function ToolRibbon({
     </Cluster>
   );
 
-  // ── Manage tab content ─────────────────────────────────────────────────────
+  // -- Manage tab content -----------------------------------------------------
   const manageTabContent = (
     <div className="flex items-center gap-3">
       <Cluster label="Structure">
@@ -628,7 +628,7 @@ export default function ToolRibbon({
     </div>
   );
 
-  // ── Contextual Modify tab content ──────────────────────────────────────────
+  // -- Contextual Modify tab content ------------------------------------------
   const modifyTabContent = hasSelection && (
     <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
       {/* Universal Modify Tools */}
@@ -779,7 +779,7 @@ export default function ToolRibbon({
     </div>
   );
 
-  // ── All V Studio clusters in order ─────────────────────────────────────────
+  // -- All V Studio clusters in order -----------------------------------------
   const vstudioClusters = [
     { key: "build", node: buildCluster },
     { key: "openings", node: openingsCluster },
@@ -793,7 +793,7 @@ export default function ToolRibbon({
 
   return (
     <>
-      {/* ── Quick Access Floating Cluster ─────────────────────────────────────── */}
+      {/* -- Quick Access Floating Cluster --------------------------------------- */}
       <div className="absolute top-4 left-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
         {/* V Studio home logo */}
         <a
@@ -905,15 +905,15 @@ export default function ToolRibbon({
         </div>
 
         {/* Center: Active Model Name */}
-        <div className="hidden md:flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+        <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="truncate max-w-[300px] text-[var(--text-strong)] font-semibold">
+          <span className="truncate max-w-[200px] text-[var(--text-strong)] font-semibold text-xs">
             {activeModelLabel || "Empty Architecture Project"}
           </span>
         </div>
 
         {/* Right: Theme Toggle & Fullscreen */}
-        <div className="flex items-center gap-1.5">
+        <div className="absolute top-14 right-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
           <button
             type="button"
             onClick={() => setColorTheme(isDark ? "light" : "dark")}
@@ -942,11 +942,11 @@ export default function ToolRibbon({
             />
           </button>
         </div>
-      </div>
 
-      {/* ── Main Tool Island ─────────────────────────────────────── */}
+
+      {/* -- Main Tool Island --------------------------------------- */}
       <header className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto overflow-hidden">
-      {/* ── Tab Bar ────────────────────────────────────────────────────────── */}
+      {/* -- Tab Bar ---------------------------------------------------------- */}
       <div className="flex items-center gap-2 p-2">
         {/* V Studio (home tab) */}
         <button
@@ -993,7 +993,7 @@ export default function ToolRibbon({
         )}
       </div>
 
-      {/* ── Ribbon Content Panel ───────────────────────────────────────────── */}
+      {/* -- Ribbon Content Panel --------------------------------------------- */}
       {!ribbonCollapsed && (
         <div
           ref={ribbonContentRef}

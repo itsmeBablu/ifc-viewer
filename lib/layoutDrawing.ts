@@ -34,7 +34,7 @@ export type LayoutWall = {
   thicknessMm: number;
   heightMm: number;
   createdAt: number;
-  // ── Section 5: Curved wall (arc) ──────────────────────────────────────
+  // -- Section 5: Curved wall (arc) --------------------------------------
   /** If true, wall follows an arc defined by arcCenter + arcRadius. */
   curved?: boolean;
   arcCenterXmm?: number;
@@ -42,7 +42,7 @@ export type LayoutWall = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
-  // ── Section 9: Material & color ───────────────────────────────────────
+  // -- Section 9: Material & color ---------------------------------------
   color?: string;
   material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };
@@ -60,7 +60,7 @@ export type LayoutDoor = {
   /** Which side of the wall the leaf swings into (+1 / −1). */
   swing: 1 | -1;
   createdAt: number;
-  // ── Section 6: Door style, head shape, color ──────────────────────────
+  // -- Section 6: Door style, head shape, color --------------------------
   style?: "wood" | "metal" | "glass" | "double";
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
@@ -76,7 +76,7 @@ export type LayoutWindow = {
   /** Sill height above level floor, mm. */
   sillHeightMm: number;
   createdAt: number;
-  // ── Section 6: Head shape + color ─────────────────────────────────────
+  // -- Section 6: Head shape + color -------------------------------------
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
 };
@@ -87,7 +87,7 @@ export type LayoutSlab = {
   projectId: string;
   levelId: string;
   kind: "floor" | "roof";
-  // ── Legacy rectangle fields (kept for backwards compatibility) ─────────
+  // -- Legacy rectangle fields (kept for backwards compatibility) ---------
   /** Plan rectangle AABB (mm). Computed from boundary if polygon mode. */
   minXmm: number;
   minYmm: number;
@@ -101,14 +101,14 @@ export type LayoutSlab = {
    */
   elevationOffsetMm: number;
   createdAt: number;
-  // ── Section 7: Sketch-based polygon boundary + holes ──────────────────
+  // -- Section 7: Sketch-based polygon boundary + holes ------------------
   /** Outer boundary polygon (plan mm). When present, supersedes the AABB. */
   boundary?: { xMm: number; yMm: number }[];
   /** Inner hole polygons (plan mm). */
   holes?: { xMm: number; yMm: number }[][];
-  // ── Section 8: Roof per-edge slope control ────────────────────────────
+  // -- Section 8: Roof per-edge slope control ----------------------------
   edgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[];
-  // ── Section 9: Material & color ───────────────────────────────────────
+  // -- Section 9: Material & color ---------------------------------------
   color?: string;
   material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };

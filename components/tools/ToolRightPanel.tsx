@@ -55,7 +55,7 @@ export default function ToolRightPanel({
   onFile?: (file: File) => void;
   isLoadingModel?: boolean;
 }) {
-  // ── Panel open/width state ────────────────────────────────────────────────
+  // -- Panel open/width state ------------------------------------------------
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
@@ -71,14 +71,14 @@ export default function ToolRightPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // ── Splitter between Properties and Browser ───────────────────────────────
+  // -- Splitter between Properties and Browser -------------------------------
   const [propHeight, setPropHeight] = useState(220); // px
 
-  // ── Edit type dialog ──────────────────────────────────────────────────────
+  // -- Edit type dialog ------------------------------------------------------
   const [editTypeOpen, setEditTypeOpen] = useState(false);
   const [types, setTypes] = useState<Record<string, ElementTypeDefinition>>(DEFAULT_ELEMENT_TYPES);
 
-  // ── Properties section collapse ───────────────────────────────────────────
+  // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
     identity: true,
     dimensions: true,
@@ -89,7 +89,7 @@ export default function ToolRightPanel({
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
-  // ── Store slices ──────────────────────────────────────────────────────────
+  // -- Store slices ----------------------------------------------------------
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
@@ -119,7 +119,7 @@ export default function ToolRightPanel({
 
   const { structure, loading } = useIfcStructure(true);
 
-  // ── Derived selections ────────────────────────────────────────────────────
+  // -- Derived selections ----------------------------------------------------
   const selectedWall = walls.find((w) => w.id === selectedWallId);
   const selectedDoor = doors.find((d) => d.id === selectedDoorId);
   const selectedWindow = windows.find((w) => w.id === selectedWindowId);
@@ -132,7 +132,7 @@ export default function ToolRightPanel({
 
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
-  // ── Type selector helpers ─────────────────────────────────────────────────
+  // -- Type selector helpers -------------------------------------------------
   const getActiveTypeKey = (): string => {
     if (selectedWall) {
       if (selectedWall.thicknessMm === 100) return "wall-interior-100";
@@ -195,7 +195,7 @@ export default function ToolRightPanel({
     }
   };
 
-  // ── Wall metrics ──────────────────────────────────────────────────────────
+  // -- Wall metrics ----------------------------------------------------------
   const wallLen = selectedWall ? Math.round(wallLengthMm(selectedWall)) : 0;
   const wallArea = selectedWall
     ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2)
@@ -207,7 +207,7 @@ export default function ToolRightPanel({
       ).toFixed(3)
     : "0";
 
-  // ── Left-edge resize drag ─────────────────────────────────────────────────
+  // -- Left-edge resize drag -------------------------------------------------
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(DEFAULT_WIDTH);
@@ -236,7 +236,7 @@ export default function ToolRightPanel({
     [panelWidth]
   );
 
-  // ── Horizontal splitter drag (Properties / Browser split) ─────────────────
+  // -- Horizontal splitter drag (Properties / Browser split) -----------------
   const isSplitDraggingRef = useRef(false);
   const splitStartYRef = useRef(0);
   const splitStartHeightRef = useRef(220);
@@ -265,9 +265,9 @@ export default function ToolRightPanel({
     [propHeight]
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // -------------------------------------------------------------------------
   // RENDER
-  // ─────────────────────────────────────────────────────────────────────────
+  // -------------------------------------------------------------------------
   return (
     <>
       <aside
@@ -276,7 +276,7 @@ export default function ToolRightPanel({
         }`}
         style={rightPanelOpen ? { width: panelWidth } : undefined}
       >
-        {/* ── Left resize handle ──────────────────────────────────────────── */}
+        {/* -- Left resize handle -------------------------------------------- */}
         {!isFloating && rightPanelOpen && (
           <div
             onMouseDown={onResizeMouseDown}
@@ -285,7 +285,7 @@ export default function ToolRightPanel({
           />
         )}
 
-        {/* ── Panel top header ────────────────────────────────────────────── */}
+        {/* -- Panel top header ---------------------------------------------- */}
         <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3">
           <button
             type="button"
@@ -312,7 +312,7 @@ export default function ToolRightPanel({
 
         {rightPanelOpen && (
           <>
-            {/* ── PROPERTIES (top portion) ─────────────────────────────────── */}
+            {/* -- PROPERTIES (top portion) ----------------------------------- */}
             {hasSelection && (
               <>
                 <div
@@ -483,10 +483,14 @@ export default function ToolRightPanel({
                       </PropRow>
                     </PropSection>
                   </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center opacity-50 h-full">
+                    <p className="text-xs">No elements selected</p>
                   </div>
-                </div>
-
-                {/* ── Horizontal splitter ───────────────────────────────────────── */}
+                )}
+              </div>
+            </div>
+                {/* -- Horizontal splitter ----------------------------------------- */}
                 <div
                   onMouseDown={onSplitterMouseDown}
                   className="h-1.5 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-amber-500/30 transition-colors group"
@@ -497,7 +501,7 @@ export default function ToolRightPanel({
               </>
             )}
 
-            {/* ── PROJECT BROWSER (bottom portion) ─────────────────────────── */}
+            {/* -- PROJECT BROWSER (bottom portion) --------------------------- */}
             <div className="flex flex-col flex-1 min-h-0">
               {/* Browser header + tabs */}
               <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3">
@@ -602,7 +606,7 @@ export default function ToolRightPanel({
   );
 }
 
-// ── Small helper components ───────────────────────────────────────────────────
+// -- Small helper components ---------------------------------------------------
 
 function PropSection({
   open,

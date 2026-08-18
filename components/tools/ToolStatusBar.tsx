@@ -179,7 +179,7 @@ export default function ToolStatusBar({
         {/* Divider */}
         <div className="h-3 w-px bg-[var(--panel-divider)] shrink-0 mx-0.5" />
 
-        {/* ── File Attach Actions ────────────────────────────── */}
+        {/* -- File Attach Actions ------------------------------ */}
         <div className="relative">
           <button
             type="button"
@@ -212,7 +212,7 @@ export default function ToolStatusBar({
 
       {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
       <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
-        {/* ── Shading Style Toggle (Section 3) ──────────────────────────── */}
+        {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
         <div className="flex items-center rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] overflow-hidden">
           {RENDER_MODES.map((m) => (
             <button
