@@ -576,38 +576,7 @@ export default function ToolRibbon({
     </Cluster>
   );
 
-  const cameraCluster = (
-    <Cluster label="Views">
-      {(
-        [
-          { id: "free" as const, label: "3D Iso" },
-          { id: "top" as const, label: "Top" },
-          { id: "north" as const, label: "N" },
-          { id: "south" as const, label: "S" },
-          { id: "east" as const, label: "E" },
-          { id: "west" as const, label: "W" },
-        ] as const
-      ).map((v) => (
-        <button
-          key={v.id}
-          type="button"
-          onClick={() => setViewPreset(v.id as MarkupViewPreset)}
-          className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 text-[10px] font-semibold border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-[var(--text-strong)] hover:border-amber-400 transition-all min-w-[34px]"
-        >
-          <span>{v.label}</span>
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => viewerRef.current?.fitVisible?.()}
-        className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 text-[10px] font-semibold border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-amber-400 hover:text-[var(--text-strong)] transition-all"
-        title="Fit to Extents"
-      >
-        <MdZoomInMap className="h-4 w-4 text-amber-500" />
-        <span>Fit</span>
-      </button>
-    </Cluster>
-  );
+
 
   const snapsCluster = (
     <Cluster label="Snaps" border={false}>
@@ -852,7 +821,6 @@ export default function ToolRibbon({
     { key: "rooms", node: roomsCluster },
     { key: "shapes", node: shapesCluster },
     { key: "annotate", node: annotateCluster },
-    { key: "camera", node: cameraCluster },
     { key: "snaps", node: snapsCluster },
   ];
 

@@ -30,6 +30,7 @@ import {
   LuShieldCheck,
   LuTrash2,
   LuGripVertical,
+  LuEye,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -567,23 +568,30 @@ export default function ToolRightPanel({
                       </div>
                       <ToolFloorsSection />
                       
-                      {/* View Shortcuts */}
-                      <div className="flex items-center justify-between gap-2 mt-3">
-                        {[
-                          { id: 'north', label: 'N' },
-                          { id: 'east', label: 'O' },
-                          { id: 'south', label: 'S' },
-                          { id: 'west', label: 'W' },
-                          { id: 'free', label: '3D' }
-                        ].map(v => (
-                          <button 
-                            key={v.id} 
-                            onClick={() => setViewPreset(v.id as any)} 
-                            className="flex-1 bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)] rounded-lg py-1.5 text-xs font-bold text-[var(--text-strong)] hover:bg-amber-500 hover:text-slate-900 hover:border-amber-400 transition-colors shadow-sm"
-                          >
-                            {v.label}
-                          </button>
-                        ))}
+                      {/* Views tree */}
+                      <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 mt-2">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
+                          <LuEye className="h-3 w-3 text-amber-500" />
+                          Views
+                        </div>
+                        <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)] space-y-1">
+                          {[
+                            { id: 'free', label: '3D View' },
+                            { id: 'north', label: 'North Elevation' },
+                            { id: 'south', label: 'South Elevation' },
+                            { id: 'east', label: 'East Elevation' },
+                            { id: 'west', label: 'West Elevation' },
+                          ].map(v => (
+                            <button 
+                              key={v.id} 
+                              onClick={() => setViewPreset(v.id as any)} 
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-amber-500 transition-colors text-left w-full group"
+                            >
+                              <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500 transition-colors" />
+                              {v.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </>
