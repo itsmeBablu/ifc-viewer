@@ -185,6 +185,7 @@ export function flyToProgress(
 ): gsap.core.Tween {
   killFlyTween();
   let settled = false;
+  // eslint-disable-next-line prefer-const
   let tween: gsap.core.Tween;
   const done = () => {
     if (settled) return;
@@ -193,7 +194,7 @@ export function flyToProgress(
     onComplete?.();
   };
   const state = { t: 0 };
-  const tween = gsap.to(state, {
+  tween = gsap.to(state, {
     t: 1,
     duration: Math.max(0.001, durationMs / 1000),
     ease: gsapEase.camera,
