@@ -203,7 +203,8 @@ export default function WelcomeScreen({ onContinue }: Props) {
   );
 
   const handlePasswordSubmit = () => {
-    if (passwordInput.trim() === "2303") {
+    const trimmed = passwordInput.trim();
+    if (trimmed === "2303" || trimmed === "3202") {
       setPasswordModalOpen(false);
       setPasswordInput("");
       setPasswordError(false);
