@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { MARKUP_COLOR_PALETTE } from "@/lib/toolMarkup";
 
 /**
- * Single swatch → expands to a portaled palette (not clipped by panel overflow).
+ * Single swatch → expands to a portaled palette (not clipped by panel overflow)..
  */
 export default function ColorSwatchPicker({
   color,
