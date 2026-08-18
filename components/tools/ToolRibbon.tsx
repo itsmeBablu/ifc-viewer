@@ -660,10 +660,11 @@ export default function ToolRibbon({
         <button
           type="button"
           onClick={() => setRightPanelOpen(!rightPanelOpen)}
+          title="Toggle the Project Layout panel to view the IFC tree and properties"
           className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[60px] border transition-all ${
             rightPanelOpen
-              ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
-              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
+              ? "border-amber-400 bg-amber-500/20 text-amber-500 font-bold"
+              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-amber-400"
           }`}
         >
           <LuLayers className="h-5 w-5" />
@@ -675,7 +676,8 @@ export default function ToolRibbon({
         <button
           type="button"
           onClick={handleSaveFrag}
-          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-all font-semibold"
+          title="Export the model as a lightweight .frag file for fast web loading"
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-amber-400 transition-all font-semibold"
         >
           <LuSave className="h-4 w-4" />
           <span className="text-[10px]">.frag</span>
@@ -683,7 +685,8 @@ export default function ToolRibbon({
         <button
           type="button"
           onClick={handleSaveIfc}
-          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all font-semibold"
+          title="Export the model with full BIM data structure as an .ifc file"
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[55px] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-amber-400 transition-all font-semibold"
         >
           <LuSave className="h-4 w-4" />
           <span className="text-[10px]">.ifc</span>
