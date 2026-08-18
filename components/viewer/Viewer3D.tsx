@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor } from "@/lib/colorMapping";
+import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, legendStopsForMode } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
 import { animateProgress, gsapEase } from "@/lib/gsapMotion";
@@ -21,7 +21,7 @@ import { runSceneWork } from "@/lib/sceneWork";
 import { canHover } from "@/lib/canHover";
 import { effectiveSelectedRoomId, isRoomPickAllowed } from "@/lib/pickAllowed";
 import { isCompactMobileViewport } from "@/lib/layoutTokens";
-import type { CustomLegendColors } from "@/lib/colorMapping";
+import type { CustomLegendColors, LegendColorMode } from "@/lib/colorMapping";
 import { DEFAULT_SCENE_BG, findScenePreset, parseGradientLerp, resolveSceneBackground, updateSkyGradientTexture } from "@/lib/sceneSky";
 import type { DataViewMode } from "@/lib/dataViewMode";
 import { ViewCube, VIEW_CUBE_LAYOUT } from "@/lib/viewCube";
@@ -219,108 +219,23 @@ function clearSelectionOutlines(root: THREE.Object3D | null | undefined) {
     if (o.userData.isSelectionOutline) toRemove.push(o);
   });
   for (const o of toRemove) {
-    o.parent?.remove(o);
     if (o instanceof THREE.Mesh) {
-      (o.material as THREE.Material).dispose();
+      const mat = o.material;
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uAngle) {
+        gsap.killTweensOf(mat.uniforms.uAngle);
+      }
+      mat.dispose();
+      o.geometry.dispose();
     }
+    o.parent?.remove(o);
   }
 }
 
 /**
- * Multi-color rainbow selection outline shader matching the liquid glass loading spinner:
- * #0050ff (Blue) -> #1f8a70 (Teal) -> #4caf50 (Green) -> #ffdc00 (Yellow) -> #ff8c00 (Orange) -> #dc0000 (Red)
+ * Back-face shell outline scaled around the geometry bbox center.
+ * IFC room meshes keep world coords in the buffer (mesh.position ≈ 0), so a
+ * plain scale expands from the origin and misaligns the highlight.
  */
-function createRainbowOutlineMaterial(
-  bboxMin: THREE.Vector3,
-  bboxMax: THREE.Vector3,
-  inflate = 1.08,
-  opacity = 0.95,
-) {
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      time: { value: 0 },
-      opacity: { value: opacity },
-      inflate: { value: inflate },
-      bboxMin: { value: bboxMin.clone() },
-      bboxMax: { value: bboxMax.clone() },
-    },
-    vertexShader: `
-      varying vec3 vPosition;
-      uniform float inflate;
-      uniform vec3 bboxMin;
-      uniform vec3 bboxMax;
-
-      void main() {
-        vPosition = position;
-        vec3 boxCenter = (bboxMin + bboxMax) * 0.5;
-        vec3 inflatedPos = position * inflate + boxCenter * (1.0 - inflate);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(inflatedPos, 1.0);
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vPosition;
-      uniform float time;
-      uniform float opacity;
-      uniform vec3 bboxMin;
-      uniform vec3 bboxMax;
-
-      vec3 getRainbowColor(float t) {
-        t = fract(t);
-        vec3 c0 = vec3(0.0, 0.314, 1.0);    // #0050ff (Blue)
-        vec3 c1 = vec3(0.122, 0.541, 0.439); // #1f8a70 (Teal)
-        vec3 c2 = vec3(0.298, 0.686, 0.314); // #4caf50 (Green)
-        vec3 c3 = vec3(1.0, 0.863, 0.0);    // #ffdc00 (Yellow)
-        vec3 c4 = vec3(1.0, 0.549, 0.0);    // #ff8c00 (Orange)
-        vec3 c5 = vec3(0.863, 0.0, 0.0);    // #dc0000 (Red)
-
-        if (t < 0.2) return mix(c0, c1, t / 0.2);
-        if (t < 0.4) return mix(c1, c2, (t - 0.2) / 0.2);
-        if (t < 0.6) return mix(c2, c3, (t - 0.4) / 0.2);
-        if (t < 0.8) return mix(c3, c4, (t - 0.6) / 0.2);
-        return mix(c4, c5, (t - 0.8) / 0.2);
-      }
-
-      void main() {
-        float rangeY = max(bboxMax.y - bboxMin.y, 0.05);
-        float rangeX = max(bboxMax.x - bboxMin.x, 0.05);
-        float normY = (vPosition.y - bboxMin.y) / rangeY;
-        float normX = (vPosition.x - bboxMin.x) / rangeX;
-        float t = normY * 0.7 + normX * 0.3 + time * 0.25;
-        vec3 col = getRainbowColor(t);
-        gl_FragColor = vec4(col, opacity);
-      }
-    `,
-    side: THREE.BackSide,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-  });
-}
-
-function attachRainbowOutline(
-  mesh: THREE.Mesh,
-  inflate = 1.09,
-  opacity = 0.95,
-  clearFirst = true,
-) {
-  if (clearFirst) clearSelectionOutlines(mesh);
-  const geom = mesh.geometry;
-  if (!geom.boundingBox) geom.computeBoundingBox();
-  const box = geom.boundingBox;
-  if (!box || box.isEmpty()) return;
-
-  const center = box.getCenter(new THREE.Vector3());
-  const mat = createRainbowOutlineMaterial(box.min, box.max, inflate, opacity);
-  const outline = new THREE.Mesh(geom, mat);
-  outline.scale.setScalar(inflate);
-  outline.position.copy(center).multiplyScalar(1 - inflate);
-  outline.userData.isSelectionOutline = true;
-  outline.userData.isRainbowOutline = true;
-  outline.renderOrder = (mesh.renderOrder ?? 0) + 20;
-  mesh.add(outline);
-}
-
-/** Back-face shell outline scaled around the geometry bbox center. */
 function attachAlignedOutline(
   mesh: THREE.Mesh,
   color: THREE.ColorRepresentation,
@@ -353,9 +268,162 @@ function attachAlignedOutline(
   mesh.add(outline);
 }
 
-/** Color-matched rim — shared by basic 3D and presentation selection (now with rainbow liquid spinner gradient). */
-function attachColorOutline(mesh: THREE.Mesh, _hex?: string) {
-  attachRainbowOutline(mesh, 1.09, 0.95, true);
+/** Color-matched rim — shared by basic 3D and presentation selection. */
+function attachColorOutline(mesh: THREE.Mesh, hex: string) {
+  attachAlignedOutline(mesh, hex, 1.09, 0.92, true);
+}
+
+/**
+ * Thermal-gradient selection outline: a single BackSide ring with a slowly rotating
+ * conic gradient through 6 sampled stops of the active legend.
+ */
+function attachThermalSelectionOutline(mesh: THREE.Mesh, colors: THREE.Color[]) {
+  clearSelectionOutlines(mesh);
+  const geom = mesh.geometry;
+  if (!geom.boundingBox) geom.computeBoundingBox();
+  const box = geom.boundingBox;
+  if (!box || box.isEmpty()) return;
+
+  const center = box.getCenter(new THREE.Vector3());
+
+  // Clone and center geometry locally so polar angle works around (0,0) center
+  const localGeom = geom.clone();
+  localGeom.center();
+
+  const inflate = 1.12;
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColors:  { value: colors },
+      uCount:   { value: colors.length },
+      uAngle:   { value: 0 },
+      uOpacity: { value: 0.85 }, // little transparency
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vLocalPos;
+      void main() {
+        vLocalPos = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3  uColors[6];
+      uniform int   uCount;
+      uniform float uAngle;
+      uniform float uOpacity;
+      varying vec3  vLocalPos;
+      #define PI 3.14159265359
+      void main() {
+        float angle = atan(vLocalPos.z, vLocalPos.x) + uAngle;
+        float t = fract((angle + PI) / (2.0 * PI));
+        float loopT = t < 0.5 ? t * 2.0 : (1.0 - t) * 2.0;
+        float seg = loopT * float(uCount - 1);
+        int idx = int(floor(seg));
+        if (idx >= uCount - 1) idx = uCount - 2;
+        float localT = seg - float(idx);
+        vec3 c = mix(uColors[idx], uColors[idx + 1], localT);
+        gl_FragColor = vec4(c, uOpacity);
+      }
+    `,
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    clipping: true,
+  });
+
+  const ring = new THREE.Mesh(localGeom, mat);
+  ring.scale.setScalar(inflate);
+  ring.position.copy(center);
+  ring.userData.isSelectionOutline = true;
+  ring.renderOrder = (mesh.renderOrder ?? 0) + 22;
+  mesh.add(ring);
+
+  // Faster rotation around the room
+  gsap.to(mat.uniforms.uAngle, {
+    value: Math.PI * 2,
+    duration: 5.5,
+    repeat: -1,
+    ease: "none",
+  });
+}
+
+function getHighlightColors(
+  room: Room | null | undefined,
+  dataViewMode: string,
+  colorPaletteId: string,
+  heizlastRange: number[],
+  kuhllastRange: number[],
+  luftungRange: number[],
+  activeTemperatureRange: number[],
+  customLegendColors: CustomLegendColors | null | undefined,
+): THREE.Color[] {
+  let targetMode = dataViewMode;
+  if (dataViewMode === "heizlast") {
+    targetMode = "temperature";
+  } else if (dataViewMode === "temperature") {
+    targetMode = "heizlast";
+  }
+
+  let mode: LegendColorMode = "heizlast";
+  let range = heizlastRange;
+  let overrides = customLegendColors?.heizlast;
+  let val = room?.heatLoad ?? 0;
+
+  if (targetMode === "kuhllast") {
+    mode = "kuhllast";
+    range = kuhllastRange;
+    overrides = customLegendColors?.kuhllast;
+    val = room?.coolLoad ?? 0;
+  } else if (targetMode === "luftung") {
+    mode = "luftung";
+    range = luftungRange;
+    overrides = customLegendColors?.luftung;
+    val = room?.heatLoad ?? 0;
+  } else if (targetMode === "temperature") {
+    mode = "temperature";
+    range = activeTemperatureRange;
+    overrides = customLegendColors?.temperature;
+    val = room ? roomTemperatureForView(room, "temperature" as DataViewMode) : 20;
+  }
+
+  const stops = legendStopsForMode(mode, colorPaletteId, range, overrides);
+  if (!stops || !stops.length) {
+    return [
+      new THREE.Color("#0050ff"),
+      new THREE.Color("#1f8a70"),
+      new THREE.Color("#4caf50"),
+      new THREE.Color("#ffdc00"),
+      new THREE.Color("#ff8c00"),
+      new THREE.Color("#dc0000"),
+    ];
+  }
+
+  const sampleColor = (t: number): THREE.Color => {
+    const clamped = Math.max(0, Math.min(1, t));
+    const scaled = clamped * (stops.length - 1);
+    const idx = Math.floor(scaled);
+    const f = scaled - idx;
+    if (idx >= stops.length - 1) return new THREE.Color(stops[stops.length - 1].color);
+    const c1 = new THREE.Color(stops[idx].color);
+    const c2 = new THREE.Color(stops[idx + 1].color);
+    return c1.clone().lerp(c2, f);
+  };
+
+  const first = range[0];
+  const last = range[range.length - 1];
+  const span = last - first;
+  const tCenter = span === 0 ? 0.5 : Math.max(0, Math.min(1, (val - first) / span));
+
+  const startT = Math.max(0, Math.min(0.5, tCenter - 0.25));
+  const endT = Math.min(1, Math.max(0.5, tCenter + 0.25));
+
+  const colors: THREE.Color[] = [];
+  for (let i = 0; i < 6; i++) {
+    const t = startT + (endT - startT) * (i / 5);
+    colors.push(sampleColor(t));
+  }
+  return colors;
 }
 
 function applySurfaceOpacity(
@@ -911,18 +979,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       viewCube.syncFromCamera(camera, controls.target);
       const now = performance.now();
       lastTickRef.current = now;
-
-      // Animate selection outline rainbow gradient
-      const elapsedSec = now * 0.001;
-      scene.traverse((obj) => {
-        if (obj.userData.isRainbowOutline && obj instanceof THREE.Mesh) {
-          const m = obj.material as THREE.ShaderMaterial;
-          if (m.uniforms?.time) {
-            m.uniforms.time.value = elapsedSec;
-          }
-        }
-      });
-
       const sz = new THREE.Vector2();
       renderer.getSize(sz);
       renderer.setScissorTest(false);
@@ -2164,9 +2220,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       }
 
       const hasRoomSelection = Boolean(resolvedId);
-      const SEL_OPACITY = 0.8;
-      const OTHER_OPACITY = 0.1;
-      const OTHER_GRAY = 0xa8aeb8;
       const colorAmt = useAppStore.getState().lighting.color ?? 1;
 
       const styleRoomMesh = (id: string, mesh: THREE.Mesh) => {
@@ -2192,10 +2245,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
         const nextOpacity = !passes
           ? 0.1
-          : zoneFocus && !inZone
-            ? 0.12
-            : isSel
-              ? Math.max(SEL_OPACITY, baseOpacity)
+          : isSel
+            ? 1.0
+            : zoneFocus && !inZone
+              ? 0.12
               : baseOpacity;
 
         applySurfaceOpacity(mat, nextOpacity, true);
@@ -2205,16 +2258,9 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
           (mesh.userData.baseColorHex as string | undefined) ??
           `#${mat.color.getHexString()}`;
 
-        if (hasRoomSelection && passes) {
-          mat.color.set(baseHex);
-          if (isSel) {
-            mat.emissive.set(baseHex);
-            mat.emissiveIntensity = lightMode ? 0.45 : 0.6;
-          } else {
-            mat.emissive.setHex(0x000000);
-            mat.emissiveIntensity = 0;
-          }
-        } else if (lightMode) {
+        // Keep room colour untouched for both selected and non-selected rooms.
+        // Only add a thermal-palette outline around the selected room.
+        if (lightMode) {
           const c = new THREE.Color(baseHex).lerp(
             new THREE.Color(0xd0d4dc),
             1 - colorAmt,
@@ -2229,7 +2275,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         }
 
         if (isSel && passes) {
-          attachColorOutline(mesh, baseHex);
+          const colors = getHighlightColors(
+            room,
+            dataViewMode,
+            activeColorPalette,
+            heizlastRange,
+            kuhllastRange,
+            luftungRange,
+            activeTemperatureRange,
+            customLegendColors,
+          );
+          attachThermalSelectionOutline(mesh, colors);
           mesh.renderOrder = 8;
         } else {
           mesh.renderOrder = 2;
@@ -2259,10 +2315,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
         if (isSel) {
-          const hex =
-            (obj.userData.colorHex as string | undefined) ??
-            `#${mat.color.getHexString()}`;
-          attachColorOutline(obj, hex);
+          const colors = [
+            new THREE.Color("#0050ff"),
+            new THREE.Color("#1f8a70"),
+            new THREE.Color("#4caf50"),
+            new THREE.Color("#ffdc00"),
+            new THREE.Color("#ff8c00"),
+            new THREE.Color("#dc0000"),
+          ];
+          attachThermalSelectionOutline(obj, colors);
         }
         mat.needsUpdate = true;
       });

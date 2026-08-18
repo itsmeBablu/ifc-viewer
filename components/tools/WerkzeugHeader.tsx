@@ -72,13 +72,16 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const profileCloseTimer = useRef<number | null>(null);
 
   const sideBtn =
     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-[color,background,border,box-shadow,transform] duration-300 ease-out active:scale-95 sm:h-9 sm:w-9";
   const sideIdle = isDark
     ? `${sideBtn} border border-transparent text-[var(--toolbar-icon)] hover:border-amber-300/80 hover:bg-gradient-to-br hover:from-amber-300/95 hover:via-yellow-200/88 hover:to-amber-400/78 hover:text-amber-950`
     : `${sideBtn} border border-transparent text-[var(--toolbar-icon)] hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950`;
+  const yellowGloss = isDark
+    ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]"
+    : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
+  const sideActive = `${sideBtn} ${yellowGloss}`;
 
   useEffect(() => {
     const openPicker = () => {
@@ -92,8 +95,6 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (profileCloseTimer.current != null)
-          window.clearTimeout(profileCloseTimer.current);
         setProfileOpen(false);
         setLanguageExpanded(false);
         setProfileHoverId(null);
@@ -102,22 +103,6 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
     document.addEventListener("click", onDoc);
     return () => document.removeEventListener("click", onDoc);
   }, []);
-
-  const cancelProfileMenuClose = () => {
-    if (profileCloseTimer.current != null) {
-      window.clearTimeout(profileCloseTimer.current);
-      profileCloseTimer.current = null;
-    }
-  };
-
-  const closeProfileMenuSoon = () => {
-    cancelProfileMenuClose();
-    profileCloseTimer.current = window.setTimeout(() => {
-      setProfileOpen(false);
-      setProfileHoverId(null);
-      setLanguageExpanded(false);
-    }, 150);
-  };
 
   return (
     <div
@@ -140,11 +125,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
         <GsapPopMenu
           show={profileOpen}
           className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]"
-          onMouseEnter={cancelProfileMenuClose}
-          onMouseLeave={() => {
-            setProfileHoverId(null);
-            closeProfileMenuSoon();
-          }}
+          onMouseLeave={() => setProfileHoverId(null)}
         >
           <GlassPanel variant="menu" zIndex={50}>
             <div className="box-border w-[13.25rem] p-1.5 sm:w-[14.25rem] sm:p-2">
@@ -156,8 +137,13 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
                 type="button"
                 onClick={() => setLanguageExpanded((v) => !v)}
                 aria-expanded={languageExpanded}
+                onMouseEnter={() => setProfileHoverId("language")}
                 className={`flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs ${
-                  languageExpanded ? menuRowHighlight : `${menuRowIdle} text-[var(--text-body)]`
+                  (profileHoverId != null
+                    ? profileHoverId === "language"
+                    : languageExpanded)
+                    ? menuRowHighlight
+                    : `${menuRowIdle} text-[var(--text-body)]`
                 }`}
               >
                 <span>{t(uiLanguage, "language")}</span>
@@ -186,32 +172,39 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
                     ["de", "langDe"],
                     ["es", "langEs"],
                   ] as const
-                ).map(([lang, labelKey]) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => {
-                      setUiLanguage(lang);
-                      setProfileHoverId(null);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
-                      uiLanguage === lang
-                        ? menuRowHighlight
-                        : `${menuRowIdle} text-[var(--text-body)]`
-                    }`}
-                  >
-                    <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
-                      <Image
-                        src={`/${lang}.svg`}
-                        alt={lang}
-                        width={20}
-                        height={20}
-                        className="h-full w-full object-cover"
-                      />
-                    </span>
-                    {t(uiLanguage, labelKey)}
-                  </button>
-                ))}
+                ).map(([lang, labelKey]) => {
+                  const isSelected = uiLanguage === lang;
+                  const isHovered = profileHoverId === lang;
+                  const isHighlighted = isSelected || isHovered;
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onMouseEnter={() => setProfileHoverId(lang)}
+                      onMouseLeave={() => setProfileHoverId(null)}
+                      onClick={() => {
+                        setUiLanguage(lang);
+                        setProfileHoverId(null);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
+                        isHighlighted
+                          ? menuRowHighlight
+                          : `${menuRowIdle} text-[var(--text-body)]`
+                      }`}
+                    >
+                      <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
+                        <Image
+                          src={`/${lang}.svg`}
+                          alt={lang}
+                          width={20}
+                          height={20}
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                      {t(uiLanguage, labelKey)}
+                    </button>
+                  );
+                })}
               </GsapHeightAccordion>
 
               <div className="mt-1 box-border flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-1.5">
@@ -261,13 +254,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
 
             <button
               type="button"
-              onMouseEnter={() => {
-                cancelProfileMenuClose();
-                setProfileOpen(true);
-              }}
-              onMouseLeave={closeProfileMenuSoon}
               onClick={() => {
-                cancelProfileMenuClose();
                 setProfileOpen((v) => {
                   if (v) setLanguageExpanded(false);
                   return !v;
@@ -275,7 +262,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
               }}
               aria-expanded={profileOpen}
               aria-label={t(uiLanguage, "profile")}
-              className={sideIdle}
+              className={profileOpen ? sideActive : sideIdle}
             >
               <MdOutlineAccountCircle className="h-5 w-5 sm:h-[1.35rem] sm:w-[1.35rem]" />
             </button>

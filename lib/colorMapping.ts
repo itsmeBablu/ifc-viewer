@@ -64,15 +64,11 @@ const STANDARD_HEIZLAST: ColorStop[] = [
 
 /** Summer cooling — vivid sky → cobalt (readable on glass rooms in 3D). */
 const STANDARD_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#E3F2FD" },
-  { value: 0, color: "#90CAF9" },
-  { value: 10, color: "#42A5F5" },
-  { value: 20, color: "#1E88E5" },
-  { value: 25, color: "#1565C0" },
-  { value: 30, color: "#0D47A1" },
-  { value: 40, color: "#0A3D91" },
-  { value: 50, color: "#082E6B" },
-  { value: Number.POSITIVE_INFINITY, color: "#041E42" },
+  { value: Number.NEGATIVE_INFINITY, color: "#E3B98A" },
+  { value: 0, color: "#E3B98A" },
+  { value: 25, color: "#A78BFA" },
+  { value: 50, color: "#1E40AF" },
+  { value: Number.POSITIVE_INFINITY, color: "#1E40AF" },
 ];
 
 const STANDARD_TEMP: ColorStop[] = [
@@ -96,15 +92,11 @@ const SOFT_HEIZLAST: ColorStop[] = [
 ];
 
 const SOFT_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#E3F2FD" },
-  { value: 0, color: "#90CAF9" },
-  { value: 10, color: "#64B5F6" },
-  { value: 20, color: "#42A5F5" },
-  { value: 25, color: "#1E88E5" },
-  { value: 30, color: "#1565C0" },
-  { value: 40, color: "#0D47A1" },
-  { value: 50, color: "#0A3D91" },
-  { value: Number.POSITIVE_INFINITY, color: "#062A66" },
+  { value: Number.NEGATIVE_INFINITY, color: "#F5E5D6" },
+  { value: 0, color: "#F5E5D6" },
+  { value: 25, color: "#DDD6FE" },
+  { value: 50, color: "#3B82F6" },
+  { value: Number.POSITIVE_INFINITY, color: "#3B82F6" },
 ];
 
 const SOFT_TEMP: ColorStop[] = [
@@ -130,15 +122,11 @@ const WARM_HEIZLAST: ColorStop[] = [
 
 /** Warm-summer cooling — mint → lagoon → periwinkle → soft plum. */
 const WARM_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#E4F2E8" },
-  { value: 0, color: "#B8DCC8" },
-  { value: 10, color: "#88C8B8" },
-  { value: 20, color: "#70B0C8" },
-  { value: 25, color: "#8890C8" },
-  { value: 30, color: "#A088C8" },
-  { value: 40, color: "#B878B0" },
-  { value: 50, color: "#C07098" },
-  { value: Number.POSITIVE_INFINITY, color: "#A05878" },
+  { value: Number.NEGATIVE_INFINITY, color: "#E5C39E" },
+  { value: 0, color: "#E5C39E" },
+  { value: 25, color: "#C0A7FA" },
+  { value: 50, color: "#2563EB" },
+  { value: Number.POSITIVE_INFINITY, color: "#2563EB" },
 ];
 
 const WARM_TEMP: ColorStop[] = [
@@ -162,15 +150,11 @@ const DARK_HEIZLAST: ColorStop[] = [
 ];
 
 const DARK_KUHLLAST: ColorStop[] = [
-  { value: Number.NEGATIVE_INFINITY, color: "#0D2137" },
-  { value: 0, color: "#123A4A" },
-  { value: 10, color: "#0E5C6B" },
-  { value: 20, color: "#0A7A8C" },
-  { value: 25, color: "#1565A0" },
-  { value: 30, color: "#2A4A9E" },
-  { value: 40, color: "#4A3A8C" },
-  { value: 50, color: "#6A2080" },
-  { value: Number.POSITIVE_INFINITY, color: "#3A1058" },
+  { value: Number.NEGATIVE_INFINITY, color: "#8A623A" },
+  { value: 0, color: "#8A623A" },
+  { value: 25, color: "#58457D" },
+  { value: 50, color: "#1E3A8A" },
+  { value: Number.POSITIVE_INFINITY, color: "#1E3A8A" },
 ];
 
 const DARK_TEMP: ColorStop[] = [

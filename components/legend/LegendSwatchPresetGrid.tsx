@@ -92,9 +92,11 @@ function SwatchPresetButton({
       }`}
     >
       <div
-        className={`flex w-full overflow-hidden rounded-md border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_1px_4px_rgba(0,0,0,0.12)] ${
-          compact ? "h-4" : "h-5"
-        }`}
+        className="grid w-full gap-x-1.5 gap-y-0.5 overflow-hidden rounded-md border border-white/40 shadow-sm"
+        style={{
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gridAutoRows: compact ? "6px" : "8px",
+        }}
       >
         {colors.map((color) => (
           <span

@@ -60,7 +60,7 @@ export default function LegendPalettePanel({
         placement="below"
         className="block w-full"
       >
-        <div>
+        <div className="w-full">
           <p className="px-0.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)]">
             {t(uiLanguage, "swatchPresets")}
           </p>

@@ -42,6 +42,7 @@ import { listVisibleFloors } from "@/lib/floorFilter";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { t, type UiLanguage } from "@/lib/i18n";
 import { useModelScene } from "../viewer/ModelSceneContext";
+import Plan2D from "../viewer/Plan2D";
 import GlassPanel from "../common/GlassPanel";
 import ModelText from "../common/ModelText";
 import type { Viewer3DHandle } from "../viewer/Viewer3D";
@@ -732,9 +733,6 @@ export default function FloorsPanel({
                       <p className="mt-1 whitespace-pre-line text-[11px] leading-snug text-zinc-600">
                         {modelDetailHint}
                       </p>
-                      <p className="mt-1.5 text-[10px] font-medium tracking-wide text-amber-700/90">
-                        {t(uiLanguage, "loadOtherIfcShortcut")}
-                      </p>
                     </div>
                   </GlassPanel>
                 </div>,
@@ -1058,19 +1056,8 @@ export default function FloorsPanel({
 
                 {roomsExpanded && (
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="shrink-0 overflow-hidden rounded-lg border border-zinc-300/50 bg-[var(--scene-bg)]">
-                      {snapshotUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={snapshotUrl}
-                          alt={`Floor plan ${selectedFloorObj?.name ?? ""}`}
-                          className="block h-auto max-h-36 w-full object-contain"
-                        />
-                      ) : (
-                        <div className="flex min-h-[5rem] w-full items-center justify-center text-[11px] text-zinc-400">
-                          {t(uiLanguage, "noFloorPlan")}
-                        </div>
-                      )}
+                    <div className="shrink-0 overflow-hidden rounded-lg border border-zinc-300/50 bg-[var(--scene-bg)]" style={{ height: "9rem" }}>
+                      <Plan2D className="h-full w-full" />
                     </div>
 
                     <p className="mt-1 shrink-0 px-0.5 text-[10px] font-medium text-zinc-500">

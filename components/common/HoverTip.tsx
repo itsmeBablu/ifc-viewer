@@ -82,7 +82,13 @@ export default function HoverTip({
   return (
     <div
       ref={wrapRef}
-      className={`relative inline-flex ${className}`}
+      className={`relative ${
+        className.includes("inline-flex") ||
+        className.includes("block") ||
+        className.includes("flex")
+          ? ""
+          : "inline-flex"
+      } ${className}`}
       onMouseEnter={() => {
         if (!hoverCapable || suppressed || disabled) return;
         clearTimer();

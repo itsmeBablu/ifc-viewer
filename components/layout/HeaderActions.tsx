@@ -270,7 +270,6 @@ export default function HeaderActions({
   const headerReady = useRef(false);
   const modeBtnRef = useRef<HTMLButtonElement>(null);
   const [modePos, setModePos] = useState({ top: 0, left: 0 });
-  const profileCloseTimer = useRef<number | null>(null);
 
   const expanded =
     !isMobileHeader || pinned || hovered || modeOpen || profileOpen;
@@ -378,7 +377,6 @@ export default function HeaderActions({
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
-        if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
         setModeOpen(false);
         setProfileOpen(false);
         setLanguageExpanded(false);
@@ -404,12 +402,6 @@ export default function HeaderActions({
     return () => window.removeEventListener(OPEN_IFC_FILE_EVENT, openPicker);
   }, [isLoadingModel]);
 
-  useEffect(() => {
-    return () => {
-      if (profileCloseTimer.current != null) window.clearTimeout(profileCloseTimer.current);
-    };
-  }, []);
-
   /** Mode dropdown position — anchored to the mode button itself, like HeaderTip. */
   const updateModePos = () => {
     const el = modeBtnRef.current;
@@ -428,28 +420,6 @@ export default function HeaderActions({
       window.removeEventListener("scroll", updateModePos, true);
     };
   }, [modeOpen]);
-
-  const cancelProfileMenuClose = () => {
-    if (profileCloseTimer.current != null) {
-      window.clearTimeout(profileCloseTimer.current);
-      profileCloseTimer.current = null;
-    }
-  };
-  const openProfileMenu = () => {
-    cancelProfileMenuClose();
-    setProfileOpen(true);
-    setModeOpen(false);
-    setModeHoverId(null);
-    setProfileHoverId(null);
-  };
-  const closeProfileMenuSoon = () => {
-    cancelProfileMenuClose();
-    profileCloseTimer.current = window.setTimeout(() => {
-      setProfileOpen(false);
-      setProfileHoverId(null);
-      setLanguageExpanded(false);
-    }, 150);
-  };
 
   const modeOptions: { id: DataViewMode; label: string; shortcut: string }[] = [
     { id: "heizlast", label: t(uiLanguage, "heating"), shortcut: "H" },
@@ -617,11 +587,7 @@ export default function HeaderActions({
         <GsapPopMenu
           show={profileOpen}
           className="absolute top-[calc(100%+0.45rem)] right-0 z-[50]"
-          onMouseEnter={cancelProfileMenuClose}
-          onMouseLeave={() => {
-            setProfileHoverId(null);
-            closeProfileMenuSoon();
-          }}
+          onMouseLeave={() => setProfileHoverId(null)}
         >
           <GlassPanel variant="menu" zIndex={50}>
             <div className="box-border w-[13.25rem] p-1.5 sm:w-[14.25rem] sm:p-2">
@@ -673,24 +639,23 @@ export default function HeaderActions({
                     ["es", "langEs"],
                   ] as const
                 ).map(([lang, labelKey]) => {
-                  const selected = uiLanguage === lang;
-                  const highlighted =
-                    profileHoverId != null
-                      ? profileHoverId === lang
-                      : selected;
+                  const isSelected = uiLanguage === lang;
+                  const isHovered = profileHoverId === lang;
+                  const isHighlighted = isSelected || isHovered;
                   return (
                     <button
                       key={lang}
                       type="button"
                       onMouseEnter={() => setProfileHoverId(lang)}
+                      onMouseLeave={() => setProfileHoverId(null)}
                       onClick={() => {
                         setUiLanguage(lang);
                         setProfileHoverId(null);
                       }}
                       className={`flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs ${
-                        highlighted
+                        isHighlighted
                           ? menuRowHighlight
-                          : `${menuRowIdle} text-[var(--text-body)] ${selected ? "font-semibold text-[var(--text-strong)]" : ""}`
+                          : `${menuRowIdle} text-[var(--text-body)]`
                       }`}
                     >
                       <span className="h-5 w-5 overflow-hidden rounded-full border border-white/60 shadow-sm">
@@ -825,7 +790,7 @@ export default function HeaderActions({
                       >
                         <HeaderTip
                           label={modeLabel}
-                          hint={t(uiLanguage, "viewHintWithTool")}
+                          hint={t(uiLanguage, "viewHint")}
                         >
                           <button
                             ref={modeBtnRef}
@@ -877,33 +842,38 @@ export default function HeaderActions({
                           : "relative flex h-full items-center justify-center self-stretch"
                       }
                     >
-                    <button
-                      type="button"
-                      disabled={isLoadingModel}
-                      onClick={() => {
-                        setModeOpen(false);
-                        setProfileOpen(false);
-                        setLanguageExpanded(false);
-                        fileInputRef.current?.click();
-                      }}
-                      aria-label={t(uiLanguage, "loadIfc")}
-                      className={`${
-                        showIconLabels ? iconStack : sideIdle
-                      } disabled:opacity-45`}
-                    >
-                      {showIconLabels ? (
-                        <>
-                          <span className={sideIdle}>
+                      <HeaderTip
+                        label={t(uiLanguage, "ifcUpload")}
+                        hint={t(uiLanguage, "loadOtherIfcShortcut")}
+                      >
+                        <button
+                          type="button"
+                          disabled={isLoadingModel}
+                          onClick={() => {
+                            setModeOpen(false);
+                            setProfileOpen(false);
+                            setLanguageExpanded(false);
+                            fileInputRef.current?.click();
+                          }}
+                          aria-label={t(uiLanguage, "loadIfc")}
+                          className={`${
+                            showIconLabels ? iconStack : sideIdle
+                          } disabled:opacity-45`}
+                        >
+                          {showIconLabels ? (
+                            <>
+                              <span className={sideIdle}>
+                                <UploadIcon />
+                              </span>
+                              <span className={iconCaption}>
+                                {t(uiLanguage, "ifcUpload")}
+                              </span>
+                            </>
+                          ) : (
                             <UploadIcon />
-                          </span>
-                          <span className={iconCaption}>
-                            {t(uiLanguage, "ifcUpload")}
-                          </span>
-                        </>
-                      ) : (
-                        <UploadIcon />
-                      )}
-                    </button>
+                          )}
+                        </button>
+                      </HeaderTip>
                     </div>
 
                     <div
@@ -913,49 +883,51 @@ export default function HeaderActions({
                           : "relative flex h-full items-center justify-center self-stretch"
                       }
                     >
-                      <button
-                        type="button"
-                        onMouseEnter={openProfileMenu}
-                        onMouseLeave={closeProfileMenuSoon}
-                        onClick={() => {
-                          cancelProfileMenuClose();
-                          setProfileOpen((v) => {
-                            if (v) setLanguageExpanded(false);
-                            return !v;
-                          });
-                          setModeOpen(false);
-                          setModeHoverId(null);
-                          setProfileHoverId(null);
-                        }}
-                        aria-expanded={profileOpen}
-                        aria-label={t(uiLanguage, "profile")}
-                        title={t(uiLanguage, "profileHint")}
-                        className={
-                          showIconLabels
-                            ? iconStack
-                            : profileOpen
-                              ? sideActive
-                              : sideIdle
-                        }
+                      <HeaderTip
+                        label={t(uiLanguage, "profile")}
+                        hint={t(uiLanguage, "profileHint")}
                       >
-                        {showIconLabels ? (
-                          <>
-                            <span
-                              className={profileOpen ? sideActive : sideIdle}
-                            >
-                              <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
-                            </span>
-                            <span
-                              className={iconCaption}
-                              title={t(uiLanguage, "profile")}
-                            >
-                              {t(uiLanguage, "profile")}
-                            </span>
-                          </>
-                        ) : (
-                          <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
-                        )}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileOpen((v) => {
+                              if (v) setLanguageExpanded(false);
+                              return !v;
+                            });
+                            setModeOpen(false);
+                            setModeHoverId(null);
+                            setProfileHoverId(null);
+                            setHovered(true);
+                          }}
+                          aria-expanded={profileOpen}
+                          aria-label={t(uiLanguage, "profile")}
+                          className={
+                            showIconLabels
+                              ? iconStack
+                              : profileOpen
+                                ? sideActive
+                                : sideIdle
+                          }
+                        >
+                          {showIconLabels ? (
+                            <>
+                              <span
+                                className={profileOpen ? sideActive : sideIdle}
+                              >
+                                <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
+                              </span>
+                              <span
+                                className={iconCaption}
+                                title={t(uiLanguage, "profile")}
+                              >
+                                {t(uiLanguage, "profile")}
+                              </span>
+                            </>
+                          ) : (
+                            <MdOutlineAccountCircle className="h-5 w-5 text-current sm:h-[1.35rem] sm:w-[1.35rem]" />
+                          )}
+                        </button>
+                      </HeaderTip>
                     </div>
                     </>
                   )}

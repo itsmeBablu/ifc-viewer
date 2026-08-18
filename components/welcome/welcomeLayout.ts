@@ -52,44 +52,41 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
   const mobileShared = {
     isMobileForm: true as const,
     isMobileLandscape: false as const,
-    themeCardClass: `${cardBase} shrink-0 px-3.5 py-3`,
-    seasonalCardClass: `${cardBase} shrink-0 px-3.5 py-3`,
-    seasonalHintClass: "text-[11px] leading-relaxed text-[var(--text-muted)] mt-1",
+    themeCardClass: `${cardBase} shrink-0 px-3.5 py-3 rounded-2xl`,
+    seasonalCardClass: `${cardBase} shrink-0 px-3.5 py-3 rounded-2xl`,
+    seasonalHintClass: "text-[10px] leading-snug text-[var(--text-muted)]",
     togglesRowClass: "",
     toggleCellClass: "",
     hintClass: "hidden",
-    languageCompact: false as const,
-    fieldsClass: "welcome-mobile-fields flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain",
-    cardClass: `${cardBase} shrink-0 px-3.5 py-3`,
-    inputClass: `${inputBase} h-11 shrink-0 px-3.5 py-2.5`,
+    languageCompact: true as const,
+    fieldsClass: "welcome-mobile-fields flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain pb-2 thin-scroll",
+    cardClass: `${cardBase} shrink-0 px-3.5 py-3 rounded-2xl`,
+    inputClass: `${inputBase} h-12 text-base shrink-0 px-4 py-3 font-medium shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]`,
     labelClass: "mb-1.5 block shrink-0 text-xs font-semibold tracking-wide text-[var(--text-muted)]",
     bodyTextClass: "text-xs font-semibold text-[var(--text-body)]",
     actionsClass: "welcome-mobile-actions flex shrink-0 flex-row gap-2 pt-1.5",
     primaryBtnClass:
-      "order-2 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md text-sm px-4 py-2.5",
+      "order-2 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md text-sm px-3 py-2.5 rounded-xl",
     secondaryBtnClass:
-      "order-1 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md hover:border-[var(--glass-border)] text-xs px-3.5 py-2.5",
+      "order-1 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md hover:border-[var(--glass-border)] text-xs px-3 py-2.5 rounded-xl",
     contentBlockClass:
-      "flex h-full min-h-0 w-full flex-1 flex-col gap-2.5 overflow-hidden",
+      "flex h-full min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden",
     formMaxWidth: "w-full h-full min-h-0",
     showSubtitle: false,
   };
 
   if (!isWide) {
-    const viewFlex = height < 700 ? "flex-[7]" : "flex-[8]";
-    const formFlex = height < 700 ? "flex-[13]" : "flex-[12]";
-
     return {
       tier: "stacked",
       isWide: false,
-      viewportClass: `relative order-1 min-h-0 w-full ${viewFlex} shrink-0 overflow-hidden border-b border-[var(--panel-divider)]`,
-      formClass: `order-2 flex min-h-0 ${formFlex} flex-col overflow-hidden`,
+      viewportClass: "relative order-2 h-[40dvh] w-full shrink-0 overflow-hidden border-t border-[var(--panel-divider)] shadow-inner",
+      formClass: "order-1 flex min-h-0 flex-1 flex-col overflow-hidden",
       shellClass:
-        "flex h-full min-h-0 flex-1 flex-col overflow-hidden px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]",
-      headerClass: "flex shrink-0 flex-col items-center text-center",
-      logoClass: isShort ? "mb-1 h-6 w-auto object-contain" : "mb-1.5 h-7 w-auto object-contain",
+        "flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 pt-3 pb-3",
+      headerClass: "flex shrink-0 flex-col items-center text-center pb-1",
+      logoClass: "mb-2 h-7 w-auto object-contain",
       titleClass:
-        "text-[clamp(0.9375rem,4vw,1.05rem)] font-semibold leading-tight tracking-tight text-[var(--text-strong)]",
+        "text-[clamp(1rem,4.5vw,1.15rem)] font-bold leading-tight tracking-tight text-[var(--text-strong)]",
       ...mobileShared,
     };
   }
