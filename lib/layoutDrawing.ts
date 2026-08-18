@@ -34,6 +34,17 @@ export type LayoutWall = {
   thicknessMm: number;
   heightMm: number;
   createdAt: number;
+  // ── Section 5: Curved wall (arc) ──────────────────────────────────────
+  /** If true, wall follows an arc defined by arcCenter + arcRadius. */
+  curved?: boolean;
+  arcCenterXmm?: number;
+  arcCenterYmm?: number;
+  arcRadiusMm?: number;
+  arcStartAngleDeg?: number;
+  arcEndAngleDeg?: number;
+  // ── Section 9: Material & color ───────────────────────────────────────
+  color?: string;
+  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };
 
 export type LayoutDoor = {
@@ -49,6 +60,10 @@ export type LayoutDoor = {
   /** Which side of the wall the leaf swings into (+1 / −1). */
   swing: 1 | -1;
   createdAt: number;
+  // ── Section 6: Door style, head shape, color ──────────────────────────
+  style?: "wood" | "metal" | "glass" | "double";
+  headShape?: "flat" | "arched" | "triangular";
+  color?: string;
 };
 
 export type LayoutWindow = {
@@ -61,15 +76,19 @@ export type LayoutWindow = {
   /** Sill height above level floor, mm. */
   sillHeightMm: number;
   createdAt: number;
+  // ── Section 6: Head shape + color ─────────────────────────────────────
+  headShape?: "flat" | "arched" | "triangular";
+  color?: string;
 };
 
-/** Horizontal slab — floor plate or roof plate (axis-aligned rectangle in plan). */
+/** Horizontal slab — floor plate or roof plate. */
 export type LayoutSlab = {
   id: string;
   projectId: string;
   levelId: string;
   kind: "floor" | "roof";
-  /** Plan rectangle (mm). Scene: X → X, Y → Z. */
+  // ── Legacy rectangle fields (kept for backwards compatibility) ─────────
+  /** Plan rectangle AABB (mm). Computed from boundary if polygon mode. */
   minXmm: number;
   minYmm: number;
   maxXmm: number;
@@ -82,6 +101,16 @@ export type LayoutSlab = {
    */
   elevationOffsetMm: number;
   createdAt: number;
+  // ── Section 7: Sketch-based polygon boundary + holes ──────────────────
+  /** Outer boundary polygon (plan mm). When present, supersedes the AABB. */
+  boundary?: { xMm: number; yMm: number }[];
+  /** Inner hole polygons (plan mm). */
+  holes?: { xMm: number; yMm: number }[][];
+  // ── Section 8: Roof per-edge slope control ────────────────────────────
+  edgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[];
+  // ── Section 9: Material & color ───────────────────────────────────────
+  color?: string;
+  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
 };
 
 export const DEFAULT_SLAB_THICKNESS_MM = 200;
@@ -121,12 +150,34 @@ export function newLayoutId(prefix: string): string {
 }
 
 export function wallLengthMm(w: LayoutWall): number {
+  if (w.curved && w.arcRadiusMm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const deltaAngle = Math.abs(w.arcEndAngleDeg - w.arcStartAngleDeg);
+    return w.arcRadiusMm * (deltaAngle * Math.PI) / 180;
+  }
   const dx = w.endXmm - w.startXmm;
   const dy = w.endYmm - w.startYmm;
   return Math.hypot(dx, dy);
 }
 
 export function wallAngleRad(w: LayoutWall): number {
+  if (w.curved && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    // Tangent angle at the midpoint of the arc
+    const midAngleDeg = (w.arcStartAngleDeg + w.arcEndAngleDeg) / 2;
+    const midAngleRad = (midAngleDeg * Math.PI) / 180;
+    return midAngleRad + Math.PI / 2; // Tangent direction
+  }
+  return Math.atan2(w.endYmm - w.startYmm, w.endXmm - w.startXmm);
+}
+
+export function wallAngleAtPositionRad(w: LayoutWall, positionMm: number): number {
+  if (w.curved && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const len = wallLengthMm(w);
+    const t = len > 0 ? Math.max(0, Math.min(1, positionMm / len)) : 0;
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const angle = startRad + (endRad - startRad) * t;
+    return angle + Math.PI / 2;
+  }
   return Math.atan2(w.endYmm - w.startYmm, w.endXmm - w.startXmm);
 }
 
@@ -467,9 +518,18 @@ export function pointOnWallMm(
 ): { xMm: number; yMm: number } {
   const len = wallLengthMm(w);
   const t = len > 0 ? Math.max(0, Math.min(1, offsetMm / len)) : 0;
+  if (w.curved && w.arcRadiusMm != null && w.arcCenterXmm != null && w.arcCenterYmm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const angle = startRad + (endRad - startRad) * t;
+    return {
+      xMm: Math.round(w.arcCenterXmm + w.arcRadiusMm * Math.cos(angle)),
+      yMm: Math.round(w.arcCenterYmm + w.arcRadiusMm * Math.sin(angle)),
+    };
+  }
   return {
-    xMm: w.startXmm + (w.endXmm - w.startXmm) * t,
-    yMm: w.startYmm + (w.endYmm - w.startYmm) * t,
+    xMm: Math.round(w.startXmm + (w.endXmm - w.startXmm) * t),
+    yMm: Math.round(w.startYmm + (w.endYmm - w.startYmm) * t),
   };
 }
 
@@ -479,6 +539,20 @@ export function nearestOffsetOnWallMm(
   xMm: number,
   yMm: number,
 ): number {
+  if (w.curved && w.arcRadiusMm != null && w.arcCenterXmm != null && w.arcCenterYmm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+    const dx = xMm - w.arcCenterXmm;
+    const dy = yMm - w.arcCenterYmm;
+    const angleRad = Math.atan2(dy, dx);
+    const startRad = (w.arcStartAngleDeg * Math.PI) / 180;
+    const endRad = (w.arcEndAngleDeg * Math.PI) / 180;
+    const diff = ((angleRad - startRad + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const totalDiff = endRad - startRad;
+    let t = 0;
+    if (Math.abs(totalDiff) > 1e-5) {
+      t = Math.max(0, Math.min(1, diff / totalDiff));
+    }
+    return t * wallLengthMm(w);
+  }
   const dx = w.endXmm - w.startXmm;
   const dy = w.endYmm - w.startYmm;
   const len2 = dx * dx + dy * dy;

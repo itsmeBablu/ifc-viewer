@@ -176,12 +176,26 @@ type LayoutDrawingState = {
         | "endYmm"
         | "thicknessMm"
         | "heightMm"
+        | "curved"
+        | "arcCenterXmm"
+        | "arcCenterYmm"
+        | "arcRadiusMm"
+        | "arcStartAngleDeg"
+        | "arcEndAngleDeg"
+        | "color"
+        | "material"
       >
     >,
   ) => Promise<void>;
   deleteWall: (id: string) => Promise<void>;
   selectWall: (id: string | null) => void;
   duplicateWall: (id: string) => Promise<LayoutWall | null>;
+  /** Set a straight wall to follow an arc. */
+  setWallCurved: (
+    wallId: string,
+    arcCenter: { xMm: number; yMm: number },
+    arcRadiusMm: number,
+  ) => void;
 
   placeDoorOnWall: (
     wallId: string,
@@ -220,7 +234,12 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutWindow,
-        "positionMm" | "widthMm" | "heightMm" | "sillHeightMm"
+        | "positionMm"
+        | "widthMm"
+        | "heightMm"
+        | "sillHeightMm"
+        | "headShape"
+        | "color"
       >
     >,
   ) => Promise<void>;
@@ -257,6 +276,11 @@ type LayoutDrawingState = {
         | "maxYmm"
         | "thicknessMm"
         | "elevationOffsetMm"
+        | "boundary"
+        | "holes"
+        | "edgeSlopes"
+        | "color"
+        | "material"
       >
     >,
   ) => Promise<void>;
@@ -1126,7 +1150,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return clone;
   },
 
-  placeDoorOnWall: async (wallId, positionMm, opts) => {
+  setWallCurved: (wallId, arcCenter, arcRadiusMm) => {
+    const wall = get().walls.find((w) => w.id === wallId);
+    if (!wall) return;
+    const startAngleDeg =
+      (Math.atan2(wall.startYmm - arcCenter.yMm, wall.startXmm - arcCenter.xMm) * 180) / Math.PI;
+    const endAngleDeg =
+      (Math.atan2(wall.endYmm - arcCenter.yMm, wall.endXmm - arcCenter.xMm) * 180) / Math.PI;
+    const updated: LayoutWall = {
+      ...wall,
+      curved: true,
+      arcCenterXmm: arcCenter.xMm,
+      arcCenterYmm: arcCenter.yMm,
+      arcRadiusMm,
+      arcStartAngleDeg: startAngleDeg,
+      arcEndAngleDeg: endAngleDeg,
+    };
+    set({ walls: get().walls.map((w) => (w.id === wallId ? updated : w)) });
+    idbPutWall(updated);
+  },
+
+ placeDoorOnWall: async (wallId, positionMm, opts) => {
     pushWerkzeugHistory();
 
     const projectId = get().projectId;
