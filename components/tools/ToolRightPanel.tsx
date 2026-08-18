@@ -31,6 +31,8 @@ import {
   LuTrash2,
   LuGripVertical,
   LuEye,
+  LuPlus,
+  LuMinus,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -562,11 +564,20 @@ export default function ToolRightPanel({
 
                     {/* Levels & Stories tree */}
                     <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
-                        <LuLayers className="h-3 w-3 text-amber-500" />
-                        Building Levels & Stories
-                      </div>
-                      <ToolFloorsSection />
+                      <button 
+                        type="button" 
+                        onClick={() => setFloorsOpen(!floorsOpen)} 
+                        className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-amber-500 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <LuLayers className="h-3 w-3 text-amber-500" />
+                          Building Levels & Stories
+                        </div>
+                        <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-amber-400 bg-[var(--surface-overlay)]/50 transition-colors">
+                          {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" />}
+                        </div>
+                      </button>
+                      {floorsOpen && <ToolFloorsSection />}
                       
                       {/* Views tree */}
                       <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 mt-2">
