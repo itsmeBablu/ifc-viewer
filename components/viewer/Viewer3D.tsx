@@ -647,6 +647,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
   const clipRef = useRef<ClipSliceController | null>(null);
+  const storeyLinesGroupRef = useRef<THREE.Group | null>(null);
   const roomMeshById = useRef<Map<string, THREE.Mesh>>(new Map());
   const roomMeshTwinById = useRef<Map<string, THREE.Mesh>>(new Map());
   const materialCacheRef = useRef(createOverlayMaterialCache());
@@ -951,6 +952,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     helpers.add(grid);
     helpers.add(new THREE.AxesHelper(4));
     scene.add(helpers);
+
+    const storeyLinesGroup = new THREE.Group();
+    storeyLinesGroup.name = "storey-elevation-boundaries";
+    scene.add(storeyLinesGroup);
+    storeyLinesGroupRef.current = storeyLinesGroup;
 
     sceneRef.current = scene;
     cameraRef.current = camera;
@@ -1801,6 +1807,71 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     });
     return () => overlay.dispose();
   }, [toolMode, shellGroup, rooms, roomsFromStore]);
+
+  // Render horizontal boundary lines at each floor elevation boundary
+  useEffect(() => {
+    const group = storeyLinesGroupRef.current;
+    if (!group) return;
+
+    // Clear previous lines
+    while (group.children.length > 0) {
+      const child = group.children[0] as THREE.Line;
+      group.remove(child);
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((m) => m.dispose());
+      } else {
+        child.material.dispose();
+      }
+    }
+
+    const shell = shellCloneRef.current;
+    const overlays = overlaysRef.current;
+    if (!shell && !overlays) return;
+
+    const box = new THREE.Box3();
+    if (shell) {
+      shell.updateWorldMatrix(true, true);
+      box.expandByObject(shell);
+    }
+    if (overlays) {
+      overlays.updateWorldMatrix(true, true);
+      box.expandByObject(overlays);
+    }
+
+    if (box.isEmpty()) return;
+
+    // Get horizontal boundaries
+    const minX = box.min.x;
+    const maxX = box.max.x;
+    const minZ = box.min.z;
+    const maxZ = box.max.z;
+
+    // Get unique elevations
+    const uniqueElevations = Array.from(new Set(floors.map((f) => f.elevation)));
+
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x71717a, // zinc-500
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    });
+
+    uniqueElevations.forEach((elev) => {
+      // Create rectangle loop at elev (Y elevation in world space)
+      const pts = [
+        new THREE.Vector3(minX, elev, minZ),
+        new THREE.Vector3(maxX, elev, minZ),
+        new THREE.Vector3(maxX, elev, maxZ),
+        new THREE.Vector3(minX, elev, maxZ),
+        new THREE.Vector3(minX, elev, minZ),
+      ];
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(geo, mat);
+      line.renderOrder = 10;
+      group.add(line);
+    });
+  }, [floors, shellGroup, rooms, roomsFromStore]);
 
   // Entering / leaving Werkzeug swaps the whole visible set — reframe it.
   useEffect(() => {

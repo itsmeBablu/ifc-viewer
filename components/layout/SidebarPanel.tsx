@@ -13,6 +13,7 @@ import { useModelScene } from "../viewer/ModelSceneContext";
 import type { Viewer3DHandle } from "../viewer/Viewer3D";
 import type { Floor } from "@/lib/types";
 import ModelText from "../common/ModelText";
+import RevitPropertiesPanel from "../common/RevitPropertiesPanel";
 
 type Props = {
   viewerRef: RefObject<Viewer3DHandle | null>;
@@ -186,61 +187,14 @@ export default function SidebarPanel({ viewerRef }: Props) {
           Click any room or building component in the 3D view to inspect it.
         </p>
         {selectedElement ? (
-          <div className="glass-inset space-y-2 rounded-xl p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-zinc-900">
-                  {selectedElement.name}
-                </p>
-                <p className="text-[11px] text-zinc-500">
-                  {selectedElement.typeName}
-                  {selectedElement.kind === "room" ? " · Room" : " · Component"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedElement(null);
-                  setSelectedRoomId(null);
-                }}
-                className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-900/5"
-              >
-                Clear
-              </button>
-            </div>
-            <dl className="space-y-1 text-[11px]">
-              <div className="flex justify-between gap-2">
-                <dt className="text-zinc-500">GlobalId</dt>
-                <dd className="truncate font-mono text-zinc-700">
-                  {selectedElement.globalId}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-zinc-500">Express ID</dt>
-                <dd className="font-mono text-zinc-700">
-                  {selectedElement.expressId}
-                </dd>
-              </div>
-            </dl>
-            {selectedElement.properties.length > 0 ? (
-              <ul className="max-h-44 space-y-1 overflow-y-auto border-t border-zinc-300/40 pt-2">
-                {selectedElement.properties.slice(0, 60).map((p, i) => (
-                  <li
-                    key={`${p.pset}-${p.name}-${i}`}
-                    className="grid grid-cols-[1fr_auto] gap-2 text-[10px]"
-                  >
-                    <span className="truncate text-zinc-500" title={p.pset}>
-                      {p.name}
-                    </span>
-                    <span className="max-w-[140px] truncate text-right font-medium text-zinc-800">
-                      {p.value || "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[11px] text-zinc-400">No properties found.</p>
-            )}
+          <div className="glass-inset space-y-2 rounded-xl p-3 overflow-hidden flex flex-col max-h-[360px]">
+            <RevitPropertiesPanel
+              selectedElement={selectedElement}
+              onClear={() => {
+                setSelectedElement(null);
+                setSelectedRoomId(null);
+              }}
+            />
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-300/60 px-3 py-4 text-center text-[11px] text-zinc-400">

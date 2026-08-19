@@ -29,6 +29,7 @@ export class MarkupSceneLayer {
   private snapIndicator: THREE.Mesh | null = null;
   private measureDraftLine: THREE.Line | null = null;
   private measureDraftDot: THREE.Mesh | null = null;
+  private measureDraftLabel: CSS2DObject | null = null;
   onNoteClick: ((id: string) => void) | null = null;
 
   constructor() {
@@ -297,6 +298,7 @@ export class MarkupSceneLayer {
     }
 
     if (draft && cursor) {
+      console.log("syncMeasurements draft update - draft:", draft, "cursor:", cursor);
       if (!this.measureDraftLine) {
         const geo = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(),
@@ -307,10 +309,12 @@ export class MarkupSceneLayer {
           new THREE.LineBasicMaterial({
             color: 0x38bdf8,
             depthTest: false,
+            depthWrite: false,
             transparent: true,
             opacity: 0.85,
           }),
         );
+        this.measureDraftLine.frustumCulled = false;
         this.measureDraftLine.renderOrder = 998;
         this.measureDraftLine.userData.isMarkupPreview = true;
         this.group.add(this.measureDraftLine);
@@ -322,8 +326,41 @@ export class MarkupSceneLayer {
       pos.needsUpdate = true;
       this.measureDraftLine.geometry.computeBoundingSphere();
       this.measureDraftLine.visible = true;
-    } else if (this.measureDraftLine) {
-      this.measureDraftLine.visible = false;
+
+      // Floating label for the line
+      const draftPt = new THREE.Vector3(draft.x, draft.y, draft.z);
+      const cursorPt = new THREE.Vector3(cursor.x, cursor.y, cursor.z);
+      const distMm = Math.round(toMm(draftPt.distanceTo(cursorPt)));
+
+      const dx = cursor.x - draft.x;
+      const dz = cursor.z - draft.z;
+      let angleDeg = Math.round((Math.atan2(-dz, dx) * 180) / Math.PI);
+      if (angleDeg < 0) angleDeg += 360;
+
+      const mid = draftPt.clone().add(cursorPt).multiplyScalar(0.5);
+
+      if (!this.measureDraftLabel) {
+        const el = document.createElement("div");
+        el.style.cssText = [
+          "pointer-events:none",
+          "padding:3px 8px",
+          "border-radius:9999px",
+          "background:rgba(14,165,233,0.92)",
+          "color:#fff",
+          "font:700 11px/1.2 system-ui,sans-serif",
+          "box-shadow:0 2px 8px rgba(0,0,0,.25)",
+          "white-space:nowrap",
+          "transform:translate(-50%,-120%)",
+        ].join(";");
+        this.measureDraftLabel = new CSS2DObject(el);
+        this.group.add(this.measureDraftLabel);
+      }
+      this.measureDraftLabel.element.textContent = `${distMm} mm · ${angleDeg}°`;
+      this.measureDraftLabel.position.copy(mid);
+      this.measureDraftLabel.visible = true;
+    } else {
+      if (this.measureDraftLine) this.measureDraftLine.visible = false;
+      if (this.measureDraftLabel) this.measureDraftLabel.visible = false;
     }
 
     if (draft) {
@@ -450,6 +487,11 @@ export class MarkupSceneLayer {
       this.measureDraftDot.geometry.dispose();
       (this.measureDraftDot.material as THREE.Material).dispose();
       this.measureDraftDot = null;
+    }
+    if (this.measureDraftLabel) {
+      this.group.remove(this.measureDraftLabel);
+      this.measureDraftLabel.element.remove();
+      this.measureDraftLabel = null;
     }
   }
 }

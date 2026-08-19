@@ -45,6 +45,7 @@ import { useModelScene } from "../viewer/ModelSceneContext";
 import Plan2D from "../viewer/Plan2D";
 import GlassPanel from "../common/GlassPanel";
 import ModelText from "../common/ModelText";
+import RevitPropertiesPanel from "../common/RevitPropertiesPanel";
 import type { Viewer3DHandle } from "../viewer/Viewer3D";
 import type { Room } from "@/lib/types";
 import type { PageFormat } from "@/lib/presentationLayout";
@@ -314,6 +315,20 @@ export default function FloorsPanel({
     () => listVisibleFloors(floors, rooms, shellGroup),
     [floors, rooms, shellGroup],
   );
+
+  const deduplicatedFloors = useMemo(() => {
+    const seenElevations = new Set<number>();
+    const result: typeof sortedFloors = [];
+    const sorted = [...sortedFloors].sort((a, b) => b.elevation - a.elevation);
+    for (const f of sorted) {
+      const roundedElev = Math.round(f.elevation * 1000) / 1000;
+      if (!seenElevations.has(roundedElev)) {
+        seenElevations.add(roundedElev);
+        result.push(f);
+      }
+    }
+    return result;
+  }, [sortedFloors]);
 
   useEffect(() => {
     if (selectedFloor && !sortedFloors.some((f) => f.id === selectedFloor)) {
@@ -904,81 +919,14 @@ export default function FloorsPanel({
               {t(uiLanguage, "noElementSelectedHint")}
             </p>
           ) : (
-            <div className="min-h-0 flex-1 rounded-xl border border-zinc-300/40 bg-white/30 p-2">
-              <div className="mb-1 flex min-w-0 items-center gap-2">
-                <p className="text-[10px] font-semibold tracking-wide text-zinc-600">
-                  {t(uiLanguage, "attributes")}
-                </p>
-                <ModelText
-                  as="p"
-                  className="truncate text-[11px] font-semibold text-zinc-800"
-                >
-                  {selectedElement.name}
-                </ModelText>
-              </div>
-              <div className="thin-scroll h-full max-h-full overflow-y-auto pr-1">
-                <ul className="space-y-0.5">
-                  <li className="text-[10px] leading-tight text-zinc-700">
-                    <span className="font-semibold text-zinc-600">Kind</span>
-                    :{" "}
-                    <span className="break-words text-zinc-800">
-                      {selectedElement.kind}
-                    </span>
-                  </li>
-
-                  <li className="text-[10px] leading-tight text-zinc-700">
-                    <span className="font-semibold text-zinc-600">Floor</span>
-                    :{" "}
-                    <span className="break-words text-zinc-800">
-                      {selectedElement.floorId ?? "—"}
-                    </span>
-                  </li>
-
-                  <li className="text-[10px] leading-tight text-zinc-700">
-                    <span className="font-semibold text-zinc-600">
-                      Express ID
-                    </span>
-                    :{" "}
-                    <span className="break-words text-zinc-800">
-                      {selectedElement.expressId}
-                    </span>
-                  </li>
-
-                  <li className="text-[10px] leading-tight text-zinc-700">
-                    <span className="font-semibold text-zinc-600">Room ID</span>
-                    :{" "}
-                    <span className="break-words text-zinc-800">
-                      {selectedElement.roomId ?? "—"}
-                    </span>
-                  </li>
-
-                  <li className="text-[10px] leading-tight text-zinc-700">
-                    <span className="font-semibold text-zinc-600">
-                      Global ID
-                    </span>
-                    :{" "}
-                    <span className="break-words text-zinc-800">
-                      {selectedElement.globalId ?? "—"}
-                    </span>
-                  </li>
-
-                  {(selectedElement.properties ?? []).map((p, idx) => (
-                    <li
-                      key={`${p.name}-${p.value}-${p.pset ?? "none"}-${idx}`}
-                      className="text-[10px] leading-tight text-zinc-700"
-                    >
-                      <span className="font-semibold text-zinc-600">
-                        {p.pset ? `${p.pset} · ` : ""}
-                        {p.name}
-                      </span>
-                      :{" "}
-                      <span className="break-words text-zinc-800">
-                        {p.value}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <div className="min-h-0 flex-1 rounded-xl border border-zinc-300/40 bg-white/30 p-2 overflow-hidden flex flex-col">
+              <RevitPropertiesPanel
+                selectedElement={selectedElement}
+                onClear={() => {
+                  setSelectedElement(null);
+                  setSelectedRoomId(null);
+                }}
+              />
             </div>
           )
         ) : (
@@ -1001,16 +949,15 @@ export default function FloorsPanel({
               <span className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate">{t(uiLanguage, "view3d")}</span>
                 <span className="tabular-nums text-[10px] text-zinc-400">
-                  {sortedFloors.length}
+                  {deduplicatedFloors.length}
                 </span>
               </span>
             </button>
 
             {/* Floors list — ~3 rows visible, rest scrollable */}
             <div className="thin-scroll max-h-[7.5rem] min-h-[5.25rem] shrink-0 divide-y divide-zinc-200/60 overflow-y-auto rounded-lg border border-zinc-300/50 bg-white/30">
-              {sortedFloors.map((f) => {
-                const active = f.id === selectedFloor;
-                const count = rooms.filter((r) => r.floorId === f.id).length;
+              {deduplicatedFloors.map((f) => {
+                const active = selectedFloorObj && Math.abs(selectedFloorObj.elevation - f.elevation) < 0.001;
                 return (
                   <button
                     key={f.id}
@@ -1020,15 +967,15 @@ export default function FloorsPanel({
                       setSelectedFloor(f.id);
                       setRoomsExpanded(true);
                     }}
-                    className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-[11px] transition-colors ${
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
                       active
                         ? "bg-zinc-900/10 font-semibold text-zinc-900"
                         : "text-zinc-600 hover:bg-zinc-900/5"
                     }`}
                   >
                     <ModelText className="min-w-0 truncate">{f.name}</ModelText>
-                    <span className="tabular-nums text-[10px] text-zinc-400">
-                      {count}
+                    <span className="tabular-nums text-[10px] text-zinc-400 font-medium shrink-0 pl-1">
+                      {f.elevation >= 0 ? "+" : ""}{f.elevation.toFixed(2)} m
                     </span>
                   </button>
                 );
