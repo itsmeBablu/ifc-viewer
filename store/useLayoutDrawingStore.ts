@@ -19,7 +19,11 @@ import {
   rememberWindowSize,
   snapWallEndpointMm,
   trimWallPair,
+  type LayoutBeam,
+  type LayoutColumn,
   type LayoutDoor,
+  type LayoutGridLine,
+  type LayoutGroup,
   type LayoutLevel,
   type LayoutPresets,
   type LayoutRoom,
@@ -28,28 +32,45 @@ import {
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
+  type SelectedElementRef,
+  type WallType,
 } from "@/lib/layoutDrawing";
 import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import {
+  idbDeleteBeam,
+  idbDeleteColumn,
   idbDeleteDoor,
+  idbDeleteGridLine,
+  idbDeleteGroup,
   idbDeleteLevel,
   idbDeleteSlab,
   idbDeleteUnderlay,
   idbDeleteWall,
+  idbDeleteWallType,
   idbDeleteWindow,
   idbGetPresets,
+  idbListBeams,
+  idbListColumns,
   idbListDoors,
+  idbListGridLines,
+  idbListGroups,
   idbListLevels,
   idbListSlabs,
   idbListUnderlays,
   idbListWalls,
+  idbListWallTypes,
   idbListWindows,
+  idbPutBeam,
+  idbPutColumn,
   idbPutDoor,
+  idbPutGridLine,
+  idbPutGroup,
   idbPutLevel,
   idbPutPresets,
   idbPutSlab,
   idbPutUnderlay,
   idbPutWall,
+  idbPutWallType,
   idbPutWindow,
 } from "@/lib/layoutDrawingDb";
 import {
@@ -121,6 +142,12 @@ type LayoutDrawingState = {
   doors: LayoutDoor[];
   windows: LayoutWindow[];
   slabs: LayoutSlab[];
+  columns: LayoutColumn[];
+  beams: LayoutBeam[];
+  gridLines: LayoutGridLine[];
+  groups: LayoutGroup[];
+  wallTypes: WallType[];
+  activeGroupId: string | null;
   layoutRooms: LayoutRoom[];
   sketchLines: LayoutSketchLine[];
   sketchDraw: SketchDrawState;
@@ -133,6 +160,14 @@ type LayoutDrawingState = {
   wallDraw: WallDrawState;
   slabDraw: SlabDrawState;
   tracePreview: TracePreviewState;
+  selectedElements: SelectedElementRef[];
+  marqueeBox: {
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    isCrossing: boolean;
+  } | null;
   selectedWallId: string | null;
   selectedDoorId: string | null;
   selectedWindowId: string | null;
@@ -149,6 +184,10 @@ type LayoutDrawingState = {
   draftWindowHeightMm: number;
   draftWindowSillMm: number;
   draftSlabThicknessMm: number;
+  draftColumnWidthMm: number;
+  draftColumnDepthMm: number;
+  draftBeamWidthMm: number;
+  draftBeamDepthMm: number;
 
   loadForProject: (projectId: string | null, isEmpty?: boolean) => Promise<void>;
   createEmptyProject: (name: string) => Promise<{
@@ -357,6 +396,48 @@ type LayoutDrawingState = {
   }>;
 
   clearLayoutSelection: () => void;
+
+  // -- Section 1: Multi-Selection & Batch Modify --------------------------
+  selectElement: (ref: SelectedElementRef | null, mode?: "replace" | "toggle" | "add" | "remove") => void;
+  selectMultiple: (refs: SelectedElementRef[], mode?: "replace" | "add") => void;
+  clearSelection: () => void;
+  setMarqueeBox: (box: { startX: number; startY: number; currentX: number; currentY: number; isCrossing: boolean } | null) => void;
+  deleteSelected: () => Promise<void>;
+  moveSelected: (deltaXmm: number, deltaYmm: number) => Promise<void>;
+  copySelected: (deltaXmm: number, deltaYmm: number) => Promise<SelectedElementRef[]>;
+  mirrorSelected: (axisP1: { xMm: number; yMm: number }, axisP2: { xMm: number; yMm: number }) => Promise<void>;
+  rotateSelected: (center: { xMm: number; yMm: number }, angleDeg: number) => Promise<void>;
+  scaleSelected: (origin: { xMm: number; yMm: number }, scaleFactor: number) => Promise<void>;
+
+  // -- Section 2: Grouping ------------------------------------------------
+  createGroupFromSelection: (name?: string) => Promise<LayoutGroup | null>;
+  ungroup: (groupId: string) => Promise<void>;
+  enterGroupEdit: (groupId: string) => void;
+  exitGroupEdit: () => void;
+
+  // -- Section 3: Layered Wall Assemblies --------------------------------
+  addWallType: (wt: WallType) => Promise<void>;
+  updateWallType: (id: string, patch: Partial<WallType>) => Promise<void>;
+  deleteWallType: (id: string) => Promise<void>;
+
+  // -- Section 4: Structural Columns & Beams ------------------------------
+  addColumn: (col: Omit<LayoutColumn, "id" | "projectId" | "createdAt">) => Promise<LayoutColumn | null>;
+  updateColumn: (id: string, patch: Partial<LayoutColumn>) => Promise<void>;
+  deleteColumn: (id: string) => Promise<void>;
+  selectColumn: (id: string | null) => void;
+  setDraftColumnSize: (widthMm: number, depthMm: number) => void;
+
+  addBeam: (beam: Omit<LayoutBeam, "id" | "projectId" | "createdAt">) => Promise<LayoutBeam | null>;
+  updateBeam: (id: string, patch: Partial<LayoutBeam>) => Promise<void>;
+  deleteBeam: (id: string) => Promise<void>;
+  selectBeam: (id: string | null) => void;
+  setDraftBeamSize: (widthMm: number, depthMm: number) => void;
+
+  // -- Section 5: Reference / Grid Planes ---------------------------------
+  addGridLine: (grid: Omit<LayoutGridLine, "id" | "projectId" | "createdAt">) => Promise<LayoutGridLine | null>;
+  updateGridLine: (id: string, patch: Partial<LayoutGridLine>) => Promise<void>;
+  deleteGridLine: (id: string) => Promise<void>;
+  selectGridLine: (id: string | null) => void;
 };
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
@@ -372,6 +453,14 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   doors: [],
   windows: [],
   slabs: [],
+  columns: [],
+  beams: [],
+  gridLines: [],
+  groups: [],
+  wallTypes: [],
+  activeGroupId: null,
+  selectedElements: [],
+  marqueeBox: null,
   layoutRooms: [],
   sketchLines: [],
   sketchDraw: null,
@@ -400,6 +489,13 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftWindowHeightMm: DEFAULT_WINDOW_HEIGHT_MM,
   draftWindowSillMm: DEFAULT_WINDOW_SILL_MM,
   draftSlabThicknessMm: DEFAULT_SLAB_THICKNESS_MM,
+  draftColumnWidthMm: 300,
+  draftColumnDepthMm: 300,
+  draftBeamWidthMm: 200,
+  draftBeamDepthMm: 400,
+  draftWindowHeightMm: DEFAULT_WINDOW_HEIGHT_MM,
+  draftWindowSillMm: DEFAULT_WINDOW_SILL_MM,
+  draftSlabThicknessMm: DEFAULT_SLAB_THICKNESS_MM,
 
   loadForProject: async (projectId, isEmpty = false) => {
     clearWerkzeugHistory();
@@ -414,8 +510,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         doors: [],
         windows: [],
         slabs: [],
-    layoutRooms: [],
-    drawingScale: "1:100",
+        columns: [],
+        beams: [],
+        gridLines: [],
+        groups: [],
+        wallTypes: [],
+        activeGroupId: null,
+        selectedElements: [],
+        marqueeBox: null,
+        layoutRooms: [],
+        drawingScale: "1:100",
         underlays: [],
         presets: { ...EMPTY_LAYOUT_PRESETS },
         armedLayoutTool: null,
@@ -432,16 +536,33 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       });
       return;
     }
-    const [levels, walls, doors, windows, slabs, underlays, presets] =
-      await Promise.all([
-        idbListLevels(projectId),
-        idbListWalls(projectId),
-        idbListDoors(projectId),
-        idbListWindows(projectId),
-        idbListSlabs(projectId),
-        idbListUnderlays(projectId),
-        idbGetPresets(projectId),
-      ]);
+    const [
+      levels,
+      walls,
+      doors,
+      windows,
+      slabs,
+      columns,
+      beams,
+      gridLines,
+      groups,
+      wallTypes,
+      underlays,
+      presets,
+    ] = await Promise.all([
+      idbListLevels(projectId),
+      idbListWalls(projectId),
+      idbListDoors(projectId),
+      idbListWindows(projectId),
+      idbListSlabs(projectId),
+      idbListColumns(projectId),
+      idbListBeams(projectId),
+      idbListGridLines(projectId),
+      idbListGroups(projectId),
+      idbListWallTypes(projectId),
+      idbListUnderlays(projectId),
+      idbGetPresets(projectId),
+    ]);
     levels.sort((a, b) => a.elevationMm - b.elevationMm);
     set({
       projectId,
@@ -452,6 +573,14 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       doors: doors.map((d) => normalizeDoor(d)),
       windows,
       slabs,
+      columns,
+      beams,
+      gridLines,
+      groups,
+      wallTypes,
+      activeGroupId: null,
+      selectedElements: [],
+      marqueeBox: null,
       underlays,
       presets,
       armedLayoutTool: null,
@@ -1094,17 +1223,43 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  selectSlab: (id) =>
+  selectSlab: (id) => {
+    if (!id) {
+      set({
+        selectedSlabId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "slab"),
+        wallDraw: null,
+        slabDraw: null,
+      });
+      return;
+    }
+    const group = get().groups.find((g) => g.elementRefs.some((r) => r.kind === "slab" && r.id === id));
+    if (group && get().activeGroupId !== group.id) {
+      set({
+        selectedElements: [...group.elementRefs],
+        selectedSlabId: id,
+        selectedWallId: null,
+        selectedDoorId: null,
+        selectedWindowId: null,
+        selectedUnderlayId: null,
+        armedLayoutTool: null,
+        wallDraw: null,
+        slabDraw: null,
+      });
+      return;
+    }
     set({
       selectedSlabId: id,
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
       selectedUnderlayId: null,
+      selectedElements: [{ kind: "slab", id }],
       armedLayoutTool: null,
       wallDraw: null,
       slabDraw: null,
-    }),
+    });
+  },
 
   duplicateSlab: async (id) => {
     const slab = get().slabs.find((s) => s.id === id);
@@ -1178,17 +1333,43 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  selectWall: (id) =>
+  selectWall: (id) => {
+    if (!id) {
+      set({
+        selectedWallId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "wall"),
+        wallDraw: null,
+        slabDraw: null,
+      });
+      return;
+    }
+    const group = get().groups.find((g) => g.elementRefs.some((r) => r.kind === "wall" && r.id === id));
+    if (group && get().activeGroupId !== group.id) {
+      set({
+        selectedElements: [...group.elementRefs],
+        selectedWallId: id,
+        selectedDoorId: null,
+        selectedWindowId: null,
+        selectedSlabId: null,
+        selectedUnderlayId: null,
+        armedLayoutTool: null,
+        wallDraw: null,
+        slabDraw: null,
+      });
+      return;
+    }
     set({
       selectedWallId: id,
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
       selectedUnderlayId: null,
+      selectedElements: [{ kind: "wall", id }],
       armedLayoutTool: null,
       wallDraw: null,
       slabDraw: null,
-    }),
+    });
+  },
 
   duplicateWall: async (id) => {
     pushWerkzeugHistory();
@@ -1345,15 +1526,37 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  selectDoor: (id) =>
+  selectDoor: (id) => {
+    if (!id) {
+      set({
+        selectedDoorId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "door"),
+      });
+      return;
+    }
+    const group = get().groups.find((g) => g.elementRefs.some((r) => r.kind === "door" && r.id === id));
+    if (group && get().activeGroupId !== group.id) {
+      set({
+        selectedElements: [...group.elementRefs],
+        selectedDoorId: id,
+        selectedWallId: null,
+        selectedWindowId: null,
+        selectedSlabId: null,
+        selectedUnderlayId: null,
+        armedLayoutTool: null,
+      });
+      return;
+    }
     set({
       selectedDoorId: id,
       selectedWallId: null,
       selectedWindowId: null,
       selectedSlabId: null,
       selectedUnderlayId: null,
+      selectedElements: [{ kind: "door", id }],
       armedLayoutTool: null,
-    }),
+    });
+  },
 
   duplicateDoor: async (id) => {
     pushWerkzeugHistory();
@@ -1471,15 +1674,37 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  selectWindow: (id) =>
+  selectWindow: (id) => {
+    if (!id) {
+      set({
+        selectedWindowId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "window"),
+      });
+      return;
+    }
+    const group = get().groups.find((g) => g.elementRefs.some((r) => r.kind === "window" && r.id === id));
+    if (group && get().activeGroupId !== group.id) {
+      set({
+        selectedElements: [...group.elementRefs],
+        selectedWindowId: id,
+        selectedWallId: null,
+        selectedDoorId: null,
+        selectedSlabId: null,
+        selectedUnderlayId: null,
+        armedLayoutTool: null,
+      });
+      return;
+    }
     set({
       selectedWindowId: id,
       selectedWallId: null,
       selectedDoorId: null,
       selectedSlabId: null,
       selectedUnderlayId: null,
+      selectedElements: [{ kind: "window", id }],
       armedLayoutTool: null,
-    }),
+    });
+  },
 
   duplicateWindow: async (id) => {
     pushWerkzeugHistory();
@@ -1498,6 +1723,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedWindowId: clone.id,
       selectedWallId: null,
       selectedDoorId: null,
+      selectedElements: [{ kind: "window", id: clone.id }],
       lastMutatedAt: Date.now(),
     });
     return clone;
@@ -1505,6 +1731,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   clearLayoutSelection: () =>
     set({
+      selectedElements: [],
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -1843,12 +2070,868 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return { success: true };
   },
 
-  selectSketchLine: (id) => set({ selectedSketchLineId: id }),
+  selectSketchLine: (id) => {
+    if (!id) {
+      set({
+        selectedSketchLineId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "line"),
+      });
+      return;
+    }
+    set({
+      selectedSketchLineId: id,
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedUnderlayId: null,
+      selectedElements: [{ kind: "line", id }],
+    });
+  },
   deleteSketchLine: (id) =>
     set((s) => ({
       sketchLines: s.sketchLines.filter((l) => l.id !== id),
       selectedSketchLineId:
         s.selectedSketchLineId === id ? null : s.selectedSketchLineId,
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "line" && e.id === id)),
       lastMutatedAt: Date.now(),
     })),
+
+  // -- Section 1: Multi-Selection System ---------------------------------
+  selectElement: (ref, mode = "replace") => {
+    if (!ref) {
+      get().clearSelection();
+      return;
+    }
+    // If element belongs to a group and not currently editing inside that group:
+    const group = get().groups.find((g) =>
+      g.elementRefs.some((r) => r.kind === ref.kind && r.id === ref.id),
+    );
+    const refsToSelect: SelectedElementRef[] =
+      group && get().activeGroupId !== group.id ? group.elementRefs : [ref];
+
+    let next: SelectedElementRef[] = [];
+    if (mode === "replace") {
+      next = [...refsToSelect];
+    } else if (mode === "add") {
+      const existing = new Set(get().selectedElements.map((e) => `${e.kind}:${e.id}`));
+      next = [...get().selectedElements];
+      for (const r of refsToSelect) {
+        if (!existing.has(`${r.kind}:${r.id}`)) next.push(r);
+      }
+    } else if (mode === "remove") {
+      const removeSet = new Set(refsToSelect.map((r) => `${r.kind}:${r.id}`));
+      next = get().selectedElements.filter((e) => !removeSet.has(`${e.kind}:${e.id}`));
+    } else if (mode === "toggle") {
+      const isSelected = refsToSelect.some((r) =>
+        get().selectedElements.some((e) => e.kind === r.kind && e.id === r.id),
+      );
+      if (isSelected) {
+        const removeSet = new Set(refsToSelect.map((r) => `${r.kind}:${r.id}`));
+        next = get().selectedElements.filter((e) => !removeSet.has(`${e.kind}:${e.id}`));
+      } else {
+        next = [...get().selectedElements, ...refsToSelect];
+      }
+    }
+
+    const primary = next[next.length - 1] ?? null;
+    set({
+      selectedElements: next,
+      selectedWallId: primary?.kind === "wall" ? primary.id : null,
+      selectedDoorId: primary?.kind === "door" ? primary.id : null,
+      selectedWindowId: primary?.kind === "window" ? primary.id : null,
+      selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
+      selectedUnderlayId: null,
+    });
+  },
+
+  selectMultiple: (refs, mode = "replace") => {
+    let next: SelectedElementRef[] = [];
+    if (mode === "replace") {
+      next = [...refs];
+    } else {
+      const existing = new Set(get().selectedElements.map((e) => `${e.kind}:${e.id}`));
+      next = [...get().selectedElements];
+      for (const r of refs) {
+        if (!existing.has(`${r.kind}:${r.id}`)) next.push(r);
+      }
+    }
+    const primary = next[next.length - 1] ?? null;
+    set({
+      selectedElements: next,
+      selectedWallId: primary?.kind === "wall" ? primary.id : null,
+      selectedDoorId: primary?.kind === "door" ? primary.id : null,
+      selectedWindowId: primary?.kind === "window" ? primary.id : null,
+      selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
+      selectedUnderlayId: null,
+    });
+  },
+
+  clearSelection: () => {
+    set({
+      selectedElements: [],
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedSketchLineId: null,
+      selectedUnderlayId: null,
+    });
+  },
+
+  setMarqueeBox: (box) => set({ marqueeBox: box }),
+
+  deleteSelected: async () => {
+    const sel = get().selectedElements;
+    if (sel.length === 0) return;
+    pushWerkzeugHistory();
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const doorIds = new Set(sel.filter((e) => e.kind === "door").map((e) => e.id));
+    const winIds = new Set(sel.filter((e) => e.kind === "window").map((e) => e.id));
+    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
+
+    // Also delete child openings of deleted walls
+    for (const d of get().doors) {
+      if (wallIds.has(d.wallId)) doorIds.add(d.id);
+    }
+    for (const w of get().windows) {
+      if (wallIds.has(w.wallId)) winIds.add(w.id);
+    }
+
+    for (const id of wallIds) await idbDeleteWall(id);
+    for (const id of doorIds) await idbDeleteDoor(id);
+    for (const id of winIds) await idbDeleteWindow(id);
+    for (const id of slabIds) await idbDeleteSlab(id);
+    for (const id of colIds) await idbDeleteColumn(id);
+    for (const id of beamIds) await idbDeleteBeam(id);
+    for (const id of gridIds) await idbDeleteGridLine(id);
+
+    set((s) => ({
+      walls: s.walls.filter((w) => !wallIds.has(w.id)),
+      doors: s.doors.filter((d) => !doorIds.has(d.id)),
+      windows: s.windows.filter((w) => !winIds.has(w.id)),
+      slabs: s.slabs.filter((sl) => !slabIds.has(sl.id)),
+      columns: s.columns.filter((c) => !colIds.has(c.id)),
+      beams: s.beams.filter((b) => !beamIds.has(b.id)),
+      gridLines: s.gridLines.filter((g) => !gridIds.has(g.id)),
+      sketchLines: s.sketchLines.filter((l) => !lineIds.has(l.id)),
+      selectedElements: [],
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedSketchLineId: null,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  moveSelected: async (deltaXmm, deltaYmm) => {
+    const sel = get().selectedElements;
+    if (sel.length === 0 || (deltaXmm === 0 && deltaYmm === 0)) return;
+    pushWerkzeugHistory();
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
+
+    const nextWalls = get().walls.map((w) => {
+      if (!wallIds.has(w.id)) return w;
+      return {
+        ...w,
+        startXmm: w.startXmm + deltaXmm,
+        startYmm: w.startYmm + deltaYmm,
+        endXmm: w.endXmm + deltaXmm,
+        endYmm: w.endYmm + deltaYmm,
+        arcCenterXmm: w.arcCenterXmm != null ? w.arcCenterXmm + deltaXmm : undefined,
+        arcCenterYmm: w.arcCenterYmm != null ? w.arcCenterYmm + deltaYmm : undefined,
+      };
+    });
+
+    const nextSlabs = get().slabs.map((sl) => {
+      if (!slabIds.has(sl.id)) return sl;
+      return {
+        ...sl,
+        minXmm: sl.minXmm + deltaXmm,
+        maxXmm: sl.maxXmm + deltaXmm,
+        minYmm: sl.minYmm + deltaYmm,
+        maxYmm: sl.maxYmm + deltaYmm,
+        boundary: sl.boundary?.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm })),
+        holes: sl.holes?.map((h) => h.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm }))),
+      };
+    });
+
+    const nextCols = get().columns.map((c) => {
+      if (!colIds.has(c.id)) return c;
+      return { ...c, xMm: c.xMm + deltaXmm, yMm: c.yMm + deltaYmm };
+    });
+
+    const nextBeams = get().beams.map((b) => {
+      if (!beamIds.has(b.id)) return b;
+      return {
+        ...b,
+        startXmm: b.startXmm + deltaXmm,
+        startYmm: b.startYmm + deltaYmm,
+        endXmm: b.endXmm + deltaXmm,
+        endYmm: b.endYmm + deltaYmm,
+      };
+    });
+
+    const nextGrids = get().gridLines.map((g) => {
+      if (!gridIds.has(g.id)) return g;
+      return {
+        ...g,
+        startXmm: g.startXmm + deltaXmm,
+        startYmm: g.startYmm + deltaYmm,
+        endXmm: g.endXmm + deltaXmm,
+        endYmm: g.endYmm + deltaYmm,
+      };
+    });
+
+    const nextLines = get().sketchLines.map((l) => {
+      if (!lineIds.has(l.id)) return l;
+      return {
+        ...l,
+        startXmm: l.startXmm + deltaXmm,
+        startYmm: l.startYmm + deltaYmm,
+        endXmm: l.endXmm + deltaXmm,
+        endYmm: l.endYmm + deltaYmm,
+      };
+    });
+
+    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
+    for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
+    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
+    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+    for (const g of nextGrids) if (gridIds.has(g.id)) await idbPutGridLine(g);
+
+    set({
+      walls: nextWalls,
+      slabs: nextSlabs,
+      columns: nextCols,
+      beams: nextBeams,
+      gridLines: nextGrids,
+      sketchLines: nextLines,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  copySelected: async (deltaXmm, deltaYmm) => {
+    const sel = get().selectedElements;
+    const projectId = get().projectId;
+    if (sel.length === 0 || !projectId) return [];
+    pushWerkzeugHistory();
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
+
+    const newRefs: SelectedElementRef[] = [];
+    const newWalls: LayoutWall[] = [];
+    const newDoors: LayoutDoor[] = [];
+    const newWindows: LayoutWindow[] = [];
+    const newSlabs: LayoutSlab[] = [];
+    const newCols: LayoutColumn[] = [];
+    const newBeams: LayoutBeam[] = [];
+    const newGrids: LayoutGridLine[] = [];
+    const newLines: LayoutSketchLine[] = [];
+
+    const wallIdMap = new Map<string, string>();
+
+    for (const w of get().walls) {
+      if (!wallIds.has(w.id)) continue;
+      const copyId = newLayoutId("wall");
+      wallIdMap.set(w.id, copyId);
+      const copy: LayoutWall = {
+        ...w,
+        id: copyId,
+        startXmm: w.startXmm + deltaXmm,
+        startYmm: w.startYmm + deltaYmm,
+        endXmm: w.endXmm + deltaXmm,
+        endYmm: w.endYmm + deltaYmm,
+        createdAt: Date.now(),
+      };
+      newWalls.push(copy);
+      newRefs.push({ kind: "wall", id: copyId });
+      await idbPutWall(copy);
+    }
+
+    // Duplicate openings on copied walls
+    for (const d of get().doors) {
+      const newWallId = wallIdMap.get(d.wallId);
+      if (!newWallId) continue;
+      const copyDoor: LayoutDoor = {
+        ...d,
+        id: newLayoutId("door"),
+        wallId: newWallId,
+        createdAt: Date.now(),
+      };
+      newDoors.push(copyDoor);
+      await idbPutDoor(copyDoor);
+    }
+    for (const win of get().windows) {
+      const newWallId = wallIdMap.get(win.wallId);
+      if (!newWallId) continue;
+      const copyWin: LayoutWindow = {
+        ...win,
+        id: newLayoutId("win"),
+        wallId: newWallId,
+        createdAt: Date.now(),
+      };
+      newWindows.push(copyWin);
+      await idbPutWindow(copyWin);
+    }
+
+    for (const sl of get().slabs) {
+      if (!slabIds.has(sl.id)) continue;
+      const copyId = newLayoutId(sl.kind === "roof" ? "roof" : "floor");
+      const copy: LayoutSlab = {
+        ...sl,
+        id: copyId,
+        minXmm: sl.minXmm + deltaXmm,
+        maxXmm: sl.maxXmm + deltaXmm,
+        minYmm: sl.minYmm + deltaYmm,
+        maxYmm: sl.maxYmm + deltaYmm,
+        boundary: sl.boundary?.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm })),
+        holes: sl.holes?.map((h) => h.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm }))),
+        createdAt: Date.now(),
+      };
+      newSlabs.push(copy);
+      newRefs.push({ kind: "slab", id: copyId });
+      await idbPutSlab(copy);
+    }
+
+    for (const c of get().columns) {
+      if (!colIds.has(c.id)) continue;
+      const copyId = newLayoutId("col");
+      const copy: LayoutColumn = {
+        ...c,
+        id: copyId,
+        xMm: c.xMm + deltaXmm,
+        yMm: c.yMm + deltaYmm,
+        createdAt: Date.now(),
+      };
+      newCols.push(copy);
+      newRefs.push({ kind: "column", id: copyId });
+      await idbPutColumn(copy);
+    }
+
+    for (const b of get().beams) {
+      if (!beamIds.has(b.id)) continue;
+      const copyId = newLayoutId("beam");
+      const copy: LayoutBeam = {
+        ...b,
+        id: copyId,
+        startXmm: b.startXmm + deltaXmm,
+        startYmm: b.startYmm + deltaYmm,
+        endXmm: b.endXmm + deltaXmm,
+        endYmm: b.endYmm + deltaYmm,
+        createdAt: Date.now(),
+      };
+      newBeams.push(copy);
+      newRefs.push({ kind: "beam", id: copyId });
+      await idbPutBeam(copy);
+    }
+
+    for (const g of get().gridLines) {
+      if (!gridIds.has(g.id)) continue;
+      const copyId = newLayoutId("grid");
+      const copy: LayoutGridLine = {
+        ...g,
+        id: copyId,
+        label: `${g.label}'`,
+        startXmm: g.startXmm + deltaXmm,
+        startYmm: g.startYmm + deltaYmm,
+        endXmm: g.endXmm + deltaXmm,
+        endYmm: g.endYmm + deltaYmm,
+        createdAt: Date.now(),
+      };
+      newGrids.push(copy);
+      newRefs.push({ kind: "grid", id: copyId });
+      await idbPutGridLine(copy);
+    }
+
+    for (const l of get().sketchLines) {
+      if (!lineIds.has(l.id)) continue;
+      const copyId = newLayoutId("line");
+      const copy: LayoutSketchLine = {
+        ...l,
+        id: copyId,
+        startXmm: l.startXmm + deltaXmm,
+        startYmm: l.startYmm + deltaYmm,
+        endXmm: l.endXmm + deltaXmm,
+        endYmm: l.endYmm + deltaYmm,
+        createdAt: Date.now(),
+      };
+      newLines.push(copy);
+      newRefs.push({ kind: "line", id: copyId });
+    }
+
+    set((s) => ({
+      walls: [...s.walls, ...newWalls],
+      doors: [...s.doors, ...newDoors],
+      windows: [...s.windows, ...newWindows],
+      slabs: [...s.slabs, ...newSlabs],
+      columns: [...s.columns, ...newCols],
+      beams: [...s.beams, ...newBeams],
+      gridLines: [...s.gridLines, ...newGrids],
+      sketchLines: [...s.sketchLines, ...newLines],
+      selectedElements: newRefs,
+      lastMutatedAt: Date.now(),
+    }));
+
+    return newRefs;
+  },
+
+  mirrorSelected: async (axisP1, axisP2) => {
+    const sel = get().selectedElements;
+    if (sel.length === 0) return;
+    pushWerkzeugHistory();
+
+    const dx = axisP2.xMm - axisP1.xMm;
+    const dy = axisP2.yMm - axisP1.yMm;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return;
+
+    const mirrorPoint = (x: number, y: number) => {
+      const u = ((x - axisP1.xMm) * dx + (y - axisP1.yMm) * dy) / lenSq;
+      const projX = axisP1.xMm + u * dx;
+      const projY = axisP1.yMm + u * dy;
+      return { x: 2 * projX - x, y: 2 * projY - y };
+    };
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
+
+    const nextWalls = get().walls.map((w) => {
+      if (!wallIds.has(w.id)) return w;
+      const p1 = mirrorPoint(w.startXmm, w.startYmm);
+      const p2 = mirrorPoint(w.endXmm, w.endYmm);
+      return { ...w, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    const nextCols = get().columns.map((c) => {
+      if (!colIds.has(c.id)) return c;
+      const p = mirrorPoint(c.xMm, c.yMm);
+      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
+    });
+
+    const nextBeams = get().beams.map((b) => {
+      if (!beamIds.has(b.id)) return b;
+      const p1 = mirrorPoint(b.startXmm, b.startYmm);
+      const p2 = mirrorPoint(b.endXmm, b.endYmm);
+      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    const nextSlabs = get().slabs.map((sl) => {
+      if (!slabIds.has(sl.id)) return sl;
+      const p1 = mirrorPoint(sl.minXmm, sl.minYmm);
+      const p2 = mirrorPoint(sl.maxXmm, sl.maxYmm);
+      return {
+        ...sl,
+        minXmm: Math.min(Math.round(p1.x), Math.round(p2.x)),
+        maxXmm: Math.max(Math.round(p1.x), Math.round(p2.x)),
+        minYmm: Math.min(Math.round(p1.y), Math.round(p2.y)),
+        maxYmm: Math.max(Math.round(p1.y), Math.round(p2.y)),
+        boundary: sl.boundary?.map((p) => {
+          const mp = mirrorPoint(p.xMm, p.yMm);
+          return { xMm: Math.round(mp.x), yMm: Math.round(mp.y) };
+        }),
+      };
+    });
+
+    const nextLines = get().sketchLines.map((l) => {
+      if (!lineIds.has(l.id)) return l;
+      const p1 = mirrorPoint(l.startXmm, l.startYmm);
+      const p2 = mirrorPoint(l.endXmm, l.endYmm);
+      return { ...l, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
+    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
+    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+    for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
+
+    set({
+      walls: nextWalls,
+      columns: nextCols,
+      beams: nextBeams,
+      slabs: nextSlabs,
+      sketchLines: nextLines,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  rotateSelected: async (center, angleDeg) => {
+    const sel = get().selectedElements;
+    if (sel.length === 0 || angleDeg === 0) return;
+    pushWerkzeugHistory();
+
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    const rotatePoint = (x: number, y: number) => {
+      const rx = x - center.xMm;
+      const ry = y - center.yMm;
+      return {
+        x: center.xMm + rx * cos - ry * sin,
+        y: center.yMm + rx * sin + ry * cos,
+      };
+    };
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+
+    const nextWalls = get().walls.map((w) => {
+      if (!wallIds.has(w.id)) return w;
+      const p1 = rotatePoint(w.startXmm, w.startYmm);
+      const p2 = rotatePoint(w.endXmm, w.endYmm);
+      return { ...w, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    const nextCols = get().columns.map((c) => {
+      if (!colIds.has(c.id)) return c;
+      const p = rotatePoint(c.xMm, c.yMm);
+      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
+    });
+
+    const nextBeams = get().beams.map((b) => {
+      if (!beamIds.has(b.id)) return b;
+      const p1 = rotatePoint(b.startXmm, b.startYmm);
+      const p2 = rotatePoint(b.endXmm, b.endYmm);
+      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
+    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
+    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+
+    set({
+      walls: nextWalls,
+      columns: nextCols,
+      beams: nextBeams,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  scaleSelected: async (origin, scaleFactor) => {
+    const sel = get().selectedElements;
+    if (sel.length === 0 || scaleFactor <= 0 || scaleFactor === 1) return;
+    pushWerkzeugHistory();
+
+    const scalePoint = (x: number, y: number) => ({
+      x: origin.xMm + (x - origin.xMm) * scaleFactor,
+      y: origin.yMm + (y - origin.yMm) * scaleFactor,
+    });
+
+    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+
+    const nextWalls = get().walls.map((w) => {
+      if (!wallIds.has(w.id)) return w;
+      const p1 = scalePoint(w.startXmm, w.startYmm);
+      const p2 = scalePoint(w.endXmm, w.endYmm);
+      return {
+        ...w,
+        startXmm: Math.round(p1.x),
+        startYmm: Math.round(p1.y),
+        endXmm: Math.round(p2.x),
+        endYmm: Math.round(p2.y),
+      };
+    });
+
+    const nextCols = get().columns.map((c) => {
+      if (!colIds.has(c.id)) return c;
+      const p = scalePoint(c.xMm, c.yMm);
+      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
+    });
+
+    const nextBeams = get().beams.map((b) => {
+      if (!beamIds.has(b.id)) return b;
+      const p1 = scalePoint(b.startXmm, b.startYmm);
+      const p2 = scalePoint(b.endXmm, b.endYmm);
+      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
+    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
+    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+
+    set({
+      walls: nextWalls,
+      columns: nextCols,
+      beams: nextBeams,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  // -- Section 2: Grouping ------------------------------------------------
+  createGroupFromSelection: async (name) => {
+    const sel = get().selectedElements;
+    const projectId = get().projectId;
+    if (sel.length < 2 || !projectId) return null;
+    pushWerkzeugHistory();
+
+    const group: LayoutGroup = {
+      id: newLayoutId("group"),
+      projectId,
+      name: name || `Group ${get().groups.length + 1}`,
+      elementRefs: [...sel],
+      createdAt: Date.now(),
+    };
+
+    await idbPutGroup(group);
+    set((s) => ({
+      groups: [...s.groups, group],
+      lastMutatedAt: Date.now(),
+    }));
+    return group;
+  },
+
+  ungroup: async (groupId) => {
+    const group = get().groups.find((g) => g.id === groupId);
+    if (!group) return;
+    pushWerkzeugHistory();
+    await idbDeleteGroup(groupId);
+    set((s) => ({
+      groups: s.groups.filter((g) => g.id !== groupId),
+      activeGroupId: s.activeGroupId === groupId ? null : s.activeGroupId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  enterGroupEdit: (groupId) => set({ activeGroupId: groupId }),
+  exitGroupEdit: () => set({ activeGroupId: null }),
+
+  // -- Section 3: Layered Wall Assemblies --------------------------------
+  addWallType: async (wt) => {
+    const projectId = get().projectId;
+    if (!projectId) return;
+    pushWerkzeugHistory();
+    await idbPutWallType(wt);
+    set((s) => ({
+      wallTypes: [...s.wallTypes, wt],
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  updateWallType: async (id, patch) => {
+    const prev = get().wallTypes.find((wt) => wt.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: WallType = { ...prev, ...patch };
+    if (patch.layers) {
+      updated.totalThicknessMm = patch.layers.reduce((sum, l) => sum + l.thicknessMm, 0);
+    }
+    await idbPutWallType(updated);
+
+    // Update all walls utilizing this type
+    const nextWalls = get().walls.map((w) => {
+      if (w.wallTypeId !== id) return w;
+      return {
+        ...w,
+        thicknessMm: updated.totalThicknessMm,
+        layers: updated.layers,
+      };
+    });
+    for (const w of nextWalls) {
+      if (w.wallTypeId === id) await idbPutWall(w);
+    }
+
+    set((s) => ({
+      wallTypes: s.wallTypes.map((wt) => (wt.id === id ? updated : wt)),
+      walls: nextWalls,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteWallType: async (id) => {
+    await idbDeleteWallType(id);
+    set((s) => ({
+      wallTypes: s.wallTypes.filter((wt) => wt.id !== id),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  // -- Section 4: Structural Columns & Beams ------------------------------
+  addColumn: async (col) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+
+    const column: LayoutColumn = {
+      ...col,
+      id: newLayoutId("col"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutColumn(column);
+    set((s) => ({
+      columns: [...s.columns, column],
+      selectedElements: [{ kind: "column", id: column.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return column;
+  },
+
+  updateColumn: async (id, patch) => {
+    const prev = get().columns.find((c) => c.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutColumn = { ...prev, ...patch };
+    await idbPutColumn(updated);
+    set((s) => ({
+      columns: s.columns.map((c) => (c.id === id ? updated : c)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteColumn: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteColumn(id);
+    set((s) => ({
+      columns: s.columns.filter((c) => c.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "column" && e.id === id)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectColumn: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "column"),
+      });
+      return;
+    }
+    get().selectElement({ kind: "column", id });
+  },
+
+  setDraftColumnSize: (widthMm, depthMm) =>
+    set({ draftColumnWidthMm: widthMm, draftColumnDepthMm: depthMm }),
+
+  addBeam: async (beam) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+
+    const newBeam: LayoutBeam = {
+      ...beam,
+      id: newLayoutId("beam"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutBeam(newBeam);
+    set((s) => ({
+      beams: [...s.beams, newBeam],
+      selectedElements: [{ kind: "beam", id: newBeam.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return newBeam;
+  },
+
+  updateBeam: async (id, patch) => {
+    const prev = get().beams.find((b) => b.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutBeam = { ...prev, ...patch };
+    await idbPutBeam(updated);
+    set((s) => ({
+      beams: s.beams.map((b) => (b.id === id ? updated : b)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteBeam: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteBeam(id);
+    set((s) => ({
+      beams: s.beams.filter((b) => b.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "beam" && e.id === id)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectBeam: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "beam"),
+      });
+      return;
+    }
+    get().selectElement({ kind: "beam", id });
+  },
+
+  setDraftBeamSize: (widthMm, depthMm) =>
+    set({ draftBeamWidthMm: widthMm, draftBeamDepthMm: depthMm }),
+
+  // -- Section 5: Reference / Grid Planes ---------------------------------
+  addGridLine: async (grid) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+
+    const gridLine: LayoutGridLine = {
+      ...grid,
+      id: newLayoutId("grid"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutGridLine(gridLine);
+    set((s) => ({
+      gridLines: [...s.gridLines, gridLine],
+      selectedElements: [{ kind: "grid", id: gridLine.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return gridLine;
+  },
+
+  updateGridLine: async (id, patch) => {
+    const prev = get().gridLines.find((g) => g.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutGridLine = { ...prev, ...patch };
+    await idbPutGridLine(updated);
+    set((s) => ({
+      gridLines: s.gridLines.map((g) => (g.id === id ? updated : g)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteGridLine: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteGridLine(id);
+    set((s) => ({
+      gridLines: s.gridLines.filter((g) => g.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "grid" && e.id === id)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectGridLine: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "grid"),
+      });
+      return;
+    }
+    get().selectElement({ kind: "grid", id });
+  },
 }));

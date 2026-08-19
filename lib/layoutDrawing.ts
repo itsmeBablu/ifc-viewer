@@ -42,9 +42,11 @@ export type LayoutWall = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
-  // -- Section 9: Material & color ---------------------------------------
   color?: string;
   material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
+  // -- Layered Wall Assemblies -------------------------------------------
+  wallTypeId?: string;
+  layers?: WallLayer[];
 };
 
 export type LayoutDoor = {
@@ -138,7 +140,82 @@ export type LayoutSketchLine = {
   createdAt: number;
 };
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "lines" | "trim";
+export type WallLayerFunction = "finish1" | "substrate" | "insulation" | "structure" | "core" | "finish2";
+
+export type WallLayer = {
+  id: string;
+  name: string;
+  function: WallLayerFunction;
+  material: string;
+  thicknessMm: number;
+  color?: string;
+};
+
+export type WallType = {
+  id: string;
+  name: string;
+  layers: WallLayer[];
+  totalThicknessMm: number;
+};
+
+export type LayoutColumn = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  topLevelId?: string;
+  xMm: number;
+  yMm: number;
+  profile: "rect" | "circle";
+  widthMm: number;
+  depthMm: number;
+  heightMm?: number;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type LayoutBeam = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  widthMm: number;
+  depthMm: number;
+  elevationOffsetMm: number;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type LayoutGridLine = {
+  id: string;
+  projectId: string;
+  label: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  visibleLevels?: string[];
+  createdAt: number;
+};
+
+export type SelectedElementRef = {
+  kind: "wall" | "door" | "window" | "slab" | "placement" | "column" | "beam" | "line" | "grid" | "group";
+  id: string;
+};
+
+export type LayoutGroup = {
+  id: string;
+  projectId: string;
+  name: string;
+  elementRefs: SelectedElementRef[];
+  createdAt: number;
+};
+
+export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "column" | "beam" | "grid" | "lines" | "trim";
 
 /**
  * Trim or extend two walls so they meet cleanly at their intersection point,
@@ -1019,3 +1096,46 @@ export function detectEnclosedRoomBoundary(
   ];
   return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
 }
+
+// ---------------------------------------------------------------------------
+// Sheet Composition & Title Block (Section 7)
+// ---------------------------------------------------------------------------
+
+export type SheetSize = "A1" | "A2" | "A3" | "A4";
+
+export const SHEET_DIMENSIONS_MM: Record<SheetSize, { widthMm: number; heightMm: number }> = {
+  A1: { widthMm: 841, heightMm: 594 },
+  A2: { widthMm: 594, heightMm: 420 },
+  A3: { widthMm: 420, heightMm: 297 },
+  A4: { widthMm: 297, heightMm: 210 },
+};
+
+export type SheetViewport = {
+  id: string;
+  viewType: "floor_plan" | "3d_view" | "elevation";
+  levelId?: string;
+  name: string;
+  scale: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+};
+
+export type LayoutSheet = {
+  id: string;
+  projectId: string;
+  sheetNumber: string;
+  sheetName: string;
+  sheetSize: SheetSize;
+  projectName: string;
+  clientName?: string;
+  author: string;
+  checker?: string;
+  date: string;
+  scale: string;
+  revisions: { rev: string; desc: string; date: string }[];
+  viewports: SheetViewport[];
+  createdAt: number;
+};
+

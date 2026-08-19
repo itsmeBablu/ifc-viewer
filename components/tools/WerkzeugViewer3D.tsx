@@ -60,6 +60,7 @@ import {
 } from "@/lib/markupSnap";
 import { fromMm, snapToNearbyAabb, toMm } from "@/lib/markupUnits";
 import { MarkupSceneLayer } from "@/components/tools/MarkupSceneLayer";
+import { FirstPersonWalkthroughController } from "@/lib/firstPersonWalkthrough";
 import QuadViewOverlays from "@/components/tools/QuadViewOverlays";
 import {
   applySlotToCameras,
@@ -87,6 +88,7 @@ import {
   nearestParallelFaceGapMm,
   wallTranslated,
   wallWithFaceGapTo,
+  type SelectedElementRef,
 } from "@/lib/layoutDrawing";
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
@@ -154,6 +156,19 @@ type Props = {
   onPointerLeave?: () => void;
   className?: string;
 };
+
+function projectPointToClient(
+  pt: THREE.Vector3,
+  camera: THREE.Camera,
+  canvas: HTMLCanvasElement,
+): { x: number; y: number } {
+  const v = pt.clone().project(camera);
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: rect.left + ((v.x + 1) / 2) * rect.width,
+    y: rect.top + ((-v.y + 1) / 2) * rect.height,
+  };
+}
 
 function roomColorHex(
   room: Room,
@@ -743,6 +758,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const lastNotePinTokenRef = useRef(0);
   const transformControlsRef = useRef<TransformControls | null>(null);
   const transformDraggingRef = useRef(false);
+  const walkthroughRef = useRef<FirstPersonWalkthroughController | null>(null);
   const persistGizmoRef = useRef<() => void>(() => {});
   /** Drag wall endpoint / wall move / unlocked underlay move. */
   const wallEditDragRef = useRef<{
@@ -1135,6 +1151,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     scene.add(layoutLayer.group);
     layoutLayerRef.current = layoutLayer;
 
+    walkthroughRef.current = new FirstPersonWalkthroughController(
+      camera,
+      renderer.domElement,
+    );
+
     const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -1237,7 +1258,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         markup?.render(activeCam);
       } else {
         const activeCam = cameraRef.current ?? camera;
-        controls.update();
+        if (walkthroughRef.current?.enabled) {
+          walkthroughRef.current.update();
+        } else {
+          controls.update();
+        }
         // Keep Top/N/S/O/W locked to absolute axes (CAD-style).
         if (
           activeCam instanceof THREE.OrthographicCamera &&
@@ -2216,14 +2241,47 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         : ms.viewPreset === "top";
       // Top/plan: respect active floor filter. 3D: always show every level.
       const showAllLevels = !isPlanView || markupFloor == null;
+      const sel = s.selectedElements || [];
+      const selWallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+      if (s.selectedWallId) selWallIds.add(s.selectedWallId);
+      const selDoorIds = new Set(sel.filter((e) => e.kind === "door").map((e) => e.id));
+      if (s.selectedDoorId) selDoorIds.add(s.selectedDoorId);
+      const selWinIds = new Set(sel.filter((e) => e.kind === "window").map((e) => e.id));
+      if (s.selectedWindowId) selWinIds.add(s.selectedWindowId);
+      const selSlabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
+      if (s.selectedSlabId) selSlabIds.add(s.selectedSlabId);
+      const selColIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
+      const selBeamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+      const selGridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+
       layer.sync(s.levels, s.walls, s.doors, s.windows, s.slabs, {
         activeLevelId: markupFloor,
         selectedWallId: s.selectedWallId,
         selectedDoorId: s.selectedDoorId,
         selectedWindowId: s.selectedWindowId,
         selectedSlabId: s.selectedSlabId,
+        selectedWallIds: selWallIds,
+        selectedDoorIds: selDoorIds,
+        selectedWindowIds: selWinIds,
+        selectedSlabIds: selSlabIds,
         showAllLevels,
         planMode: isPlanView,
+      });
+      layer.syncColumns(s.columns || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedColumnIds: selColIds,
+        showAllLevels,
+      });
+      layer.syncBeams(s.beams || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedBeamIds: selBeamIds,
+        showAllLevels,
+      });
+      layer.syncGridLines(s.gridLines || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedGridLineIds: selGridIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
       layer.syncUnderlays(s.underlays, s.levels, {
         activeLevelId: markupFloor,
@@ -2307,6 +2365,26 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       unsubMarkup();
     };
   }, [toolMode, activeModelId, activeModelLabel, markupFloorIdForLayout]);
+
+  const walkthroughMode = useToolMarkupStore((s) => s.walkthroughMode);
+  const setWalkthroughMode = useToolMarkupStore((s) => s.setWalkthroughMode);
+
+  useEffect(() => {
+    const wt = walkthroughRef.current;
+    const controls = controlsRef.current;
+    if (!wt) return;
+
+    if (walkthroughMode) {
+      if (controls) controls.enabled = false;
+      const floorId = useToolMarkupStore.getState().markupFloorId;
+      const floor = useAppStore.getState().floors.find((f) => f.id === floorId);
+      const elevM = floor?.elevation ?? 0;
+      wt.activate(elevM);
+    } else {
+      wt.deactivate();
+      if (controls) controls.enabled = true;
+    }
+  }, [walkthroughMode]);
 
   useEffect(() => {
     if (!toolMode) return;
@@ -3563,6 +3641,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     let pointerDownX = 0;
     let pointerDownY = 0;
     let suppressNextClick = false;
+    let marqueeActive = false;
+    let marqueeStartX = 0;
+    let marqueeStartY = 0;
+    let draftBeamStart: { xMm: number; yMm: number } | null = null;
+    let draftGridStart: { xMm: number; yMm: number } | null = null;
     /** Selected wall / unlocked underlay — promote to move-drag after threshold. */
     let pendingWallMoveId: string | null = null;
     let pendingUnderlayMoveId: string | null = null;
@@ -3898,6 +3981,22 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     const onMove = (e: PointerEvent) => {
       if ((e.buttons & 1) === 1 && !suppressNextClick) {
+        if (marqueeActive) {
+          const dx = e.clientX - marqueeStartX;
+          const dy = e.clientY - marqueeStartY;
+          if (dx * dx + dy * dy >= DRAG_PX * DRAG_PX) {
+            const controls = controlsRef.current;
+            if (controls) controls.enabled = false;
+            useLayoutDrawingStore.getState().setMarqueeBox({
+              startX: marqueeStartX,
+              startY: marqueeStartY,
+              currentX: e.clientX,
+              currentY: e.clientY,
+              isCrossing: e.clientX < marqueeStartX,
+            });
+            suppressNextClick = true;
+          }
+        }
         const dx = e.clientX - pointerDownX;
         const dy = e.clientY - pointerDownY;
         if (dx * dx + dy * dy >= DRAG_PX * DRAG_PX) {
@@ -4830,6 +4929,129 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "column") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                void layoutStore.addColumn({
+                  levelId,
+                  xMm: plan.xMm,
+                  yMm: plan.yMm,
+                  widthMm: layoutStore.draftColumnWidthMm,
+                  depthMm: layoutStore.draftColumnDepthMm,
+                  profile: "rect",
+                });
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "beam") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!draftBeamStart) {
+                  draftBeamStart = plan;
+                } else {
+                  void layoutStore.addBeam({
+                    levelId,
+                    startXmm: draftBeamStart.xMm,
+                    startYmm: draftBeamStart.yMm,
+                    endXmm: plan.xMm,
+                    endYmm: plan.yMm,
+                    widthMm: layoutStore.draftBeamWidthMm,
+                    depthMm: layoutStore.draftBeamDepthMm,
+                    elevationOffsetMm: 0,
+                  });
+                  draftBeamStart = null;
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "grid") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                if (!draftGridStart) {
+                  draftGridStart = plan;
+                } else {
+                  const count = layoutStore.gridLines.length + 1;
+                  const label = String.fromCharCode(64 + count);
+                  void layoutStore.addGridLine({
+                    label,
+                    startXmm: draftGridStart.xMm,
+                    startYmm: draftGridStart.yMm,
+                    endXmm: plan.xMm,
+                    endYmm: plan.yMm,
+                  });
+                  draftGridStart = null;
+                }
+                return;
+              }
+            }
+
             if (
               layoutStore.armedLayoutTool === "door" ||
               layoutStore.armedLayoutTool === "window"
@@ -4961,7 +5183,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   );
                   return;
                 }
-                layoutStore.selectWall(layoutHit.id);
+                layoutStore.selectElement(
+                  { kind: "wall", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
                 return;
               }
               if (layoutHit.kind === "door") {
@@ -4983,7 +5208,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   );
                   return;
                 }
-                layoutStore.selectDoor(layoutHit.id);
+                layoutStore.selectElement(
+                  { kind: "door", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
                 return;
               }
               if (layoutHit.kind === "window") {
@@ -5004,15 +5232,45 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   );
                   return;
                 }
-                layoutStore.selectWindow(layoutHit.id);
+                layoutStore.selectElement(
+                  { kind: "window", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
                 return;
               }
               if (layoutHit.kind === "slab") {
-                layoutStore.selectSlab(layoutHit.id);
+                layoutStore.selectElement(
+                  { kind: "slab", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "column") {
+                layoutStore.selectElement(
+                  { kind: "column", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "beam") {
+                layoutStore.selectElement(
+                  { kind: "beam", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "grid") {
+                layoutStore.selectElement(
+                  { kind: "grid", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
                 return;
               }
               if (layoutHit.kind === "sketch-line") {
-                layoutStore.selectSketchLine(layoutHit.id);
+                layoutStore.selectElement(
+                  { kind: "line", id: layoutHit.id },
+                  e.shiftKey ? "toggle" : "replace",
+                );
                 return;
               }
             }
@@ -5439,6 +5697,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(hit.id);
                 const u = layoutStore.underlays.find((x) => x.id === hit.id);
                 if (u && !u.locked) pendingUnderlayMoveId = hit.id;
+              } else if (!hit) {
+                // Empty canvas click down -> start marquee drag-box selection
+                marqueeActive = true;
+                marqueeStartX = e.clientX;
+                marqueeStartY = e.clientY;
               }
             }
           }
@@ -5450,10 +5713,86 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         controls.enabled = false;
       }
     };
-    const onPointerUp = () => {
+    const onPointerUp = (e: PointerEvent) => {
       pendingWallMoveId = null;
       pendingUnderlayMoveId = null;
       if (wallEditDragRef.current) endWallEditDrag();
+
+      if (marqueeActive) {
+        marqueeActive = false;
+        const box = useLayoutDrawingStore.getState().marqueeBox;
+        if (box) {
+          useLayoutDrawingStore.getState().setMarqueeBox(null);
+          suppressNextClick = true;
+          const minX = Math.min(box.startX, box.currentX);
+          const maxX = Math.max(box.startX, box.currentX);
+          const minY = Math.min(box.startY, box.currentY);
+          const maxY = Math.max(box.startY, box.currentY);
+
+          const cam = preparePointerRayRef.current(e.clientX, e.clientY);
+          if (cam) {
+            const layout = useLayoutDrawingStore.getState();
+            const matched: SelectedElementRef[] = [];
+
+            const isPtInBox = (pt: { x: number; y: number }) =>
+              pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY;
+
+            const testPoints = (pts: THREE.Vector3[]) => {
+              const screenPts = pts.map((p) => projectPointToClient(p, cam, canvas));
+              if (box.isCrossing) {
+                return screenPts.some(isPtInBox);
+              } else {
+                return screenPts.length > 0 && screenPts.every(isPtInBox);
+              }
+            };
+
+            for (const w of layout.walls) {
+              const lvl = layout.levels.find((l) => l.id === w.levelId);
+              const elev = fromMm(lvl?.elevationMm ?? 0);
+              const p1 = new THREE.Vector3(fromMm(w.startXmm), elev, fromMm(w.startYmm));
+              const p2 = new THREE.Vector3(fromMm(w.endXmm), elev, fromMm(w.endYmm));
+              if (testPoints([p1, p2])) matched.push({ kind: "wall", id: w.id });
+            }
+            for (const sl of layout.slabs) {
+              const lvl = layout.levels.find((l) => l.id === sl.levelId);
+              const elev = fromMm(lvl?.elevationMm ?? 0);
+              const pts = [
+                new THREE.Vector3(fromMm(sl.minXmm), elev, fromMm(sl.minYmm)),
+                new THREE.Vector3(fromMm(sl.maxXmm), elev, fromMm(sl.minYmm)),
+                new THREE.Vector3(fromMm(sl.maxXmm), elev, fromMm(sl.maxYmm)),
+                new THREE.Vector3(fromMm(sl.minXmm), elev, fromMm(sl.maxYmm)),
+              ];
+              if (testPoints(pts)) matched.push({ kind: "slab", id: sl.id });
+            }
+            for (const col of layout.columns) {
+              const lvl = layout.levels.find((l) => l.id === col.levelId);
+              const elev = fromMm(lvl?.elevationMm ?? 0);
+              const p = new THREE.Vector3(fromMm(col.xMm), elev, fromMm(col.yMm));
+              if (testPoints([p])) matched.push({ kind: "column", id: col.id });
+            }
+            for (const b of layout.beams) {
+              const lvl = layout.levels.find((l) => l.id === b.levelId);
+              const elev = fromMm(lvl?.elevationMm ?? 0);
+              const p1 = new THREE.Vector3(fromMm(b.startXmm), elev, fromMm(b.startYmm));
+              const p2 = new THREE.Vector3(fromMm(b.endXmm), elev, fromMm(b.endYmm));
+              if (testPoints([p1, p2])) matched.push({ kind: "beam", id: b.id });
+            }
+            for (const g of layout.gridLines) {
+              const p1 = new THREE.Vector3(fromMm(g.startXmm), 0, fromMm(g.startYmm));
+              const p2 = new THREE.Vector3(fromMm(g.endXmm), 0, fromMm(g.endYmm));
+              if (testPoints([p1, p2])) matched.push({ kind: "grid", id: g.id });
+            }
+            for (const l of layout.sketchLines) {
+              const p1 = new THREE.Vector3(fromMm(l.startXmm), 0, fromMm(l.startYmm));
+              const p2 = new THREE.Vector3(fromMm(l.endXmm), 0, fromMm(l.endYmm));
+              if (testPoints([p1, p2])) matched.push({ kind: "line", id: l.id });
+            }
+
+            layout.selectMultiple(matched, e.shiftKey ? "add" : "replace");
+          }
+        }
+      }
+
       const controls = controlsRef.current;
       if (controls && !useAppStore.getState().viewerContextMenuOpen) {
         controls.enabled = true;
@@ -5488,9 +5827,30 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     setRightPanelOpen,
   ]);
 
+  const marqueeBox = useLayoutDrawingStore((s) => s.marqueeBox);
+
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      {marqueeBox && (
+        <div
+          className="pointer-events-none fixed z-[999]"
+          style={{
+            left: Math.min(marqueeBox.startX, marqueeBox.currentX),
+            top: Math.min(marqueeBox.startY, marqueeBox.currentY),
+            width: Math.abs(marqueeBox.currentX - marqueeBox.startX),
+            height: Math.abs(marqueeBox.currentY - marqueeBox.startY),
+            backgroundColor: marqueeBox.isCrossing
+              ? "rgba(34, 197, 94, 0.15)"
+              : "rgba(59, 130, 246, 0.15)",
+            borderColor: marqueeBox.isCrossing
+              ? "rgba(34, 197, 94, 0.85)"
+              : "rgba(59, 130, 246, 0.85)",
+            borderWidth: 1.5,
+            borderStyle: marqueeBox.isCrossing ? "dashed" : "solid",
+          }}
+        />
+      )}
     </div>
   );
 });

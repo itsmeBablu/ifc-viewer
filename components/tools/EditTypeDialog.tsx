@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LuX, LuCheck, LuSlidersHorizontal, LuInfo } from "react-icons/lu";
+import { LuX, LuCheck, LuSlidersHorizontal, LuInfo, LuPlus, LuTrash2, LuLayers } from "react-icons/lu";
 import { UnifiedButton } from "@/components/common/UnifiedButton";
+import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
 
 export type ElementTypeDefinition = {
   id: string;
@@ -16,6 +17,7 @@ export type ElementTypeDefinition = {
   functionType: "Interior" | "Exterior" | "Structural" | "Non-Bearing";
   thermalConductivity?: string;
   fireRating?: string;
+  layers?: WallLayer[];
 };
 
 export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
@@ -30,6 +32,11 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     functionType: "Interior",
     thermalConductivity: "0.45 W/mK",
     fireRating: "F90",
+    layers: [
+      { id: "l1", name: "Plaster Interior", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f1f5f9" },
+      { id: "l2", name: "Concrete Core", function: "structure", material: "Concrete Core", thicknessMm: 170, color: "#94a3b8" },
+      { id: "l3", name: "Plaster Exterior", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#f1f5f9" },
+    ],
   },
   "wall-interior-100": {
     id: "wall-interior-100",
@@ -41,17 +48,11 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     functionType: "Interior",
     thermalConductivity: "0.25 W/mK",
     fireRating: "F30",
-  },
-  "wall-interior-150": {
-    id: "wall-interior-150",
-    name: "Interior Block - 150mm",
-    category: "Wall",
-    thicknessMm: 150,
-    heightMm: 3000,
-    material: "Concrete Block",
-    functionType: "Interior",
-    thermalConductivity: "0.38 W/mK",
-    fireRating: "F60",
+    layers: [
+      { id: "l1", name: "Gypsum Board", function: "finish1", material: "Gypsum Board", thicknessMm: 12.5, color: "#e2e8f0" },
+      { id: "l2", name: "Metal Stud Air", function: "core", material: "Stud Cavity", thicknessMm: 75, color: "#cbd5e1" },
+      { id: "l3", name: "Gypsum Board", function: "finish2", material: "Gypsum Board", thicknessMm: 12.5, color: "#e2e8f0" },
+    ],
   },
   "wall-exterior-300": {
     id: "wall-exterior-300",
@@ -63,17 +64,12 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     functionType: "Exterior",
     thermalConductivity: "0.18 W/mK",
     fireRating: "F90-A",
-  },
-  "wall-exterior-365": {
-    id: "wall-exterior-365",
-    name: "Exterior - 365mm Monolithic",
-    category: "Wall",
-    thicknessMm: 365,
-    heightMm: 3000,
-    material: "Clay Poroton Block",
-    functionType: "Exterior",
-    thermalConductivity: "0.14 W/mK",
-    fireRating: "F90-A",
+    layers: [
+      { id: "l1", name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f8fafc" },
+      { id: "l2", name: "Concrete Block", function: "structure", material: "Concrete Block", thicknessMm: 175, color: "#94a3b8" },
+      { id: "l3", name: "Mineral Wool", function: "insulation", material: "Mineral Wool", thicknessMm: 100, color: "#fef08a" },
+      { id: "l4", name: "Exterior Render", function: "finish2", material: "Stucco Render", thicknessMm: 10, color: "#e2e8f0" },
+    ],
   },
 
   // Door Types
@@ -245,6 +241,127 @@ export default function EditTypeDialog({
           />
         </div>
 
+        {/* Wall Layered Assembly Structure */}
+        {formData.category === "Wall" && (
+          <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                <LuLayers className="h-3.5 w-3.5" />
+                <span>Layer Structure (Interior → Exterior)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newLayer: WallLayer = {
+                    id: `l-${Date.now()}`,
+                    name: "New Layer",
+                    function: "insulation",
+                    material: "Thermal Insulation",
+                    thicknessMm: 50,
+                    color: "#fde047",
+                  };
+                  const updatedLayers = [...(formData.layers || []), newLayer];
+                  const total = updatedLayers.reduce((s, l) => s + l.thicknessMm, 0);
+                  setFormData({
+                    ...formData,
+                    layers: updatedLayers,
+                    thicknessMm: total,
+                  });
+                }}
+                className="flex items-center gap-1 text-[10px] font-bold text-yellow-400 hover:text-yellow-300"
+              >
+                <LuPlus className="h-3 w-3" />
+                <span>Add Layer</span>
+              </button>
+            </div>
+
+            {/* Visual Cross-Section Preview Bar */}
+            {formData.layers && formData.layers.length > 0 && (
+              <div className="flex h-4 w-full overflow-hidden rounded border border-slate-700 bg-slate-900">
+                {formData.layers.map((l, i) => (
+                  <div
+                    key={l.id || i}
+                    style={{
+                      width: `${(l.thicknessMm / (formData.thicknessMm || 1)) * 100}%`,
+                      backgroundColor: l.color || (l.function === "insulation" ? "#facc15" : l.function === "structure" ? "#64748b" : "#94a3b8"),
+                    }}
+                    title={`${l.name}: ${l.thicknessMm}mm`}
+                    className="h-full border-r border-slate-950/40 last:border-none"
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Layers Table */}
+            <div className="space-y-1.5">
+              {(formData.layers || []).map((layer, idx) => (
+                <div key={layer.id || idx} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-overlay)] p-1.5 border border-[var(--panel-divider)]/60 text-[11px]">
+                  <select
+                    value={layer.function}
+                    onChange={(e) => {
+                      const updated = (formData.layers || []).map((l, i) =>
+                        i === idx ? { ...l, function: e.target.value as WallLayerFunction } : l
+                      );
+                      setFormData({ ...formData, layers: updated });
+                    }}
+                    className="w-24 rounded border border-[var(--panel-divider)] bg-slate-900 px-1 py-0.5 text-[10px] text-[var(--text-strong)]"
+                  >
+                    <option value="finish1">Finish 1 [Int]</option>
+                    <option value="substrate">Substrate</option>
+                    <option value="structure">Structure</option>
+                    <option value="core">Core Cavity</option>
+                    <option value="insulation">Insulation</option>
+                    <option value="finish2">Finish 2 [Ext]</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={layer.material}
+                    onChange={(e) => {
+                      const updated = (formData.layers || []).map((l, i) =>
+                        i === idx ? { ...l, material: e.target.value, name: e.target.value } : l
+                      );
+                      setFormData({ ...formData, layers: updated });
+                    }}
+                    placeholder="Material"
+                    className="flex-1 rounded border border-[var(--panel-divider)] bg-slate-900 px-1.5 py-0.5 text-[10px] text-[var(--text-strong)]"
+                  />
+
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="number"
+                      value={layer.thicknessMm}
+                      onChange={(e) => {
+                        const val = Math.max(1, Number(e.target.value));
+                        const updated = (formData.layers || []).map((l, i) =>
+                          i === idx ? { ...l, thicknessMm: val } : l
+                        );
+                        const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                        setFormData({ ...formData, layers: updated, thicknessMm: total });
+                      }}
+                      className="w-14 rounded border border-[var(--panel-divider)] bg-slate-900 px-1 py-0.5 text-right font-mono text-[10px] text-[var(--text-strong)]"
+                    />
+                    <span className="text-[9px] text-[var(--text-muted)] font-mono">mm</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = (formData.layers || []).filter((_, i) => i !== idx);
+                      const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                      setFormData({ ...formData, layers: updated, thicknessMm: total });
+                    }}
+                    className="text-slate-500 hover:text-red-400 p-0.5"
+                    title="Remove layer"
+                  >
+                    <LuTrash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Construction Dimensions */}
         <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
@@ -253,13 +370,14 @@ export default function EditTypeDialog({
 
           {formData.thicknessMm !== undefined && (
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-body)]">Thickness:</span>
+              <span className="text-[11px] text-[var(--text-body)]">Total Thickness:</span>
               <div className="flex items-center gap-1">
                 <input
                   type="number"
                   value={formData.thicknessMm}
+                  disabled={formData.category === "Wall" && Boolean(formData.layers && formData.layers.length > 0)}
                   onChange={(e) => setFormData({ ...formData, thicknessMm: Number(e.target.value) })}
-                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)] disabled:opacity-60"
                 />
                 <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
               </div>

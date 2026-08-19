@@ -33,6 +33,7 @@ import { WerkzeugModelSceneContext } from "./WerkzeugModelSceneContext";
 import WerkzeugViewer3D, {
   type WerkzeugViewer3DHandle,
 } from "./WerkzeugViewer3D";
+import VStudioErrorBoundary from "./VStudioErrorBoundary";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
@@ -42,6 +43,7 @@ import ToolRightPanel from "./ToolRightPanel";
 import DraggablePanel from "./DraggablePanel";
 import ToolStatusBar from "./ToolStatusBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
+import SheetViewDialog from "./SheetViewDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
 import ToolModeCursorHud from "./ToolModeCursorHud";
 import WerkzeugEntryPanel from "./WerkzeugEntryPanel";
@@ -122,6 +124,7 @@ export default function WerkzeugApp() {
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
+  const [sheetViewOpen, setSheetViewOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(320);
   const dragDepthRef = useRef(0);
 
@@ -455,6 +458,7 @@ export default function WerkzeugApp() {
           onFile={handleFile}
           isLoadingModel={isLoadingModel}
           onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
+          onOpenSheet={() => setSheetViewOpen(true)}
         />
 
         {/* Contextual Ribbon Options Bar */}
@@ -465,12 +469,14 @@ export default function WerkzeugApp() {
           className="fixed inset-y-0 left-0 z-0 bg-[#0c0d12] transition-[right] duration-200"
           style={{ right: isDesktop && rightPanelOpen ? panelWidth : 0 }}
         >
-          <WerkzeugViewer3D
-            ref={viewerRef}
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeaveViewer}
-            className="h-full w-full"
-          />
+          <VStudioErrorBoundary fallbackTitle="3D Viewport Render Error">
+            <WerkzeugViewer3D
+              ref={viewerRef}
+              onPointerMove={handlePointerMove}
+              onPointerLeave={handlePointerLeaveViewer}
+              className="h-full w-full"
+            />
+          </VStudioErrorBoundary>
         </main>
 
         <SceneBusyOverlay />
@@ -492,6 +498,9 @@ export default function WerkzeugApp() {
 
         {/* Room & Area Take-off Schedule Modal */}
         <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
+
+        {/* Sheet Composition & Title Block Modal (Section 7) */}
+        <SheetViewDialog isOpen={sheetViewOpen} onClose={() => setSheetViewOpen(false)} />
 
         {/* Bottom CAD Status Bar */}
         <ToolStatusBar

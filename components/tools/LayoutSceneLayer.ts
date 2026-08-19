@@ -10,7 +10,10 @@ import {
   pointOnWallMm,
   wallAngleRad,
   wallAngleAtPositionRad,
+  type LayoutBeam,
+  type LayoutColumn,
   type LayoutDoor,
+  type LayoutGridLine,
   type LayoutLevel,
   type LayoutSlab,
   type LayoutSketchLine,
@@ -47,6 +50,9 @@ export default class LayoutSceneLayer {
   private doorMeshes = new Map<string, THREE.Group>();
   private windowMeshes = new Map<string, THREE.Group>();
   private slabMeshes = new Map<string, THREE.Mesh>();
+  private columnMeshes = new Map<string, THREE.Mesh>();
+  private beamMeshes = new Map<string, THREE.Mesh>();
+  private gridMeshes = new Map<string, THREE.Group>();
   private previewLine: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
   private tracePreviewGroup: THREE.Group | null = null;
@@ -327,6 +333,225 @@ export default class LayoutSceneLayer {
       levelById,
       opts,
     );
+  }
+
+  syncColumns(
+    columns: LayoutColumn[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedColumnIds: Set<string>;
+      showAllLevels: boolean;
+    },
+  ) {
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    const keep = new Set(columns.map((c) => c.id));
+    for (const [id, mesh] of this.columnMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.columnMeshes.delete(id);
+      }
+    }
+
+    for (const col of columns) {
+      const level = levelById.get(col.levelId);
+      const elev = level?.elevationMm ?? 0;
+      const height = fromMm(col.heightMm ?? level?.heightMm ?? 3000);
+      const isSelected = opts.selectedColumnIds.has(col.id);
+
+      let mesh = this.columnMeshes.get(col.id);
+      if (!mesh) {
+        const w = fromMm(col.widthMm);
+        const d = fromMm(col.depthMm);
+        const geo =
+          col.profile === "circle"
+            ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
+            : new THREE.BoxGeometry(w, height, d);
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x94a3b8,
+          roughness: 0.5,
+          metalness: 0.1,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutColumnId = col.id;
+        mesh.userData.kind = "column";
+        this.columnMeshes.set(col.id, mesh);
+        this.group.add(mesh);
+      }
+
+      mesh.position.set(fromMm(col.xMm), fromMm(elev) + height / 2, fromMm(col.yMm));
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        col.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (isSelected) {
+        mat.color.setHex(0xfacc15);
+        mat.emissive.setHex(0x92400e);
+        mat.emissiveIntensity = 0.3;
+      } else {
+        mat.color.setHex(col.color ? parseInt(col.color.replace("#", "0x"), 16) : 0x94a3b8);
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+      }
+    }
+  }
+
+  syncBeams(
+    beams: LayoutBeam[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedBeamIds: Set<string>;
+      showAllLevels: boolean;
+    },
+  ) {
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    const keep = new Set(beams.map((b) => b.id));
+    for (const [id, mesh] of this.beamMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.beamMeshes.delete(id);
+      }
+    }
+
+    for (const beam of beams) {
+      const level = levelById.get(beam.levelId);
+      const elev = level?.elevationMm ?? 0;
+      const isSelected = opts.selectedBeamIds.has(beam.id);
+
+      const dx = fromMm(beam.endXmm - beam.startXmm);
+      const dz = fromMm(beam.endYmm - beam.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const w = fromMm(beam.widthMm);
+      const d = fromMm(beam.depthMm);
+
+      let mesh = this.beamMeshes.get(beam.id);
+      if (!mesh) {
+        const geo = new THREE.BoxGeometry(len, d, w);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x64748b,
+          roughness: 0.4,
+          metalness: 0.2,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutBeamId = beam.id;
+        mesh.userData.kind = "beam";
+        this.beamMeshes.set(beam.id, mesh);
+        this.group.add(mesh);
+      }
+
+      mesh.position.set(
+        fromMm((beam.startXmm + beam.endXmm) / 2),
+        fromMm(elev + beam.elevationOffsetMm) + d / 2,
+        fromMm((beam.startYmm + beam.endYmm) / 2),
+      );
+      mesh.rotation.y = -Math.atan2(dz, dx);
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        beam.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (isSelected) {
+        mat.color.setHex(0xfacc15);
+        mat.emissive.setHex(0x92400e);
+        mat.emissiveIntensity = 0.3;
+      } else {
+        mat.color.setHex(beam.color ? parseInt(beam.color.replace("#", "0x"), 16) : 0x64748b);
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+      }
+    }
+  }
+
+  syncGridLines(
+    gridLines: LayoutGridLine[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedGridLineIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(gridLines.map((g) => g.id));
+    for (const [id, grp] of this.gridMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.gridMeshes.delete(id);
+      }
+    }
+
+    const y = fromMm(opts.fallbackElevMm) + 0.05;
+
+    for (const grid of gridLines) {
+      const isSelected = opts.selectedGridLineIds.has(grid.id);
+      const col = isSelected ? 0xfacc15 : 0x3b82f6;
+
+      let grp = this.gridMeshes.get(grid.id);
+      if (grp) {
+        this.disposeGroup(grp);
+        grp.clear();
+      } else {
+        grp = new THREE.Group();
+        grp.name = `grid-${grid.id}`;
+        grp.userData.layoutGridId = grid.id;
+        this.gridMeshes.set(grid.id, grp);
+        this.group.add(grp);
+      }
+
+      const p1 = new THREE.Vector3(fromMm(grid.startXmm), y, fromMm(grid.startYmm));
+      const p2 = new THREE.Vector3(fromMm(grid.endXmm), y, fromMm(grid.endYmm));
+
+      // Grid line
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineDashedMaterial({
+        color: col,
+        dashSize: 0.4,
+        gapSize: 0.2,
+      });
+      const lineMesh = new THREE.Line(lineGeo, lineMat);
+      lineMesh.computeLineDistances();
+      lineMesh.renderOrder = 110;
+      grp.add(lineMesh);
+
+      // Bubble tag at endpoints
+      for (const pt of [p1, p2]) {
+        const bubbleGeo = new THREE.CircleGeometry(0.35, 24);
+        bubbleGeo.rotateX(-Math.PI / 2);
+        const bubbleMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          side: THREE.DoubleSide,
+        });
+        const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+        bubble.position.copy(pt);
+        bubble.renderOrder = 112;
+        grp.add(bubble);
+
+        // Ring around bubble
+        const ringGeo = new THREE.RingGeometry(0.32, 0.36, 24);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: col,
+          side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(pt);
+        ring.position.y += 0.002;
+        ring.renderOrder = 113;
+        grp.add(ring);
+      }
+    }
   }
 
   syncUnderlays(
@@ -901,6 +1126,9 @@ export default class LayoutSceneLayer {
     | { kind: "door"; id: string }
     | { kind: "window"; id: string }
     | { kind: "slab"; id: string }
+    | { kind: "column"; id: string }
+    | { kind: "beam"; id: string }
+    | { kind: "grid"; id: string }
     | { kind: "sketch-line"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
@@ -952,6 +1180,12 @@ export default class LayoutSceneLayer {
           return { kind: "window", id: o.userData.layoutWindowId as string };
         if (o.userData.layoutSlabId)
           return { kind: "slab", id: o.userData.layoutSlabId as string };
+        if (o.userData.layoutColumnId)
+          return { kind: "column", id: o.userData.layoutColumnId as string };
+        if (o.userData.layoutBeamId)
+          return { kind: "beam", id: o.userData.layoutBeamId as string };
+        if (o.userData.layoutGridId)
+          return { kind: "grid", id: o.userData.layoutGridId as string };
         if (o.userData.layoutSketchLineId)
           return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
@@ -1134,10 +1368,22 @@ export default class LayoutSceneLayer {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
+    for (const mesh of this.columnMeshes.values()) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    for (const mesh of this.beamMeshes.values()) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    for (const grp of this.gridMeshes.values()) this.disposeGroup(grp);
     this.wallMeshes.clear();
     this.doorMeshes.clear();
     this.windowMeshes.clear();
     this.slabMeshes.clear();
+    this.columnMeshes.clear();
+    this.beamMeshes.clear();
+    this.gridMeshes.clear();
     for (const mesh of this.levelSlabs.values()) {
       this.group.remove(mesh);
       mesh.geometry.dispose();

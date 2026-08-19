@@ -87,6 +87,7 @@ interface ToolRibbonProps {
   onFile: (file: File) => void;
   isLoadingModel: boolean;
   onOpenRoomSchedule?: () => void;
+  onOpenSheet?: () => void;
 }
 
 // --- Cluster wrapper helpers ---------------------------------------------------
@@ -288,6 +289,7 @@ export default function ToolRibbon({
   onFile,
   isLoadingModel,
   onOpenRoomSchedule,
+  onOpenSheet,
 }: ToolRibbonProps) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -577,6 +579,15 @@ export default function ToolRibbon({
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("roof"); setActiveDropdown(null); }}>
               <IconMarkupRoof className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Roof</span>
             </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("column"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">▮</span> <span className="text-xs">Column (CL)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("beam"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">▬</span> <span className="text-xs">Beam (BM)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("grid"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">⊞</span> <span className="text-xs">Grid (GR)</span>
+            </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("lines"); setActiveDropdown(null); }}>
               <LuPencil className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Lines (L)</span>
             </button>
@@ -606,6 +617,9 @@ export default function ToolRibbon({
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { onOpenRoomSchedule?.(); setActiveDropdown(null); }}>
               <LuFileSpreadsheet className="h-4 w-4 text-emerald-400" /> <span className="text-xs">Schedule</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { onOpenSheet?.(); setActiveDropdown(null); }}>
+              <LuFileSpreadsheet className="h-4 w-4 text-sky-400" /> <span className="text-xs">Sheet (SH)</span>
             </button>
           </div>
         )}

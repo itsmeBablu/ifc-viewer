@@ -11,6 +11,7 @@ import {
   LuKeyboard,
   LuPaperclip,
   LuFileImage,
+  LuFootprints,
 } from "react-icons/lu";
 import type { RenderMode } from "@/lib/types";
 
@@ -238,8 +239,23 @@ export default function ToolStatusBar({
         </div>
       </div>
 
-      {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
+      {/* Right: Shading Toggle + Scale + Level + Snap + Units + Walkthrough */}
       <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
+        {/* -- Walkthrough Toggle (Section 8) ---------------------------- */}
+        <button
+          type="button"
+          onClick={() => useToolMarkupStore.getState().setWalkthroughMode(!useToolMarkupStore.getState().walkthroughMode)}
+          title="Toggle First-Person Walkthrough (WASD)"
+          className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+            useToolMarkupStore((s) => s.walkthroughMode)
+              ? "border-yellow-400 bg-yellow-400/20 text-yellow-400"
+              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-yellow-400"
+          }`}
+        >
+          <LuFootprints className="h-3 w-3" />
+          <span>Walk</span>
+        </button>
+
         {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
         <div className="relative">
           <button
