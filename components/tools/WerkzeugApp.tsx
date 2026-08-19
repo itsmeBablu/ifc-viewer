@@ -261,6 +261,18 @@ export default function WerkzeugApp() {
         setArmedTool(null);
         return;
       }
+
+      if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("trim");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "l" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("lines");
+        setArmedTool(null);
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);

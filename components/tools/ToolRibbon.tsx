@@ -37,6 +37,7 @@ import {
   LuArrowRight,
   LuCheck,
   LuPencil,
+  LuScissors,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -560,6 +561,9 @@ export default function ToolRibbon({
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("lines"); setActiveDropdown(null); }}>
               <LuPencil className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Lines (L)</span>
             </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("trim"); setActiveDropdown(null); }}>
+              <LuScissors className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Trim / Extend (TR)</span>
+            </button>
           </div>
         )}
       </div>
@@ -783,6 +787,20 @@ export default function ToolRibbon({
             </RibbonBtn>
           );
         })}
+
+        <RibbonBtn
+          active={armedLayoutTool === "trim"}
+          onClick={() => {
+            if (armedLayoutTool === "trim") {
+              setArmedLayoutTool(null);
+            } else {
+              handleSelectLayoutTool("trim");
+            }
+          }}
+          title="Trim / Extend to Corner (TR)"
+        >
+          <LuScissors className="h-4 w-4" />
+        </RibbonBtn>
 
         <RibbonBtn
           onClick={() => {

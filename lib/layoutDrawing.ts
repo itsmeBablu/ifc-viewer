@@ -138,7 +138,51 @@ export type LayoutSketchLine = {
   createdAt: number;
 };
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "lines";
+export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "lines" | "trim";
+
+/**
+ * Trim or extend two walls so they meet cleanly at their intersection point,
+ * preserving the portions closest to clickPt1 and clickPt2 (Revit / AutoCAD standard).
+ */
+export function trimWallPair(
+  w1: LayoutWall,
+  clickPt1: { xMm: number; yMm: number },
+  w2: LayoutWall,
+  clickPt2: { xMm: number; yMm: number },
+): {
+  wall1Patch: Partial<LayoutWall>;
+  wall2Patch: Partial<LayoutWall>;
+} | null {
+  const hit = lineLineIntersection(
+    w1.startXmm,
+    w1.startYmm,
+    w1.endXmm,
+    w1.endYmm,
+    w2.startXmm,
+    w2.startYmm,
+    w2.endXmm,
+    w2.endYmm,
+  );
+  if (!hit) return null;
+
+  // For w1: keep endpoint closer to clickPt1, move other endpoint to hit
+  const dStart1 = Math.hypot(clickPt1.xMm - w1.startXmm, clickPt1.yMm - w1.startYmm);
+  const dEnd1 = Math.hypot(clickPt1.xMm - w1.endXmm, clickPt1.yMm - w1.endYmm);
+  const wall1Patch: Partial<LayoutWall> =
+    dStart1 <= dEnd1
+      ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
+      : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
+
+  // For w2: keep endpoint closer to clickPt2, move other endpoint to hit
+  const dStart2 = Math.hypot(clickPt2.xMm - w2.startXmm, clickPt2.yMm - w2.startYmm);
+  const dEnd2 = Math.hypot(clickPt2.xMm - w2.endXmm, clickPt2.yMm - w2.endYmm);
+  const wall2Patch: Partial<LayoutWall> =
+    dStart2 <= dEnd2
+      ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
+      : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
+
+  return { wall1Patch, wall2Patch };
+}
 
 export type LayoutPresets = {
   wallThicknessMm: number[];

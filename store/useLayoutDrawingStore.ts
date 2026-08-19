@@ -18,6 +18,7 @@ import {
   rememberNumber,
   rememberWindowSize,
   snapWallEndpointMm,
+  trimWallPair,
   type LayoutDoor,
   type LayoutLevel,
   type LayoutPresets,
@@ -213,6 +214,15 @@ type LayoutDrawingState = {
     arcRadiusMm: number,
   ) => void;
 
+  trimFirstPick: { wallId: string; clickPointMm: { xMm: number; yMm: number } } | null;
+  setTrimFirstPick: (pick: { wallId: string; clickPointMm: { xMm: number; yMm: number } } | null) => void;
+  trimWalls: (
+    wall1Id: string,
+    clickPt1Mm: { xMm: number; yMm: number },
+    wall2Id: string,
+    clickPt2Mm: { xMm: number; yMm: number },
+  ) => Promise<boolean>;
+
   placeDoorOnWall: (
     wallId: string,
     positionMm: number,
@@ -375,6 +385,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   wallDraw: null,
   slabDraw: null,
   tracePreview: null,
+  trimFirstPick: null,
   selectedWallId: null,
   selectedDoorId: null,
   selectedWindowId: null,
@@ -1223,6 +1234,31 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     };
     set({ walls: get().walls.map((w) => (w.id === wallId ? updated : w)) });
     idbPutWall(updated);
+  },
+
+  setTrimFirstPick: (pick) => set({ trimFirstPick: pick }),
+
+  trimWalls: async (w1Id, pt1, w2Id, pt2) => {
+    const w1 = get().walls.find((w) => w.id === w1Id);
+    const w2 = get().walls.find((w) => w.id === w2Id);
+    if (!w1 || !w2 || w1.id === w2.id) return false;
+    const res = trimWallPair(w1, pt1, w2, pt2);
+    if (!res) return false;
+
+    pushWerkzeugHistory();
+    const updated1 = { ...w1, ...res.wall1Patch };
+    const updated2 = { ...w2, ...res.wall2Patch };
+
+    set({
+      walls: get().walls.map((w) =>
+        w.id === w1Id ? updated1 : w.id === w2Id ? updated2 : w,
+      ),
+      trimFirstPick: null,
+      lastMutatedAt: Date.now(),
+    });
+    await idbPutWall(updated1);
+    await idbPutWall(updated2);
+    return true;
   },
 
  placeDoorOnWall: async (wallId, positionMm, opts) => {

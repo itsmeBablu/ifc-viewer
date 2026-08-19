@@ -4786,6 +4786,40 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "trim") {
+              const wallId = layoutHit?.kind === "wall" ? layoutHit.id : null;
+              if (wallId) {
+                let plan = { xMm: 0, yMm: 0 };
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) {
+                  plan = planPointFromHit(surface.point);
+                } else {
+                  const wall = layoutStore.walls.find((w) => w.id === wallId);
+                  if (wall) {
+                    plan = {
+                      xMm: Math.round((wall.startXmm + wall.endXmm) / 2),
+                      yMm: Math.round((wall.startYmm + wall.endYmm) / 2),
+                    };
+                  }
+                }
+
+                if (!layoutStore.trimFirstPick) {
+                  layoutStore.setTrimFirstPick({ wallId, clickPointMm: plan });
+                  layoutStore.selectWall(wallId);
+                } else {
+                  void layoutStore.trimWalls(
+                    layoutStore.trimFirstPick.wallId,
+                    layoutStore.trimFirstPick.clickPointMm,
+                    wallId,
+                    plan,
+                  );
+                }
+                return;
+              }
+            }
+
             // Select / pin note on layout elements
             if (!layoutStore.armedLayoutTool && layoutHit) {
               if (
@@ -5187,6 +5221,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               layoutStore.selectWindow(lh.id);
             } else if (lh?.kind === "slab") {
               layoutStore.selectSlab(lh.id);
+            } else if (lh?.kind === "sketch-line") {
+              layoutStore.selectSketchLine(lh.id);
             }
             if (lh && lh.kind !== "ground") {
               layoutLayer.group.traverse((o) => {
@@ -5198,7 +5234,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   (lh.kind === "window" &&
                     o.userData?.layoutWindowId === lh.id) ||
                   (lh.kind === "slab" &&
-                    o.userData?.layoutSlabId === lh.id)
+                    o.userData?.layoutSlabId === lh.id) ||
+                  (lh.kind === "sketch-line" &&
+                    o.userData?.layoutSketchLineId === lh.id)
                 ) {
                   box.expandByObject(o);
                   framed = true;

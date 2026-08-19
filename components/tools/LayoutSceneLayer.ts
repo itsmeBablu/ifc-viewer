@@ -848,7 +848,7 @@ export default class LayoutSceneLayer {
     this.disposeGroup(this.sketchGroup);
     this.sketchGroup.clear();
 
-    const y = fromMm(elevMm) + 0.04;
+    const y = fromMm(elevMm) + 0.06;
     const sketchYellow = 0xfacc15;
     const selectedCyan = 0x38bdf8;
     const gapRed = 0xef4444;
@@ -864,33 +864,36 @@ export default class LayoutSceneLayer {
       const dz = p2.z - p1.z;
       const segLen = Math.hypot(dx, dz);
       if (segLen > 0.001) {
-        const segGeo = new THREE.CylinderGeometry(0.04, 0.04, segLen, 8);
+        const segGeo = new THREE.CylinderGeometry(0.075, 0.075, segLen, 12);
         segGeo.rotateZ(Math.PI / 2);
         const segMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
-          emissiveIntensity: isSelected ? 0.6 : 0.35,
-          roughness: 0.3,
-          metalness: 0.2,
+          emissiveIntensity: isSelected ? 0.85 : 0.6,
+          roughness: 0.2,
+          metalness: 0.1,
+          depthTest: false,
         });
         const segMesh = new THREE.Mesh(segGeo, segMat);
         segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
         segMesh.rotation.y = -Math.atan2(dz, dx);
         segMesh.userData.layoutSketchLineId = l.id;
-        segMesh.renderOrder = 30;
+        segMesh.renderOrder = 100;
         this.sketchGroup.add(segMesh);
       }
 
       for (const pt of [p1, p2]) {
-        const sphereGeo = new THREE.SphereGeometry(0.06, 12, 10);
+        const sphereGeo = new THREE.SphereGeometry(0.09, 14, 12);
         const sphereMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
-          emissiveIntensity: 0.4,
+          emissiveIntensity: isSelected ? 0.9 : 0.65,
+          depthTest: false,
         });
         const sphere = new THREE.Mesh(sphereGeo, sphereMat);
         sphere.position.copy(pt);
-        sphere.renderOrder = 32;
+        sphere.userData.layoutSketchLineId = l.id;
+        sphere.renderOrder = 102;
         this.sketchGroup.add(sphere);
       }
     }
@@ -910,20 +913,19 @@ export default class LayoutSceneLayer {
           const dz = p2.z - p1.z;
           const segLen = Math.hypot(dx, dz);
           if (segLen > 0.001) {
-            const segGeo = new THREE.CylinderGeometry(0.045, 0.045, segLen, 8);
+            const segGeo = new THREE.CylinderGeometry(0.08, 0.08, segLen, 12);
             segGeo.rotateZ(Math.PI / 2);
             const isRubberband = i === pts.length - 2 && draw.cursor != null;
             const segMat = new THREE.MeshStandardMaterial({
               color: isRubberband ? 0xfde047 : 0xfacc15,
               emissive: 0xfacc15,
-              emissiveIntensity: isRubberband ? 0.7 : 0.4,
-              transparent: true,
-              opacity: isRubberband ? 0.9 : 1,
+              emissiveIntensity: isRubberband ? 0.85 : 0.6,
+              depthTest: false,
             });
             const segMesh = new THREE.Mesh(segGeo, segMat);
             segMesh.position.set((p1.x + p2.x) / 2, y + 0.01, (p1.z + p2.z) / 2);
             segMesh.rotation.y = -Math.atan2(dz, dx);
-            segMesh.renderOrder = 35;
+            segMesh.renderOrder = 105;
             this.sketchGroup.add(segMesh);
           }
         }
@@ -932,16 +934,16 @@ export default class LayoutSceneLayer {
 
     // 3. Render glowing gap markers if any
     for (const gp of gapPoints) {
-      const gapGeo = new THREE.SphereGeometry(0.12, 16, 12);
+      const gapGeo = new THREE.SphereGeometry(0.14, 16, 12);
       const gapMat = new THREE.MeshStandardMaterial({
         color: gapRed,
         emissive: gapRed,
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 0.9,
         depthTest: false,
       });
       const gapMesh = new THREE.Mesh(gapGeo, gapMat);
       gapMesh.position.set(fromMm(gp.xMm), y + 0.05, fromMm(gp.yMm));
-      gapMesh.renderOrder = 40;
+      gapMesh.renderOrder = 110;
       this.sketchGroup.add(gapMesh);
     }
   }
