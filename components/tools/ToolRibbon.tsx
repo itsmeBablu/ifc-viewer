@@ -261,7 +261,7 @@ export default function ToolRibbon({
   const [saveMenuOpen, setSaveMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [isTouchMode, setIsTouchMode] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | "annotate" | "snaps" | null>(null);
 
   // Draggable Ribbon State
   const [ribbonPos, setRibbonPos] = useState({ x: 0, y: 0 });

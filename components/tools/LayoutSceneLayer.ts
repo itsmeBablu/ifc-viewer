@@ -1319,15 +1319,6 @@ export default class LayoutSceneLayer {
     }
   }
 
-  private applyOpeningDisplay(g: THREE.Group, planMode: boolean) {
-    const box = g.children.find(
-      (c) => c instanceof THREE.Mesh && c.name === "opening-box",
-    ) as THREE.Mesh | undefined;
-    const plan = g.children.find((c) => c.name === "plan-symbol");
-    if (box) box.visible = !planMode;
-    if (plan) plan.visible = planMode;
-  }
-
   /** Ensure solid box + CAD plan symbol both exist; visibility via planMode. */
   private syncDoorPlanSymbol(
     g: THREE.Group,
