@@ -1379,11 +1379,11 @@ export default class LayoutSceneLayer {
           const tz = Math.max(0, Math.min(1, (vz + thickM / 2) / (thickM || 1e-5)));
 
           if (vx < -halfLen + 0.05) {
-            const deltaX = -(1 - tz) * sRightM - tz * sLeftM;
-            pos.setX(i, vx + deltaX);
+            const newX = -halfLen + (tz * sLeftM + (1 - tz) * sRightM);
+            pos.setX(i, newX);
           } else if (vx > halfLen - 0.05) {
-            const deltaX = (1 - tz) * eRightM + tz * eLeftM;
-            pos.setX(i, vx + deltaX);
+            const newX = halfLen - (tz * eLeftM + (1 - tz) * eRightM);
+            pos.setX(i, newX);
           }
         }
       }
