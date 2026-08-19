@@ -2242,7 +2242,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         s.sketchLines || [],
         s.sketchDraw,
         s.gapHighlightPoints || [],
-        activeLevel?.elevationMm ?? 0
+        activeLevel?.elevationMm ?? 0,
+        s.selectedSketchLineId,
       );
       const tp = s.tracePreview;
       const cand = tp?.candidates[tp.index] ?? null;
@@ -4896,6 +4897,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
               if (layoutHit.kind === "slab") {
                 layoutStore.selectSlab(layoutHit.id);
+                return;
+              }
+              if (layoutHit.kind === "sketch-line") {
+                layoutStore.selectSketchLine(layoutHit.id);
                 return;
               }
             }

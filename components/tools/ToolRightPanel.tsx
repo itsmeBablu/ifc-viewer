@@ -38,6 +38,7 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import { useIfcStructure } from "./useIfcStructure";
 import IfcStructureTree from "./IfcStructureTree";
 import ToolFloorsSection from "./ToolFloorsSection";
@@ -129,6 +130,11 @@ export default function ToolRightPanel({
   const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
   const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
 
+  const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
+  const selectedSketchLineId = useLayoutDrawingStore((s) => s.selectedSketchLineId);
+  const deleteSketchLine = useLayoutDrawingStore((s) => s.deleteSketchLine);
+  const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
+
   const placements = useToolMarkupStore((s) => s.placements);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
   
@@ -137,10 +143,11 @@ export default function ToolRightPanel({
   const selectedDoor = doors.find((d) => d.id === selectedDoorId);
   const selectedWindow = windows.find((w) => w.id === selectedWindowId);
   const selectedSlab = slabs.find((s) => s.id === selectedSlabId);
+  const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId);
 
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedSketchLine || selectedPlacement
   );
 
   // IFC spatial tree hook
@@ -355,172 +362,340 @@ export default function ToolRightPanel({
           <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-2 text-xs">
             {hasSelection ? (
               <>
-                {/* Type Selector (Compact, Thin Divider) */}
-                {(selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
-                  <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-                      Type
+                {selectedSketchLine ? (
+                  <div className="space-y-2">
+                    <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                        Element
+                      </div>
+                      <div className="font-semibold text-xs text-[var(--text-strong)] mt-0.5">
+                        Sketch Line
+                      </div>
                     </div>
-                    <select
-                      value={activeTypeKey}
-                      onChange={(e) => handleTypeChange(e.target.value)}
-                      className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-semibold text-xs text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
+
+                    <PropSection
+                      open={openSections.dimensions}
+                      onToggle={() => toggleSection("dimensions")}
+                      icon={<LuRuler className="h-3.5 w-3.5 text-yellow-400" />}
+                      label="Geometry"
                     >
-                      {Object.values(types)
-                        .filter((t) => {
-                          if (selectedWall) return t.category === "Wall";
-                          if (selectedDoor) return t.category === "Door";
-                          if (selectedWindow) return t.category === "Window";
-                          if (selectedSlab) return t.category === "Floor" || t.category === "Roof";
-                          return true;
-                        })
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+                      <PropRow label="Length">
+                        <span className="font-mono font-semibold text-yellow-400">
+                          {Math.round(
+                            Math.hypot(
+                              selectedSketchLine.endXmm -
+                                selectedSketchLine.startXmm,
+                              selectedSketchLine.endYmm -
+                                selectedSketchLine.startYmm,
+                            ),
+                          )}{" "}
+                          mm
+                        </span>
+                      </PropRow>
+                      <PropRow label="Angle">
+                        <span className="font-mono text-[var(--text-strong)]">
+                          {Math.round(
+                            (Math.atan2(
+                              selectedSketchLine.endYmm -
+                                selectedSketchLine.startYmm,
+                              selectedSketchLine.endXmm -
+                                selectedSketchLine.startXmm,
+                            ) *
+                              180) /
+                              Math.PI,
+                          )}
+                          °
+                        </span>
+                      </PropRow>
+                      <PropRow label="Start">
+                        <span className="font-mono text-[10px] text-[var(--text-strong)]">
+                          ({selectedSketchLine.startXmm},{" "}
+                          {selectedSketchLine.startYmm})
+                        </span>
+                      </PropRow>
+                      <PropRow label="End">
+                        <span className="font-mono text-[10px] text-[var(--text-strong)]">
+                          ({selectedSketchLine.endXmm},{" "}
+                          {selectedSketchLine.endYmm})
+                        </span>
+                      </PropRow>
+                    </PropSection>
 
-                <div className="space-y-1">
-                  {/* Identity */}
-                  <PropSection
-                    open={openSections.identity}
-                    onToggle={() => toggleSection("identity")}
-                    icon={<LuFileText className="h-3.5 w-3.5 text-yellow-400" />}
-                    label="Identity Data"
-                  >
-                    <PropRow label="Mark / ID">
-                      <span className="font-mono font-semibold text-[var(--text-strong)]">
-                        {selectedWall
-                          ? `W-${selectedWall.id.slice(-4)}`
-                          : selectedDoor
-                          ? `D-${selectedDoor.id.slice(-4)}`
-                          : selectedWindow
-                          ? `WN-${selectedWindow.id.slice(-4)}`
-                          : "EL-1"}
-                      </span>
-                    </PropRow>
-                    <PropRow label="Remarks">
-                      <input
-                        type="text"
-                        placeholder="Add remark…"
-                        className="w-32 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right text-[10px]"
-                      />
-                    </PropRow>
-                  </PropSection>
+                    <PropSection
+                      open={openSections.identity}
+                      onToggle={() => toggleSection("identity")}
+                      icon={<LuLayers className="h-3.5 w-3.5 text-yellow-400" />}
+                      label="Chain & Loop"
+                    >
+                      <PropRow label="Status">
+                        {detectLoopsFromSegments(sketchLines).isFullyClosed ? (
+                          <span className="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/30">
+                            Closed Loop
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-[var(--text-muted)]">
+                            Open Chain ({sketchLines.length} segments)
+                          </span>
+                        )}
+                      </PropRow>
+                    </PropSection>
 
-                  {/* Dimensions */}
-                  <PropSection
-                    open={openSections.dimensions}
-                    onToggle={() => toggleSection("dimensions")}
-                    icon={<LuRuler className="h-3.5 w-3.5 text-yellow-400" />}
-                    label="Dimensions"
-                  >
-                    {selectedWall && (
-                      <>
-                        <PropRow label="Length">
-                          <span className="font-mono font-semibold text-[var(--text-strong)]">{wallLen} mm</span>
-                        </PropRow>
-                        <PropRow label="Thickness">
-                          <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.thicknessMm} mm</span>
-                        </PropRow>
-                        <PropRow label="Height">
-                          <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.heightMm || 3000} mm</span>
-                        </PropRow>
-                        <PropRow label="Area">
-                          <span className="font-mono font-semibold text-emerald-400">{wallArea} m²</span>
-                        </PropRow>
-                        <PropRow label="Volume">
-                          <span className="font-mono font-semibold text-sky-400">{wallVol} m³</span>
-                        </PropRow>
-                      </>
-                    )}
-                    {selectedDoor && (
-                      <>
-                        <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.widthMm} mm</span></PropRow>
-                        <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.heightMm} mm</span></PropRow>
-                        <PropRow label="Opening Area"><span className="font-mono font-semibold text-emerald-400">{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span></PropRow>
-                      </>
-                    )}
-                    {selectedWindow && (
-                      <>
-                        <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.widthMm} mm</span></PropRow>
-                        <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.heightMm} mm</span></PropRow>
-                        <PropRow label="Sill Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.sillHeightMm} mm</span></PropRow>
-                      </>
-                    )}
-                    {selectedSlab && (
-                      <>
-                        <PropRow label="Thickness"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedSlab.thicknessMm} mm</span></PropRow>
-                        <PropRow label="Area"><span className="font-mono font-semibold text-emerald-400">{(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²</span></PropRow>
-                      </>
-                    )}
-                    {selectedPlacement && (
-                      <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
-                    )}
-                  </PropSection>
-
-                  {/* Constraints */}
-                  <PropSection
-                    open={openSections.constraints}
-                    onToggle={() => toggleSection("constraints")}
-                    icon={<LuLayers className="h-3.5 w-3.5 text-yellow-400" />}
-                    label="Constraints"
-                  >
-                    <PropRow label="Base Constraint"><span className="font-semibold text-yellow-400">{currentFloorObj ? currentFloorObj.name : "Level 1"}</span></PropRow>
-                    <PropRow label="Base Offset"><span className="font-mono text-[var(--text-strong)]">0 mm</span></PropRow>
-                  </PropSection>
-
-                  {/* Materials */}
-                  <PropSection
-                    open={openSections.materials}
-                    onToggle={() => toggleSection("materials")}
-                    icon={<LuBox className="h-3.5 w-3.5 text-yellow-400" />}
-                    label="Materials & Finish"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[var(--text-body)]">Primary Material:</span>
-                      <button
-                        type="button"
-                        onClick={() => setMaterialEditorOpen(true)}
-                        className="flex items-center gap-1 font-semibold text-yellow-400 hover:underline"
-                        title="Click to change material in Material Editor"
-                      >
-                        <LuPalette className="h-3 w-3" />
-                        <span>{selectedWall?.material || selectedSlab?.material || selectedDoor?.material || currentType?.material || "Concrete"}</span>
-                      </button>
-                    </div>
-                    {selectedDoor && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-body)]">Leaf Panel:</span>
+                    <div className="pt-2 border-t border-[var(--panel-divider)]/40 space-y-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
-                          onClick={() => setMaterialEditorOpen(true)}
-                          className="font-semibold text-yellow-400 hover:underline"
+                          onClick={() => convertSketchToSlab("floor")}
+                          className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1.5 bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 font-bold text-[11px] hover:bg-yellow-400/25 transition-all"
                         >
-                          <span>{selectedDoor.style || "Standard"}</span>
+                          <span>To Floor</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => convertSketchToSlab("roof")}
+                          className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1.5 bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 font-bold text-[11px] hover:bg-yellow-400/25 transition-all"
+                        >
+                          <span>To Roof</span>
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteSketchLine(selectedSketchLine.id)}
+                        className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-[10px] hover:bg-red-500/20 transition-all"
+                      >
+                        <LuTrash2 className="h-3 w-3" />
+                        <span>Delete Line</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Type Selector (Compact, Thin Divider) */}
+                    {(selectedWall ||
+                      selectedDoor ||
+                      selectedWindow ||
+                      selectedSlab) && (
+                      <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                          Type
+                        </div>
+                        <select
+                          value={activeTypeKey}
+                          onChange={(e) => handleTypeChange(e.target.value)}
+                          className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-semibold text-xs text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
+                        >
+                          {Object.values(types)
+                            .filter((t) => {
+                              if (selectedWall) return t.category === "Wall";
+                              if (selectedDoor) return t.category === "Door";
+                              if (selectedWindow) return t.category === "Window";
+                              if (selectedSlab)
+                                return (
+                                  t.category === "Floor" ||
+                                  t.category === "Roof"
+                                );
+                              return true;
+                            })
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
                     )}
-                    <PropRow label="Function"><span className="font-medium text-[var(--text-strong)]">{currentType.functionType}</span></PropRow>
-                  </PropSection>
 
-                  {/* IFC */}
-                  <PropSection
-                    open={openSections.ifc}
-                    onToggle={() => toggleSection("ifc")}
-                    icon={<LuShieldCheck className="h-3.5 w-3.5 text-yellow-400" />}
-                    label="IFC / BIM Data"
-                  >
-                    <PropRow label="Export Entity">
-                      <span className="font-mono text-[var(--text-strong)]">
-                        {selectedWall ? "IfcWallStandardCase" : selectedDoor ? "IfcDoor" : selectedWindow ? "IfcWindow" : "IfcSlab"}
-                      </span>
-                    </PropRow>
-                  </PropSection>
-                </div>
+                    <div className="space-y-1">
+                      {/* Identity */}
+                      <PropSection
+                        open={openSections.identity}
+                        onToggle={() => toggleSection("identity")}
+                        icon={
+                          <LuFileText className="h-3.5 w-3.5 text-yellow-400" />
+                        }
+                        label="Identity Data"
+                      >
+                        <PropRow label="Mark / ID">
+                          <span className="font-mono font-semibold text-[var(--text-strong)]">
+                            {selectedWall
+                              ? `W-${selectedWall.id.slice(-4)}`
+                              : selectedDoor
+                              ? `D-${selectedDoor.id.slice(-4)}`
+                              : selectedWindow
+                              ? `WN-${selectedWindow.id.slice(-4)}`
+                              : "EL-1"}
+                          </span>
+                        </PropRow>
+                        <PropRow label="Remarks">
+                          <input
+                            type="text"
+                            placeholder="Add remark…"
+                            className="w-32 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right text-[10px]"
+                          />
+                        </PropRow>
+                      </PropSection>
+
+                      {/* Dimensions */}
+                      <PropSection
+                        open={openSections.dimensions}
+                        onToggle={() => toggleSection("dimensions")}
+                        icon={
+                          <LuRuler className="h-3.5 w-3.5 text-yellow-400" />
+                        }
+                        label="Dimensions"
+                      >
+                        {selectedWall && (
+                          <>
+                            <PropRow label="Length">
+                              <span className="font-mono font-semibold text-yellow-400">
+                                {Math.round(
+                                  Math.hypot(
+                                    selectedWall.endXmm - selectedWall.startXmm,
+                                    selectedWall.endYmm - selectedWall.startYmm,
+                                  ),
+                                )}{" "}
+                                mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Thickness">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedWall.thicknessMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Height">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedWall.heightMm} mm
+                              </span>
+                            </PropRow>
+                          </>
+                        )}
+                        {selectedDoor && (
+                          <>
+                            <PropRow label="Width">
+                              <span className="font-mono font-semibold text-yellow-400">
+                                {selectedDoor.widthMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Height">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedDoor.heightMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Offset on Wall">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedDoor.positionMm} mm
+                              </span>
+                            </PropRow>
+                          </>
+                        )}
+                        {selectedWindow && (
+                          <>
+                            <PropRow label="Width">
+                              <span className="font-mono font-semibold text-yellow-400">
+                                {selectedWindow.widthMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Height">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedWindow.heightMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Sill Height">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedWindow.sillHeightMm} mm
+                              </span>
+                            </PropRow>
+                          </>
+                        )}
+                        {selectedSlab && (
+                          <>
+                            <PropRow label="Thickness">
+                              <span className="font-mono font-semibold text-yellow-400">
+                                {selectedSlab.thicknessMm} mm
+                              </span>
+                            </PropRow>
+                            <PropRow label="Elevation Offset">
+                              <span className="font-mono text-[var(--text-strong)]">
+                                {selectedSlab.elevationOffsetMm} mm
+                              </span>
+                            </PropRow>
+                          </>
+                        )}
+                        {selectedPlacement && (
+                          <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
+                        )}
+                      </PropSection>
+
+                      {/* Materials & Finishes */}
+                      <PropSection
+                        open={openSections.materials}
+                        onToggle={() => toggleSection("materials")}
+                        icon={<LuBox className="h-3.5 w-3.5 text-yellow-400" />}
+                        label="Materials & Finishes"
+                      >
+                        <div className="flex items-center justify-between text-xs py-0.5">
+                          <span className="text-[var(--text-muted)]">
+                            Material
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setMaterialEditorOpen(true)}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1 font-semibold text-xs text-yellow-400 hover:border-yellow-400 transition-all"
+                          >
+                            <LuPalette className="h-3 w-3" />
+                            <span>
+                              {selectedWall?.material ||
+                                selectedSlab?.material ||
+                                selectedDoor?.material ||
+                                currentType?.material ||
+                                "Default Material"}
+                            </span>
+                          </button>
+                        </div>
+                        {selectedDoor && (
+                          <div className="flex items-center justify-between text-xs py-0.5">
+                            <span className="text-[var(--text-muted)]">
+                              Door Style
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setMaterialEditorOpen(true)}
+                              className="font-semibold text-yellow-400 hover:underline"
+                            >
+                              <span>{selectedDoor.style || "Standard"}</span>
+                            </button>
+                          </div>
+                        )}
+                        <PropRow label="Function">
+                          <span className="font-medium text-[var(--text-strong)]">
+                            {currentType?.functionType || "Interior"}
+                          </span>
+                        </PropRow>
+                      </PropSection>
+
+                      {/* IFC */}
+                      <PropSection
+                        open={openSections.ifc}
+                        onToggle={() => toggleSection("ifc")}
+                        icon={
+                          <LuShieldCheck className="h-3.5 w-3.5 text-yellow-400" />
+                        }
+                        label="IFC / BIM Data"
+                      >
+                        <PropRow label="Export Entity">
+                          <span className="font-mono text-[var(--text-strong)]">
+                            {selectedWall
+                              ? "IfcWallStandardCase"
+                              : selectedDoor
+                              ? "IfcDoor"
+                              : selectedWindow
+                              ? "IfcWindow"
+                              : "IfcSlab"}
+                          </span>
+                        </PropRow>
+                      </PropSection>
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               /* Persistent Empty State when nothing is selected */

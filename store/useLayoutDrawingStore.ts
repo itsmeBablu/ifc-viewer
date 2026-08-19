@@ -336,6 +336,9 @@ type LayoutDrawingState = {
   addSketchLinePoint: (point: { xMm: number; yMm: number }) => Promise<LayoutSketchLine | null>;
   finishSketchLineDraw: () => void;
   cancelSketchLineDraw: () => void;
+  selectedSketchLineId: string | null;
+  selectSketchLine: (id: string | null) => void;
+  deleteSketchLine: (id: string) => void;
   clearSketchLines: () => void;
   convertSketchToSlab: (kind: "floor" | "roof") => Promise<{
     success: boolean;
@@ -362,6 +365,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   layoutRooms: [],
   sketchLines: [],
   sketchDraw: null,
+  selectedSketchLineId: null,
   gapHighlightPoints: [],
   drawingScale: "1:100",
   unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
@@ -1469,6 +1473,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedSketchLineId: null,
       selectedUnderlayId: null,
     }),
 
@@ -1793,6 +1798,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({
       sketchLines: [],
       sketchDraw: null,
+      selectedSketchLineId: null,
       gapHighlightPoints: [],
       armedLayoutTool: null,
       lastMutatedAt: Date.now(),
@@ -1800,4 +1806,13 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     return { success: true };
   },
+
+  selectSketchLine: (id) => set({ selectedSketchLineId: id }),
+  deleteSketchLine: (id) =>
+    set((s) => ({
+      sketchLines: s.sketchLines.filter((l) => l.id !== id),
+      selectedSketchLineId:
+        s.selectedSketchLineId === id ? null : s.selectedSketchLineId,
+      lastMutatedAt: Date.now(),
+    })),
 }));

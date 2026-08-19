@@ -588,89 +588,7 @@ export default class LayoutSceneLayer {
     this.group.add(this.previewLine);
   }
 
-  /**
-   * Syncs sketch lines, live drawn segment, and gap error highlight markers.
-   */
-  syncSketch(
-    lines: LayoutSketchLine[],
-    draw: { points: { xMm: number; yMm: number }[]; cursor: { xMm: number; yMm: number } | null } | null,
-    gapPoints: { xMm: number; yMm: number }[],
-    elevationMm: number,
-  ) {
-    this.disposeGroup(this.sketchGroup);
 
-    if (lines.length === 0 && !draw && gapPoints.length === 0) return;
-
-    const y = fromMm(elevationMm) + 0.025;
-
-    // 1. Render established sketch lines
-    if (lines.length > 0) {
-      const positions: number[] = [];
-      for (const line of lines) {
-        positions.push(
-          fromMm(line.startXmm), y, fromMm(line.startYmm),
-          fromMm(line.endXmm), y, fromMm(line.endYmm)
-        );
-
-        // Vertex node dots
-        const dotGeo = new THREE.SphereGeometry(fromMm(60), 8, 8);
-        const dotMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false });
-        const dotStart = new THREE.Mesh(dotGeo, dotMat);
-        dotStart.position.set(fromMm(line.startXmm), y + 0.005, fromMm(line.startYmm));
-        const dotEnd = new THREE.Mesh(dotGeo, dotMat);
-        dotEnd.position.set(fromMm(line.endXmm), y + 0.005, fromMm(line.endYmm));
-        this.sketchGroup.add(dotStart, dotEnd);
-      }
-
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      const mat = new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 3 });
-      const lineSegs = new THREE.LineSegments(geo, mat);
-      this.sketchGroup.add(lineSegs);
-    }
-
-    // 2. Render active drawing rubberband
-    if (draw && draw.points.length > 0) {
-      const last = draw.points[draw.points.length - 1];
-      const cur = draw.cursor;
-      if (last && cur) {
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute(
-          "position",
-          new THREE.Float32BufferAttribute([
-            fromMm(last.xMm), y, fromMm(last.yMm),
-            fromMm(cur.xMm), y, fromMm(cur.yMm),
-          ], 3)
-        );
-        const mat = new THREE.LineDashedMaterial({
-          color: 0xfde047,
-          dashSize: 0.1,
-          gapSize: 0.05,
-        });
-        const line = new THREE.Line(geo, mat);
-        line.computeLineDistances();
-        this.sketchGroup.add(line);
-      }
-    }
-
-    // 3. Render gap highlight markers (red pulsing spheres)
-    if (gapPoints && gapPoints.length > 0) {
-      for (const gp of gapPoints) {
-        const sphereGeo = new THREE.SphereGeometry(fromMm(120), 16, 12);
-        const sphereMat = new THREE.MeshStandardMaterial({
-          color: 0xef4444,
-          emissive: 0xdc2626,
-          emissiveIntensity: 0.8,
-          roughness: 0.2,
-          depthTest: false,
-        });
-        const mesh = new THREE.Mesh(sphereGeo, sphereMat);
-        mesh.position.set(fromMm(gp.xMm), y + 0.04, fromMm(gp.yMm));
-        mesh.renderOrder = 30;
-        this.sketchGroup.add(mesh);
-      }
-    }
-  }
 
   /**
    * Tier 2 auto-trace hover preview — highlighted wall box (and opening mark).
@@ -851,6 +769,7 @@ export default class LayoutSceneLayer {
     | { kind: "door"; id: string }
     | { kind: "window"; id: string }
     | { kind: "slab"; id: string }
+    | { kind: "sketch-line"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
@@ -901,6 +820,8 @@ export default class LayoutSceneLayer {
           return { kind: "window", id: o.userData.layoutWindowId as string };
         if (o.userData.layoutSlabId)
           return { kind: "slab", id: o.userData.layoutSlabId as string };
+        if (o.userData.layoutSketchLineId)
+          return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {
             kind: "underlay",
@@ -915,6 +836,114 @@ export default class LayoutSceneLayer {
       }
     }
     return null;
+  }
+
+  syncSketch(
+    lines: LayoutSketchLine[],
+    draw: { levelId: string; points: { xMm: number; yMm: number }[]; cursor: { xMm: number; yMm: number } | null } | null,
+    gapPoints: { xMm: number; yMm: number }[] = [],
+    elevMm: number = 0,
+    selectedLineId: string | null = null,
+  ) {
+    this.disposeGroup(this.sketchGroup);
+    this.sketchGroup.clear();
+
+    const y = fromMm(elevMm) + 0.04;
+    const sketchYellow = 0xfacc15;
+    const selectedCyan = 0x38bdf8;
+    const gapRed = 0xef4444;
+
+    // 1. Render placed sketch lines as high-contrast ribbons / thick lines + node spheres
+    for (const l of lines) {
+      const isSelected = l.id === selectedLineId;
+      const col = isSelected ? selectedCyan : sketchYellow;
+      const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
+      const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
+
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const segLen = Math.hypot(dx, dz);
+      if (segLen > 0.001) {
+        const segGeo = new THREE.CylinderGeometry(0.04, 0.04, segLen, 8);
+        segGeo.rotateZ(Math.PI / 2);
+        const segMat = new THREE.MeshStandardMaterial({
+          color: col,
+          emissive: col,
+          emissiveIntensity: isSelected ? 0.6 : 0.35,
+          roughness: 0.3,
+          metalness: 0.2,
+        });
+        const segMesh = new THREE.Mesh(segGeo, segMat);
+        segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
+        segMesh.rotation.y = -Math.atan2(dz, dx);
+        segMesh.userData.layoutSketchLineId = l.id;
+        segMesh.renderOrder = 30;
+        this.sketchGroup.add(segMesh);
+      }
+
+      for (const pt of [p1, p2]) {
+        const sphereGeo = new THREE.SphereGeometry(0.06, 12, 10);
+        const sphereMat = new THREE.MeshStandardMaterial({
+          color: col,
+          emissive: col,
+          emissiveIntensity: 0.4,
+        });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        sphere.position.copy(pt);
+        sphere.renderOrder = 32;
+        this.sketchGroup.add(sphere);
+      }
+    }
+
+    // 2. Render in-progress drawing chain and rubberband cursor line
+    if (draw && draw.points.length > 0) {
+      const pts = [...draw.points];
+      if (draw.cursor) pts.push(draw.cursor);
+
+      if (pts.length >= 2) {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i];
+          const b = pts[i + 1];
+          const p1 = new THREE.Vector3(fromMm(a.xMm), y + 0.01, fromMm(a.yMm));
+          const p2 = new THREE.Vector3(fromMm(b.xMm), y + 0.01, fromMm(b.yMm));
+          const dx = p2.x - p1.x;
+          const dz = p2.z - p1.z;
+          const segLen = Math.hypot(dx, dz);
+          if (segLen > 0.001) {
+            const segGeo = new THREE.CylinderGeometry(0.045, 0.045, segLen, 8);
+            segGeo.rotateZ(Math.PI / 2);
+            const isRubberband = i === pts.length - 2 && draw.cursor != null;
+            const segMat = new THREE.MeshStandardMaterial({
+              color: isRubberband ? 0xfde047 : 0xfacc15,
+              emissive: 0xfacc15,
+              emissiveIntensity: isRubberband ? 0.7 : 0.4,
+              transparent: true,
+              opacity: isRubberband ? 0.9 : 1,
+            });
+            const segMesh = new THREE.Mesh(segGeo, segMat);
+            segMesh.position.set((p1.x + p2.x) / 2, y + 0.01, (p1.z + p2.z) / 2);
+            segMesh.rotation.y = -Math.atan2(dz, dx);
+            segMesh.renderOrder = 35;
+            this.sketchGroup.add(segMesh);
+          }
+        }
+      }
+    }
+
+    // 3. Render glowing gap markers if any
+    for (const gp of gapPoints) {
+      const gapGeo = new THREE.SphereGeometry(0.12, 16, 12);
+      const gapMat = new THREE.MeshStandardMaterial({
+        color: gapRed,
+        emissive: gapRed,
+        emissiveIntensity: 0.8,
+        depthTest: false,
+      });
+      const gapMesh = new THREE.Mesh(gapGeo, gapMat);
+      gapMesh.position.set(fromMm(gp.xMm), y + 0.05, fromMm(gp.yMm));
+      gapMesh.renderOrder = 40;
+      this.sketchGroup.add(gapMesh);
+    }
   }
 
   dispose() {
