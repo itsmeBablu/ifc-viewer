@@ -10,7 +10,7 @@ import {
   LuSparkles,
   LuLayers,
   LuBox,
-  LuSliders,
+  LuSlidersHorizontal,
 } from "react-icons/lu";
 import {
   useMaterialStore,
@@ -197,7 +197,7 @@ export default function MaterialEditorPanel({
           <div className="space-y-3 rounded-2xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3 shadow-sm">
             <div className="flex items-center justify-between border-b border-[var(--panel-divider)]/60 pb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                <LuSliders className="h-3 w-3" />
+                <LuSlidersHorizontal className="h-3 w-3" />
                 Parameters — {selectedMat.name}
               </span>
               {!selectedMat.isPreset && (
