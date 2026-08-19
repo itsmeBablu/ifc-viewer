@@ -113,29 +113,110 @@ function RibbonBtn({
   active,
   onClick,
   title,
+  label,
   children,
   danger,
 }: {
   active?: boolean;
   onClick?: () => void;
   title?: string;
+  label?: string;
   children: React.ReactNode;
   danger?: boolean;
   large?: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
-  
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const displayLabel = label;
+
+  const animateIn = () => {
+    if (active) return;
+    if (btnRef.current) {
+      gsap.to(btnRef.current, {
+        backgroundColor: "rgba(250, 204, 21, 0.16)",
+        borderColor: "rgba(250, 204, 21, 0.4)",
+        boxShadow: "0 0 12px rgba(250, 204, 21, 0.22)",
+        duration: 0.25,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+    }
+    if (labelRef.current && displayLabel) {
+      gsap.to(labelRef.current, {
+        maxWidth: 80,
+        opacity: 1,
+        marginLeft: 4,
+        duration: 0.25,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+    }
+  };
+
+  const animateOut = () => {
+    if (active) return;
+    if (btnRef.current) {
+      gsap.to(btnRef.current, {
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        boxShadow: "none",
+        duration: 0.2,
+        ease: "power2.inOut",
+        overwrite: "auto",
+      });
+    }
+    if (labelRef.current) {
+      gsap.to(labelRef.current, {
+        maxWidth: 0,
+        opacity: 0,
+        marginLeft: 0,
+        duration: 0.2,
+        ease: "power2.inOut",
+        overwrite: "auto",
+      });
+    }
+  };
+
   useEffect(() => {
     if (active && btnRef.current) {
       gsap.fromTo(
         btnRef.current,
         { scale: 0.92, backgroundColor: "rgba(250, 204, 21, 0)" },
-        { scale: 1, backgroundColor: "#facc15", duration: 0.35, ease: "elastic.out(1, 0.5)", overwrite: "auto" }
+        {
+          scale: 1,
+          backgroundColor: "#facc15",
+          borderColor: "#fde047",
+          duration: 0.35,
+          ease: "elastic.out(1, 0.5)",
+          overwrite: "auto",
+        },
       );
     } else if (btnRef.current) {
-      gsap.to(btnRef.current, { scale: 1, backgroundColor: "transparent", duration: 0.2, ease: "power2.out", overwrite: "auto" });
+      gsap.to(btnRef.current, {
+        scale: 1,
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        duration: 0.2,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
     }
   }, [active]);
+
+  const handlePointerDown = () => {
+    longPressTimer.current = setTimeout(() => {
+      animateIn();
+    }, 350);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   return (
     <button
@@ -143,15 +224,28 @@ function RibbonBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`relative overflow-hidden flex items-center justify-center rounded-lg transition-all cursor-pointer min-w-[34px] min-h-[30px] p-1.5 ${
+      onPointerEnter={animateIn}
+      onPointerLeave={animateOut}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className={`relative overflow-hidden flex items-center justify-center rounded-lg border border-transparent transition-all cursor-pointer min-w-[34px] min-h-[30px] px-2 py-1 ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
           ? "text-slate-950 font-bold shadow-md shadow-yellow-400/20"
-          : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+          : "text-[var(--text-body)] hover:text-yellow-400"
       }`}
     >
       {children}
+      {displayLabel && (
+        <span
+          ref={labelRef}
+          className="overflow-hidden whitespace-nowrap text-[10px] font-bold text-[var(--text-strong)] opacity-0 max-w-0 pointer-events-none"
+        >
+          {displayLabel}
+        </span>
+      )}
     </button>
   );
 }
