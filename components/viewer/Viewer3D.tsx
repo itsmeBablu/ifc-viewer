@@ -714,7 +714,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
   const toolMode = useAppStore((s) => s.toolMode);
-  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const hiddenElementIds = useAppStore((s) => s.hiddenElementIds);
   const isolatedElementIds = useAppStore((s) => s.isolatedElementIds);
   const toolRevealToken = useAppStore((s) => s.toolRevealToken);
@@ -1023,17 +1022,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     };
     // Remount when view-cube layout changes (HMR keeps the old instance otherwise).
   }, [VIEW_CUBE_LAYOUT.revision]);
-
-  // Shift the viewcube left of the open right side panel so it sits exactly next to it.
-  useEffect(() => {
-    const cube = viewCubeRef.current;
-    if (!cube) return;
-    const dockCoverPx = rightPanelOpen ? 360 : 20;
-    cube.setMargins({
-      marginRight: VIEW_CUBE_LAYOUT.marginRight + dockCoverPx,
-      marginTop: VIEW_CUBE_LAYOUT.marginTop,
-    });
-  }, [rightPanelOpen]);
 
   // Build shell + room overlays
   useEffect(() => {

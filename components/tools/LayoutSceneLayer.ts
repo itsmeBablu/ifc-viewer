@@ -1234,8 +1234,8 @@ export default class LayoutSceneLayer {
         color: col,
         transparent: true,
         opacity: 0.95,
-        depthTest: false,
-        depthWrite: false,
+        depthTest: true,
+        depthWrite: true,
         side: THREE.DoubleSide,
       });
 
@@ -1266,12 +1266,7 @@ export default class LayoutSceneLayer {
 
       // Complementary THREE.Line on top for guaranteed 1px visibility at any zoom
       const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const lineMat = new THREE.LineBasicMaterial({
-        color: col,
-        linewidth: 2,
-        depthTest: false,
-        depthWrite: false,
-      });
+      const lineMat = new THREE.LineBasicMaterial({ color: col, linewidth: 2 });
       const lineMesh = new THREE.Line(lineGeo, lineMat);
       lineMesh.renderOrder = renderOrd + 1;
       lineMesh.frustumCulled = false;
@@ -1300,8 +1295,8 @@ export default class LayoutSceneLayer {
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,
-          depthTest: false,
-          depthWrite: false,
+          depthTest: true,
+          depthWrite: true,
         });
         const disc = new THREE.Mesh(discGeo, discMat);
         disc.position.copy(pt);
@@ -1341,8 +1336,6 @@ export default class LayoutSceneLayer {
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,
-          depthTest: false,
-          depthWrite: false,
         });
         const disc = new THREE.Mesh(discGeo, discMat);
         disc.position.set(fromMm(dp.xMm), drawY + 0.005, fromMm(dp.yMm));
