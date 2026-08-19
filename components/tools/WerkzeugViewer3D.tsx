@@ -32,6 +32,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import * as THREE from "three";
 import { MOUSE } from "three";
@@ -711,12 +712,90 @@ function applyRenderMode(
   }
 }
 
+interface CadSnapResult {
+  xMm: number;
+  yMm: number;
+  type: "endpoint" | "midpoint" | null;
+}
+
+function getCadSnapPoint(
+  cursorMm: { xMm: number; yMm: number },
+  activeLevelId: string | null,
+  walls: any[],
+  sketchLines: any[],
+  toleranceMm = 400
+): CadSnapResult {
+  let bestPt: { xMm: number; yMm: number } | null = null;
+  let bestDist = Infinity;
+  let snapType: "endpoint" | "midpoint" | null = null;
+
+  const segments: { p1: { x: number; y: number }; p2: { x: number; y: number } }[] = [];
+
+  if (activeLevelId) {
+    walls.forEach((w) => {
+      if (w.levelId === activeLevelId) {
+        segments.push({
+          p1: { x: w.startXmm, y: w.startYmm },
+          p2: { x: w.endXmm, y: w.endYmm },
+        });
+      }
+    });
+    sketchLines.forEach((l) => {
+      if (l.levelId === activeLevelId) {
+        segments.push({
+          p1: { x: l.startXmm, y: l.startYmm },
+          p2: { x: l.endXmm, y: l.endYmm },
+        });
+      }
+    });
+  }
+
+  // 1. Check endpoints first
+  for (const seg of segments) {
+    for (const pt of [seg.p1, seg.p2]) {
+      const d = Math.hypot(cursorMm.xMm - pt.x, cursorMm.yMm - pt.y);
+      if (d < toleranceMm && d < bestDist) {
+        bestDist = d;
+        bestPt = { xMm: pt.x, yMm: pt.y };
+        snapType = "endpoint";
+      }
+    }
+  }
+
+  // 2. Midpoints
+  if (!bestPt) {
+    for (const seg of segments) {
+      const mx = (seg.p1.x + seg.p2.x) / 2;
+      const my = (seg.p1.y + seg.p2.y) / 2;
+      const d = Math.hypot(cursorMm.xMm - mx, cursorMm.yMm - my);
+      if (d < toleranceMm && d < bestDist) {
+        bestDist = d;
+        bestPt = { xMm: mx, yMm: my };
+        snapType = "midpoint";
+      }
+    }
+  }
+
+  if (bestPt) {
+    return { xMm: bestPt.xMm, yMm: bestPt.yMm, type: snapType };
+  }
+  return { xMm: cursorMm.xMm, yMm: cursorMm.yMm, type: null };
+}
+
 const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function WerkzeugViewer3D(
   { onPointerMove, onPointerLeave, className },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
+
+  const [cadSnap, setCadSnap] = useState<{
+    type: "endpoint" | "midpoint";
+    screenX: number;
+    screenY: number;
+    xMm: number;
+    yMm: number;
+  } | null>(null);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
@@ -4121,27 +4200,93 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const layoutStore = useLayoutDrawingStore.getState();
         const layoutLayer = layoutLayerRef.current;
         const cam = cameraRef.current;
-        if (layoutStore.wallDraw && cam && layoutLayer) {
+        const ms = useToolMarkupStore.getState();
+        const activeLevelId = ms.markupFloorId ?? layoutStore.levels[0]?.id ?? null;
+        const isDrawingOrArmed =
+          layoutStore.wallDraw ||
+          layoutStore.sketchDraw ||
+          layoutStore.armedLayoutTool === "wall" ||
+          layoutStore.armedLayoutTool === "lines";
+
+        if (isDrawingOrArmed && cam && layoutLayer && canvas) {
           const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
-          if (!camRay) return;
-          raycaster.current.setFromCamera(pointerNdc.current, camRay);
-          const hit = layoutLayer.pickLayout(raycaster.current);
-          let pt: THREE.Vector3 | null =
-            hit?.kind === "ground" || hit?.kind === "underlay"
-              ? hit.point
-              : null;
-          if (!pt) {
-            const roots: THREE.Object3D[] = [layoutLayer.group];
-            if (shellCloneRef.current) roots.push(shellCloneRef.current);
-            const surface = pickMarkupSurface(raycaster.current, roots);
-            pt = surface?.point ?? null;
+          if (camRay) {
+            raycaster.current.setFromCamera(pointerNdc.current, camRay);
+            const hit = layoutLayer.pickLayout(raycaster.current);
+            let pt: THREE.Vector3 | null =
+              hit?.kind === "ground" || hit?.kind === "underlay"
+                ? hit.point
+                : null;
+            if (!pt) {
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              const surface = pickMarkupSurface(raycaster.current, roots);
+              pt = surface?.point ?? null;
+            }
+            if (!pt) {
+              const activeLvl =
+                layoutStore.levels.find((l) => l.id === ms.markupFloorId) ??
+                layoutStore.levels[0];
+              const levelElevMm = activeLvl?.elevationMm ?? 0;
+              const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+              const targetPt = new THREE.Vector3();
+              if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                pt = targetPt;
+              }
+            }
+            if (pt) {
+              let snapPt = pt.clone();
+              if (ms.gridSnap) snapPt = applyGridSnap(snapPt, ms.gridSize, ["x", "z"]);
+              
+              const rawXmm = toMm(snapPt.x);
+              const rawYmm = toMm(snapPt.z);
+              
+              const snap = getCadSnapPoint(
+                { xMm: rawXmm, yMm: rawYmm },
+                activeLevelId,
+                layoutStore.walls,
+                layoutStore.sketchLines
+              );
+              
+              currentCadSnapRef.current = snap;
+              
+              if (snap.type) {
+                const elevation = fromMm(
+                  layoutStore.levels.find((l) => l.id === activeLevelId)?.elevationMm ?? 0
+                );
+                const snappedV3 = new THREE.Vector3(fromMm(snap.xMm), elevation, fromMm(snap.yMm));
+                snappedV3.project(cam);
+                
+                const rect = canvas.getBoundingClientRect();
+                const screenX = ((snappedV3.x + 1) * rect.width) / 2;
+                const screenY = ((-snappedV3.y + 1) * rect.height) / 2;
+                
+                setCadSnap({
+                  type: snap.type,
+                  screenX,
+                  screenY,
+                  xMm: snap.xMm,
+                  yMm: snap.yMm,
+                });
+              } else {
+                setCadSnap(null);
+              }
+            } else {
+              currentCadSnapRef.current = null;
+              setCadSnap(null);
+            }
           }
-          if (pt) {
-            const ms = useToolMarkupStore.getState();
-            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+        } else {
+          currentCadSnapRef.current = null;
+          if (cadSnap) setCadSnap(null);
+        }
+
+        if (layoutStore.wallDraw && cam && layoutLayer) {
+          const snap = currentCadSnapRef.current;
+          if (snap) {
             layoutStore.updateWallCursor({
-              xMm: toMm(pt.x),
-              yMm: toMm(pt.z),
+              xMm: snap.xMm,
+              yMm: snap.yMm,
             });
             const after = useLayoutDrawingStore.getState().wallDraw;
             if (after?.lengthMm != null) {
@@ -4164,38 +4309,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         }
 
         if (layoutStore.sketchDraw && cam && layoutLayer) {
-          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
-          if (!camRay) return;
-          raycaster.current.setFromCamera(pointerNdc.current, camRay);
-          const hit = layoutLayer.pickLayout(raycaster.current);
-          let pt: THREE.Vector3 | null =
-            hit?.kind === "ground" || hit?.kind === "underlay"
-              ? hit.point
-              : null;
-          if (!pt) {
-            const roots: THREE.Object3D[] = [layoutLayer.group];
-            if (shellCloneRef.current) roots.push(shellCloneRef.current);
-            const surface = pickMarkupSurface(raycaster.current, roots);
-            pt = surface?.point ?? null;
-          }
-          if (!pt) {
-            const ms = useToolMarkupStore.getState();
-            const activeLvl =
-              layoutStore.levels.find((l) => l.id === ms.markupFloorId) ??
-              layoutStore.levels[0];
-            const levelElevMm = activeLvl?.elevationMm ?? 0;
-            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
-            const targetPt = new THREE.Vector3();
-            if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
-              pt = targetPt;
-            }
-          }
-          if (pt) {
-            const ms = useToolMarkupStore.getState();
-            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+          const snap = currentCadSnapRef.current;
+          if (snap) {
             layoutStore.updateSketchLineCursor({
-              xMm: toMm(pt.x),
-              yMm: toMm(pt.z),
+              xMm: snap.xMm,
+              yMm: snap.yMm,
             });
             const after = useLayoutDrawingStore.getState().sketchDraw;
             if (after?.lengthMm != null) {
@@ -4764,6 +4882,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           if (layoutLayer && layoutStore.projectId) {
             const layoutHit = layoutLayer.pickLayout(raycaster.current);
             const planPointFromHit = (pt: THREE.Vector3) => {
+              const snap = currentCadSnapRef.current;
+              if (snap && snap.type) {
+                return { xMm: snap.xMm, yMm: snap.yMm };
+              }
               let p = pt.clone();
               if (markupStore.gridSnap) {
                 p = applyGridSnap(p, markupStore.gridSize, ["x", "z"]);
@@ -5832,6 +5954,28 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      {cadSnap && (
+        <div
+          className="pointer-events-none absolute z-[999] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
+          style={{
+            left: cadSnap.screenX,
+            top: cadSnap.screenY,
+            width: 16,
+            height: 16,
+          }}
+        >
+          {cadSnap.type === "endpoint" ? (
+            <div className="w-3.5 h-3.5 border-2 border-emerald-500 bg-emerald-500/10" />
+          ) : (
+            <svg className="w-4.5 h-4.5 overflow-visible" viewBox="0 0 10 10">
+              <polygon
+                points="5,1 9,9 1,9"
+                className="fill-emerald-500/10 stroke-emerald-500 stroke-2"
+              />
+            </svg>
+          )}
+        </div>
+      )}
       {marqueeBox && (
         <div
           className="pointer-events-none fixed z-[999]"
