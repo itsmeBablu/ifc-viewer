@@ -189,6 +189,11 @@ type LayoutDrawingState = {
   draftBeamWidthMm: number;
   draftBeamDepthMm: number;
 
+  browserSearch: string;
+  setBrowserSearch: (val: string) => void;
+  elementsCategoryFilter: string;
+  setElementsCategoryFilter: (val: string) => void;
+
   loadForProject: (projectId: string | null, isEmpty?: boolean) => Promise<void>;
   createEmptyProject: (name: string) => Promise<{
     projectId: string;
@@ -493,6 +498,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftColumnDepthMm: 300,
   draftBeamWidthMm: 200,
   draftBeamDepthMm: 400,
+
+  browserSearch: "",
+  setBrowserSearch: (val) => set({ browserSearch: val }),
+  elementsCategoryFilter: "all",
+  setElementsCategoryFilter: (val) => set({ elementsCategoryFilter: val }),
 
   loadForProject: async (projectId, isEmpty = false) => {
     clearWerkzeugHistory();

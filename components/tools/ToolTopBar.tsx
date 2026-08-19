@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CiGrid32 } from "react-icons/ci";
 import { TbRulerMeasure2, TbTarget } from "react-icons/tb";
 import { TfiSave, TfiViewGrid } from "react-icons/tfi";
+import { LuSearch, LuX } from "react-icons/lu";
 import HoverTip from "@/components/common/HoverTip";
 import {
   buildFragBlob,
@@ -107,6 +108,11 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
+
+  const browserSearch = useLayoutDrawingStore((s) => s.browserSearch);
+  const setBrowserSearch = useLayoutDrawingStore((s) => s.setBrowserSearch);
+  const elementsCategoryFilter = useLayoutDrawingStore((s) => s.elementsCategoryFilter);
+  const setElementsCategoryFilter = useLayoutDrawingStore((s) => s.setElementsCategoryFilter);
 
   const selectedPlacement =
     placements.find((p) => p.id === selectedPlacementId) ?? null;
@@ -400,6 +406,42 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
               </button>
             </div>
           )}
+        </div>
+
+        <span className="mx-0.5 h-5 w-px shrink-0 bg-[var(--panel-divider)]" />
+
+        {/* Search & Category Filter Elements */}
+        <div className="flex items-center gap-1.5 px-1 shrink-0">
+          <div className="relative flex items-center h-8 bg-white/40 border border-zinc-300/50 rounded-lg px-2 text-[11px] min-w-[120px] max-w-[160px] shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] focus-within:border-yellow-400">
+            <LuSearch className="h-3.5 w-3.5 text-zinc-400 mr-1.5 shrink-0" />
+            <input
+              type="text"
+              value={browserSearch}
+              onChange={(e) => setBrowserSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full bg-transparent outline-none text-[11px] text-zinc-800 placeholder:text-zinc-400"
+            />
+            {browserSearch && (
+              <button
+                type="button"
+                onClick={() => setBrowserSearch("")}
+                className="text-zinc-400 hover:text-zinc-600 pl-0.5"
+              >
+                <LuX className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="relative flex items-center h-8 bg-white/40 border border-zinc-300/50 rounded-lg px-1.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+            <select
+              value={elementsCategoryFilter}
+              onChange={(e) => setElementsCategoryFilter(e.target.value)}
+              className="bg-transparent outline-none text-[9px] font-bold uppercase text-zinc-600 focus:text-zinc-900 cursor-pointer"
+            >
+              {["all", "wall", "door", "window", "slab", "column", "beam", "grid"].map((cat) => (
+                <option key={cat} value={cat} className="text-zinc-950 font-bold uppercase">{cat}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <span className="mx-0.5 h-5 w-px shrink-0 bg-[var(--panel-divider)]" />
