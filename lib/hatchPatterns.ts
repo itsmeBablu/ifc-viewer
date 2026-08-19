@@ -19,7 +19,7 @@ export function getHatchCanvasTexture(
 
   if (typeof document === "undefined") {
     // SSR fallback dummy texture
-    const dummy = new THREE.CanvasTexture(document?.createElement("canvas") || ({} as any));
+    const dummy = new THREE.CanvasTexture(document?.createElement("canvas") || ({} as HTMLCanvasElement));
     return dummy;
   }
 

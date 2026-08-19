@@ -20,7 +20,7 @@ import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import type { PageFormat } from "@/lib/presentationLayout";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
-import { MARKUP_TOOL_ORDER } from "../tool/MarkupIcons";
+import { MARKUP_TOOL_ORDER } from "../tools/MarkupIcons";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import SliceHeightSlider from "../common/SliceHeightSlider";

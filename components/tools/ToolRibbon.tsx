@@ -143,8 +143,8 @@ function RibbonBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`relative overflow-hidden flex flex-col items-center justify-center gap-1 rounded-xl transition-colors ${
-        large ? "p-2 min-w-[50px]" : "p-1.5 min-w-[44px]"
+      className={`relative overflow-hidden flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
+        large ? "p-1.5 min-w-[48px] min-h-[44px]" : "p-1 min-w-[44px] min-h-[44px]"
       } ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
@@ -153,10 +153,7 @@ function RibbonBtn({
           : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
       }`}
     >
-      {React.Children.map(children, (child) => {
-        if (React.isValidElement(child) && child.type === "span") return null;
-        return child;
-      })}
+      {children}
     </button>
   );
 }
@@ -876,33 +873,88 @@ export default function ToolRibbon({
             </button>
 
             {saveMenuOpen && (
-              <div
-                className="absolute left-0 top-full mt-1 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100"
-                onClick={() => setSaveMenuOpen(false)}
-              >
-                <button
-                  type="button"
-                  onClick={handleSaveFrag}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+              isTouchMode ? (
+                <div 
+                  className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+                  onClick={() => setSaveMenuOpen(false)}
                 >
-                  <LuSave className="h-3.5 w-3.5 text-sky-500" />
-                  <div>
-                    <div className="font-semibold text-[var(--text-strong)]">Save as .frag</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">Fast lightweight binary geometry</div>
+                  <div 
+                    className="w-full bg-[var(--popover-bg)] border-t border-[var(--panel-divider)] rounded-t-[2rem] p-5 shadow-2xl space-y-3 animate-in slide-in-from-bottom duration-200 select-none"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="w-12 h-1.5 bg-[var(--text-muted)]/40 rounded-full mx-auto mb-3" />
+                    <div className="flex items-center justify-between pb-2 border-b border-[var(--panel-divider)]">
+                      <span className="font-bold text-sm text-[var(--text-strong)] flex items-center gap-2">
+                        <LuSave className="h-4 w-4 text-amber-500" />
+                        Save Project
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setSaveMenuOpen(false)} 
+                        className="p-1.5 rounded-full hover:bg-[var(--glass-inset-bg)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                      >
+                        <LuX className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { handleSaveFrag(); setSaveMenuOpen(false); }}
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-amber-500/20 active:border-amber-500 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-500">
+                        <LuSave className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[var(--text-strong)]">Save as .frag</div>
+                        <div className="text-xs text-[var(--text-muted)]">Fast lightweight binary geometry package</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { handleSaveIfc(); setSaveMenuOpen(false); }}
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-amber-500/20 active:border-amber-500 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                        <LuSave className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[var(--text-strong)]">Save as .ifc</div>
+                        <div className="text-xs text-[var(--text-muted)]">Full BIM export with IFC schema structures</div>
+                      </div>
+                    </button>
                   </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveIfc}
-                  className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+                </div>
+              ) : (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100"
+                  onClick={() => setSaveMenuOpen(false)}
                 >
-                  <LuSave className="h-3.5 w-3.5 text-emerald-500" />
-                  <div>
-                    <div className="font-semibold text-[var(--text-strong)]">Save as .ifc</div>
-                    <div className="text-[10px] text-[var(--text-muted)]">Export with IFC structure & geometry</div>
-                  </div>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveFrag}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+                  >
+                    <LuSave className="h-3.5 w-3.5 text-sky-500" />
+                    <div>
+                      <div className="font-semibold text-[var(--text-strong)]">Save as .frag</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Fast lightweight binary geometry</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveIfc}
+                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+                  >
+                    <LuSave className="h-3.5 w-3.5 text-emerald-500" />
+                    <div>
+                      <div className="font-semibold text-[var(--text-strong)]">Save as .ifc</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Export with IFC structure & geometry</div>
+                    </div>
+                  </button>
+                </div>
+              )
             )}
           </div>
 
