@@ -296,6 +296,9 @@ export default function ToolRibbon({
   const setRenderMode = useAppStore((s) => s.setRenderMode);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const floors = useAppStore((s) => s.floors);
+  const currentFloor = floors.find((f) => f.id === selectedFloor);
 
   const isDark = colorTheme === "dark";
 
@@ -1196,13 +1199,18 @@ export default function ToolRibbon({
           </button>
         </div>
 
-        {/* Center: Active Model Name */}
-        <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="truncate max-w-[200px] text-[var(--text-strong)] font-semibold text-xs">
-            {activeModelLabel || "Empty Architecture Project"}
-          </span>
-        </div>
+        {/* Center: Active Model Name + Active Level (When right panel is collapsed) */}
+        {!rightPanelOpen && (
+          <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
+            <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+            <span className="truncate max-w-[200px] text-[var(--text-strong)] font-semibold text-xs">
+              {activeModelLabel || "Architecture Project"}
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
+              • {currentFloor?.name ?? "All Levels"}
+            </span>
+          </div>
+        )}
 
       {/* -- Main Tool Island (Desktop & iPad) ----------------------- */}
       {isTouchMode ? (

@@ -113,6 +113,7 @@ export default function ToolRightPanel({
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const floors = useAppStore((s) => s.floors);
+  const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
   const walls = useLayoutDrawingStore((s) => s.walls);
   const doors = useLayoutDrawingStore((s) => s.doors);
@@ -323,6 +324,9 @@ export default function ToolRightPanel({
             <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
             <span className="font-bold text-xs text-[var(--text-strong)] truncate">
               {activeModelLabel || "Architecture Project"}
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
+              • {currentFloorObj?.name ?? "All Levels"}
             </span>
           </div>
           <button
@@ -869,25 +873,6 @@ export default function ToolRightPanel({
           <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 thin-scroll text-xs space-y-2.5">
             {browserTab === "all" ? (
               <>
-                {/* Active Level selector */}
-                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-                    Active Level
-                  </div>
-                  <select
-                    value={selectedFloor || ""}
-                    onChange={(e) => setSelectedFloor(e.target.value || null)}
-                    className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
-                  >
-                    <option value="">All Levels (Building)</option>
-                    {floors.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} ({f.elevation != null ? `${f.elevation.toFixed(2)} m` : "Level"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 {/* Levels & Stories tree */}
                 <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
                   <button 
