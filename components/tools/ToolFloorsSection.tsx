@@ -17,6 +17,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import GlassPanel from "../common/GlassPanel";
+import { UnifiedButton } from "../common/UnifiedButton";
 import { useModelScene } from "./WerkzeugModelSceneContext";
 
 /**
@@ -346,18 +347,18 @@ export default function ToolFloorsSection({
                     className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-[11px] text-[var(--text-strong)] outline-none focus:border-yellow-400 transition-colors"
                   />
                 </label>
-                <button
-                  type="button"
+                <UnifiedButton
+                  size="xs"
+                  variant="primary"
                   onClick={() => {
                     const n = Number(calibMm);
                     if (Number.isFinite(n) && n > 0) {
                       void commitCalibrateDistance(n);
                     }
                   }}
-                  className="h-[30px] rounded-lg bg-yellow-400 hover:bg-yellow-300 px-3 text-[10px] font-bold text-slate-950 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
                 >
                   OK
-                </button>
+                </UnifiedButton>
               </div>
             )}
             <button
@@ -426,76 +427,71 @@ export default function ToolFloorsSection({
                       />
                     </label>
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      <button
-                        type="button"
+                      <UnifiedButton
+                        size="xs"
+                        variant="primary"
                         onClick={() =>
                           beginCalibrateUnderlay(popupUnderlay.id)
                         }
-                        className="flex items-center gap-1 rounded-xl border border-yellow-400/40 bg-yellow-400/15 px-2.5 py-1.5 text-[10px] font-bold text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 shadow-sm shadow-yellow-400/10 transition-all cursor-pointer"
+                        icon={<LuCrosshair className="h-3 w-3" />}
                       >
-                        <LuCrosshair className="h-3 w-3" />
-                        <span>{t(uiLanguage, "underlayCalibrate")}</span>
-                      </button>
+                        {t(uiLanguage, "underlayCalibrate")}
+                      </UnifiedButton>
 
-                      <button
-                        type="button"
+                      <UnifiedButton
+                        size="xs"
+                        variant={popupUnderlay.locked ? "primary" : "secondary"}
                         onClick={() =>
                           void updateUnderlay(popupUnderlay.id, {
                             locked: !popupUnderlay.locked,
                           })
                         }
-                        className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[10px] font-semibold transition-all cursor-pointer ${
-                          popupUnderlay.locked
-                            ? "border-yellow-400/50 bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 shadow-sm"
-                            : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-yellow-400/40 hover:text-yellow-400"
-                        }`}
+                        icon={popupUnderlay.locked ? <LuLock className="h-3 w-3" /> : <LuLockOpen className="h-3 w-3" />}
                       >
-                        {popupUnderlay.locked ? <LuLock className="h-3 w-3" /> : <LuLockOpen className="h-3 w-3" />}
-                        <span>
-                          {popupUnderlay.locked
-                            ? t(uiLanguage, "underlayUnlock")
-                            : t(uiLanguage, "underlayLock")}
-                        </span>
-                      </button>
+                        {popupUnderlay.locked
+                          ? t(uiLanguage, "underlayUnlock")
+                          : t(uiLanguage, "underlayLock")}
+                      </UnifiedButton>
 
-                      <button
-                        type="button"
+                      <UnifiedButton
+                        size="xs"
+                        variant="secondary"
                         onClick={() => {
                           setUploadLevelId(popupLevelId);
                           fileInputRef.current?.click();
                         }}
-                        className="flex items-center gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--text-body)] hover:border-[var(--glass-border)] hover:text-[var(--text-strong)] transition-all cursor-pointer"
+                        icon={<LuRefreshCw className="h-3 w-3" />}
                       >
-                        <LuRefreshCw className="h-3 w-3" />
-                        <span>{t(uiLanguage, "underlayReplace")}</span>
-                      </button>
+                        {t(uiLanguage, "underlayReplace")}
+                      </UnifiedButton>
 
-                      <button
-                        type="button"
+                      <UnifiedButton
+                        size="xs"
+                        variant="danger"
                         onClick={() => {
                           void deleteUnderlay(popupUnderlay.id);
                           setPopupLevelId(null);
                         }}
-                        className="flex items-center gap-1 rounded-xl border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
+                        icon={<LuTrash2 className="h-3 w-3" />}
                       >
-                        <LuTrash2 className="h-3 w-3" />
-                        <span>{t(uiLanguage, "markupDelete")}</span>
-                      </button>
+                        {t(uiLanguage, "markupDelete")}
+                      </UnifiedButton>
                     </div>
                   </>
                 ) : (
-                  <button
-                    type="button"
+                  <UnifiedButton
+                    size="sm"
+                    variant="primary"
                     disabled={busy}
                     onClick={() => {
                       setUploadLevelId(popupLevelId);
                       fileInputRef.current?.click();
                     }}
-                    className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-yellow-400/50 bg-yellow-400 text-slate-950 font-bold px-3 py-2 text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer disabled:opacity-50"
+                    icon={<LuPlus className="h-3.5 w-3.5" />}
+                    className="w-full"
                   >
-                    <LuPlus className="h-3.5 w-3.5" />
-                    <span>{t(uiLanguage, "underlayAdd")}</span>
-                  </button>
+                    {t(uiLanguage, "underlayAdd")}
+                  </UnifiedButton>
                 )}
               </div>
             </div>

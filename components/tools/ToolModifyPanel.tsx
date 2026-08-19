@@ -21,6 +21,7 @@ import {
   MARKUP_TOOL_ORDER,
   isShapeTool,
 } from "./MarkupIcons";
+import { UnifiedButton } from "@/components/common/UnifiedButton";
 
 const TRANSFORM_MODES = ["translate", "rotate", "scale"] as const;
 const SIDE_VIEWS = [
@@ -391,22 +392,24 @@ export default function ToolModifyPanel({
           {t(uiLanguage, "markupSaveAs")}
         </p>
         <div className="flex gap-1.5">
-          <button
-            type="button"
+          <UnifiedButton
+            size="sm"
+            variant="secondary"
             disabled={!modelKey}
             onClick={() => saveAs("frag")}
-            className="flex-1 rounded-xl bg-zinc-800 px-2 py-2 text-[11px] font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-40"
+            className="flex-1"
           >
             .frag
-          </button>
-          <button
-            type="button"
+          </UnifiedButton>
+          <UnifiedButton
+            size="sm"
+            variant="primary"
             disabled={!modelKey}
             onClick={() => saveAs("ifc")}
-            className="flex-1 rounded-xl bg-amber-400/90 px-2 py-2 text-[11px] font-semibold text-amber-950 transition hover:bg-amber-400 disabled:opacity-40"
+            className="flex-1"
           >
             .ifc
-          </button>
+          </UnifiedButton>
         </div>
         <p className="mt-1 px-0.5 text-[9px] leading-snug text-zinc-500">
           {saveMsg ??

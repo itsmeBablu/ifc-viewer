@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { LuX, LuCheck, LuSlidersHorizontal, LuInfo } from "react-icons/lu";
+import { UnifiedButton } from "@/components/common/UnifiedButton";
 
 export type ElementTypeDefinition = {
   id: string;
@@ -368,20 +369,22 @@ export default function EditTypeDialog({
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--panel-divider)]">
-          <button
+          <UnifiedButton
             type="button"
+            size="sm"
+            variant="secondary"
             onClick={onClose}
-            className="rounded-xl border border-[var(--panel-divider)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </UnifiedButton>
+          <UnifiedButton
             type="submit"
-            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all"
+            size="sm"
+            variant="primary"
+            icon={<LuCheck className="h-3.5 w-3.5" />}
           >
-            <LuCheck className="h-3.5 w-3.5" />
-            <span>Apply</span>
-          </button>
+            Apply
+          </UnifiedButton>
         </div>
       </form>
     </div>

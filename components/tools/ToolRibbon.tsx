@@ -65,6 +65,7 @@ import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { UnifiedButton } from "@/components/common/UnifiedButton";
 import { undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
 import {
   buildFragBlob,
@@ -1271,31 +1272,31 @@ export default function ToolRibbon({
                 {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
               </span>
 
-              <button
-                type="button"
+              <UnifiedButton
+                size="xs"
+                variant="primary"
                 onClick={async () => {
                   const res = await convertSketchToSlab("floor");
                   if (!res.success && res.error) setSketchError(res.error);
                   else setSketchError(null);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
+                icon={<IconMarkupFloor className="h-3.5 w-3.5" />}
               >
-                <IconMarkupFloor className="h-3.5 w-3.5" />
-                <span>To Floor</span>
-              </button>
+                To Floor
+              </UnifiedButton>
 
-              <button
-                type="button"
+              <UnifiedButton
+                size="xs"
+                variant="primary"
                 onClick={async () => {
                   const res = await convertSketchToSlab("roof");
                   if (!res.success && res.error) setSketchError(res.error);
                   else setSketchError(null);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
+                icon={<IconMarkupRoof className="h-3.5 w-3.5" />}
               >
-                <IconMarkupRoof className="h-3.5 w-3.5" />
-                <span>To Roof</span>
-              </button>
+                To Roof
+              </UnifiedButton>
 
               <button
                 type="button"
@@ -1348,46 +1349,34 @@ export default function ToolRibbon({
           {/* -- Tab Bar ---------------------------------------------------------- */}
           <div className="flex items-center gap-2 p-2 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
             {/* V Studio (home tab) */}
-            <button
-              type="button"
+            <UnifiedButton
+              size="xs"
+              variant={activeTab === "vstudio" ? "primary" : "secondary"}
               onClick={() => setActiveTab("vstudio")}
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-                activeTab === "vstudio"
-                  ? "bg-yellow-400 text-slate-950 font-bold border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
-                  : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
             >
               V Studio
-            </button>
+            </UnifiedButton>
 
             {/* Manage */}
-            <button
-              type="button"
+            <UnifiedButton
+              size="xs"
+              variant={activeTab === "manage" ? "primary" : "secondary"}
               onClick={() => setActiveTab("manage")}
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-                activeTab === "manage"
-                  ? "bg-yellow-400 text-slate-950 font-bold border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
-                  : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
             >
               Manage
-            </button>
+            </UnifiedButton>
 
             {/* Modify (Contextual) */}
             {hasSelection && (
               <>
                 <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
-                <button
-                  type="button"
+                <UnifiedButton
+                  size="xs"
+                  variant={activeTab === "modify" ? "primary" : "secondary"}
                   onClick={() => setActiveTab("modify")}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-                    activeTab === "modify"
-                      ? "bg-yellow-400 text-slate-950 font-bold border-yellow-300 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
-                      : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                  }`}
                 >
                   {contextualModifyTitle}
-                </button>
+                </UnifiedButton>
               </>
             )}
 
