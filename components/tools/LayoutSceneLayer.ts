@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
   joinedWallCenterlines,
+  solveWallJunctions,
   pointOnWallMm,
   wallAngleRad,
   wallAngleAtPositionRad,
@@ -16,6 +17,7 @@ import {
   type LayoutWall,
   type LayoutWindow,
   type WallCenterlineMm,
+  type WallMiterOffsets,
 } from "@/lib/layoutDrawing";
 import {
   underlayHeightMm,
@@ -184,6 +186,7 @@ export default class LayoutSceneLayer {
       }
     }
     const joins = joinedWallCenterlines(walls);
+    const miterJoins = solveWallJunctions(walls, joins);
     for (const wall of walls) {
       const level = levelById.get(wall.levelId);
       const elev = level?.elevationMm ?? 0;
@@ -192,15 +195,16 @@ export default class LayoutSceneLayer {
         opts.activeLevelId == null ||
         wall.levelId === opts.activeLevelId;
       const cl = joins.get(wall.id) ?? wall;
+      const miter = miterJoins.get(wall.id);
       const wallDoors = doors.filter((d) => d.wallId === wall.id);
       const wallWindows = windows.filter((w) => w.wallId === wall.id);
       let mesh = this.wallMeshes.get(wall.id);
       if (!mesh) {
-        mesh = this.createWallMesh(wall, elev, cl, wallDoors, wallWindows);
+        mesh = this.createWallMesh(wall, elev, cl, wallDoors, wallWindows, miter);
         this.wallMeshes.set(wall.id, mesh);
         this.group.add(mesh);
       } else {
-        this.updateWallMesh(mesh, wall, elev, cl, wallDoors, wallWindows);
+        this.updateWallMesh(mesh, wall, elev, cl, wallDoors, wallWindows, miter);
       }
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -1173,6 +1177,7 @@ export default class LayoutSceneLayer {
     cl: WallCenterlineMm,
     doors: LayoutDoor[] = [],
     windows: LayoutWindow[] = [],
+    miter?: WallMiterOffsets,
   ): THREE.BufferGeometry {
     if (
       wall.curved &&
@@ -1323,6 +1328,37 @@ export default class LayoutSceneLayer {
       const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
       // Center along extrusion axis (Z) so wall positioning matches existing transformations
       geo.translate(0, 0, -thickM / 2);
+
+      // Section 2: Clean miter vertex displacement for multi-wall junctions
+      if (
+        miter &&
+        (miter.startOffsetLeftMm ||
+          miter.startOffsetRightMm ||
+          miter.endOffsetLeftMm ||
+          miter.endOffsetRightMm)
+      ) {
+        const pos = geo.attributes.position;
+        const sLeftM = fromMm(miter.startOffsetLeftMm);
+        const sRightM = fromMm(miter.startOffsetRightMm);
+        const eLeftM = fromMm(miter.endOffsetLeftMm);
+        const eRightM = fromMm(miter.endOffsetRightMm);
+
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i);
+          const vz = pos.getZ(i);
+
+          const tz = Math.max(0, Math.min(1, (vz + thickM / 2) / (thickM || 1e-5)));
+
+          if (vx < -halfLen + 0.05) {
+            const deltaX = -(1 - tz) * sRightM - tz * sLeftM;
+            pos.setX(i, vx + deltaX);
+          } else if (vx > halfLen - 0.05) {
+            const deltaX = (1 - tz) * eRightM + tz * eLeftM;
+            pos.setX(i, vx + deltaX);
+          }
+        }
+      }
+
       geo.computeVertexNormals();
       return geo;
     }
@@ -1334,8 +1370,9 @@ export default class LayoutSceneLayer {
     cl: WallCenterlineMm,
     doors: LayoutDoor[] = [],
     windows: LayoutWindow[] = [],
+    miter?: WallMiterOffsets,
   ): THREE.Mesh {
-    const geo = this.buildWallGeometry(wall, cl, doors, windows);
+    const geo = this.buildWallGeometry(wall, cl, doors, windows, miter);
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.85,
       metalness: 0.05,
@@ -1344,7 +1381,7 @@ export default class LayoutSceneLayer {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutWallId = wall.id;
     mesh.userData.kind = "layout-wall";
-    this.updateWallMesh(mesh, wall, elevMm, cl, doors, windows);
+    this.updateWallMesh(mesh, wall, elevMm, cl, doors, windows, miter);
     return mesh;
   }
 
@@ -1355,9 +1392,10 @@ export default class LayoutSceneLayer {
     cl: WallCenterlineMm,
     doors: LayoutDoor[] = [],
     windows: LayoutWindow[] = [],
+    miter?: WallMiterOffsets,
   ) {
     mesh.geometry.dispose();
-    mesh.geometry = this.buildWallGeometry(wall, cl, doors, windows);
+    mesh.geometry = this.buildWallGeometry(wall, cl, doors, windows, miter);
 
     if (
       wall.curved &&

@@ -524,6 +524,169 @@ export function joinedWallCenterlines(
   return result;
 }
 
+export type WallMiterOffsets = {
+  startOffsetLeftMm: number;
+  startOffsetRightMm: number;
+  endOffsetLeftMm: number;
+  endOffsetRightMm: number;
+};
+
+/**
+ * Multi-wall junction solver for 2, 3, 4, or 5+ walls meeting at any angle.
+ * Computes exact mitered boundary line intersections for seamless corner joins.
+ */
+export function solveWallJunctions(
+  walls: LayoutWall[],
+  centerlines?: Map<string, WallCenterlineMm>,
+): Map<string, WallMiterOffsets> {
+  const offsets = new Map<string, WallMiterOffsets>();
+  for (const w of walls) {
+    offsets.set(w.id, {
+      startOffsetLeftMm: 0,
+      startOffsetRightMm: 0,
+      endOffsetLeftMm: 0,
+      endOffsetRightMm: 0,
+    });
+  }
+
+  // Group straight walls by level
+  const levels = new Set(walls.map((w) => w.levelId));
+  for (const levelId of levels) {
+    const levelWalls = walls.filter((w) => w.levelId === levelId && !w.curved);
+    if (levelWalls.length < 2) continue;
+
+    type EndpointRef = {
+      wall: LayoutWall;
+      end: "start" | "end";
+      xMm: number;
+      yMm: number;
+      dirX: number;
+      dirY: number;
+      angle: number;
+      halfThick: number;
+    };
+
+    const endpoints: EndpointRef[] = [];
+    for (const w of levelWalls) {
+      const cl = centerlines?.get(w.id) ?? {
+        startXmm: w.startXmm,
+        startYmm: w.startYmm,
+        endXmm: w.endXmm,
+        endYmm: w.endYmm,
+      };
+      const dx = cl.endXmm - cl.startXmm;
+      const dy = cl.endYmm - cl.startYmm;
+      const len = Math.hypot(dx, dy);
+      if (len < 10) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      const halfThick = (w.thicknessMm || 200) / 2;
+
+      // At start, direction pointing into the wall away from start is (+ux, +uy)
+      endpoints.push({
+        wall: w,
+        end: "start",
+        xMm: cl.startXmm,
+        yMm: cl.startYmm,
+        dirX: ux,
+        dirY: uy,
+        angle: Math.atan2(uy, ux),
+        halfThick,
+      });
+
+      // At end, direction pointing into the wall away from end is (-ux, -uy)
+      endpoints.push({
+        wall: w,
+        end: "end",
+        xMm: cl.endXmm,
+        yMm: cl.endYmm,
+        dirX: -ux,
+        dirY: -uy,
+        angle: Math.atan2(-uy, -ux),
+        halfThick,
+      });
+    }
+
+    // Cluster endpoints into junction nodes (tolerance: 80mm)
+    const visited = new Set<number>();
+    for (let i = 0; i < endpoints.length; i++) {
+      if (visited.has(i)) continue;
+      const cluster: EndpointRef[] = [endpoints[i]];
+      visited.add(i);
+
+      for (let j = i + 1; j < endpoints.length; j++) {
+        if (visited.has(j)) continue;
+        const d = Math.hypot(endpoints[i].xMm - endpoints[j].xMm, endpoints[i].yMm - endpoints[j].yMm);
+        if (d <= JOIN_EPS_MM * 1.5) {
+          cluster.push(endpoints[j]);
+          visited.add(j);
+        }
+      }
+
+      if (cluster.length < 2) continue;
+
+      // Sort cluster radially by angle
+      cluster.sort((a, b) => a.angle - b.angle);
+
+      // Shared node point
+      const nodeX = cluster.reduce((sum, e) => sum + e.xMm, 0) / cluster.length;
+      const nodeY = cluster.reduce((sum, e) => sum + e.yMm, 0) / cluster.length;
+
+      const N = cluster.length;
+      for (let k = 0; k < N; k++) {
+        const curr = cluster[k];
+        const next = cluster[(k + 1) % N];
+
+        if (curr.wall.id === next.wall.id) continue;
+
+        // Curr left edge: normal is (-dirY, +dirX)
+        const leftP1x = nodeX - curr.dirY * curr.halfThick;
+        const leftP1y = nodeY + curr.dirX * curr.halfThick;
+        const leftP2x = leftP1x + curr.dirX * 1000;
+        const leftP2y = leftP1y + curr.dirY * 1000;
+
+        // Next right edge: normal is (+dirY, -dirX)
+        const rightP1x = nodeX + next.dirY * next.halfThick;
+        const rightP1y = nodeY - next.dirX * next.halfThick;
+        const rightP2x = rightP1x + next.dirX * 1000;
+        const rightP2y = rightP1y + next.dirY * 1000;
+
+        const hit = lineLineIntersection(leftP1x, leftP1y, leftP2x, leftP2y, rightP1x, rightP1y, rightP2x, rightP2y);
+        if (hit) {
+          const projCurr = (hit.x - nodeX) * curr.dirX + (hit.y - nodeY) * curr.dirY;
+          const projNext = (hit.x - nodeX) * next.dirX + (hit.y - nodeY) * next.dirY;
+
+          const maxMiterCurr = curr.halfThick * 3;
+          const maxMiterNext = next.halfThick * 3;
+
+          const clampedCurr = Math.max(-maxMiterCurr, Math.min(maxMiterCurr, projCurr));
+          const clampedNext = Math.max(-maxMiterNext, Math.min(maxMiterNext, projNext));
+
+          const offCurr = offsets.get(curr.wall.id);
+          if (offCurr) {
+            if (curr.end === "start") {
+              offCurr.startOffsetLeftMm = clampedCurr;
+            } else {
+              offCurr.endOffsetRightMm = clampedCurr;
+            }
+          }
+
+          const offNext = offsets.get(next.wall.id);
+          if (offNext) {
+            if (next.end === "start") {
+              offNext.startOffsetRightMm = clampedNext;
+            } else {
+              offNext.endOffsetLeftMm = clampedNext;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return offsets;
+}
+
 /** Point along wall at offset mm from start (clamped). */
 export function pointOnWallMm(
   w: LayoutWall,
