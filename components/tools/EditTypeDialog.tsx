@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { LuX, LuCheck, LuSlidersHorizontal, LuLayers, LuInfo } from "react-icons/lu";
+import { useState, useEffect } from "react";
+import { LuX, LuCheck, LuSlidersHorizontal, LuInfo } from "react-icons/lu";
 
 export type ElementTypeDefinition = {
   id: string;
@@ -178,6 +178,23 @@ export default function EditTypeDialog({
 }: EditTypeDialogProps) {
   const [formData, setFormData] = useState<ElementTypeDefinition>({ ...typeDef });
 
+  // Update form state live in place when selection changes
+  useEffect(() => {
+    setFormData({ ...typeDef });
+  }, [typeDef]);
+
+  // Esc key listener to dismiss
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -187,175 +204,186 @@ export default function EditTypeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-lg rounded-2xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
-        {/* Header */}
-        <div className="flex h-12 items-center justify-between border-b border-[var(--panel-divider)] px-4 bg-[var(--surface-overlay)]">
-          <div className="flex items-center gap-2">
-            <LuSlidersHorizontal className="h-4 w-4 text-amber-500" />
-            <span className="font-bold text-sm text-[var(--text-strong)]">
-              Type Properties — {formData.name}
-            </span>
+    <div className="absolute inset-0 z-30 flex flex-col bg-[var(--popover-bg)] backdrop-blur-xl border border-[var(--panel-divider)] rounded-[2rem] shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200 select-none">
+      {/* Header */}
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/70">
+        <div className="flex items-center gap-2 truncate">
+          <LuSlidersHorizontal className="h-4 w-4 text-amber-500 shrink-0" />
+          <span className="font-bold text-xs text-[var(--text-strong)] truncate">
+            Edit Type — {formData.name}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close (Esc)"
+          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+        >
+          <LuX className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Form Body */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3.5 space-y-3 thin-scroll text-xs">
+        {/* Note Banner */}
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-600 dark:text-amber-400">
+          <LuInfo className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div className="text-[10px] leading-relaxed">
+            <strong>Global Type Parameters:</strong> Changes apply to <strong>all instances</strong> of this type in the project.
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            <LuX className="h-4 w-4" />
-          </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4 thin-scroll text-xs">
-          {/* Note Banner */}
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400">
-            <LuInfo className="h-4 w-4 shrink-0 mt-0.5" />
-            <div className="text-[11px] leading-relaxed">
-              <strong>Global Type Parameters:</strong> Changes made here will apply to <strong>all instances</strong> of this type across the entire project.
-            </div>
+        {/* Type Name */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Type Name</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-medium text-xs text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
+          />
+        </div>
+
+        {/* Construction Dimensions */}
+        <div className="space-y-2.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-2.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+            Dimensions
           </div>
 
-          {/* Type Name */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-[var(--text-muted)]">Type Name</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-3 py-1.5 font-medium text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Construction Dimensions */}
-          <div className="space-y-3 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-              Construction Dimensions
-            </div>
-
-            {formData.thicknessMm !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Default Thickness (mm):</span>
+          {formData.thicknessMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Thickness:</span>
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   value={formData.thicknessMm}
                   onChange={(e) => setFormData({ ...formData, thicknessMm: Number(e.target.value) })}
-                  className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
                 />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
               </div>
-            )}
+            </div>
+          )}
 
-            {formData.widthMm !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Default Width (mm):</span>
+          {formData.widthMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Width:</span>
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   value={formData.widthMm}
                   onChange={(e) => setFormData({ ...formData, widthMm: Number(e.target.value) })}
-                  className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
                 />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
               </div>
-            )}
+            </div>
+          )}
 
-            {formData.heightMm !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Default Height (mm):</span>
+          {formData.heightMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Height:</span>
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   value={formData.heightMm}
                   onChange={(e) => setFormData({ ...formData, heightMm: Number(e.target.value) })}
-                  className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
                 />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
               </div>
-            )}
+            </div>
+          )}
 
-            {formData.sillHeightMm !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Default Sill Height (mm):</span>
+          {formData.sillHeightMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Sill Height:</span>
+              <div className="flex items-center gap-1">
                 <input
                   type="number"
                   value={formData.sillHeightMm}
                   onChange={(e) => setFormData({ ...formData, sillHeightMm: Number(e.target.value) })}
-                  className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
                 />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+
+        {/* Materials & Finishes */}
+        <div className="space-y-2.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-2.5">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+            Materials & Function
           </div>
 
-          {/* Materials & Finishes */}
-          <div className="space-y-3 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-              Materials & Performance
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-body)]">Material:</span>
+            <input
+              type="text"
+              value={formData.material}
+              onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+              className="w-36 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right text-[11px] text-[var(--text-strong)]"
+            />
+          </div>
 
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-body)]">Function:</span>
+            <select
+              value={formData.functionType}
+              onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
+              className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-[11px] text-[var(--text-strong)]"
+            >
+              <option value="Interior">Interior</option>
+              <option value="Exterior">Exterior</option>
+              <option value="Structural">Structural</option>
+              <option value="Non-Bearing">Non-Bearing</option>
+            </select>
+          </div>
+
+          {formData.thermalConductivity && (
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-body)]">Core Material:</span>
+              <span className="text-[11px] text-[var(--text-body)]">Thermal U/K:</span>
               <input
                 type="text"
-                value={formData.material}
-                onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                className="w-48 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right text-[11px] text-[var(--text-strong)]"
+                value={formData.thermalConductivity}
+                onChange={(e) => setFormData({ ...formData, thermalConductivity: e.target.value })}
+                className="w-32 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
               />
             </div>
+          )}
 
+          {formData.fireRating && (
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-body)]">Function:</span>
-              <select
-                value={formData.functionType}
-                onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
-                className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1 text-xs text-[var(--text-strong)]"
-              >
-                <option value="Interior">Interior</option>
-                <option value="Exterior">Exterior</option>
-                <option value="Structural">Structural</option>
-                <option value="Non-Bearing">Non-Bearing</option>
-              </select>
+              <span className="text-[11px] text-[var(--text-body)]">Fire Rating:</span>
+              <input
+                type="text"
+                value={formData.fireRating}
+                onChange={(e) => setFormData({ ...formData, fireRating: e.target.value })}
+                className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+              />
             </div>
+          )}
+        </div>
 
-            {formData.thermalConductivity && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Thermal U/K-Value:</span>
-                <input
-                  type="text"
-                  value={formData.thermalConductivity}
-                  onChange={(e) => setFormData({ ...formData, thermalConductivity: e.target.value })}
-                  className="w-36 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
-                />
-              </div>
-            )}
-
-            {formData.fireRating && (
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[var(--text-body)]">Fire Rating:</span>
-                <input
-                  type="text"
-                  value={formData.fireRating}
-                  onChange={(e) => setFormData({ ...formData, fireRating: e.target.value })}
-                  className="w-24 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--panel-divider)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-[var(--panel-divider)] px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition-all"
-            >
-              <LuCheck className="h-4 w-4" />
-              <span>Apply Changes (All Instances)</span>
-            </button>
-          </div>
-        </form>
-      </div>
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--panel-divider)]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-[var(--panel-divider)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition-all"
+          >
+            <LuCheck className="h-3.5 w-3.5" />
+            <span>Apply</span>
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

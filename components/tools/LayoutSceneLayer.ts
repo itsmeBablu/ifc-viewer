@@ -24,6 +24,8 @@ import {
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useMaterialStore } from "@/store/materialStore";
+import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 
 const WALL_COLOR = 0xd6d3d1;
 const WALL_SEL = 0xf59e0b;
@@ -186,13 +188,15 @@ export default class LayoutSceneLayer {
         opts.activeLevelId == null ||
         wall.levelId === opts.activeLevelId;
       const cl = joins.get(wall.id) ?? wall;
+      const wallDoors = doors.filter((d) => d.wallId === wall.id);
+      const wallWindows = windows.filter((w) => w.wallId === wall.id);
       let mesh = this.wallMeshes.get(wall.id);
       if (!mesh) {
-        mesh = this.createWallMesh(wall, elev, cl);
+        mesh = this.createWallMesh(wall, elev, cl, wallDoors, wallWindows);
         this.wallMeshes.set(wall.id, mesh);
         this.group.add(mesh);
       } else {
-        this.updateWallMesh(mesh, wall, elev, cl);
+        this.updateWallMesh(mesh, wall, elev, cl, wallDoors, wallWindows);
       }
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -1009,13 +1013,41 @@ export default class LayoutSceneLayer {
     mesh.userData.layoutSlabId = slab.id;
   }
 
-  private applyMaterialAndColor(mat: THREE.MeshStandardMaterial, colorStr?: string, matType?: string) {
+  private applyMaterialAndColor(
+    mat: THREE.MeshStandardMaterial,
+    colorStr?: string,
+    matType?: string,
+  ) {
     // Reset defaults first
     mat.roughness = 0.85;
     mat.metalness = 0.05;
     mat.transparent = false;
     mat.opacity = 1.0;
-    
+    mat.map = null;
+
+    const customMat = useMaterialStore.getState().getMaterial(matType);
+    if (customMat) {
+      mat.roughness = customMat.roughness;
+      mat.metalness = customMat.metalness;
+      mat.opacity = customMat.opacity;
+      mat.transparent =
+        customMat.opacity < 0.99 ||
+        Boolean(customMat.transmission && customMat.transmission > 0);
+
+      const effectiveColor = colorStr || customMat.color;
+      mat.color.setStyle(effectiveColor);
+
+      if (customMat.hatchStyle && customMat.hatchStyle !== "solid") {
+        mat.map = getHatchCanvasTexture(
+          customMat.hatchStyle,
+          "#27272a",
+          effectiveColor,
+          8,
+        );
+      }
+      return;
+    }
+
     let baseColor = 0xd6d3d1; // default wall color
     if (matType === "concrete") {
       baseColor = 0x878683;
@@ -1040,7 +1072,7 @@ export default class LayoutSceneLayer {
       baseColor = 0xf8fafc;
       mat.roughness = 0.95;
     }
-    
+
     if (colorStr) {
       mat.color.setStyle(colorStr);
     } else {
@@ -1048,18 +1080,30 @@ export default class LayoutSceneLayer {
     }
   }
 
-  private buildWallGeometry(wall: LayoutWall, cl: WallCenterlineMm): THREE.BufferGeometry {
-    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcStartAngleDeg != null && wall.arcEndAngleDeg != null) {
+  private buildWallGeometry(
+    wall: LayoutWall,
+    cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
+  ): THREE.BufferGeometry {
+    if (
+      wall.curved &&
+      wall.arcRadiusMm != null &&
+      wall.arcCenterXmm != null &&
+      wall.arcCenterYmm != null &&
+      wall.arcStartAngleDeg != null &&
+      wall.arcEndAngleDeg != null
+    ) {
       const r = fromMm(wall.arcRadiusMm);
       const thick = fromMm(wall.thicknessMm);
       const height = fromMm(wall.heightMm);
-      
+
       const startRad = (wall.arcStartAngleDeg * Math.PI) / 180;
       const endRad = (wall.arcEndAngleDeg * Math.PI) / 180;
-      
+
       const rInner = r - thick / 2;
       const rOuter = r + thick / 2;
-      
+
       const shape = new THREE.Shape();
       const x0 = rInner * Math.cos(startRad);
       const y0 = rInner * Math.sin(startRad);
@@ -1068,20 +1112,131 @@ export default class LayoutSceneLayer {
       shape.lineTo(rOuter * Math.cos(endRad), rOuter * Math.sin(endRad));
       shape.absarc(0, 0, rOuter, endRad, startRad, true);
       shape.lineTo(x0, y0);
-      
+
       const extrudeSettings = {
         depth: height,
         bevelEnabled: false,
         steps: 1,
         curveSegments: 32,
       };
-      
-      return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+      const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geo.computeVertexNormals();
+      return geo;
     } else {
       const dx = cl.endXmm - cl.startXmm;
       const dy = cl.endYmm - cl.startYmm;
       const len = Math.max(50, Math.hypot(dx, dy));
-      return new THREE.BoxGeometry(fromMm(len), fromMm(wall.heightMm), fromMm(wall.thicknessMm));
+      const wallHeightMm = wall.heightMm || 3000;
+      const wallThickMm = wall.thicknessMm || 200;
+      const lenM = fromMm(len);
+      const heightM = fromMm(wallHeightMm);
+      const thickM = fromMm(wallThickMm);
+      const halfLen = lenM / 2;
+      const halfHeight = heightM / 2;
+
+      // Build outer wall 2D profile (local X: along wall length, local Y: height)
+      const shape = new THREE.Shape();
+      shape.moveTo(-halfLen, -halfHeight);
+      shape.lineTo(halfLen, -halfHeight);
+      shape.lineTo(halfLen, halfHeight);
+      shape.lineTo(-halfLen, halfHeight);
+      shape.closePath();
+
+      // Hosted openings (doors + windows)
+      const openings: {
+        posMm: number;
+        widthMm: number;
+        heightMm: number;
+        sillMm: number;
+        headShape?: string;
+      }[] = [
+        ...doors.map((d) => ({
+          posMm: d.positionMm,
+          widthMm: d.widthMm || 900,
+          heightMm: d.heightMm || 2100,
+          sillMm: 0,
+          headShape: d.headShape,
+        })),
+        ...windows.map((w) => ({
+          posMm: w.positionMm,
+          widthMm: w.widthMm || 1200,
+          heightMm: w.heightMm || 1400,
+          sillMm: w.sillHeightMm ?? 900,
+          headShape: w.headShape,
+        })),
+      ];
+
+      for (const op of openings) {
+        const holeCenterX = fromMm(op.posMm) - halfLen;
+        const holeHalfW = fromMm(op.widthMm) / 2;
+        const holeYBottom = fromMm(op.sillMm) - halfHeight;
+        const holeYTop = fromMm(op.sillMm + op.heightMm) - halfHeight;
+
+        const x1 = holeCenterX - holeHalfW;
+        const x2 = holeCenterX + holeHalfW;
+        const y1 = Math.max(-halfHeight - 0.001, holeYBottom);
+        const y2 = Math.min(halfHeight + 0.001, holeYTop);
+
+        // Verify valid opening geometry inside wall boundaries
+        if (x2 > -halfLen && x1 < halfLen && y2 > y1) {
+          const clampedX1 = Math.max(-halfLen + 0.001, x1);
+          const clampedX2 = Math.min(halfLen - 0.001, x2);
+          const clampedHoleHalfW = (clampedX2 - clampedX1) / 2;
+          const clampedCenterX = (clampedX1 + clampedX2) / 2;
+
+          const hole = new THREE.Path();
+          if (op.headShape === "arched" && y2 - y1 > clampedHoleHalfW) {
+            const rectH = y2 - y1 - clampedHoleHalfW;
+            const archBaseY = y1 + rectH;
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, archBaseY);
+            hole.absarc(
+              clampedCenterX,
+              archBaseY,
+              clampedHoleHalfW,
+              0,
+              Math.PI,
+              false,
+            );
+            hole.lineTo(clampedX1, y1);
+          } else if (
+            op.headShape === "triangular" &&
+            y2 - y1 > clampedHoleHalfW / 2
+          ) {
+            const rectH = y2 - y1 - clampedHoleHalfW / 2;
+            const triBaseY = y1 + rectH;
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, triBaseY);
+            hole.lineTo(clampedCenterX, y2);
+            hole.lineTo(clampedX1, triBaseY);
+            hole.lineTo(clampedX1, y1);
+          } else {
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, y2);
+            hole.lineTo(clampedX1, y2);
+            hole.lineTo(clampedX1, y1);
+          }
+          hole.closePath();
+          shape.holes.push(hole);
+        }
+      }
+
+      const extrudeSettings = {
+        depth: thickM,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 24,
+      };
+
+      const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      // Center along extrusion axis (Z) so wall positioning matches existing transformations
+      geo.translate(0, 0, -thickM / 2);
+      geo.computeVertexNormals();
+      return geo;
     }
   }
 
@@ -1089,8 +1244,10 @@ export default class LayoutSceneLayer {
     wall: LayoutWall,
     elevMm: number,
     cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
   ): THREE.Mesh {
-    const geo = this.buildWallGeometry(wall, cl);
+    const geo = this.buildWallGeometry(wall, cl, doors, windows);
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.85,
       metalness: 0.05,
@@ -1099,7 +1256,7 @@ export default class LayoutSceneLayer {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutWallId = wall.id;
     mesh.userData.kind = "layout-wall";
-    this.updateWallMesh(mesh, wall, elevMm, cl);
+    this.updateWallMesh(mesh, wall, elevMm, cl, doors, windows);
     return mesh;
   }
 
@@ -1108,12 +1265,23 @@ export default class LayoutSceneLayer {
     wall: LayoutWall,
     elevMm: number,
     cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
   ) {
     mesh.geometry.dispose();
-    mesh.geometry = this.buildWallGeometry(wall, cl);
-    
-    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null) {
-      mesh.position.set(fromMm(wall.arcCenterXmm), fromMm(elevMm), fromMm(wall.arcCenterYmm));
+    mesh.geometry = this.buildWallGeometry(wall, cl, doors, windows);
+
+    if (
+      wall.curved &&
+      wall.arcRadiusMm != null &&
+      wall.arcCenterXmm != null &&
+      wall.arcCenterYmm != null
+    ) {
+      mesh.position.set(
+        fromMm(wall.arcCenterXmm),
+        fromMm(elevMm),
+        fromMm(wall.arcCenterYmm),
+      );
       mesh.rotation.set(-Math.PI / 2, 0, 0);
     } else {
       const height = fromMm(wall.heightMm);
@@ -1201,7 +1369,13 @@ export default class LayoutSceneLayer {
     const inner = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
     outer.holes.push(inner);
 
-    const { frameMat, panelMat } = this.getOpeningMaterials(category, style, colorStr);
+    const { frameMat, panelMat } = this.getOpeningMaterials(
+      category,
+      style,
+      colorStr,
+      door?.material || win?.material,
+      (door as any)?.panelMaterial || (win as any)?.panelMaterial,
+    );
 
     // 1. Frame Mesh
     const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: d, bevelEnabled: false });
@@ -1249,23 +1423,59 @@ export default class LayoutSceneLayer {
     boxGroup.rotation.set(0, -wallAngleAtPositionRad(wall, positionMm), 0);
   }
 
-  private getOpeningMaterials(category: "door" | "window", style?: string, colorStr?: string) {
+  private getOpeningMaterials(
+    category: "door" | "window",
+    style?: string,
+    colorStr?: string,
+    frameMatId?: string,
+    panelMatId?: string,
+  ) {
     const frameMat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.1 });
-    const panelMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
-    
-    if (colorStr) {
+    let panelMat: THREE.Material = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
+
+    const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
+    if (customFrame) {
+      frameMat.roughness = customFrame.roughness;
+      frameMat.metalness = customFrame.metalness;
+      frameMat.color.setStyle(colorStr || customFrame.color);
+    } else if (colorStr) {
       frameMat.color.setStyle(colorStr);
     } else {
       frameMat.color.setHex(category === "door" ? 0x78716c : 0x0284c7);
     }
-    
+
+    const customPanel = useMaterialStore.getState().getMaterial(panelMatId);
+    if (customPanel) {
+      if (customPanel.transmission && customPanel.transmission > 0.3) {
+        panelMat = new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(customPanel.color),
+          transparent: true,
+          opacity: customPanel.opacity,
+          roughness: customPanel.roughness,
+          metalness: customPanel.metalness,
+          transmission: customPanel.transmission,
+          thickness: 0.02,
+        });
+      } else {
+        const std = new THREE.MeshStandardMaterial({
+          roughness: customPanel.roughness,
+          metalness: customPanel.metalness,
+          opacity: customPanel.opacity,
+          transparent: customPanel.opacity < 0.99,
+        });
+        std.color.setStyle(customPanel.color);
+        panelMat = std;
+      }
+      return { frameMat, panelMat };
+    }
+
     if (style === "wood") {
-      panelMat.color.setHex(0x8b5a2b);
-      panelMat.roughness = 0.8;
+      (panelMat as THREE.MeshStandardMaterial).color.setHex(0x8b5a2b);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.8;
     } else if (style === "metal") {
-      panelMat.color.setHex(0xd1d5db);
-      panelMat.roughness = 0.3;
-      panelMat.metalness = 0.9;
+      (panelMat as THREE.MeshStandardMaterial).color.setHex(0xd1d5db);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.3;
+      (panelMat as THREE.MeshStandardMaterial).metalness = 0.9;
     } else if (style === "glass" || category === "window") {
       const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xbae6fd,
@@ -1278,10 +1488,10 @@ export default class LayoutSceneLayer {
       });
       return { frameMat, panelMat: glassMat };
     } else {
-      panelMat.color.copy(frameMat.color);
-      panelMat.roughness = 0.7;
+      (panelMat as THREE.MeshStandardMaterial).color.copy(frameMat.color);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.7;
     }
-    
+
     return { frameMat, panelMat };
   }
 
@@ -1317,15 +1527,6 @@ export default class LayoutSceneLayer {
     for (const g of this.windowMeshes.values()) {
       this.applyOpeningDisplay(g, planMode);
     }
-  }
-
-  private applyOpeningDisplay(g: THREE.Group, planMode: boolean) {
-    const box = g.children.find(
-      (c) => c instanceof THREE.Mesh && c.name === "opening-box",
-    ) as THREE.Mesh | undefined;
-    const plan = g.children.find((c) => c.name === "plan-symbol");
-    if (box) box.visible = !planMode;
-    if (plan) plan.visible = planMode;
   }
 
   /** Ensure solid box + CAD plan symbol both exist; visibility via planMode. */

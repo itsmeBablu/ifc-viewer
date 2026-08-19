@@ -1064,6 +1064,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       // Right-drag pans; short right-click opens context menu (see ViewerContextMenu).
       RIGHT: MOUSE.PAN,
     };
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
 
     const transform = new TransformControls(camera, renderer.domElement);
     transform.setSize(0.85);
