@@ -493,9 +493,6 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftColumnDepthMm: 300,
   draftBeamWidthMm: 200,
   draftBeamDepthMm: 400,
-  draftWindowHeightMm: DEFAULT_WINDOW_HEIGHT_MM,
-  draftWindowSillMm: DEFAULT_WINDOW_SILL_MM,
-  draftSlabThicknessMm: DEFAULT_SLAB_THICKNESS_MM,
 
   loadForProject: async (projectId, isEmpty = false) => {
     clearWerkzeugHistory();

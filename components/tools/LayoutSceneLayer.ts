@@ -177,6 +177,10 @@ export default class LayoutSceneLayer {
       selectedDoorId: string | null;
       selectedWindowId: string | null;
       selectedSlabId: string | null;
+      selectedWallIds?: Set<string>;
+      selectedDoorIds?: Set<string>;
+      selectedWindowIds?: Set<string>;
+      selectedSlabIds?: Set<string>;
       showAllLevels: boolean;
       /** Top/plan view — CAD door/window symbols instead of 3D boxes. */
       planMode?: boolean;
@@ -216,7 +220,8 @@ export default class LayoutSceneLayer {
       }
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (wall.id === opts.selectedWallId) {
+      const isWallSelected = wall.id === opts.selectedWallId || Boolean(opts.selectedWallIds?.has(wall.id));
+      if (isWallSelected) {
         mat.color.setHex(WALL_SEL);
         mat.emissive.setHex(0x92400e);
         mat.emissiveIntensity = 0.25;
@@ -253,7 +258,8 @@ export default class LayoutSceneLayer {
       // this.stripOpeningLabels(g);
       this.syncDoorPlanSymbol(g, wall, door, elev, planMode);
       g.visible = visible;
-      this.tintOpening(g, door.id === opts.selectedDoorId);
+      const isDoorSelected = door.id === opts.selectedDoorId || Boolean(opts.selectedDoorIds?.has(door.id));
+      this.tintOpening(g, isDoorSelected);
     }
 
     const winKeep = new Set(windows.map((w) => w.id));
@@ -282,7 +288,8 @@ export default class LayoutSceneLayer {
       // this.stripOpeningLabels(g);
       this.syncWindowPlanSymbol(g, wall, win, elev, planMode);
       g.visible = visible;
-      this.tintOpening(g, win.id === opts.selectedWindowId);
+      const isWinSelected = win.id === opts.selectedWindowId || Boolean(opts.selectedWindowIds?.has(win.id));
+      this.tintOpening(g, isWinSelected);
     }
 
     const slabKeep = new Set(slabs.map((s) => s.id));
@@ -310,13 +317,12 @@ export default class LayoutSceneLayer {
         this.updateSlabMesh(mesh, slab, elev);
       }
       mesh.visible = visible;
-      const selected = slab.id === opts.selectedSlabId;
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (selected) {
-        const sel = slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL;
-        mat.color.setHex(sel);
+      const isSlabSelected = slab.id === opts.selectedSlabId || Boolean(opts.selectedSlabIds?.has(slab.id));
+      if (isSlabSelected) {
+        mat.color.setHex(slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL);
         mat.emissive.setHex(0x92400e);
-        mat.emissiveIntensity = 0.2;
+        mat.emissiveIntensity = 0.25;
       } else {
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
