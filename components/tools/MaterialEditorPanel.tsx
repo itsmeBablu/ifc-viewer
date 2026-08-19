@@ -163,9 +163,9 @@ export default function MaterialEditorPanel({
       </div>
 
       {/* Main Body (Dense, Compact, Thin Dividers) */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 thin-scroll text-xs">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2 thin-scroll text-xs">
         {/* Swatch Library Grid with 3D Sphere Previews */}
-        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
+        <div className="pb-2 border-b border-[var(--panel-divider)]/40 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
               <LuBox className="h-3 w-3" />
@@ -182,7 +182,7 @@ export default function MaterialEditorPanel({
           </div>
 
           {/* Category Filter Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto thin-scroll pb-1">
+          <div className="flex items-center gap-1 overflow-x-auto thin-scroll pb-0.5">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -199,7 +199,7 @@ export default function MaterialEditorPanel({
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto thin-scroll p-0.5">
+          <div className="grid grid-cols-3 gap-1.5 max-h-[150px] overflow-y-auto thin-scroll p-0.5">
             {filteredMaterials.map((mat) => {
               const isSelected = mat.id === selectedMaterialId;
               const sphereUrl = renderMaterialSphere(mat, 52);
@@ -208,32 +208,32 @@ export default function MaterialEditorPanel({
                   key={mat.id}
                   type="button"
                   onClick={() => setSelectedMaterialId(mat.id)}
-                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all text-center group ${
+                  className={`flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all text-center group ${
                     isSelected
                       ? "border-yellow-400 bg-yellow-400/15 shadow-md ring-1 ring-yellow-400/50"
                       : "border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 hover:border-yellow-400/50"
                   }`}
                 >
                   {/* 3D Rendered Sphere Preview */}
-                  <div className="h-9 w-9 flex items-center justify-center relative">
+                  <div className="h-8 w-8 flex items-center justify-center relative">
                     {sphereUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={sphereUrl}
                         alt={mat.name}
-                        className="h-9 w-9 object-contain drop-shadow-md"
+                        className="h-8 w-8 object-contain drop-shadow-md"
                       />
                     ) : (
                       <div
-                        className="h-8 w-8 rounded-full border border-white/30 shadow-inner"
+                        className="h-7 w-7 rounded-full border border-white/30 shadow-inner"
                         style={{ backgroundColor: mat.color }}
                       />
                     )}
-                    <span className="absolute bottom-0 right-0 text-[7.5px] font-mono font-bold bg-black/60 text-white rounded px-0.5 border border-white/20">
+                    <span className="absolute bottom-0 right-0 text-[7px] font-mono font-bold bg-black/60 text-white rounded px-0.5 border border-white/20">
                       {HATCH_OPTIONS.find((h) => h.id === mat.hatchStyle)?.icon || "■"}
                     </span>
                   </div>
-                  <span className="mt-1 truncate text-[9.5px] font-semibold text-[var(--text-strong)] w-full">
+                  <span className="mt-1 truncate text-[9px] font-semibold text-[var(--text-strong)] w-full">
                     {mat.name}
                   </span>
                 </button>
@@ -244,8 +244,8 @@ export default function MaterialEditorPanel({
 
         {/* Selected Material Property Controls (Compact, Thin Dividers) */}
         {selectedMat && (
-          <div className="space-y-2 pb-2.5 border-b border-[var(--panel-divider)]/40">
-            <div className="flex items-center justify-between pb-1">
+          <div className="space-y-2 pb-2 border-b border-[var(--panel-divider)]/40">
+            <div className="flex items-center justify-between pb-0.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
                 <LuSlidersHorizontal className="h-3 w-3" />
                 Parameters — {selectedMat.name}
@@ -263,8 +263,8 @@ export default function MaterialEditorPanel({
             </div>
 
             {/* Name & Category */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="space-y-0.5">
                 <label className="text-[10px] font-semibold text-[var(--text-muted)]">Name</label>
                 <input
                   type="text"
@@ -274,7 +274,7 @@ export default function MaterialEditorPanel({
                   className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)] font-medium disabled:opacity-60"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <label className="text-[10px] font-semibold text-[var(--text-muted)]">Category</label>
                 <select
                   value={selectedMat.category}
@@ -294,7 +294,7 @@ export default function MaterialEditorPanel({
             </div>
 
             {/* Color Palette + Custom Hex */}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1 pt-0.5">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-semibold text-[var(--text-muted)]">Base Color</label>
                 <div className="flex items-center gap-1.5">
@@ -303,9 +303,9 @@ export default function MaterialEditorPanel({
                     value={selectedMat.color}
                     disabled={selectedMat.isPreset}
                     onChange={(e) => updateMaterial(selectedMat.id, { color: e.target.value })}
-                    className="h-5 w-5 rounded cursor-pointer border-0 p-0 bg-transparent disabled:opacity-60"
+                    className="h-4 w-4 rounded cursor-pointer border-0 p-0 bg-transparent disabled:opacity-60"
                   />
-                  <span className="font-mono text-[10px] text-[var(--text-strong)]">
+                  <span className="font-mono text-[9.5px] text-[var(--text-strong)]">
                     {selectedMat.color.toUpperCase()}
                   </span>
                 </div>
@@ -318,7 +318,7 @@ export default function MaterialEditorPanel({
                       key={c}
                       type="button"
                       onClick={() => updateMaterial(selectedMat.id, { color: c })}
-                      className="h-4 w-4 rounded-full border border-white/20 hover:scale-110 transition-transform"
+                      className="h-3.5 w-3.5 rounded-full border border-white/20 hover:scale-110 transition-transform"
                       style={{ backgroundColor: c }}
                       title={c}
                     />
@@ -328,10 +328,10 @@ export default function MaterialEditorPanel({
             </div>
 
             {/* PBR Sliders — Unified Yellow Accent Color */}
-            <div className="space-y-2 pt-1">
+            <div className="space-y-1.5 pt-0.5">
               {/* Roughness */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between text-[10.5px]">
                   <span className="text-[var(--text-body)]">Roughness (Matte vs Gloss):</span>
                   <span className="font-mono font-bold text-yellow-400">
                     {Math.round(selectedMat.roughness * 100)}%
@@ -350,8 +350,8 @@ export default function MaterialEditorPanel({
               </div>
 
               {/* Metalness */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between text-[10.5px]">
                   <span className="text-[var(--text-body)]">Metalness (Dielectric vs Metal):</span>
                   <span className="font-mono font-bold text-yellow-400">
                     {Math.round(selectedMat.metalness * 100)}%
@@ -370,8 +370,8 @@ export default function MaterialEditorPanel({
               </div>
 
               {/* Opacity */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between text-[10.5px]">
                   <span className="text-[var(--text-body)]">Opacity (Solid vs Transparent):</span>
                   <span className="font-mono font-bold text-yellow-400">
                     {Math.round(selectedMat.opacity * 100)}%
@@ -390,33 +390,33 @@ export default function MaterialEditorPanel({
               </div>
 
               {/* 2D Plan Hatch Pattern */}
-              <div className="space-y-1.5 pt-1 border-t border-[var(--panel-divider)]/40">
+              <div className="space-y-1 pt-1.5 border-t border-[var(--panel-divider)]/40">
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   2D Plan Hatch Pattern
                 </label>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1">
                   {HATCH_OPTIONS.map((h) => (
                     <button
                       key={h.id}
                       type="button"
                       disabled={selectedMat.isPreset}
                       onClick={() => updateMaterial(selectedMat.id, { hatchStyle: h.id })}
-                      className={`flex flex-col items-center justify-center p-1.5 rounded-lg border text-center transition-all ${
+                      className={`flex flex-col items-center justify-center p-1 rounded-lg border text-center transition-all ${
                         selectedMat.hatchStyle === h.id
-                          ? "border-yellow-400 bg-yellow-400/20 text-yellow-400 font-bold"
+                          ? "border-yellow-400 bg-yellow-400/20 text-yellow-400 font-bold shadow-sm"
                           : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)] hover:border-yellow-400/50"
                       } disabled:opacity-60`}
                     >
                       <span className="text-xs font-mono font-bold">{h.icon}</span>
-                      <span className="text-[9px] mt-0.5 truncate">{h.label}</span>
+                      <span className="text-[8.5px] mt-0.5 truncate">{h.label}</span>
                     </button>
                   ))}
                 </div>
 
                 {/* Hatch Size / Spacing Slider */}
                 {selectedMat.hatchStyle !== "solid" && (
-                  <div className="space-y-1 pt-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
+                  <div className="space-y-0.5 pt-1">
+                    <div className="flex items-center justify-between text-[10.5px]">
                       <span className="text-[var(--text-body)]">Hatch Line Spacing:</span>
                       <span className="font-mono font-bold text-yellow-400">
                         {selectedMat.hatchScaleMm || 200} mm
@@ -440,15 +440,15 @@ export default function MaterialEditorPanel({
                 )}
               </div>
 
-              {/* Advanced Surface Mapping Controls (Section 10) */}
-              <div className="space-y-2 pt-2 border-t border-[var(--panel-divider)]/40">
+              {/* Advanced Surface Mapping Controls */}
+              <div className="space-y-1.5 pt-1.5 border-t border-[var(--panel-divider)]/40">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
                   Surface Texture & Relief
                 </label>
 
                 {/* Texture Tiling / Scale */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between text-[10.5px]">
                     <span className="text-[var(--text-body)]">Tiling / UV Scale:</span>
                     <span className="font-mono font-bold text-yellow-400">
                       {(selectedMat.tilingScale || 1.0).toFixed(1)}x
@@ -471,8 +471,8 @@ export default function MaterialEditorPanel({
                 </div>
 
                 {/* Bump / Normal Relief */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between text-[10.5px]">
                     <span className="text-[var(--text-body)]">Surface Bump / Depth:</span>
                     <span className="font-mono font-bold text-yellow-400">
                       {Math.round((selectedMat.bumpScale ?? 0.2) * 50)}%
@@ -498,15 +498,15 @@ export default function MaterialEditorPanel({
           </div>
         )}
 
-        {/* Per-Part Assignment Action Banner */}
-        <div className="space-y-2 rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-2.5">
+        {/* Per-Part Assignment Action (Compact, Thin Divider, No Heavy Box) */}
+        <div className="pt-2 border-t border-[var(--panel-divider)]/40 space-y-1.5">
           <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-500 dark:text-yellow-400 flex items-center gap-1.5">
             <LuSparkles className="h-3 w-3" />
             Assign to Selected Element
           </div>
 
           {(selectedDoorId || selectedWindowId) && (
-            <div className="flex items-center gap-1 bg-[var(--surface-overlay)] p-1 rounded-lg border border-[var(--panel-divider)]">
+            <div className="flex items-center gap-1 bg-[var(--surface-overlay)] p-0.5 rounded-lg border border-[var(--panel-divider)]">
               <button
                 type="button"
                 onClick={() => setPartTarget("frame")}
