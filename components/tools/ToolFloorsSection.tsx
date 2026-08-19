@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  LuLock,
+  LuLockOpen,
+  LuCrosshair,
+  LuTrash2,
+  LuRefreshCw,
+  LuX,
+  LuPlus,
+} from "react-icons/lu";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -311,22 +320,22 @@ export default function ToolFloorsSection({
         {err && <p className="px-2 py-1 text-[10px] text-red-600">{err}</p>}
 
         {calibrateUnderlayId && (
-          <div className="mt-2 rounded-xl border border-amber-300/80 bg-amber-50/90 p-2">
-            <p className="text-[10px] font-semibold text-amber-950">
+          <div className="mt-2 rounded-xl border border-yellow-400/40 liquid-glass-panel p-2.5 shadow-xl animate-in fade-in zoom-in-95">
+            <p className="text-[10px] font-bold text-yellow-400">
               {t(uiLanguage, "underlayCalibrateTitle")}
             </p>
-            <p className="mt-0.5 text-[9px] leading-snug text-amber-900/80">
+            <p className="mt-0.5 text-[9.5px] leading-snug text-[var(--text-body)]">
               {calibratePoints.length < 2
                 ? t(uiLanguage, "underlayCalibrateHint")
                 : t(uiLanguage, "underlayCalibrateEnter")}
             </p>
-            <p className="mt-1 text-[9px] tabular-nums text-amber-900">
+            <p className="mt-1 text-[9px] tabular-nums font-semibold text-yellow-400/90">
               {calibratePoints.length}/2 {t(uiLanguage, "underlayPoints")}
             </p>
             {calibratePoints.length >= 2 && (
-              <div className="mt-1.5 flex items-end gap-1.5">
+              <div className="mt-2 flex items-end gap-1.5">
                 <label className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[8px] font-semibold uppercase text-amber-800">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                     mm
                   </span>
                   <input
@@ -334,7 +343,7 @@ export default function ToolFloorsSection({
                     min={1}
                     value={calibMm}
                     onChange={(e) => setCalibMm(e.target.value)}
-                    className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] outline-none"
+                    className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-[11px] text-[var(--text-strong)] outline-none focus:border-yellow-400 transition-colors"
                   />
                 </label>
                 <button
@@ -345,7 +354,7 @@ export default function ToolFloorsSection({
                       void commitCalibrateDistance(n);
                     }
                   }}
-                  className="h-[30px] rounded-lg bg-amber-500 px-2.5 text-[10px] font-bold text-white"
+                  className="h-[30px] rounded-lg bg-yellow-400 hover:bg-yellow-300 px-3 text-[10px] font-bold text-slate-950 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
                 >
                   OK
                 </button>
@@ -354,7 +363,7 @@ export default function ToolFloorsSection({
             <button
               type="button"
               onClick={() => cancelCalibrateUnderlay()}
-              className="mt-1.5 text-[9px] font-semibold text-amber-800 underline"
+              className="mt-2 text-[9px] font-semibold text-[var(--text-muted)] hover:text-yellow-400 transition-colors cursor-pointer"
             >
               {t(uiLanguage, "cancel")}
             </button>
@@ -367,17 +376,17 @@ export default function ToolFloorsSection({
         createPortal(
           <div
             ref={popupRef}
-            className="fixed z-[180] w-[260px]"
+            className="fixed z-[180] w-[270px] animate-in fade-in zoom-in-95 duration-150"
             style={{ top: popupPos.top, left: popupPos.left }}
           >
-            <GlassPanel variant="control" zIndex={180}>
-              <div className="flex flex-col gap-2 p-2.5">
-                <div className="flex items-start justify-between gap-2">
+            <div className="liquid-glass-panel rounded-2xl border border-[var(--glass-border)] p-3 shadow-2xl backdrop-blur-2xl">
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2 border-b border-[var(--panel-divider)]/40 pb-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
+                    <p className="text-[10px] font-bold tracking-wider text-yellow-400 uppercase">
                       {t(uiLanguage, "underlayTitle")}
                     </p>
-                    <p className="truncate text-[11px] text-[var(--text-body)]">
+                    <p className="truncate text-[11px] font-medium text-[var(--text-strong)]">
                       {popupUnderlay?.sourceName ??
                         t(uiLanguage, "underlayNone")}
                     </p>
@@ -385,23 +394,23 @@ export default function ToolFloorsSection({
                   <button
                     type="button"
                     onClick={() => setPopupLevelId(null)}
-                    className="rounded px-1 text-[12px] text-[var(--text-muted)] hover:bg-[var(--surface-muted)]"
+                    className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
                   >
-                    ×
+                    <LuX className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
                 {popupUnderlay ? (
                   <>
-                    <p className="text-[9px] leading-snug text-[var(--text-muted)]">
+                    <p className="text-[9.5px] leading-snug text-[var(--text-body)]">
                       {popupUnderlay.mmPerPixel > 0
                         ? `${Math.round(popupUnderlay.mmPerPixel * 100) / 100} mm/px · ${popupUnderlay.locked ? t(uiLanguage, "underlayLockedHint") : t(uiLanguage, "underlayDragHint")}`
                         : t(uiLanguage, "underlayNeedsCalib")}
                     </p>
-                    <label className="flex flex-col gap-0.5">
-                      <span className="text-[8px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                    <label className="flex flex-col gap-1 py-1">
+                      <span className="text-[8.5px] font-semibold tracking-wider text-[var(--text-muted)] uppercase">
                         {t(uiLanguage, "underlayOpacity")}{" "}
-                        {Math.round(popupUnderlay.opacity * 100)}%
+                        <span className="text-yellow-400 font-bold">{Math.round(popupUnderlay.opacity * 100)}%</span>
                       </span>
                       <input
                         type="range"
@@ -413,18 +422,21 @@ export default function ToolFloorsSection({
                             opacity: Number(e.target.value) / 100,
                           })
                         }
+                        className="accent-yellow-400 h-1.5 rounded-lg bg-[var(--surface-muted)] cursor-pointer"
                       />
                     </label>
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                       <button
                         type="button"
                         onClick={() =>
                           beginCalibrateUnderlay(popupUnderlay.id)
                         }
-                        className="rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-950"
+                        className="flex items-center gap-1 rounded-xl border border-yellow-400/40 bg-yellow-400/15 px-2.5 py-1.5 text-[10px] font-bold text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 shadow-sm shadow-yellow-400/10 transition-all cursor-pointer"
                       >
-                        {t(uiLanguage, "underlayCalibrate")}
+                        <LuCrosshair className="h-3 w-3" />
+                        <span>{t(uiLanguage, "underlayCalibrate")}</span>
                       </button>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -432,31 +444,42 @@ export default function ToolFloorsSection({
                             locked: !popupUnderlay.locked,
                           })
                         }
-                        className="rounded-lg bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold"
+                        className={`flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[10px] font-semibold transition-all cursor-pointer ${
+                          popupUnderlay.locked
+                            ? "border-yellow-400/50 bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 shadow-sm"
+                            : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-yellow-400/40 hover:text-yellow-400"
+                        }`}
                       >
-                        {popupUnderlay.locked
-                          ? t(uiLanguage, "underlayUnlock")
-                          : t(uiLanguage, "underlayLock")}
+                        {popupUnderlay.locked ? <LuLock className="h-3 w-3" /> : <LuLockOpen className="h-3 w-3" />}
+                        <span>
+                          {popupUnderlay.locked
+                            ? t(uiLanguage, "underlayUnlock")
+                            : t(uiLanguage, "underlayLock")}
+                        </span>
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
                           setUploadLevelId(popupLevelId);
                           fileInputRef.current?.click();
                         }}
-                        className="rounded-lg bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold"
+                        className="flex items-center gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2.5 py-1.5 text-[10px] font-semibold text-[var(--text-body)] hover:border-[var(--glass-border)] hover:text-[var(--text-strong)] transition-all cursor-pointer"
                       >
-                        {t(uiLanguage, "underlayReplace")}
+                        <LuRefreshCw className="h-3 w-3" />
+                        <span>{t(uiLanguage, "underlayReplace")}</span>
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
                           void deleteUnderlay(popupUnderlay.id);
                           setPopupLevelId(null);
                         }}
-                        className="rounded-lg bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-600"
+                        className="flex items-center gap-1 rounded-xl border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-red-400 hover:bg-red-500/20 transition-all cursor-pointer"
                       >
-                        {t(uiLanguage, "markupDelete")}
+                        <LuTrash2 className="h-3 w-3" />
+                        <span>{t(uiLanguage, "markupDelete")}</span>
                       </button>
                     </div>
                   </>
@@ -468,13 +491,14 @@ export default function ToolFloorsSection({
                       setUploadLevelId(popupLevelId);
                       fileInputRef.current?.click();
                     }}
-                    className="rounded-lg bg-sky-100 px-2 py-2 text-[11px] font-semibold text-sky-950"
+                    className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-yellow-400/50 bg-yellow-400 text-slate-950 font-bold px-3 py-2 text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer disabled:opacity-50"
                   >
-                    {t(uiLanguage, "underlayAdd")}
+                    <LuPlus className="h-3.5 w-3.5" />
+                    <span>{t(uiLanguage, "underlayAdd")}</span>
                   </button>
                 )}
               </div>
-            </GlassPanel>
+            </div>
           </div>,
           (document.fullscreenElement as HTMLElement | null) ?? document.body,
         )}
