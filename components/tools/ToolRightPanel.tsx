@@ -47,6 +47,7 @@ import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import { wallLengthMm } from "@/lib/layoutDrawing";
+import UnifiedButton from "@/components/common/UnifiedButton";
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
@@ -335,27 +336,31 @@ export default function ToolRightPanel({
               Properties
             </span>
 
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
+            <div className="flex items-center gap-1.5">
+              <UnifiedButton
+                size="xs"
+                variant="secondary"
                 onClick={() => setMaterialEditorOpen(true)}
-                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-bold text-[10px] hover:border-yellow-400 hover:text-yellow-400 transition-all"
+                icon={<LuPalette className="h-2.5 w-2.5 text-yellow-400" />}
                 title="Open Material Editor"
               >
-                <LuPalette className="h-2.5 w-2.5 text-yellow-400" />
-                <span>Materials</span>
-              </button>
+                Materials
+              </UnifiedButton>
 
-              {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
-                <button
-                  type="button"
-                  onClick={() => setEditTypeOpen(true)}
-                  className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-yellow-400/40 bg-yellow-400/10 text-yellow-400 font-bold text-[10px] hover:bg-yellow-400/20 transition-all"
-                >
-                  <LuSlidersHorizontal className="h-2.5 w-2.5" />
-                  <span>Edit Type</span>
-                </button>
-              )}
+              {hasSelection &&
+                (selectedWall ||
+                  selectedDoor ||
+                  selectedWindow ||
+                  selectedSlab) && (
+                  <UnifiedButton
+                    size="xs"
+                    variant="primary"
+                    onClick={() => setEditTypeOpen(true)}
+                    icon={<LuSlidersHorizontal className="h-2.5 w-2.5" />}
+                  >
+                    Edit Type
+                  </UnifiedButton>
+                )}
             </div>
           </div>
 
@@ -442,29 +447,32 @@ export default function ToolRightPanel({
 
                     <div className="pt-2 border-t border-[var(--panel-divider)]/40 space-y-1.5">
                       <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
+                        <UnifiedButton
+                          size="xs"
+                          variant="primary"
                           onClick={() => convertSketchToSlab("floor")}
-                          className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1.5 bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 font-bold text-[11px] hover:bg-yellow-400/25 transition-all"
+                          className="w-full"
                         >
-                          <span>To Floor</span>
-                        </button>
-                        <button
-                          type="button"
+                          To Floor
+                        </UnifiedButton>
+                        <UnifiedButton
+                          size="xs"
+                          variant="primary"
                           onClick={() => convertSketchToSlab("roof")}
-                          className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1.5 bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 font-bold text-[11px] hover:bg-yellow-400/25 transition-all"
+                          className="w-full"
                         >
-                          <span>To Roof</span>
-                        </button>
+                          To Roof
+                        </UnifiedButton>
                       </div>
-                      <button
-                        type="button"
+                      <UnifiedButton
+                        size="xs"
+                        variant="danger"
                         onClick={() => deleteSketchLine(selectedSketchLine.id)}
-                        className="w-full flex items-center justify-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-[10px] hover:bg-red-500/20 transition-all"
+                        icon={<LuTrash2 className="h-3 w-3" />}
+                        className="w-full"
                       >
-                        <LuTrash2 className="h-3 w-3" />
-                        <span>Delete Line</span>
-                      </button>
+                        Delete Line
+                      </UnifiedButton>
                     </div>
                   </div>
                 ) : (
