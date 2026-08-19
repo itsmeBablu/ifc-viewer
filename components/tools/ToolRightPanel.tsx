@@ -152,16 +152,16 @@ export default function ToolRightPanel({
 
   // Type definitions
   const activeTypeKey = selectedWall
-    ? "basic-exterior-200"
+    ? "wall-generic-200"
     : selectedDoor
-    ? "standard-door-900"
+    ? "door-single-900"
     : selectedWindow
-    ? "standard-window-1200"
+    ? "win-double-1200"
     : selectedSlab
-    ? "concrete-slab-200"
-    : "basic-exterior-200";
+    ? (selectedSlab.kind === "roof" ? "slab-roof-300" : "slab-floor-200")
+    : "wall-generic-200";
 
-  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES["basic-exterior-200"];
+  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
   const handleTypeChange = (typeId: string) => {
     const tDef = types[typeId];
@@ -489,7 +489,7 @@ export default function ToolRightPanel({
                         title="Click to change material in Material Editor"
                       >
                         <LuPalette className="h-3 w-3" />
-                        <span>{selectedWall?.material || selectedSlab?.material || selectedDoor?.material || currentType.material}</span>
+                        <span>{selectedWall?.material || selectedSlab?.material || selectedDoor?.material || currentType?.material || "Concrete"}</span>
                       </button>
                     </div>
                     {selectedDoor && (
