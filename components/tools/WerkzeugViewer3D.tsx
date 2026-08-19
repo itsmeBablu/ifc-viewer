@@ -1823,6 +1823,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       true,
       lighting,
     );
+    layoutLayerRef.current?.setRenderMode(renderMode);
     clipRef.current?.rebindMaterials();
     // Rebuild so Schnitthöhe caps pick up new space/element opacity
     clipRef.current?.rebuildCaps();
@@ -1833,17 +1834,37 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     if (toolMode) {
-      // Strong studio lighting so IFC default colors pop (BIMvision-like).
-      if (sun) {
-        sun.intensity = 1.45;
-        sun.castShadow = true;
-      }
-      if (ambient) {
-        ambient.intensity = 0.95;
-      }
-      if (renderer) {
-        renderer.toneMappingExposure = 1.25;
-        renderer.shadowMap.enabled = true;
+      if (renderMode === "light") {
+        if (sun) {
+          sun.intensity = 0.6;
+          sun.castShadow = false;
+        }
+        if (ambient) ambient.intensity = 1.4;
+        if (renderer) {
+          renderer.toneMappingExposure = 1.35;
+          renderer.shadowMap.enabled = false;
+        }
+      } else if (renderMode === "realistic") {
+        if (sun) {
+          sun.intensity = 1.6;
+          sun.castShadow = true;
+        }
+        if (ambient) ambient.intensity = 0.85;
+        if (renderer) {
+          renderer.toneMappingExposure = 1.25;
+          renderer.shadowMap.enabled = true;
+        }
+      } else {
+        // fullColor / wireframe
+        if (sun) {
+          sun.intensity = 1.3;
+          sun.castShadow = renderMode !== "wireframe";
+        }
+        if (ambient) ambient.intensity = 0.95;
+        if (renderer) {
+          renderer.toneMappingExposure = 1.15;
+          renderer.shadowMap.enabled = renderMode !== "wireframe";
+        }
       }
     } else {
       if (sun) {

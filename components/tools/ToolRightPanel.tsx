@@ -140,6 +140,21 @@ export default function ToolRightPanel({
 
   const placements = useToolMarkupStore((s) => s.placements);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
+
+  const getViewTitle = () => {
+    if (viewPreset === "top") {
+      return currentFloorObj ? `Floor Plan: ${currentFloorObj.name}` : "Top (Plan)";
+    }
+    if (viewPreset === "north") return "Elevation: North";
+    if (viewPreset === "south") return "Elevation: South";
+    if (viewPreset === "east") return "Elevation: East";
+    if (viewPreset === "west") return "Elevation: West";
+    if (viewPreset === "free" || !viewPreset) {
+      return currentFloorObj ? `3D View (${currentFloorObj.name})` : "3D View";
+    }
+    return "3D View";
+  };
   
   // Derive selection objects
   const selectedWall = walls.find((w) => w.id === selectedWallId);
@@ -326,7 +341,7 @@ export default function ToolRightPanel({
               {activeModelLabel || "Architecture Project"}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
-              • {currentFloorObj?.name ?? "All Levels"}
+              • {getViewTitle()}
             </span>
           </div>
           <button
@@ -960,20 +975,24 @@ function PropSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] overflow-hidden">
+    <div className="border-b border-[var(--panel-divider)]/40 pb-1.5 last:border-b-0">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between p-2.5 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
+        className="flex w-full items-center justify-between py-1 px-1 font-bold text-[11px] text-[var(--text-strong)] hover:text-yellow-400 transition-colors cursor-pointer"
       >
         <span className="flex items-center gap-1.5">
           {icon}
           <span>{label}</span>
         </span>
-        {open ? <LuChevronUp className="h-3.5 w-3.5" /> : <LuChevronDown className="h-3.5 w-3.5" />}
+        {open ? (
+          <LuChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        ) : (
+          <LuChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        )}
       </button>
       {open && (
-        <div className="p-2.5 pt-0 space-y-2 border-t border-[var(--panel-divider)]/40 text-[11px]">
+        <div className="pt-1 px-1 space-y-1 text-[11px]">
           {children}
         </div>
       )}
@@ -983,8 +1002,8 @@ function PropSection({
 
 function PropRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-[var(--text-muted)]">{label}:</span>
+    <div className="flex items-center justify-between py-1 border-b border-[var(--panel-divider)]/20 last:border-b-0">
+      <span className="text-[var(--text-muted)] text-[10px]">{label}:</span>
       {children}
     </div>
   );

@@ -29,6 +29,7 @@ import { fromMm } from "@/lib/markupUnits";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
+import type { RenderMode } from "@/lib/types";
 
 const WALL_COLOR = 0xd6d3d1;
 const WALL_SEL = 0xfacc15;
@@ -41,6 +42,7 @@ const ROOF_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
+  private currentRenderMode: RenderMode = "realistic";
   private wallMeshes = new Map<string, THREE.Mesh>();
   private doorMeshes = new Map<string, THREE.Group>();
   private windowMeshes = new Map<string, THREE.Group>();
@@ -503,17 +505,17 @@ export default class LayoutSceneLayer {
   private ensureEndpointMeshes() {
     if (this.endpointStart && this.endpointEnd) return;
     const make = (end: "start" | "end") => {
-      const geo = new THREE.SphereGeometry(fromMm(140), 18, 14);
+      const geo = new THREE.SphereGeometry(fromMm(36), 14, 12);
       const mat = new THREE.MeshStandardMaterial({
         color: end === "start" ? 0x38bdf8 : 0xf472b6,
         emissive: end === "start" ? 0x0ea5e9 : 0xdb2777,
-        emissiveIntensity: 0.35,
-        roughness: 0.35,
-        metalness: 0.15,
+        emissiveIntensity: 0.45,
+        roughness: 0.3,
+        metalness: 0.2,
         depthTest: false,
       });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.renderOrder = 20;
+      mesh.renderOrder = 120;
       mesh.userData.layoutWallEndpoint = end;
       mesh.userData.isLayoutEndpoint = true;
       this.endpointGroup.add(mesh);
@@ -883,7 +885,7 @@ export default class LayoutSceneLayer {
       }
 
       for (const pt of [p1, p2]) {
-        const sphereGeo = new THREE.SphereGeometry(0.09, 14, 12);
+        const sphereGeo = new THREE.SphereGeometry(0.035, 12, 10);
         const sphereMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
@@ -913,7 +915,7 @@ export default class LayoutSceneLayer {
           const dz = p2.z - p1.z;
           const segLen = Math.hypot(dx, dz);
           if (segLen > 0.001) {
-            const segGeo = new THREE.CylinderGeometry(0.08, 0.08, segLen, 12);
+            const segGeo = new THREE.CylinderGeometry(0.04, 0.04, segLen, 12);
             segGeo.rotateZ(Math.PI / 2);
             const isRubberband = i === pts.length - 2 && draw.cursor != null;
             const segMat = new THREE.MeshStandardMaterial({
@@ -934,7 +936,7 @@ export default class LayoutSceneLayer {
 
     // 3. Render glowing gap markers if any
     for (const gp of gapPoints) {
-      const gapGeo = new THREE.SphereGeometry(0.14, 16, 12);
+      const gapGeo = new THREE.SphereGeometry(0.05, 14, 10);
       const gapMat = new THREE.MeshStandardMaterial({
         color: gapRed,
         emissive: gapRed,
@@ -1091,7 +1093,73 @@ export default class LayoutSceneLayer {
       geo.computeVertexNormals();
     }
 
+    // World-metric UVs for slabs so hatch patterns tile without stretching
+    const pos = geo.attributes.position;
+    const uvs = geo.attributes.uv;
+    if (pos && uvs) {
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vy = pos.getY(i);
+        uvs.setXY(i, vx, vy);
+      }
+      uvs.needsUpdate = true;
+    }
+
     return geo;
+  }
+
+  setRenderMode(mode: RenderMode) {
+    this.currentRenderMode = mode;
+    this.group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        if (obj.userData?.isLayoutEndpoint || obj.userData?.layoutSketchLineId) return;
+        const mat = obj.material;
+        if (!mat) return;
+        const mats = Array.isArray(mat) ? mat : [mat];
+        for (const m of mats) {
+          if (mode === "wireframe") {
+            m.wireframe = true;
+          } else if (mode === "light") {
+            m.wireframe = false;
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.color.setHex(0xf8fafc);
+              m.roughness = 0.95;
+              m.metalness = 0;
+              m.map = null;
+            }
+          } else if (mode === "fullColor") {
+            m.wireframe = false;
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.map = null;
+              m.roughness = 0.7;
+              m.metalness = 0.05;
+            }
+          } else {
+            // realistic
+            m.wireframe = false;
+          }
+          m.needsUpdate = true;
+        }
+      }
+    });
+
+    if (mode === "realistic") {
+      const state = useLayoutDrawingStore.getState();
+      for (const [id, mesh] of this.wallMeshes) {
+        const wall = state.walls.find((w) => w.id === id);
+        if (wall && mesh.material instanceof THREE.MeshStandardMaterial) {
+          this.applyMaterialAndColor(mesh.material, wall.color, wall.material);
+          mesh.material.needsUpdate = true;
+        }
+      }
+      for (const [id, mesh] of this.slabMeshes) {
+        const slab = state.slabs.find((s) => s.id === id);
+        if (slab && mesh.material instanceof THREE.MeshStandardMaterial) {
+          this.applyMaterialAndColor(mesh.material, slab.color, slab.material);
+          mesh.material.needsUpdate = true;
+        }
+      }
+    }
   }
 
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
@@ -1147,6 +1215,14 @@ export default class LayoutSceneLayer {
     mat.transparent = false;
     mat.opacity = 1.0;
     mat.map = null;
+    mat.wireframe = this.currentRenderMode === "wireframe";
+
+    if (this.currentRenderMode === "light") {
+      mat.color.setHex(0xf8fafc);
+      mat.roughness = 0.95;
+      mat.metalness = 0;
+      return;
+    }
 
     const customMat = useMaterialStore.getState().getMaterial(matType);
     if (customMat) {
@@ -1160,13 +1236,20 @@ export default class LayoutSceneLayer {
       const effectiveColor = colorStr || customMat.color;
       mat.color.setStyle(effectiveColor);
 
-      if (customMat.hatchStyle && customMat.hatchStyle !== "solid") {
-        mat.map = getHatchCanvasTexture(
+      if (this.currentRenderMode === "realistic" && customMat.hatchStyle && customMat.hatchStyle !== "solid") {
+        const tex = getHatchCanvasTexture(
           customMat.hatchStyle,
           "#27272a",
           effectiveColor,
           customMat.hatchScaleMm || 200,
         );
+        if (tex) {
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          const scaleM = (customMat.hatchScaleMm || 200) / 1000;
+          tex.repeat.set(1 / scaleM, 1 / scaleM);
+          mat.map = tex;
+        }
       }
       return;
     }
@@ -1391,6 +1474,28 @@ export default class LayoutSceneLayer {
       }
 
       geo.computeVertexNormals();
+
+      // Generate world-metric UVs so hatch textures and materials tile seamlessly and never stretch
+      const pos = geo.attributes.position;
+      const uvs = geo.attributes.uv;
+      if (pos && uvs) {
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i);
+          const vy = pos.getY(i);
+          const vz = pos.getZ(i);
+          const nx = Math.abs(geo.attributes.normal?.getX(i) ?? 0);
+          const ny = Math.abs(geo.attributes.normal?.getY(i) ?? 0);
+          if (ny > 0.5) {
+            uvs.setXY(i, vx, vz);
+          } else if (nx > 0.5) {
+            uvs.setXY(i, vz, vy);
+          } else {
+            uvs.setXY(i, vx, vy);
+          }
+        }
+        uvs.needsUpdate = true;
+      }
+
       return geo;
     }
   }

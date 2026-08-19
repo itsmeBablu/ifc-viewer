@@ -301,6 +301,21 @@ export default function ToolRibbon({
   const floors = useAppStore((s) => s.floors);
   const currentFloor = floors.find((f) => f.id === selectedFloor);
 
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
+  const getViewTitle = () => {
+    if (viewPreset === "top") {
+      return currentFloor ? `Floor Plan: ${currentFloor.name}` : "Top (Plan)";
+    }
+    if (viewPreset === "north") return "Elevation: North";
+    if (viewPreset === "south") return "Elevation: South";
+    if (viewPreset === "east") return "Elevation: East";
+    if (viewPreset === "west") return "Elevation: West";
+    if (viewPreset === "free" || !viewPreset) {
+      return currentFloor ? `3D View (${currentFloor.name})` : "3D View";
+    }
+    return "3D View";
+  };
+
   const isDark = colorTheme === "dark";
 
   // Layout Store
@@ -981,27 +996,6 @@ export default function ToolRibbon({
           )}
         </Cluster>
       )}
-
-      {/* Deselect */}
-      <div className="flex flex-col items-center gap-1">
-        <button
-          type="button"
-          onClick={() => {
-            if (isSketching) {
-              clearSketchLines();
-              setSketchError(null);
-            }
-            clearCurrentSelection();
-          }}
-          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all cursor-pointer"
-        >
-          <span className="text-xs font-bold">Esc</span>
-          <span className="text-[10px]">Finish</span>
-        </button>
-        <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-          Finish
-        </span>
-      </div>
     </div>
   );
 
@@ -1200,7 +1194,7 @@ export default function ToolRibbon({
           </button>
         </div>
 
-        {/* Center: Active Model Name + Active Level (When right panel is collapsed) */}
+        {/* Center: Active Model Name + Active View (When right panel is collapsed) */}
         {!rightPanelOpen && (
           <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
             <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
@@ -1208,7 +1202,7 @@ export default function ToolRibbon({
               {activeModelLabel || "Architecture Project"}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
-              • {currentFloor?.name ?? "All Levels"}
+              • {getViewTitle()}
             </span>
           </div>
         )}
@@ -1239,9 +1233,9 @@ export default function ToolRibbon({
 
             <button
               type="button"
-              onClick={() => setSaveMenuOpen(true)}
-              title="Save"
-              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] text-yellow-400"
+              onClick={handleSaveFrag}
+              title="Save (.frag)"
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
             >
               <LuSave className="h-4 w-4" />
             </button>
@@ -1265,9 +1259,9 @@ export default function ToolRibbon({
             </button>
           </div>
 
-          {/* Center: Dropdown-only Tool Groups or Sketch Actions */}
-          {isSketching ? (
-            <div className="flex items-center gap-1.5 animate-in fade-in">
+          {/* Center: Tools Cluster or Sketch Slabs Conversion */}
+          {sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
+            <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
               <span className="text-xs font-bold text-yellow-400 px-1.5">
                 {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
               </span>
@@ -1355,15 +1349,6 @@ export default function ToolRibbon({
               onClick={() => setActiveTab("vstudio")}
             >
               V Studio
-            </UnifiedButton>
-
-            {/* Manage */}
-            <UnifiedButton
-              size="xs"
-              variant={activeTab === "manage" ? "primary" : "secondary"}
-              onClick={() => setActiveTab("manage")}
-            >
-              Manage
             </UnifiedButton>
 
             {/* Modify (Contextual) */}

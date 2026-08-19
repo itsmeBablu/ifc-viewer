@@ -35,6 +35,7 @@ export default function ToolStatusBar({
 
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const trimFirstPick = useLayoutDrawingStore((s) => s.trimFirstPick);
   const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
   const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
 
@@ -69,14 +70,28 @@ export default function ToolStatusBar({
   ].filter(Boolean).join("+") || "Off";
   const wallSnapType = useLayoutDrawingStore((s) => s.wallDraw?.snapType);
 
-  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
+  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const selectedElement = useAppStore((s) => s.selectedElement);
   const renderMode = useAppStore((s) => s.renderMode);
   const setRenderMode = useAppStore((s) => s.setRenderMode);
 
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
   const getToolStatusAndHints = () => {
+    if (armedLayoutTool === "trim") {
+      if (trimFirstPick) {
+        return {
+          mode: "Trim / Join — Step 2",
+          hint: "Select second wall to attach and join to the first wall (base wall stays highlighted)",
+        };
+      }
+      return {
+        mode: "Trim / Join Tool Active",
+        hint: "Select first wall near the end you want to keep as base reference",
+      };
+    }
     if (armedLayoutTool === "wall") {
       if (wallDraw) {
         return {
