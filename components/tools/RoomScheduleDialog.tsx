@@ -86,7 +86,7 @@ export default function RoomScheduleDialog({
               {rooms.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-[var(--text-muted)] italic">
-                    No rooms placed yet. Click "Add Room" or use the Room Tool in the Architecture ribbon.
+                    No rooms placed yet. Click &quot;Add Room&quot; or use the Room Tool in the Architecture ribbon.
                   </td>
                 </tr>
               ) : (

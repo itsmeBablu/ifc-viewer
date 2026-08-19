@@ -2,6 +2,7 @@
 import gsap from "gsap";
 import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   LuChevronDown,
   LuFolderOpen,
@@ -996,13 +997,13 @@ export default function ToolRibbon({
       {/* -- Quick Access Floating Cluster --------------------------------------- */}
       <div className="absolute top-4 left-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
         {/* V Studio home logo */}
-        <a
+        <Link
           href="/"
           title="Back to Viewer"
           className="flex items-center justify-center rounded-md px-2 py-1 hover:bg-[var(--glass-inset-bg)] transition-colors"
         >
           <Image src="/ibv_logo.svg" alt="IBV" width={100} height={24} className="h-6 w-auto object-contain" priority />
-        </a>
+        </Link>
 
         <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
 
