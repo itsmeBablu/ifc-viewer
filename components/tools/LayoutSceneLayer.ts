@@ -1144,20 +1144,40 @@ export default class LayoutSceneLayer {
     });
 
     if (mode === "realistic") {
-      const state = useLayoutDrawingStore.getState();
-      for (const [id, mesh] of this.wallMeshes) {
-        const wall = state.walls.find((w) => w.id === id);
-        if (wall && mesh.material instanceof THREE.MeshStandardMaterial) {
+      this.refreshMaterials();
+    }
+  }
+
+  refreshMaterials() {
+    const state = useLayoutDrawingStore.getState();
+    for (const [id, mesh] of this.wallMeshes) {
+      const wall = state.walls.find((w) => w.id === id);
+      if (wall && mesh.material instanceof THREE.MeshStandardMaterial) {
+        if (wall.id === state.selectedWallId) {
+          mesh.material.color.setHex(WALL_SEL);
+          mesh.material.emissive.setHex(0x92400e);
+          mesh.material.emissiveIntensity = 0.25;
+        } else {
+          mesh.material.emissive.setHex(0x000000);
+          mesh.material.emissiveIntensity = 0;
           this.applyMaterialAndColor(mesh.material, wall.color, wall.material);
-          mesh.material.needsUpdate = true;
         }
+        mesh.material.needsUpdate = true;
       }
-      for (const [id, mesh] of this.slabMeshes) {
-        const slab = state.slabs.find((s) => s.id === id);
-        if (slab && mesh.material instanceof THREE.MeshStandardMaterial) {
+    }
+    for (const [id, mesh] of this.slabMeshes) {
+      const slab = state.slabs.find((s) => s.id === id);
+      if (slab && mesh.material instanceof THREE.MeshStandardMaterial) {
+        if (slab.id === state.selectedSlabId) {
+          mesh.material.color.setHex(slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL);
+          mesh.material.emissive.setHex(0x92400e);
+          mesh.material.emissiveIntensity = 0.25;
+        } else {
+          mesh.material.emissive.setHex(0x000000);
+          mesh.material.emissiveIntensity = 0;
           this.applyMaterialAndColor(mesh.material, slab.color, slab.material);
-          mesh.material.needsUpdate = true;
         }
+        mesh.material.needsUpdate = true;
       }
     }
   }

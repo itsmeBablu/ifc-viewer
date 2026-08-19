@@ -81,6 +81,7 @@ import {
 import LayoutSceneLayer from "@/components/tools/LayoutSceneLayer";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useMaterialStore } from "@/store/materialStore";
 import {
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
@@ -1898,6 +1899,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       }
     }
   }, [renderMode, lighting, toolMode]);
+
+  // Live 3D material update subscription
+  useEffect(() => {
+    const unsub = useMaterialStore.subscribe(() => {
+      layoutLayerRef.current?.refreshMaterials();
+    });
+    return () => unsub();
+  }, []);
 
   // 3D viewport background — solid or sky gradient
   useEffect(() => {

@@ -301,9 +301,8 @@ export default function MaterialEditorPanel({
                   <input
                     type="color"
                     value={selectedMat.color}
-                    disabled={selectedMat.isPreset}
                     onChange={(e) => updateMaterial(selectedMat.id, { color: e.target.value })}
-                    className="h-4 w-4 rounded cursor-pointer border-0 p-0 bg-transparent disabled:opacity-60"
+                    className="h-4 w-4 rounded cursor-pointer border-0 p-0 bg-transparent"
                   />
                   <span className="font-mono text-[9.5px] text-[var(--text-strong)]">
                     {selectedMat.color.toUpperCase()}
@@ -311,24 +310,26 @@ export default function MaterialEditorPanel({
                 </div>
               </div>
 
-              {!selectedMat.isPreset && (
-                <div className="flex flex-wrap gap-1 pt-0.5">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => updateMaterial(selectedMat.id, { color: c })}
-                      className="h-3.5 w-3.5 rounded-full border border-white/20 hover:scale-110 transition-transform"
-                      style={{ backgroundColor: c }}
-                      title={c}
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1 pt-0.5">
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updateMaterial(selectedMat.id, { color: c })}
+                    className={`h-3.5 w-3.5 rounded-full border transition-all ${
+                      selectedMat.color.toLowerCase() === c.toLowerCase()
+                        ? "border-yellow-400 scale-125 shadow-sm"
+                        : "border-white/20 hover:scale-110"
+                    }`}
+                    style={{ backgroundColor: c }}
+                    title={c}
+                  />
+                ))}
+              </div>
             </div>
 
-            {/* PBR Sliders — Unified Yellow Accent Color */}
-            <div className="space-y-1.5 pt-0.5">
+            {/* PBR Sliders — Thin & Sleek with Unified Yellow Accent */}
+            <div className="space-y-2 pt-1">
               {/* Roughness */}
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between text-[10.5px]">
@@ -343,9 +344,8 @@ export default function MaterialEditorPanel({
                   max="1"
                   step="0.01"
                   value={selectedMat.roughness}
-                  disabled={selectedMat.isPreset}
                   onChange={(e) => updateMaterial(selectedMat.id, { roughness: parseFloat(e.target.value) })}
-                  className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                 />
               </div>
 
@@ -363,9 +363,8 @@ export default function MaterialEditorPanel({
                   max="1"
                   step="0.01"
                   value={selectedMat.metalness}
-                  disabled={selectedMat.isPreset}
                   onChange={(e) => updateMaterial(selectedMat.id, { metalness: parseFloat(e.target.value) })}
-                  className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                 />
               </div>
 
@@ -379,13 +378,12 @@ export default function MaterialEditorPanel({
                 </div>
                 <input
                   type="range"
-                  min="0.1"
+                  min="0.05"
                   max="1"
                   step="0.01"
                   value={selectedMat.opacity}
-                  disabled={selectedMat.isPreset}
                   onChange={(e) => updateMaterial(selectedMat.id, { opacity: parseFloat(e.target.value) })}
-                  className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                 />
               </div>
 
@@ -399,13 +397,12 @@ export default function MaterialEditorPanel({
                     <button
                       key={h.id}
                       type="button"
-                      disabled={selectedMat.isPreset}
                       onClick={() => updateMaterial(selectedMat.id, { hatchStyle: h.id })}
-                      className={`flex flex-col items-center justify-center p-1 rounded-lg border text-center transition-all ${
+                      className={`flex flex-col items-center justify-center p-1 rounded-lg border text-center transition-all cursor-pointer ${
                         selectedMat.hatchStyle === h.id
                           ? "border-yellow-400 bg-yellow-400/20 text-yellow-400 font-bold shadow-sm"
                           : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)] hover:border-yellow-400/50"
-                      } disabled:opacity-60`}
+                      }`}
                     >
                       <span className="text-xs font-mono font-bold">{h.icon}</span>
                       <span className="text-[8.5px] mt-0.5 truncate">{h.label}</span>
@@ -428,13 +425,12 @@ export default function MaterialEditorPanel({
                       max="1000"
                       step="25"
                       value={selectedMat.hatchScaleMm || 200}
-                      disabled={selectedMat.isPreset}
                       onChange={(e) =>
                         updateMaterial(selectedMat.id, {
                           hatchScaleMm: parseInt(e.target.value, 10),
                         })
                       }
-                      className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                      className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                     />
                   </div>
                 )}
@@ -460,13 +456,12 @@ export default function MaterialEditorPanel({
                     max="5.0"
                     step="0.1"
                     value={selectedMat.tilingScale || 1.0}
-                    disabled={selectedMat.isPreset}
                     onChange={(e) =>
                       updateMaterial(selectedMat.id, {
                         tilingScale: parseFloat(e.target.value),
                       })
                     }
-                    className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                    className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                   />
                 </div>
 
@@ -484,13 +479,12 @@ export default function MaterialEditorPanel({
                     max="2.0"
                     step="0.05"
                     value={selectedMat.bumpScale ?? 0.2}
-                    disabled={selectedMat.isPreset}
                     onChange={(e) =>
                       updateMaterial(selectedMat.id, {
                         bumpScale: parseFloat(e.target.value),
                       })
                     }
-                    className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                    className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
                   />
                 </div>
               </div>
