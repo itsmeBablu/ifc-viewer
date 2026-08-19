@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
-import { LuAlertTriangle, LuRotateCcw, LuChevronDown, LuChevronUp, LuTerminal } from "react-icons/lu";
+import { LuTriangleAlert, LuRotateCcw, LuChevronDown, LuChevronUp, LuTerminal } from "react-icons/lu";
 
 interface Props {
   children: ReactNode;
@@ -52,7 +52,7 @@ export default class VStudioErrorBoundary extends Component<Props, State> {
         <div className="relative flex h-full w-full flex-col items-center justify-center bg-[var(--bg-canvas,#0f172a)] p-6 text-[var(--text-main,#f8fafc)]">
           <div className="flex max-w-md flex-col items-center rounded-2xl border border-red-500/30 bg-slate-900/90 p-6 text-center shadow-2xl backdrop-blur-xl">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-red-400 ring-8 ring-red-500/5">
-              <LuAlertTriangle className="h-7 w-7" />
+              <LuTriangleAlert className="h-7 w-7" />
             </div>
 
             <h3 className="mb-1 text-lg font-bold tracking-tight text-white">
