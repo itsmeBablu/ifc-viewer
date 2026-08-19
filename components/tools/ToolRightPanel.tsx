@@ -33,6 +33,7 @@ import {
   LuEye,
   LuPlus,
   LuMinus,
+  LuPalette,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -43,6 +44,7 @@ import ToolFloorsSection from "./ToolFloorsSection";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
+import MaterialEditorPanel from "./MaterialEditorPanel";
 import { wallLengthMm } from "@/lib/layoutDrawing";
 
 const MIN_WIDTH = 280;
@@ -81,8 +83,9 @@ export default function ToolRightPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // -- Edit type dialog ------------------------------------------------------
+  // -- Edit type and material editor panels ----------------------------------
   const [editTypeOpen, setEditTypeOpen] = useState(false);
+  const [materialEditorOpen, setMaterialEditorOpen] = useState(false);
   const [types, setTypes] = useState<Record<string, ElementTypeDefinition>>(DEFAULT_ELEMENT_TYPES);
 
   // -- Properties section collapse -------------------------------------------
@@ -332,16 +335,28 @@ export default function ToolRightPanel({
               Properties
             </span>
 
-            {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setEditTypeOpen(true)}
-                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] hover:bg-amber-500/20 transition-all"
+                onClick={() => setMaterialEditorOpen(true)}
+                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-bold text-[10px] hover:border-amber-400 hover:text-amber-500 transition-all"
+                title="Open Material Editor (3ds Max style)"
               >
-                <LuSlidersHorizontal className="h-2.5 w-2.5" />
-                <span>Edit Type</span>
+                <LuPalette className="h-2.5 w-2.5 text-amber-500" />
+                <span>Materials</span>
               </button>
-            )}
+
+              {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
+                <button
+                  type="button"
+                  onClick={() => setEditTypeOpen(true)}
+                  className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] hover:bg-amber-500/20 transition-all"
+                >
+                  <LuSlidersHorizontal className="h-2.5 w-2.5" />
+                  <span>Edit Type</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-3 text-xs">
@@ -472,7 +487,30 @@ export default function ToolRightPanel({
                     icon={<LuBox className="h-3.5 w-3.5 text-amber-500" />}
                     label="Materials & Finish"
                   >
-                    <PropRow label="Structure"><span className="font-medium text-[var(--text-strong)]">{currentType.material}</span></PropRow>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[var(--text-body)]">Primary Material:</span>
+                      <button
+                        type="button"
+                        onClick={() => setMaterialEditorOpen(true)}
+                        className="flex items-center gap-1 font-semibold text-amber-500 hover:underline"
+                        title="Click to change material in Material Editor"
+                      >
+                        <LuPalette className="h-3 w-3" />
+                        <span>{selectedWall?.material || selectedSlab?.material || selectedDoor?.material || currentType.material}</span>
+                      </button>
+                    </div>
+                    {selectedDoor && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[var(--text-body)]">Leaf Panel:</span>
+                        <button
+                          type="button"
+                          onClick={() => setMaterialEditorOpen(true)}
+                          className="font-semibold text-amber-500 hover:underline"
+                        >
+                          <span>{selectedDoor.style || "Standard"}</span>
+                        </button>
+                      </div>
+                    )}
                     <PropRow label="Function"><span className="font-medium text-[var(--text-strong)]">{currentType.functionType}</span></PropRow>
                   </PropSection>
 
@@ -630,6 +668,12 @@ export default function ToolRightPanel({
           isOpen={editTypeOpen}
           onClose={() => setEditTypeOpen(false)}
           onSave={handleTypeSave}
+        />
+
+        {/* In-dock Slide-Over Material Editor */}
+        <MaterialEditorPanel
+          isOpen={materialEditorOpen}
+          onClose={() => setMaterialEditorOpen(false)}
         />
       </aside>
     </>

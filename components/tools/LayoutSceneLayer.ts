@@ -24,6 +24,8 @@ import {
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useMaterialStore } from "@/store/materialStore";
+import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 
 const WALL_COLOR = 0xd6d3d1;
 const WALL_SEL = 0xf59e0b;
@@ -1011,13 +1013,41 @@ export default class LayoutSceneLayer {
     mesh.userData.layoutSlabId = slab.id;
   }
 
-  private applyMaterialAndColor(mat: THREE.MeshStandardMaterial, colorStr?: string, matType?: string) {
+  private applyMaterialAndColor(
+    mat: THREE.MeshStandardMaterial,
+    colorStr?: string,
+    matType?: string,
+  ) {
     // Reset defaults first
     mat.roughness = 0.85;
     mat.metalness = 0.05;
     mat.transparent = false;
     mat.opacity = 1.0;
-    
+    mat.map = null;
+
+    const customMat = useMaterialStore.getState().getMaterial(matType);
+    if (customMat) {
+      mat.roughness = customMat.roughness;
+      mat.metalness = customMat.metalness;
+      mat.opacity = customMat.opacity;
+      mat.transparent =
+        customMat.opacity < 0.99 ||
+        Boolean(customMat.transmission && customMat.transmission > 0);
+
+      const effectiveColor = colorStr || customMat.color;
+      mat.color.setStyle(effectiveColor);
+
+      if (customMat.hatchStyle && customMat.hatchStyle !== "solid") {
+        mat.map = getHatchCanvasTexture(
+          customMat.hatchStyle,
+          "#27272a",
+          effectiveColor,
+          8,
+        );
+      }
+      return;
+    }
+
     let baseColor = 0xd6d3d1; // default wall color
     if (matType === "concrete") {
       baseColor = 0x878683;
@@ -1042,7 +1072,7 @@ export default class LayoutSceneLayer {
       baseColor = 0xf8fafc;
       mat.roughness = 0.95;
     }
-    
+
     if (colorStr) {
       mat.color.setStyle(colorStr);
     } else {
@@ -1339,7 +1369,13 @@ export default class LayoutSceneLayer {
     const inner = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
     outer.holes.push(inner);
 
-    const { frameMat, panelMat } = this.getOpeningMaterials(category, style, colorStr);
+    const { frameMat, panelMat } = this.getOpeningMaterials(
+      category,
+      style,
+      colorStr,
+      door?.material || win?.material,
+      (door as any)?.panelMaterial || (win as any)?.panelMaterial,
+    );
 
     // 1. Frame Mesh
     const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: d, bevelEnabled: false });
@@ -1387,23 +1423,59 @@ export default class LayoutSceneLayer {
     boxGroup.rotation.set(0, -wallAngleAtPositionRad(wall, positionMm), 0);
   }
 
-  private getOpeningMaterials(category: "door" | "window", style?: string, colorStr?: string) {
+  private getOpeningMaterials(
+    category: "door" | "window",
+    style?: string,
+    colorStr?: string,
+    frameMatId?: string,
+    panelMatId?: string,
+  ) {
     const frameMat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.1 });
-    const panelMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
-    
-    if (colorStr) {
+    let panelMat: THREE.Material = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
+
+    const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
+    if (customFrame) {
+      frameMat.roughness = customFrame.roughness;
+      frameMat.metalness = customFrame.metalness;
+      frameMat.color.setStyle(colorStr || customFrame.color);
+    } else if (colorStr) {
       frameMat.color.setStyle(colorStr);
     } else {
       frameMat.color.setHex(category === "door" ? 0x78716c : 0x0284c7);
     }
-    
+
+    const customPanel = useMaterialStore.getState().getMaterial(panelMatId);
+    if (customPanel) {
+      if (customPanel.transmission && customPanel.transmission > 0.3) {
+        panelMat = new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(customPanel.color),
+          transparent: true,
+          opacity: customPanel.opacity,
+          roughness: customPanel.roughness,
+          metalness: customPanel.metalness,
+          transmission: customPanel.transmission,
+          thickness: 0.02,
+        });
+      } else {
+        const std = new THREE.MeshStandardMaterial({
+          roughness: customPanel.roughness,
+          metalness: customPanel.metalness,
+          opacity: customPanel.opacity,
+          transparent: customPanel.opacity < 0.99,
+        });
+        std.color.setStyle(customPanel.color);
+        panelMat = std;
+      }
+      return { frameMat, panelMat };
+    }
+
     if (style === "wood") {
-      panelMat.color.setHex(0x8b5a2b);
-      panelMat.roughness = 0.8;
+      (panelMat as THREE.MeshStandardMaterial).color.setHex(0x8b5a2b);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.8;
     } else if (style === "metal") {
-      panelMat.color.setHex(0xd1d5db);
-      panelMat.roughness = 0.3;
-      panelMat.metalness = 0.9;
+      (panelMat as THREE.MeshStandardMaterial).color.setHex(0xd1d5db);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.3;
+      (panelMat as THREE.MeshStandardMaterial).metalness = 0.9;
     } else if (style === "glass" || category === "window") {
       const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xbae6fd,
@@ -1416,10 +1488,10 @@ export default class LayoutSceneLayer {
       });
       return { frameMat, panelMat: glassMat };
     } else {
-      panelMat.color.copy(frameMat.color);
-      panelMat.roughness = 0.7;
+      (panelMat as THREE.MeshStandardMaterial).color.copy(frameMat.color);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.7;
     }
-    
+
     return { frameMat, panelMat };
   }
 
