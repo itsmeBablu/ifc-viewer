@@ -99,10 +99,10 @@ function Cluster({
 }) {
   return (
     <div
-      className={`flex flex-col items-center gap-1 ${border ? "border-r border-[var(--panel-divider)]/60 pr-3" : ""}`}
+      className={`flex flex-col items-center gap-0.5 ${border ? "border-r border-[var(--panel-divider)]/60 pr-2.5" : ""}`}
     >
       <div className="flex items-center gap-1">{children}</div>
-      <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+      <span className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider select-none leading-none mt-0.5">
         {label}
       </span>
     </div>
@@ -115,7 +115,6 @@ function RibbonBtn({
   title,
   children,
   danger,
-  large,
 }: {
   active?: boolean;
   onClick?: () => void;
@@ -130,8 +129,8 @@ function RibbonBtn({
     if (active && btnRef.current) {
       gsap.fromTo(
         btnRef.current,
-        { scale: 0.9, backgroundColor: "rgba(250, 204, 21, 0)" },
-        { scale: 1, backgroundColor: "#facc15", duration: 0.4, ease: "elastic.out(1, 0.5)", overwrite: "auto" }
+        { scale: 0.92, backgroundColor: "rgba(250, 204, 21, 0)" },
+        { scale: 1, backgroundColor: "#facc15", duration: 0.35, ease: "elastic.out(1, 0.5)", overwrite: "auto" }
       );
     } else if (btnRef.current) {
       gsap.to(btnRef.current, { scale: 1, backgroundColor: "transparent", duration: 0.2, ease: "power2.out", overwrite: "auto" });
@@ -144,9 +143,7 @@ function RibbonBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`relative overflow-hidden flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
-        large ? "p-1.5 min-w-[48px] min-h-[44px]" : "p-1 min-w-[44px] min-h-[44px]"
-      } ${
+      className={`relative overflow-hidden flex items-center justify-center rounded-lg transition-all cursor-pointer min-w-[34px] min-h-[30px] p-1.5 ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
@@ -441,13 +438,12 @@ export default function ToolRibbon({
     <Cluster label="Build">
       <div className="relative">
         <RibbonBtn
-          large
           active={["wall", "door", "window", "floor", "roof", "lines"].includes(armedLayoutTool || "")}
           onClick={() => setActiveDropdown(activeDropdown === "build" ? null : "build")}
-          title="Build Elements"
+          title="Build Elements (Walls, Doors, Windows, Slabs, Lines)"
         >
-          <IconMarkupWall className="h-5 w-5" />
-          <span className="text-[10px] flex items-center gap-1">Build <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupWall className="h-4.5 w-4.5" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "build" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -479,12 +475,11 @@ export default function ToolRibbon({
     <Cluster label="Rooms">
       <div className="relative">
         <RibbonBtn
-          large
           onClick={() => setActiveDropdown(activeDropdown === "rooms" ? null : "rooms")}
-          title="Rooms"
+          title="Rooms & Schedule"
         >
-          <LuTable className="h-5 w-5 text-yellow-400" />
-          <span className="text-[10px] flex items-center gap-1">Rooms <LuChevronDown className="h-3 w-3" /></span>
+          <LuTable className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "rooms" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -504,13 +499,12 @@ export default function ToolRibbon({
     <Cluster label="Shapes">
       <div className="relative">
         <RibbonBtn
-          large
           active={Boolean(armedTool && ["cube", "cylinder", "sphere", "cone", "torus", "pyramid"].includes(armedTool))}
           onClick={() => setActiveDropdown(activeDropdown === "shapes" ? null : "shapes")}
-          title="Shapes"
+          title="3D Markup Shapes"
         >
-          <IconMarkupCube className="h-5 w-5" />
-          <span className="text-[10px] flex items-center gap-1">Shapes <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupCube className="h-4.5 w-4.5" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "shapes" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -536,13 +530,12 @@ export default function ToolRibbon({
     <Cluster label="Annotate">
       <div className="relative">
         <RibbonBtn
-          large
           active={armedTool === "note"}
           onClick={() => setActiveDropdown(activeDropdown === "annotate" ? null : "annotate")}
-          title="Annotate"
+          title="Sticky Notes & Dimensions"
         >
-          <IconMarkupNote className="h-5 w-5 text-yellow-400" />
-          <span className="text-[10px] flex items-center gap-1">Note <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupNote className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "annotate" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -590,12 +583,11 @@ export default function ToolRibbon({
     <Cluster label="Snaps" border={false}>
       <div className="relative">
         <RibbonBtn
-          large
           onClick={() => setActiveDropdown(activeDropdown === "snaps" ? null : "snaps")}
-          title="Snaps"
+          title="Object Snaps"
         >
-          <LuMagnet className="h-5 w-5 text-yellow-400" />
-          <span className="text-[10px] flex items-center gap-1">Snaps <LuChevronDown className="h-3 w-3" /></span>
+          <LuMagnet className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "snaps" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-40 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -679,9 +671,9 @@ export default function ToolRibbon({
       <Cluster label="Modify Tools">
         {(
           [
-            { id: "translate" as const, label: "Move", icon: LuMove },
-            { id: "rotate" as const, label: "Rotate", icon: LuRotate3D },
-            { id: "scale" as const, label: "Scale", icon: LuScaling },
+            { id: "translate" as const, label: "Move (MV)", icon: LuMove },
+            { id: "rotate" as const, label: "Rotate (RO)", icon: LuRotate3D },
+            { id: "scale" as const, label: "Scale (RE)", icon: LuScaling },
           ] as const
         ).map((m) => {
           const Icon = m.icon;
@@ -693,7 +685,6 @@ export default function ToolRibbon({
               title={m.label}
             >
               <Icon className="h-4 w-4" />
-              <span className="text-[9px]">{m.label}</span>
             </RibbonBtn>
           );
         })}
@@ -706,7 +697,6 @@ export default function ToolRibbon({
           title="Copy / Duplicate (CO)"
         >
           <LuCopy className="h-4 w-4" />
-          <span className="text-[9px]">Copy</span>
         </RibbonBtn>
 
         <RibbonBtn
@@ -721,7 +711,6 @@ export default function ToolRibbon({
           title="Delete element (DE)"
         >
           <LuTrash2 className="h-4 w-4" />
-          <span className="text-[9px]">Delete</span>
         </RibbonBtn>
       </Cluster>
 
@@ -1300,7 +1289,7 @@ export default function ToolRibbon({
           {!ribbonCollapsed && (
             <div
               ref={ribbonContentRef}
-              className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[420px]"
+              className="flex h-[52px] items-center gap-2.5 px-3 py-1 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[400px]"
             >
               {activeTab === "vstudio" && (
                 <div className="flex items-center gap-3">

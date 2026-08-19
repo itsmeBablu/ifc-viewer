@@ -176,12 +176,12 @@ export default function ToolStatusBar({
   }, []);
 
   return (
-    <div ref={statusBarRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
+    <div ref={statusBarRef} className="fixed bottom-3.5 left-1/2 -translate-x-1/2 z-40 flex h-7.5 items-center justify-between liquid-glass-pill px-3 py-1 text-[10px] text-[var(--text-muted)] select-none shadow-2xl gap-4">
       {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
-      <div className="flex items-center gap-2 font-medium min-w-0">
+      <div className="flex items-center gap-1.5 font-medium min-w-0">
         {/* Mode badge */}
-        <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
-        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+        <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">
           {mode}
         </span>
         <span className="text-[var(--text-strong)] font-semibold truncate hidden lg:flex items-center gap-1 max-w-[380px]">
