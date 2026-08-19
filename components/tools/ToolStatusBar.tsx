@@ -11,6 +11,7 @@ import {
   LuKeyboard,
   LuPaperclip,
   LuFileImage,
+  LuFootprints,
 } from "react-icons/lu";
 import type { RenderMode } from "@/lib/types";
 
@@ -35,6 +36,7 @@ export default function ToolStatusBar({
 
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
+  const trimFirstPick = useLayoutDrawingStore((s) => s.trimFirstPick);
   const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
   const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
 
@@ -69,14 +71,28 @@ export default function ToolStatusBar({
   ].filter(Boolean).join("+") || "Off";
   const wallSnapType = useLayoutDrawingStore((s) => s.wallDraw?.snapType);
 
-  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
+  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const selectedElement = useAppStore((s) => s.selectedElement);
   const renderMode = useAppStore((s) => s.renderMode);
   const setRenderMode = useAppStore((s) => s.setRenderMode);
 
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
   const getToolStatusAndHints = () => {
+    if (armedLayoutTool === "trim") {
+      if (trimFirstPick) {
+        return {
+          mode: "Trim / Join — Step 2",
+          hint: "Select second wall to attach and join to the first wall (base wall stays highlighted)",
+        };
+      }
+      return {
+        mode: "Trim / Join Tool Active",
+        hint: "Select first wall near the end you want to keep as base reference",
+      };
+    }
     if (armedLayoutTool === "wall") {
       if (wallDraw) {
         return {
@@ -176,12 +192,12 @@ export default function ToolStatusBar({
   }, []);
 
   return (
-    <div ref={statusBarRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-9 items-center justify-between liquid-glass-pill px-4 text-[11px] text-[var(--text-muted)] select-none shadow-2xl gap-6">
+    <div ref={statusBarRef} className="fixed bottom-3.5 left-1/2 -translate-x-1/2 z-40 flex h-7.5 items-center justify-between liquid-glass-pill px-3 py-1 text-[10px] text-[var(--text-muted)] select-none shadow-2xl gap-4">
       {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
-      <div className="flex items-center gap-2 font-medium min-w-0">
+      <div className="flex items-center gap-1.5 font-medium min-w-0">
         {/* Mode badge */}
-        <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
-        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+        <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">
           {mode}
         </span>
         <span className="text-[var(--text-strong)] font-semibold truncate hidden lg:flex items-center gap-1 max-w-[380px]">
@@ -223,8 +239,23 @@ export default function ToolStatusBar({
         </div>
       </div>
 
-      {/* Right: Shading Toggle + Scale + Level + Snap + Units */}
+      {/* Right: Shading Toggle + Scale + Level + Snap + Units + Walkthrough */}
       <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
+        {/* -- Walkthrough Toggle (Section 8) ---------------------------- */}
+        <button
+          type="button"
+          onClick={() => useToolMarkupStore.getState().setWalkthroughMode(!useToolMarkupStore.getState().walkthroughMode)}
+          title="Toggle First-Person Walkthrough (WASD)"
+          className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+            useToolMarkupStore((s) => s.walkthroughMode)
+              ? "border-yellow-400 bg-yellow-400/20 text-yellow-400"
+              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-yellow-400"
+          }`}
+        >
+          <LuFootprints className="h-3 w-3" />
+          <span>Walk</span>
+        </button>
+
         {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
         <div className="relative">
           <button

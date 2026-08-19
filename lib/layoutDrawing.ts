@@ -42,9 +42,11 @@ export type LayoutWall = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
-  // -- Section 9: Material & color ---------------------------------------
   color?: string;
   material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
+  // -- Layered Wall Assemblies -------------------------------------------
+  wallTypeId?: string;
+  layers?: WallLayer[];
 };
 
 export type LayoutDoor = {
@@ -64,6 +66,7 @@ export type LayoutDoor = {
   style?: "wood" | "metal" | "glass" | "double";
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
+  material?: string;
 };
 
 export type LayoutWindow = {
@@ -79,6 +82,7 @@ export type LayoutWindow = {
   // -- Section 6: Head shape + color -------------------------------------
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
+  material?: string;
 };
 
 /** Horizontal slab — floor plate or roof plate. */
@@ -125,7 +129,137 @@ export function normalizeDoor(
   };
 }
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof";
+export type LayoutSketchLine = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  createdAt: number;
+};
+
+export type WallLayerFunction = "finish1" | "substrate" | "insulation" | "structure" | "core" | "finish2";
+
+export type WallLayer = {
+  id: string;
+  name: string;
+  function: WallLayerFunction;
+  material: string;
+  thicknessMm: number;
+  color?: string;
+};
+
+export type WallType = {
+  id: string;
+  name: string;
+  layers: WallLayer[];
+  totalThicknessMm: number;
+};
+
+export type LayoutColumn = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  topLevelId?: string;
+  xMm: number;
+  yMm: number;
+  profile: "rect" | "circle";
+  widthMm: number;
+  depthMm: number;
+  heightMm?: number;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type LayoutBeam = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  widthMm: number;
+  depthMm: number;
+  elevationOffsetMm: number;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type LayoutGridLine = {
+  id: string;
+  projectId: string;
+  label: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  visibleLevels?: string[];
+  createdAt: number;
+};
+
+export type SelectedElementRef = {
+  kind: "wall" | "door" | "window" | "slab" | "placement" | "column" | "beam" | "line" | "grid" | "group";
+  id: string;
+};
+
+export type LayoutGroup = {
+  id: string;
+  projectId: string;
+  name: string;
+  elementRefs: SelectedElementRef[];
+  createdAt: number;
+};
+
+export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "column" | "beam" | "grid" | "lines" | "trim";
+
+/**
+ * Trim or extend two walls so they meet cleanly at their intersection point,
+ * preserving the portions closest to clickPt1 and clickPt2 (Revit / AutoCAD standard).
+ */
+export function trimWallPair(
+  w1: LayoutWall,
+  clickPt1: { xMm: number; yMm: number },
+  w2: LayoutWall,
+  clickPt2: { xMm: number; yMm: number },
+): {
+  wall1Patch: Partial<LayoutWall>;
+  wall2Patch: Partial<LayoutWall>;
+} | null {
+  const hit = lineLineIntersection(
+    w1.startXmm,
+    w1.startYmm,
+    w1.endXmm,
+    w1.endYmm,
+    w2.startXmm,
+    w2.startYmm,
+    w2.endXmm,
+    w2.endYmm,
+  );
+  if (!hit) return null;
+
+  // For w1: keep endpoint closer to clickPt1, move other endpoint to hit
+  const dStart1 = Math.hypot(clickPt1.xMm - w1.startXmm, clickPt1.yMm - w1.startYmm);
+  const dEnd1 = Math.hypot(clickPt1.xMm - w1.endXmm, clickPt1.yMm - w1.endYmm);
+  const wall1Patch: Partial<LayoutWall> =
+    dStart1 <= dEnd1
+      ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
+      : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
+
+  // For w2: keep endpoint closer to clickPt2, move other endpoint to hit
+  const dStart2 = Math.hypot(clickPt2.xMm - w2.startXmm, clickPt2.yMm - w2.startYmm);
+  const dEnd2 = Math.hypot(clickPt2.xMm - w2.endXmm, clickPt2.yMm - w2.endYmm);
+  const wall2Patch: Partial<LayoutWall> =
+    dStart2 <= dEnd2
+      ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
+      : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
+
+  return { wall1Patch, wall2Patch };
+}
 
 export type LayoutPresets = {
   wallThicknessMm: number[];
@@ -511,6 +645,169 @@ export function joinedWallCenterlines(
   return result;
 }
 
+export type WallMiterOffsets = {
+  startOffsetLeftMm: number;
+  startOffsetRightMm: number;
+  endOffsetLeftMm: number;
+  endOffsetRightMm: number;
+};
+
+/**
+ * Multi-wall junction solver for 2, 3, 4, or 5+ walls meeting at any angle.
+ * Computes exact mitered boundary line intersections for seamless corner joins.
+ */
+export function solveWallJunctions(
+  walls: LayoutWall[],
+  centerlines?: Map<string, WallCenterlineMm>,
+): Map<string, WallMiterOffsets> {
+  const offsets = new Map<string, WallMiterOffsets>();
+  for (const w of walls) {
+    offsets.set(w.id, {
+      startOffsetLeftMm: 0,
+      startOffsetRightMm: 0,
+      endOffsetLeftMm: 0,
+      endOffsetRightMm: 0,
+    });
+  }
+
+  // Group straight walls by level
+  const levels = new Set(walls.map((w) => w.levelId));
+  for (const levelId of levels) {
+    const levelWalls = walls.filter((w) => w.levelId === levelId && !w.curved);
+    if (levelWalls.length < 2) continue;
+
+    type EndpointRef = {
+      wall: LayoutWall;
+      end: "start" | "end";
+      xMm: number;
+      yMm: number;
+      dirX: number;
+      dirY: number;
+      angle: number;
+      halfThick: number;
+    };
+
+    const endpoints: EndpointRef[] = [];
+    for (const w of levelWalls) {
+      const cl = centerlines?.get(w.id) ?? {
+        startXmm: w.startXmm,
+        startYmm: w.startYmm,
+        endXmm: w.endXmm,
+        endYmm: w.endYmm,
+      };
+      const dx = cl.endXmm - cl.startXmm;
+      const dy = cl.endYmm - cl.startYmm;
+      const len = Math.hypot(dx, dy);
+      if (len < 10) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      const halfThick = (w.thicknessMm || 200) / 2;
+
+      // At start, direction pointing into the wall away from start is (+ux, +uy)
+      endpoints.push({
+        wall: w,
+        end: "start",
+        xMm: cl.startXmm,
+        yMm: cl.startYmm,
+        dirX: ux,
+        dirY: uy,
+        angle: Math.atan2(uy, ux),
+        halfThick,
+      });
+
+      // At end, direction pointing into the wall away from end is (-ux, -uy)
+      endpoints.push({
+        wall: w,
+        end: "end",
+        xMm: cl.endXmm,
+        yMm: cl.endYmm,
+        dirX: -ux,
+        dirY: -uy,
+        angle: Math.atan2(-uy, -ux),
+        halfThick,
+      });
+    }
+
+    // Cluster endpoints into junction nodes (tolerance: 80mm)
+    const visited = new Set<number>();
+    for (let i = 0; i < endpoints.length; i++) {
+      if (visited.has(i)) continue;
+      const cluster: EndpointRef[] = [endpoints[i]];
+      visited.add(i);
+
+      for (let j = i + 1; j < endpoints.length; j++) {
+        if (visited.has(j)) continue;
+        const d = Math.hypot(endpoints[i].xMm - endpoints[j].xMm, endpoints[i].yMm - endpoints[j].yMm);
+        if (d <= JOIN_EPS_MM * 1.5) {
+          cluster.push(endpoints[j]);
+          visited.add(j);
+        }
+      }
+
+      if (cluster.length < 2) continue;
+
+      // Sort cluster radially by angle
+      cluster.sort((a, b) => a.angle - b.angle);
+
+      // Shared node point
+      const nodeX = cluster.reduce((sum, e) => sum + e.xMm, 0) / cluster.length;
+      const nodeY = cluster.reduce((sum, e) => sum + e.yMm, 0) / cluster.length;
+
+      const N = cluster.length;
+      for (let k = 0; k < N; k++) {
+        const curr = cluster[k];
+        const next = cluster[(k + 1) % N];
+
+        if (curr.wall.id === next.wall.id) continue;
+
+        // Curr left edge: normal is (-dirY, +dirX)
+        const leftP1x = nodeX - curr.dirY * curr.halfThick;
+        const leftP1y = nodeY + curr.dirX * curr.halfThick;
+        const leftP2x = leftP1x + curr.dirX * 1000;
+        const leftP2y = leftP1y + curr.dirY * 1000;
+
+        // Next right edge: normal is (+dirY, -dirX)
+        const rightP1x = nodeX + next.dirY * next.halfThick;
+        const rightP1y = nodeY - next.dirX * next.halfThick;
+        const rightP2x = rightP1x + next.dirX * 1000;
+        const rightP2y = rightP1y + next.dirY * 1000;
+
+        const hit = lineLineIntersection(leftP1x, leftP1y, leftP2x, leftP2y, rightP1x, rightP1y, rightP2x, rightP2y);
+        if (hit) {
+          const projCurr = (hit.x - nodeX) * curr.dirX + (hit.y - nodeY) * curr.dirY;
+          const projNext = (hit.x - nodeX) * next.dirX + (hit.y - nodeY) * next.dirY;
+
+          const maxMiterCurr = curr.halfThick * 3;
+          const maxMiterNext = next.halfThick * 3;
+
+          const clampedCurr = Math.max(-maxMiterCurr, Math.min(maxMiterCurr, projCurr));
+          const clampedNext = Math.max(-maxMiterNext, Math.min(maxMiterNext, projNext));
+
+          const offCurr = offsets.get(curr.wall.id);
+          if (offCurr) {
+            if (curr.end === "start") {
+              offCurr.startOffsetLeftMm = clampedCurr;
+            } else {
+              offCurr.endOffsetRightMm = clampedCurr;
+            }
+          }
+
+          const offNext = offsets.get(next.wall.id);
+          if (offNext) {
+            if (next.end === "start") {
+              offNext.startOffsetRightMm = clampedNext;
+            } else {
+              offNext.endOffsetLeftMm = clampedNext;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return offsets;
+}
+
 /** Point along wall at offset mm from start (clamped). */
 export function pointOnWallMm(
   w: LayoutWall,
@@ -799,3 +1096,46 @@ export function detectEnclosedRoomBoundary(
   ];
   return { boundary, areaSqM: computePolygonAreaSqM(boundary) };
 }
+
+// ---------------------------------------------------------------------------
+// Sheet Composition & Title Block (Section 7)
+// ---------------------------------------------------------------------------
+
+export type SheetSize = "A1" | "A2" | "A3" | "A4";
+
+export const SHEET_DIMENSIONS_MM: Record<SheetSize, { widthMm: number; heightMm: number }> = {
+  A1: { widthMm: 841, heightMm: 594 },
+  A2: { widthMm: 594, heightMm: 420 },
+  A3: { widthMm: 420, heightMm: 297 },
+  A4: { widthMm: 297, heightMm: 210 },
+};
+
+export type SheetViewport = {
+  id: string;
+  viewType: "floor_plan" | "3d_view" | "elevation";
+  levelId?: string;
+  name: string;
+  scale: string;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+};
+
+export type LayoutSheet = {
+  id: string;
+  projectId: string;
+  sheetNumber: string;
+  sheetName: string;
+  sheetSize: SheetSize;
+  projectName: string;
+  clientName?: string;
+  author: string;
+  checker?: string;
+  date: string;
+  scale: string;
+  revisions: { rev: string; desc: string; date: string }[];
+  viewports: SheetViewport[];
+  createdAt: number;
+};
+

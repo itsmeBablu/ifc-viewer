@@ -33,6 +33,7 @@ import { WerkzeugModelSceneContext } from "./WerkzeugModelSceneContext";
 import WerkzeugViewer3D, {
   type WerkzeugViewer3DHandle,
 } from "./WerkzeugViewer3D";
+import VStudioErrorBoundary from "./VStudioErrorBoundary";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
@@ -42,6 +43,7 @@ import ToolRightPanel from "./ToolRightPanel";
 import DraggablePanel from "./DraggablePanel";
 import ToolStatusBar from "./ToolStatusBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
+import SheetViewDialog from "./SheetViewDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
 import ToolModeCursorHud from "./ToolModeCursorHud";
 import WerkzeugEntryPanel from "./WerkzeugEntryPanel";
@@ -122,6 +124,8 @@ export default function WerkzeugApp() {
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
+  const [sheetViewOpen, setSheetViewOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(320);
   const dragDepthRef = useRef(0);
 
   const rooms = useAppStore((s) => s.rooms);
@@ -257,6 +261,18 @@ export default function WerkzeugApp() {
 
       if (e.key.toLowerCase() === "d" && !e.ctrlKey && !e.metaKey) {
         setArmedLayoutTool("door");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("trim");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "l" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("lines");
         setArmedTool(null);
         return;
       }
@@ -442,19 +458,25 @@ export default function WerkzeugApp() {
           onFile={handleFile}
           isLoadingModel={isLoadingModel}
           onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
+          onOpenSheet={() => setSheetViewOpen(true)}
         />
 
         {/* Contextual Ribbon Options Bar */}
         <ToolOptionsBar />
 
-        {/* 3D CAD Viewport Canvas */}
-        <main className="fixed inset-0 z-0 bg-[#0c0d12]">
-          <WerkzeugViewer3D
-            ref={viewerRef}
-            onPointerMove={handlePointerMove}
-            onPointerLeave={handlePointerLeaveViewer}
-            className="h-full w-full"
-          />
+        {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
+        <main
+          className="fixed inset-y-0 left-0 z-0 bg-[#0c0d12] transition-[right] duration-200"
+          style={{ right: isDesktop && rightPanelOpen ? panelWidth : 0 }}
+        >
+          <VStudioErrorBoundary fallbackTitle="3D Viewport Render Error">
+            <WerkzeugViewer3D
+              ref={viewerRef}
+              onPointerMove={handlePointerMove}
+              onPointerLeave={handlePointerLeaveViewer}
+              className="h-full w-full"
+            />
+          </VStudioErrorBoundary>
         </main>
 
         <SceneBusyOverlay />
@@ -464,16 +486,21 @@ export default function WerkzeugApp() {
           active={pointerOverViewer}
         />
 
-        {/* Right Panel: Properties + Project Browser (unified) */}
+        {/* Right Panel: Properties + Layout (full-height docked on desktop) */}
         {isDesktop && (
           <ToolRightPanel
             onFile={handleFile}
             isLoadingModel={isLoadingModel}
+            panelWidth={panelWidth}
+            onPanelWidthChange={setPanelWidth}
           />
         )}
 
         {/* Room & Area Take-off Schedule Modal */}
         <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
+
+        {/* Sheet Composition & Title Block Modal (Section 7) */}
+        <SheetViewDialog isOpen={sheetViewOpen} onClose={() => setSheetViewOpen(false)} />
 
         {/* Bottom CAD Status Bar */}
         <ToolStatusBar

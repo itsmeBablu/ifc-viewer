@@ -1,16 +1,21 @@
 import type { ReferenceUnderlay } from "./referenceUnderlay";
 import type {
+  LayoutBeam,
+  LayoutColumn,
   LayoutDoor,
+  LayoutGridLine,
+  LayoutGroup,
   LayoutLevel,
   LayoutPresets,
   LayoutSlab,
   LayoutWall,
   LayoutWindow,
+  WallType,
 } from "./layoutDrawing";
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const LEVELS = "levels";
 const WALLS = "walls";
 const DOORS = "doors";
@@ -18,6 +23,11 @@ const WINDOWS = "windows";
 const SLABS = "slabs";
 const UNDERLAYS = "underlays";
 const PRESETS = "presets";
+const COLUMNS = "columns";
+const BEAMS = "beams";
+const GRID_LINES = "gridLines";
+const GROUPS = "groups";
+const WALL_TYPES = "wallTypes";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -28,7 +38,19 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS]) {
+      for (const name of [
+        LEVELS,
+        WALLS,
+        DOORS,
+        WINDOWS,
+        SLABS,
+        UNDERLAYS,
+        COLUMNS,
+        BEAMS,
+        GRID_LINES,
+        GROUPS,
+        WALL_TYPES,
+      ]) {
         if (!db.objectStoreNames.contains(name)) {
           const store = db.createObjectStore(name, { keyPath: "id" });
           store.createIndex("byProject", "projectId", { unique: false });
@@ -111,6 +133,31 @@ export const idbListUnderlays = (projectId: string) =>
 export const idbPutUnderlay = (row: ReferenceUnderlay) =>
   putRow(UNDERLAYS, row);
 export const idbDeleteUnderlay = (id: string) => deleteRow(UNDERLAYS, id);
+
+export const idbListColumns = (projectId: string) =>
+  listByProject<LayoutColumn>(COLUMNS, projectId);
+export const idbPutColumn = (row: LayoutColumn) => putRow(COLUMNS, row);
+export const idbDeleteColumn = (id: string) => deleteRow(COLUMNS, id);
+
+export const idbListBeams = (projectId: string) =>
+  listByProject<LayoutBeam>(BEAMS, projectId);
+export const idbPutBeam = (row: LayoutBeam) => putRow(BEAMS, row);
+export const idbDeleteBeam = (id: string) => deleteRow(BEAMS, id);
+
+export const idbListGridLines = (projectId: string) =>
+  listByProject<LayoutGridLine>(GRID_LINES, projectId);
+export const idbPutGridLine = (row: LayoutGridLine) => putRow(GRID_LINES, row);
+export const idbDeleteGridLine = (id: string) => deleteRow(GRID_LINES, id);
+
+export const idbListGroups = (projectId: string) =>
+  listByProject<LayoutGroup>(GROUPS, projectId);
+export const idbPutGroup = (row: LayoutGroup) => putRow(GROUPS, row);
+export const idbDeleteGroup = (id: string) => deleteRow(GROUPS, id);
+
+export const idbListWallTypes = (projectId: string) =>
+  listByProject<WallType>(WALL_TYPES, projectId);
+export const idbPutWallType = (row: WallType) => putRow(WALL_TYPES, row);
+export const idbDeleteWallType = (id: string) => deleteRow(WALL_TYPES, id);
 
 export async function idbGetPresets(projectId: string): Promise<LayoutPresets> {
   const db = await openDb();

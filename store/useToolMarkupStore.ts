@@ -239,11 +239,15 @@ type ToolMarkupState = {
   clearSelection: () => void;
   saveMarkupFile: (modelLabel?: string | null) => boolean;
   markSaved: () => void;
+  walkthroughMode: boolean;
+  setWalkthroughMode: (on: boolean) => void;
 };
 
 export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   modelKey: null,
   armedTool: null,
+  walkthroughMode: false,
+  setWalkthroughMode: (on) => set({ walkthroughMode: on }),
   transformMode: "translate",
   snapToFaces: false,
   gridSnap: false,

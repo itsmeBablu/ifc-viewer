@@ -2,6 +2,7 @@
 import gsap from "gsap";
 import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   LuChevronDown,
   LuFolderOpen,
@@ -35,6 +36,8 @@ import {
   LuMinus,
   LuArrowRight,
   LuCheck,
+  LuPencil,
+  LuScissors,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -62,6 +65,7 @@ import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { UnifiedButton } from "@/components/common/UnifiedButton";
 import { undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
 import {
   buildFragBlob,
@@ -83,6 +87,7 @@ interface ToolRibbonProps {
   onFile: (file: File) => void;
   isLoadingModel: boolean;
   onOpenRoomSchedule?: () => void;
+  onOpenSheet?: () => void;
 }
 
 // --- Cluster wrapper helpers ---------------------------------------------------
@@ -98,10 +103,10 @@ function Cluster({
 }) {
   return (
     <div
-      className={`flex flex-col items-center gap-1 ${border ? "border-r border-[var(--panel-divider)]/60 pr-3" : ""}`}
+      className={`flex flex-col items-center gap-0.5 ${border ? "border-r border-[var(--panel-divider)]/60 pr-2.5" : ""}`}
     >
       <div className="flex items-center gap-1">{children}</div>
-      <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+      <span className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider select-none leading-none mt-0.5">
         {label}
       </span>
     </div>
@@ -112,30 +117,110 @@ function RibbonBtn({
   active,
   onClick,
   title,
+  label,
   children,
   danger,
-  large,
 }: {
   active?: boolean;
   onClick?: () => void;
   title?: string;
+  label?: string;
   children: React.ReactNode;
   danger?: boolean;
   large?: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
-  
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const displayLabel = label;
+
+  const animateIn = () => {
+    if (active) return;
+    if (btnRef.current) {
+      gsap.to(btnRef.current, {
+        backgroundColor: "rgba(250, 204, 21, 0.16)",
+        borderColor: "rgba(250, 204, 21, 0.4)",
+        boxShadow: "0 0 12px rgba(250, 204, 21, 0.22)",
+        duration: 0.25,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+    }
+    if (labelRef.current && displayLabel) {
+      gsap.to(labelRef.current, {
+        maxWidth: 80,
+        opacity: 1,
+        marginLeft: 4,
+        duration: 0.25,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+    }
+  };
+
+  const animateOut = () => {
+    if (active) return;
+    if (btnRef.current) {
+      gsap.to(btnRef.current, {
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        boxShadow: "none",
+        duration: 0.2,
+        ease: "power2.inOut",
+        overwrite: "auto",
+      });
+    }
+    if (labelRef.current) {
+      gsap.to(labelRef.current, {
+        maxWidth: 0,
+        opacity: 0,
+        marginLeft: 0,
+        duration: 0.2,
+        ease: "power2.inOut",
+        overwrite: "auto",
+      });
+    }
+  };
+
   useEffect(() => {
     if (active && btnRef.current) {
       gsap.fromTo(
         btnRef.current,
-        { scale: 0.9, backgroundColor: "rgba(245, 158, 11, 0)" },
-        { scale: 1, backgroundColor: "#f59e0b", duration: 0.4, ease: "elastic.out(1, 0.5)", overwrite: "auto" }
+        { scale: 0.92, backgroundColor: "rgba(250, 204, 21, 0)" },
+        {
+          scale: 1,
+          backgroundColor: "#facc15",
+          borderColor: "#fde047",
+          duration: 0.35,
+          ease: "elastic.out(1, 0.5)",
+          overwrite: "auto",
+        },
       );
     } else if (btnRef.current) {
-      gsap.to(btnRef.current, { scale: 1, backgroundColor: "transparent", duration: 0.2, ease: "power2.out", overwrite: "auto" });
+      gsap.to(btnRef.current, {
+        scale: 1,
+        backgroundColor: "transparent",
+        borderColor: "transparent",
+        duration: 0.2,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
     }
   }, [active]);
+
+  const handlePointerDown = () => {
+    longPressTimer.current = setTimeout(() => {
+      animateIn();
+    }, 350);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   return (
     <button
@@ -143,17 +228,28 @@ function RibbonBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`relative overflow-hidden flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
-        large ? "p-1.5 min-w-[48px] min-h-[44px]" : "p-1 min-w-[44px] min-h-[44px]"
-      } ${
+      onPointerEnter={animateIn}
+      onPointerLeave={animateOut}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className={`relative overflow-hidden flex items-center justify-center rounded-lg border border-transparent transition-all cursor-pointer min-w-[34px] min-h-[30px] px-2 py-1 ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
-          ? "text-slate-950 font-bold shadow-md shadow-amber-500/20"
-          : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+          ? "text-slate-950 font-bold shadow-md shadow-yellow-400/20"
+          : "text-[var(--text-body)] hover:text-yellow-400"
       }`}
     >
       {children}
+      {displayLabel && (
+        <span
+          ref={labelRef}
+          className="overflow-hidden whitespace-nowrap text-[10px] font-bold text-[var(--text-strong)] opacity-0 max-w-0 pointer-events-none"
+        >
+          {displayLabel}
+        </span>
+      )}
     </button>
   );
 }
@@ -176,7 +272,7 @@ function ToggleBtn({
       title={title}
       className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border transition-all ${
         active
-          ? "border-amber-400 bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold"
+          ? "border-yellow-400 bg-yellow-400/20 text-yellow-500 dark:text-yellow-400 font-bold"
           : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
       }`}
     >
@@ -193,6 +289,7 @@ export default function ToolRibbon({
   onFile,
   isLoadingModel,
   onOpenRoomSchedule,
+  onOpenSheet,
 }: ToolRibbonProps) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -202,6 +299,24 @@ export default function ToolRibbon({
   const setRenderMode = useAppStore((s) => s.setRenderMode);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const selectedFloor = useAppStore((s) => s.selectedFloor);
+  const floors = useAppStore((s) => s.floors);
+  const currentFloor = floors.find((f) => f.id === selectedFloor);
+
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
+  const getViewTitle = () => {
+    if (viewPreset === "top") {
+      return currentFloor ? `Floor Plan: ${currentFloor.name}` : "Top (Plan)";
+    }
+    if (viewPreset === "north") return "Elevation: North";
+    if (viewPreset === "south") return "Elevation: South";
+    if (viewPreset === "east") return "Elevation: East";
+    if (viewPreset === "west") return "Elevation: West";
+    if (viewPreset === "free" || !viewPreset) {
+      return currentFloor ? `3D View (${currentFloor.name})` : "3D View";
+    }
+    return "3D View";
+  };
 
   const isDark = colorTheme === "dark";
 
@@ -250,6 +365,12 @@ export default function ToolRibbon({
   const selectPlacement = useToolMarkupStore((s) => s.selectPlacement);
   const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
   const duplicatePlacement = useToolMarkupStore((s) => s.duplicatePlacement);
+
+  const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
+  const gapHighlightPoints = useLayoutDrawingStore((s) => s.gapHighlightPoints);
+  const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
+  const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
+  const [sketchError, setSketchError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<RibbonTab>("vstudio");
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
@@ -310,8 +431,9 @@ export default function ToolRibbon({
   const ribbonContentRef = useRef<HTMLDivElement>(null);
 
   // Determine what is currently selected for contextual Modify tab
+  const isSketching = Boolean(armedLayoutTool === "lines" || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId
+    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId || isSketching
   );
 
   const contextualModifyTitle = selectedWallId
@@ -324,6 +446,8 @@ export default function ToolRibbon({
     ? "Modify | Floors"
     : selectedPlacementId
     ? "Modify | 3D Shapes"
+    : isSketching
+    ? `Sketch (${sketchLines.length} ${sketchLines.length === 1 ? "Line" : "Lines"})`
     : null;
 
   // Auto switch to contextual Modify tab when selection occurs
@@ -431,30 +555,44 @@ export default function ToolRibbon({
     <Cluster label="Build">
       <div className="relative">
         <RibbonBtn
-          large
-          active={["wall", "door", "window", "floor", "roof"].includes(armedLayoutTool || "")}
+          active={["wall", "door", "window", "floor", "roof", "lines"].includes(armedLayoutTool || "")}
           onClick={() => setActiveDropdown(activeDropdown === "build" ? null : "build")}
-          title="Build Elements"
+          title="Build Elements (Walls, Doors, Windows, Slabs, Lines)"
         >
-          <IconMarkupWall className="h-5 w-5" />
-          <span className="text-[10px] flex items-center gap-1">Build <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupWall className="h-4.5 w-4.5" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "build" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("wall"); setActiveDropdown(null); }}>
-              <IconMarkupWall className="h-4 w-4 text-amber-500" /> <span className="text-xs">Wall (W)</span>
+              <IconMarkupWall className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Wall (W)</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("door"); setActiveDropdown(null); }}>
-              <IconMarkupDoor className="h-4 w-4 text-amber-500" /> <span className="text-xs">Door (D)</span>
+              <IconMarkupDoor className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Door (D)</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("window"); setActiveDropdown(null); }}>
-              <IconMarkupWindow className="h-4 w-4 text-amber-500" /> <span className="text-xs">Window</span>
+              <IconMarkupWindow className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Window</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("floor"); setActiveDropdown(null); }}>
-              <IconMarkupFloor className="h-4 w-4 text-amber-500" /> <span className="text-xs">Floor</span>
+              <IconMarkupFloor className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Floor</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("roof"); setActiveDropdown(null); }}>
-              <IconMarkupRoof className="h-4 w-4 text-amber-500" /> <span className="text-xs">Roof</span>
+              <IconMarkupRoof className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Roof</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("column"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">▮</span> <span className="text-xs">Column (CL)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("beam"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">▬</span> <span className="text-xs">Beam (BM)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("grid"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">⊞</span> <span className="text-xs">Grid (GR)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("lines"); setActiveDropdown(null); }}>
+              <LuPencil className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Lines (L)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("trim"); setActiveDropdown(null); }}>
+              <LuScissors className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Trim / Extend (TR)</span>
             </button>
           </div>
         )}
@@ -466,20 +604,22 @@ export default function ToolRibbon({
     <Cluster label="Rooms">
       <div className="relative">
         <RibbonBtn
-          large
           onClick={() => setActiveDropdown(activeDropdown === "rooms" ? null : "rooms")}
-          title="Rooms"
+          title="Rooms & Schedule"
         >
-          <LuTable className="h-5 w-5 text-amber-500" />
-          <span className="text-[10px] flex items-center gap-1">Rooms <LuChevronDown className="h-3 w-3" /></span>
+          <LuTable className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "rooms" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { setArmedLayoutTool(null); setArmedTool(null); onOpenRoomSchedule?.(); setActiveDropdown(null); }}>
-              <LuTable className="h-4 w-4 text-amber-500" /> <span className="text-xs">Room (RM)</span>
+              <LuTable className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Room (RM)</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { onOpenRoomSchedule?.(); setActiveDropdown(null); }}>
-              <LuFileSpreadsheet className="h-4 w-4 text-emerald-500" /> <span className="text-xs">Schedule</span>
+              <LuFileSpreadsheet className="h-4 w-4 text-emerald-400" /> <span className="text-xs">Schedule</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { onOpenSheet?.(); setActiveDropdown(null); }}>
+              <LuFileSpreadsheet className="h-4 w-4 text-sky-400" /> <span className="text-xs">Sheet (SH)</span>
             </button>
           </div>
         )}
@@ -491,13 +631,12 @@ export default function ToolRibbon({
     <Cluster label="Shapes">
       <div className="relative">
         <RibbonBtn
-          large
           active={Boolean(armedTool && ["cube", "cylinder", "sphere", "cone", "torus", "pyramid"].includes(armedTool))}
           onClick={() => setActiveDropdown(activeDropdown === "shapes" ? null : "shapes")}
-          title="Shapes"
+          title="3D Markup Shapes"
         >
-          <IconMarkupCube className="h-5 w-5" />
-          <span className="text-[10px] flex items-center gap-1">Shapes <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupCube className="h-4.5 w-4.5" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "shapes" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -523,19 +662,18 @@ export default function ToolRibbon({
     <Cluster label="Annotate">
       <div className="relative">
         <RibbonBtn
-          large
           active={armedTool === "note"}
           onClick={() => setActiveDropdown(activeDropdown === "annotate" ? null : "annotate")}
-          title="Annotate"
+          title="Sticky Notes & Dimensions"
         >
-          <IconMarkupNote className="h-5 w-5 text-amber-500" />
-          <span className="text-[10px] flex items-center gap-1">Note <LuChevronDown className="h-3 w-3" /></span>
+          <IconMarkupNote className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "annotate" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
             <button 
               type="button" 
-              className={`flex items-center gap-2 p-1.5 rounded-lg text-[var(--text-body)] ${armedTool === "note" ? 'bg-amber-500/20 text-amber-500' : 'hover:bg-[var(--glass-inset-bg)]'}`}
+              className={`flex items-center gap-2 p-1.5 rounded-lg text-[var(--text-body)] ${armedTool === "note" ? 'bg-yellow-400/20 text-yellow-400' : 'hover:bg-[var(--glass-inset-bg)]'}`}
               onClick={() => {
                 setArmedLayoutTool(null);
                 setArmedTool(armedTool === "note" ? null : "note");
@@ -573,18 +711,15 @@ export default function ToolRibbon({
     </Cluster>
   );
 
-
-
   const snapsCluster = (
     <Cluster label="Snaps" border={false}>
       <div className="relative">
         <RibbonBtn
-          large
           onClick={() => setActiveDropdown(activeDropdown === "snaps" ? null : "snaps")}
-          title="Snaps"
+          title="Object Snaps"
         >
-          <LuMagnet className="h-5 w-5 text-amber-500" />
-          <span className="text-[10px] flex items-center gap-1">Snaps <LuChevronDown className="h-3 w-3" /></span>
+          <LuMagnet className="h-4.5 w-4.5 text-yellow-400" />
+          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "snaps" && (
           <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-40 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
@@ -607,7 +742,7 @@ export default function ToolRibbon({
                   s.set(!s.active);
                 }}
               >
-                <div className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${s.active ? 'bg-amber-500 border-amber-500 text-slate-900' : 'border-[var(--panel-divider)] text-transparent'}`}>
+                <div className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${s.active ? 'bg-yellow-400 border-yellow-400 text-slate-950' : 'border-[var(--panel-divider)] text-transparent'}`}>
                   <LuCheck className="h-3 w-3" />
                 </div>
                 <span className="text-xs font-semibold">{s.label}</span>
@@ -668,9 +803,9 @@ export default function ToolRibbon({
       <Cluster label="Modify Tools">
         {(
           [
-            { id: "translate" as const, label: "Move", icon: LuMove },
-            { id: "rotate" as const, label: "Rotate", icon: LuRotate3D },
-            { id: "scale" as const, label: "Scale", icon: LuScaling },
+            { id: "translate" as const, label: "Move (MV)", icon: LuMove },
+            { id: "rotate" as const, label: "Rotate (RO)", icon: LuRotate3D },
+            { id: "scale" as const, label: "Scale (RE)", icon: LuScaling },
           ] as const
         ).map((m) => {
           const Icon = m.icon;
@@ -682,10 +817,23 @@ export default function ToolRibbon({
               title={m.label}
             >
               <Icon className="h-4 w-4" />
-              <span className="text-[9px]">{m.label}</span>
             </RibbonBtn>
           );
         })}
+
+        <RibbonBtn
+          active={armedLayoutTool === "trim"}
+          onClick={() => {
+            if (armedLayoutTool === "trim") {
+              setArmedLayoutTool(null);
+            } else {
+              handleSelectLayoutTool("trim");
+            }
+          }}
+          title="Trim / Extend to Corner (TR)"
+        >
+          <LuScissors className="h-4 w-4" />
+        </RibbonBtn>
 
         <RibbonBtn
           onClick={() => {
@@ -695,7 +843,6 @@ export default function ToolRibbon({
           title="Copy / Duplicate (CO)"
         >
           <LuCopy className="h-4 w-4" />
-          <span className="text-[9px]">Copy</span>
         </RibbonBtn>
 
         <RibbonBtn
@@ -710,105 +857,159 @@ export default function ToolRibbon({
           title="Delete element (DE)"
         >
           <LuTrash2 className="h-4 w-4" />
-          <span className="text-[9px]">Delete</span>
         </RibbonBtn>
       </Cluster>
 
       {/* Category-specific controls */}
-      <Cluster label="Element Controls">
-        {selectedWallId && (
+      {isSketching && !selectedWallId && !selectedDoorId && !selectedWindowId && !selectedSlabId && !selectedPlacementId ? (
+        <Cluster label="Sketch Loop Actions">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <LuPencil className="h-4 w-4 text-yellow-400" />
+            <span className="text-xs font-bold text-[var(--text-strong)]">
+              {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
+            </span>
+          </div>
+
           <RibbonBtn
-            onClick={() => {
-              const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
-              if (wall) {
-                useLayoutDrawingStore.getState().updateWall(wall.id, {
-                  startXmm: wall.endXmm,
-                  startYmm: wall.endYmm,
-                  endXmm: wall.startXmm,
-                  endYmm: wall.startYmm,
-                });
+            active
+            onClick={async () => {
+              const res = await convertSketchToSlab("floor");
+              if (!res.success && res.error) {
+                setSketchError(res.error);
+              } else {
+                setSketchError(null);
               }
             }}
-            title="Flip wall direction (Spacebar)"
+            title="Convert closed sketch loop into Floor slab"
           >
-            <MdOutlineFlip className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Flip Wall</span>
+            <IconMarkupFloor className="h-4 w-4" />
+            <span className="text-[9px]">To Floor</span>
           </RibbonBtn>
-        )}
 
-        {selectedDoorId && (
-          <>
+          <RibbonBtn
+            active
+            onClick={async () => {
+              const res = await convertSketchToSlab("roof");
+              if (!res.success && res.error) {
+                setSketchError(res.error);
+              } else {
+                setSketchError(null);
+              }
+            }}
+            title="Convert closed sketch loop into Roof slab"
+          >
+            <IconMarkupRoof className="h-4 w-4" />
+            <span className="text-[9px]">To Roof</span>
+          </RibbonBtn>
+
+          <RibbonBtn
+            danger
+            onClick={() => {
+              clearSketchLines();
+              setSketchError(null);
+            }}
+            title="Clear all drawn sketch lines"
+          >
+            <LuTrash2 className="h-4 w-4" />
+            <span className="text-[9px]">Clear</span>
+          </RibbonBtn>
+
+          {(sketchError || gapHighlightPoints.length > 0) && (
+            <div className="flex flex-col justify-center gap-0.5 px-2 py-1 rounded-lg bg-amber-400/10 border border-amber-400/30 max-w-xs">
+              {sketchError && (
+                <span className="text-[10px] font-semibold text-rose-400 leading-tight">
+                  {sketchError}
+                </span>
+              )}
+              {gapHighlightPoints.length > 0 && (
+                <span className="text-[9.5px] font-semibold text-amber-400 leading-tight">
+                  ✦ {gapHighlightPoints.length} gap {gapHighlightPoints.length === 1 ? "point" : "points"}
+                </span>
+              )}
+            </div>
+          )}
+        </Cluster>
+      ) : (
+        <Cluster label="Element Controls">
+          {selectedWallId && (
             <RibbonBtn
               onClick={() => {
-                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                if (door) {
-                  useLayoutDrawingStore.getState().updateDoor(door.id, {
-                    hinge: door.hinge === "start" ? "end" : "start",
+                const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
+                if (wall) {
+                  useLayoutDrawingStore.getState().updateWall(wall.id, {
+                    startXmm: wall.endXmm,
+                    startYmm: wall.endYmm,
+                    endXmm: wall.startXmm,
+                    endYmm: wall.startYmm,
                   });
                 }
               }}
-              title="Flip hinge hand"
+              title="Flip wall direction (Spacebar)"
+            >
+              <MdOutlineFlip className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Flip Wall</span>
+            </RibbonBtn>
+          )}
+
+          {selectedDoorId && (
+            <>
+              <RibbonBtn
+                onClick={() => {
+                  const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                  if (door) {
+                    useLayoutDrawingStore.getState().updateDoor(door.id, {
+                      hinge: door.hinge === "start" ? "end" : "start",
+                    });
+                  }
+                }}
+                title="Flip hinge hand"
+              >
+                <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Flip Hand</span>
+              </RibbonBtn>
+              <RibbonBtn
+                onClick={() => {
+                  const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                  if (door) {
+                    useLayoutDrawingStore.getState().updateDoor(door.id, {
+                      swing: door.swing === 1 ? -1 : 1,
+                    });
+                  }
+                }}
+                title="Flip swing direction"
+              >
+                <LuRotateCw className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Flip Swing</span>
+              </RibbonBtn>
+            </>
+          )}
+
+          {selectedWindowId && (
+            <RibbonBtn
+              onClick={() => {
+                const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
+                if (win) {
+                  useLayoutDrawingStore.getState().updateWindow(win.id, { positionMm: win.positionMm });
+                }
+              }}
+              title="Flip window"
             >
               <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-              <span className="text-[9px]">Flip Hand</span>
+              <span className="text-[9px]">Flip Window</span>
             </RibbonBtn>
+          )}
+
+          {selectedPlacementId && (
             <RibbonBtn
-              onClick={() => {
-                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                if (door) {
-                  useLayoutDrawingStore.getState().updateDoor(door.id, {
-                    swing: door.swing === 1 ? -1 : 1,
-                  });
-                }
-              }}
-              title="Flip swing direction"
+              onClick={() => duplicatePlacement(selectedPlacementId)}
+              title="Duplicate shape"
             >
-              <LuRotateCw className="h-4 w-4 text-amber-500" />
-              <span className="text-[9px]">Flip Swing</span>
+              <LuCopy className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Duplicate</span>
             </RibbonBtn>
-          </>
-        )}
-
-        {selectedWindowId && (
-          <RibbonBtn
-            onClick={() => {
-              const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
-              if (win) {
-                useLayoutDrawingStore.getState().updateWindow(win.id, { positionMm: win.positionMm });
-              }
-            }}
-            title="Flip window"
-          >
-            <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Flip Window</span>
-          </RibbonBtn>
-        )}
-
-        {selectedPlacementId && (
-          <RibbonBtn
-            onClick={() => duplicatePlacement(selectedPlacementId)}
-            title="Duplicate shape"
-          >
-            <LuCopy className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Duplicate</span>
-          </RibbonBtn>
-        )}
-      </Cluster>
-
-      {/* Deselect */}
-      <div className="flex flex-col items-center gap-1">
-        <button
-          type="button"
-          onClick={clearCurrentSelection}
-          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all"
-        >
-          <span className="text-xs font-bold">Esc</span>
-          <span className="text-[10px]">Deselect</span>
-        </button>
-        <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-          Finish
-        </span>
-      </div>
+          )}
+        </Cluster>
+      )}
     </div>
   );
 
@@ -826,13 +1027,13 @@ export default function ToolRibbon({
       {/* -- Quick Access Floating Cluster --------------------------------------- */}
       <div className="absolute top-4 left-4 z-50 flex items-center gap-1 liquid-glass-pill px-2 py-1.5 shadow-lg select-none pointer-events-auto">
         {/* V Studio home logo */}
-        <a
+        <Link
           href="/"
           title="Back to Viewer"
           className="flex items-center justify-center rounded-md px-2 py-1 hover:bg-[var(--glass-inset-bg)] transition-colors"
         >
           <Image src="/ibv_logo.svg" alt="IBV" width={100} height={24} className="h-6 w-auto object-contain" priority />
-        </a>
+        </Link>
 
         <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
 
@@ -867,7 +1068,7 @@ export default function ToolRibbon({
               title="Save .frag / .ifc"
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
             >
-              <LuSave className="h-3.5 w-3.5 text-amber-500" />
+              <LuSave className="h-3.5 w-3.5 text-yellow-400" />
               <span className="hidden sm:inline text-[11px]">Save</span>
               <LuChevronDown className="h-3 w-3 text-[var(--text-muted)]" />
             </button>
@@ -885,7 +1086,7 @@ export default function ToolRibbon({
                     <div className="w-12 h-1.5 bg-[var(--text-muted)]/40 rounded-full mx-auto mb-3" />
                     <div className="flex items-center justify-between pb-2 border-b border-[var(--panel-divider)]">
                       <span className="font-bold text-sm text-[var(--text-strong)] flex items-center gap-2">
-                        <LuSave className="h-4 w-4 text-amber-500" />
+                        <LuSave className="h-4 w-4 text-yellow-400" />
                         Save Project
                       </span>
                       <button 
@@ -900,9 +1101,9 @@ export default function ToolRibbon({
                     <button
                       type="button"
                       onClick={() => { handleSaveFrag(); setSaveMenuOpen(false); }}
-                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-amber-500/20 active:border-amber-500 transition-colors"
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-yellow-400/20 active:border-yellow-400 transition-colors"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-500">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400">
                         <LuSave className="h-5 w-5" />
                       </div>
                       <div>
@@ -914,9 +1115,9 @@ export default function ToolRibbon({
                     <button
                       type="button"
                       onClick={() => { handleSaveIfc(); setSaveMenuOpen(false); }}
-                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-amber-500/20 active:border-amber-500 transition-colors"
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-yellow-400/20 active:border-yellow-400 transition-colors"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
                         <LuSave className="h-5 w-5" />
                       </div>
                       <div>
@@ -936,7 +1137,7 @@ export default function ToolRibbon({
                     onClick={handleSaveFrag}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
                   >
-                    <LuSave className="h-3.5 w-3.5 text-sky-500" />
+                    <LuSave className="h-3.5 w-3.5 text-sky-400" />
                     <div>
                       <div className="font-semibold text-[var(--text-strong)]">Save as .frag</div>
                       <div className="text-[10px] text-[var(--text-muted)]">Fast lightweight binary geometry</div>
@@ -947,7 +1148,7 @@ export default function ToolRibbon({
                     onClick={handleSaveIfc}
                     className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
                   >
-                    <LuSave className="h-3.5 w-3.5 text-emerald-500" />
+                    <LuSave className="h-3.5 w-3.5 text-emerald-400" />
                     <div>
                       <div className="font-semibold text-[var(--text-strong)]">Save as .ifc</div>
                       <div className="text-[10px] text-[var(--text-muted)]">Export with IFC structure & geometry</div>
@@ -995,7 +1196,7 @@ export default function ToolRibbon({
             title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
             className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
           >
-            {isDark ? <LuSun className="h-3.5 w-3.5 text-amber-400" /> : <LuMoon className="h-3.5 w-3.5" />}
+            {isDark ? <LuSun className="h-3.5 w-3.5 text-yellow-400" /> : <LuMoon className="h-3.5 w-3.5" />}
           </button>
           <button
             type="button"
@@ -1007,114 +1208,217 @@ export default function ToolRibbon({
           </button>
         </div>
 
-        {/* Center: Active Model Name */}
-        <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="truncate max-w-[200px] text-[var(--text-strong)] font-semibold text-xs">
-            {activeModelLabel || "Empty Architecture Project"}
-          </span>
-        </div>
-
-      {/* -- Main Tool Island --------------------------------------- */}
-      <header 
-        id="ribbon-dropdown-container"
-        className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto touch-none"
-        style={{
-          top: `calc(1rem + ${ribbonPos.y}px)`,
-          left: `calc(50% + ${ribbonPos.x}px)`,
-          transform: `translateX(-50%)`,
-        }}
-        onPointerDown={handleRibbonPointerDown}
-        onPointerMove={handleRibbonPointerMove}
-        onPointerUp={handleRibbonPointerUp}
-        onPointerCancel={handleRibbonPointerUp}
-      >
-      {/* -- Tab Bar ---------------------------------------------------------- */}
-      <div className="flex items-center gap-2 p-2 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
-        {/* V Studio (home tab) */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("vstudio")}
-          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-            activeTab === "vstudio"
-              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
-              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-          }`}
-        >
-          V Studio
-        </button>
-
-        {/* Manage */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("manage")}
-          className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-            activeTab === "manage"
-              ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
-              : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-          }`}
-        >
-          Manage
-        </button>
-
-        {/* Modify (Contextual) */}
-        {hasSelection && (
-          <>
-            <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
-            <button
-              type="button"
-              onClick={() => setActiveTab("modify")}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
-                activeTab === "modify"
-                  ? "bg-amber-500 text-slate-900 border-amber-400 shadow-md"
-                  : "bg-[var(--glass-inset-bg)] border-[var(--glass-border)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
-            >
-              {contextualModifyTitle}
-            </button>
-          </>
+        {/* Center: Active Model Name + Active View (When right panel is collapsed) */}
+        {!rightPanelOpen && (
+          <div className="absolute top-4 right-4 z-50 hidden md:flex items-center gap-2 liquid-glass-pill px-3 py-1.5 shadow-lg select-none pointer-events-auto">
+            <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+            <span className="truncate max-w-[200px] text-[var(--text-strong)] font-semibold text-xs">
+              {activeModelLabel || "Architecture Project"}
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
+              • {getViewTitle()}
+            </span>
+          </div>
         )}
 
-        {/* Ribbon collapse chevron */}
-        <div className="ml-auto">
-          <button
-            type="button"
-            onClick={() => setRibbonCollapsed(!ribbonCollapsed)}
-            title={ribbonCollapsed ? "Expand Ribbon" : "Minimize Ribbon"}
-            className="rounded-md p-1.5 no-drag text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            <LuChevronDown
-              className={`h-3.5 w-3.5 transition-transform duration-200 ${ribbonCollapsed ? "" : "rotate-180"}`}
-            />
-          </button>
-        </div>
-      </div>
-
-
-      {/* -- Ribbon Content Panel --------------------------------------------- */}
-      {!ribbonCollapsed && (
-        <div
-          ref={ribbonContentRef}
-          className="flex h-20 items-center gap-3 px-4 py-2 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[420px]"
+      {/* -- Main Tool Island (Desktop & iPad) ----------------------- */}
+      {isTouchMode ? (
+        /* iPad Combined Single Thin Bar (Section 4) */
+        <header
+          id="ribbon-dropdown-container"
+          className="absolute top-3 left-3 right-3 z-40 flex h-11 items-center justify-between liquid-glass-panel px-3 shadow-2xl select-none pointer-events-auto rounded-2xl border border-[var(--glass-border)]"
         >
-          {activeTab === "vstudio" && (
-            <div className="flex items-center gap-3">
-              {vstudioClusters.map((c) => (
-                <div key={c.key} className="flex-shrink-0">
-                  {c.node}
-                </div>
-              ))}
+          {/* Left: Brand + Quick Actions */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 pr-2 border-r border-[var(--panel-divider)]/60">
+              <span className="font-black text-sm tracking-tight text-yellow-400">V</span>
+              <span className="font-bold text-xs text-[var(--text-strong)] hidden sm:inline">STUDIO</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoadingModel}
+              title="Open"
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+            >
+              <LuFolderOpen className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveFrag}
+              title="Save (.frag)"
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+            >
+              <LuSave className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={undoWerkzeug}
+              title="Undo"
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+            >
+              <LuUndo2 className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={redoWerkzeug}
+              title="Redo"
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+            >
+              <LuRedo2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Center: Tools Cluster or Sketch Slabs Conversion */}
+          {sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
+            <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+              <span className="text-xs font-bold text-yellow-400 px-1.5">
+                {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
+              </span>
+
+              <UnifiedButton
+                size="xs"
+                variant="primary"
+                onClick={async () => {
+                  const res = await convertSketchToSlab("floor");
+                  if (!res.success && res.error) setSketchError(res.error);
+                  else setSketchError(null);
+                }}
+                icon={<IconMarkupFloor className="h-3.5 w-3.5" />}
+              >
+                To Floor
+              </UnifiedButton>
+
+              <UnifiedButton
+                size="xs"
+                variant="primary"
+                onClick={async () => {
+                  const res = await convertSketchToSlab("roof");
+                  if (!res.success && res.error) setSketchError(res.error);
+                  else setSketchError(null);
+                }}
+                icon={<IconMarkupRoof className="h-3.5 w-3.5" />}
+              >
+                To Roof
+              </UnifiedButton>
+
+              <button
+                type="button"
+                onClick={() => {
+                  clearSketchLines();
+                  setSketchError(null);
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors cursor-pointer"
+                title="Clear Lines"
+              >
+                <LuTrash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {buildCluster}
+              {roomsCluster}
+              {shapesCluster}
+              {annotateCluster}
+              {snapsCluster}
             </div>
           )}
 
-          {/* Manage tab content */}
-          {activeTab === "manage" && manageTabContent}
+          {/* Right: Theme Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setColorTheme(isDark ? "light" : "dark")}
+              className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+            >
+              {isDark ? <LuSun className="h-4 w-4 text-yellow-400" /> : <LuMoon className="h-4 w-4" />}
+            </button>
+          </div>
+        </header>
+      ) : (
+        /* Desktop Floating Main Tool Island */
+        <header 
+          id="ribbon-dropdown-container"
+          className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto touch-none"
+          style={{
+            top: `calc(1rem + ${ribbonPos.y}px)`,
+            left: `calc(50% + ${ribbonPos.x}px)`,
+            transform: `translateX(-50%)`,
+          }}
+          onPointerDown={handleRibbonPointerDown}
+          onPointerMove={handleRibbonPointerMove}
+          onPointerUp={handleRibbonPointerUp}
+          onPointerCancel={handleRibbonPointerUp}
+        >
+          {/* -- Tab Bar ---------------------------------------------------------- */}
+          <div className="flex items-center gap-2 p-2 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
+            {/* V Studio (home tab) */}
+            <UnifiedButton
+              size="xs"
+              variant={activeTab === "vstudio" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("vstudio")}
+            >
+              V Studio
+            </UnifiedButton>
 
-          {/* Modify tab content */}
-          {activeTab === "modify" && modifyTabContent}
-        </div>
+            {/* Modify (Contextual) */}
+            {hasSelection && (
+              <>
+                <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
+                <UnifiedButton
+                  size="xs"
+                  variant={activeTab === "modify" ? "primary" : "secondary"}
+                  onClick={() => setActiveTab("modify")}
+                >
+                  {contextualModifyTitle}
+                </UnifiedButton>
+              </>
+            )}
+
+            {/* Ribbon collapse chevron */}
+            <div className="ml-auto">
+              <button
+                type="button"
+                onClick={() => setRibbonCollapsed(!ribbonCollapsed)}
+                title={ribbonCollapsed ? "Expand Ribbon" : "Minimize Ribbon"}
+                className="rounded-md p-1.5 no-drag text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+              >
+                <LuChevronDown
+                  className={`h-3.5 w-3.5 transition-transform duration-200 ${ribbonCollapsed ? "" : "rotate-180"}`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* -- Ribbon Content Panel --------------------------------------------- */}
+          {!ribbonCollapsed && (
+            <div
+              ref={ribbonContentRef}
+              className="flex h-[52px] items-center gap-2.5 px-3 py-1 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[400px]"
+            >
+              {activeTab === "vstudio" && (
+                <div className="flex items-center gap-3">
+                  {vstudioClusters.map((c) => (
+                    <div key={c.key} className="flex-shrink-0">
+                      {c.node}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Manage tab content */}
+              {activeTab === "manage" && manageTabContent}
+
+              {/* Modify tab content */}
+              {activeTab === "modify" && modifyTabContent}
+            </div>
+          )}
+        </header>
       )}
-    </header>
     </>
   );
 }
