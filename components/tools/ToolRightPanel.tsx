@@ -67,17 +67,19 @@ export default function ToolRightPanel({
   const [floorsOpen, setFloorsOpen] = useState(true);
   const [isFloating, setIsFloating] = useState(false);
 
+  const [propHeight, setPropHeight] = useState(320); // default ~50% split
+
   useEffect(() => {
     const handleResize = () => {
       setIsFloating(window.innerWidth < 768);
+      if (!isSplitDraggingRef.current) {
+        setPropHeight(Math.max(200, Math.round((window.innerHeight - 192) / 2)));
+      }
     };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  // -- Splitter between Properties and Browser -------------------------------
-  const [propHeight, setPropHeight] = useState(220); // px
 
   // -- Edit type dialog ------------------------------------------------------
   const [editTypeOpen, setEditTypeOpen] = useState(false);
@@ -319,34 +321,34 @@ export default function ToolRightPanel({
             </div>
         </div>
             {/* -- PROPERTIES (top portion) ----------------------------------- */}
-            {hasSelection && (
+        <div
+          className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
+          style={{ height: propHeight, minHeight: 120 }}
+        >
+          {/* Properties header */}
+          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 bg-[var(--surface-overlay)]/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+              <LuSlidersHorizontal className="h-3 w-3" />
+              Properties
+            </span>
+
+            {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
+              <button
+                type="button"
+                onClick={() => setEditTypeOpen(true)}
+                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] hover:bg-amber-500/20 transition-all"
+              >
+                <LuSlidersHorizontal className="h-2.5 w-2.5" />
+                <span>Edit Type</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-3 text-xs">
+            {hasSelection ? (
               <>
-                <div
-                  className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll"
-                  style={{ height: propHeight, minHeight: 80 }}
-                >
-              {/* Properties header */}
-              <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                  <LuSlidersHorizontal className="h-3 w-3" />
-                  Properties
-                </span>
-
-                {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
-                  <button
-                    type="button"
-                    onClick={() => setEditTypeOpen(true)}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] hover:bg-amber-500/20 transition-all"
-                  >
-                    <LuSlidersHorizontal className="h-2.5 w-2.5" />
-                    <span>Edit Type</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-3 text-xs">
                 {/* Type Selector */}
-                {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
+                {(selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
                   <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3 shadow-sm space-y-2">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
                       Type
@@ -373,257 +375,263 @@ export default function ToolRightPanel({
                   </div>
                 )}
 
-                {hasSelection ? (
-                  <div className="space-y-2">
-                    {/* Identity */}
-                    <PropSection
-                      open={openSections.identity}
-                      onToggle={() => toggleSection("identity")}
-                      icon={<LuFileText className="h-3.5 w-3.5 text-amber-500" />}
-                      label="Identity Data"
-                    >
-                      <PropRow label="Mark / ID">
-                        <span className="font-mono font-semibold text-[var(--text-strong)]">
-                          {selectedWall
-                            ? `W-${selectedWall.id.slice(-4)}`
-                            : selectedDoor
-                            ? `D-${selectedDoor.id.slice(-4)}`
-                            : selectedWindow
-                            ? `WN-${selectedWindow.id.slice(-4)}`
-                            : "EL-1"}
-                        </span>
-                      </PropRow>
-                      <PropRow label="Remarks">
-                        <input
-                          type="text"
-                          placeholder="Add remark…"
-                          className="w-32 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right text-[10px]"
-                        />
-                      </PropRow>
-                    </PropSection>
+                <div className="space-y-2">
+                  {/* Identity */}
+                  <PropSection
+                    open={openSections.identity}
+                    onToggle={() => toggleSection("identity")}
+                    icon={<LuFileText className="h-3.5 w-3.5 text-amber-500" />}
+                    label="Identity Data"
+                  >
+                    <PropRow label="Mark / ID">
+                      <span className="font-mono font-semibold text-[var(--text-strong)]">
+                        {selectedWall
+                          ? `W-${selectedWall.id.slice(-4)}`
+                          : selectedDoor
+                          ? `D-${selectedDoor.id.slice(-4)}`
+                          : selectedWindow
+                          ? `WN-${selectedWindow.id.slice(-4)}`
+                          : "EL-1"}
+                      </span>
+                    </PropRow>
+                    <PropRow label="Remarks">
+                      <input
+                        type="text"
+                        placeholder="Add remark…"
+                        className="w-32 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right text-[10px]"
+                      />
+                    </PropRow>
+                  </PropSection>
 
-                    {/* Dimensions */}
-                    <PropSection
-                      open={openSections.dimensions}
-                      onToggle={() => toggleSection("dimensions")}
-                      icon={<LuRuler className="h-3.5 w-3.5 text-amber-500" />}
-                      label="Dimensions"
-                    >
-                      {selectedWall && (
-                        <>
-                          <PropRow label="Length">
-                            <span className="font-mono font-semibold text-[var(--text-strong)]">{wallLen} mm</span>
-                          </PropRow>
-                          <PropRow label="Thickness">
-                            <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.thicknessMm} mm</span>
-                          </PropRow>
-                          <PropRow label="Height">
-                            <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.heightMm || 3000} mm</span>
-                          </PropRow>
-                          <PropRow label="Area">
-                            <span className="font-mono font-semibold text-emerald-500">{wallArea} m²</span>
-                          </PropRow>
-                          <PropRow label="Volume">
-                            <span className="font-mono font-semibold text-sky-500">{wallVol} m³</span>
-                          </PropRow>
-                        </>
-                      )}
-                      {selectedDoor && (
-                        <>
-                          <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.widthMm} mm</span></PropRow>
-                          <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.heightMm} mm</span></PropRow>
-                          <PropRow label="Opening Area"><span className="font-mono font-semibold text-emerald-500">{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span></PropRow>
-                        </>
-                      )}
-                      {selectedWindow && (
-                        <>
-                          <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.widthMm} mm</span></PropRow>
-                          <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.heightMm} mm</span></PropRow>
-                          <PropRow label="Sill Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.sillHeightMm} mm</span></PropRow>
-                        </>
-                      )}
-                      {selectedSlab && (
-                        <>
-                          <PropRow label="Thickness"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedSlab.thicknessMm} mm</span></PropRow>
-                          <PropRow label="Area"><span className="font-mono font-semibold text-emerald-500">{(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²</span></PropRow>
-                        </>
-                      )}
-                      {selectedPlacement && (
-                        <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
-                      )}
-                    </PropSection>
+                  {/* Dimensions */}
+                  <PropSection
+                    open={openSections.dimensions}
+                    onToggle={() => toggleSection("dimensions")}
+                    icon={<LuRuler className="h-3.5 w-3.5 text-amber-500" />}
+                    label="Dimensions"
+                  >
+                    {selectedWall && (
+                      <>
+                        <PropRow label="Length">
+                          <span className="font-mono font-semibold text-[var(--text-strong)]">{wallLen} mm</span>
+                        </PropRow>
+                        <PropRow label="Thickness">
+                          <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.thicknessMm} mm</span>
+                        </PropRow>
+                        <PropRow label="Height">
+                          <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.heightMm || 3000} mm</span>
+                        </PropRow>
+                        <PropRow label="Area">
+                          <span className="font-mono font-semibold text-emerald-500">{wallArea} m²</span>
+                        </PropRow>
+                        <PropRow label="Volume">
+                          <span className="font-mono font-semibold text-sky-500">{wallVol} m³</span>
+                        </PropRow>
+                      </>
+                    )}
+                    {selectedDoor && (
+                      <>
+                        <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.widthMm} mm</span></PropRow>
+                        <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.heightMm} mm</span></PropRow>
+                        <PropRow label="Opening Area"><span className="font-mono font-semibold text-emerald-500">{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span></PropRow>
+                      </>
+                    )}
+                    {selectedWindow && (
+                      <>
+                        <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.widthMm} mm</span></PropRow>
+                        <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.heightMm} mm</span></PropRow>
+                        <PropRow label="Sill Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWindow.sillHeightMm} mm</span></PropRow>
+                      </>
+                    )}
+                    {selectedSlab && (
+                      <>
+                        <PropRow label="Thickness"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedSlab.thicknessMm} mm</span></PropRow>
+                        <PropRow label="Area"><span className="font-mono font-semibold text-emerald-500">{(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²</span></PropRow>
+                      </>
+                    )}
+                    {selectedPlacement && (
+                      <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
+                    )}
+                  </PropSection>
 
-                    {/* Constraints */}
-                    <PropSection
-                      open={openSections.constraints}
-                      onToggle={() => toggleSection("constraints")}
-                      icon={<LuLayers className="h-3.5 w-3.5 text-amber-500" />}
-                      label="Constraints"
-                    >
-                      <PropRow label="Base Constraint"><span className="font-semibold text-amber-500">{currentFloorObj ? currentFloorObj.name : "Level 1"}</span></PropRow>
-                      <PropRow label="Base Offset"><span className="font-mono text-[var(--text-strong)]">0 mm</span></PropRow>
-                    </PropSection>
+                  {/* Constraints */}
+                  <PropSection
+                    open={openSections.constraints}
+                    onToggle={() => toggleSection("constraints")}
+                    icon={<LuLayers className="h-3.5 w-3.5 text-amber-500" />}
+                    label="Constraints"
+                  >
+                    <PropRow label="Base Constraint"><span className="font-semibold text-amber-500">{currentFloorObj ? currentFloorObj.name : "Level 1"}</span></PropRow>
+                    <PropRow label="Base Offset"><span className="font-mono text-[var(--text-strong)]">0 mm</span></PropRow>
+                  </PropSection>
 
-                    {/* Materials */}
-                    <PropSection
-                      open={openSections.materials}
-                      onToggle={() => toggleSection("materials")}
-                      icon={<LuBox className="h-3.5 w-3.5 text-amber-500" />}
-                      label="Materials & Finish"
-                    >
-                      <PropRow label="Structure"><span className="font-medium text-[var(--text-strong)]">{currentType.material}</span></PropRow>
-                      <PropRow label="Function"><span className="font-medium text-[var(--text-strong)]">{currentType.functionType}</span></PropRow>
-                    </PropSection>
+                  {/* Materials */}
+                  <PropSection
+                    open={openSections.materials}
+                    onToggle={() => toggleSection("materials")}
+                    icon={<LuBox className="h-3.5 w-3.5 text-amber-500" />}
+                    label="Materials & Finish"
+                  >
+                    <PropRow label="Structure"><span className="font-medium text-[var(--text-strong)]">{currentType.material}</span></PropRow>
+                    <PropRow label="Function"><span className="font-medium text-[var(--text-strong)]">{currentType.functionType}</span></PropRow>
+                  </PropSection>
 
-                    {/* IFC */}
-                    <PropSection
-                      open={openSections.ifc}
-                      onToggle={() => toggleSection("ifc")}
-                      icon={<LuShieldCheck className="h-3.5 w-3.5 text-amber-500" />}
-                      label="IFC / BIM Data"
-                    >
-                      <PropRow label="Export Entity">
-                        <span className="font-mono text-[var(--text-strong)]">
-                          {selectedWall ? "IfcWallStandardCase" : selectedDoor ? "IfcDoor" : selectedWindow ? "IfcWindow" : "IfcSlab"}
-                        </span>
-                      </PropRow>
-                    </PropSection>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-4 text-center opacity-50 h-full">
-                    <p className="text-xs">No elements selected</p>
-                  </div>
-                )}
-              </div>
-            </div>
-                {/* -- Horizontal splitter ----------------------------------------- */}
-                <div
-                  onMouseDown={onSplitterMouseDown}
-                  className="h-1.5 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-amber-500/30 transition-colors group"
-                  title="Drag to resize"
-                >
-                  <LuGripVertical className="h-3 w-3 text-[var(--text-muted)] rotate-90 opacity-50 group-hover:opacity-100" />
+                  {/* IFC */}
+                  <PropSection
+                    open={openSections.ifc}
+                    onToggle={() => toggleSection("ifc")}
+                    icon={<LuShieldCheck className="h-3.5 w-3.5 text-amber-500" />}
+                    label="IFC / BIM Data"
+                  >
+                    <PropRow label="Export Entity">
+                      <span className="font-mono text-[var(--text-strong)]">
+                        {selectedWall ? "IfcWallStandardCase" : selectedDoor ? "IfcDoor" : selectedWindow ? "IfcWindow" : "IfcSlab"}
+                      </span>
+                    </PropRow>
+                  </PropSection>
                 </div>
               </>
-            )}
-
-            {/* -- PROJECT BROWSER (bottom portion) --------------------------- */}
-            <div className="flex flex-col flex-1 min-h-0">
-              {/* Browser header + tabs */}
-              <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-                  Project Browser
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setBrowserTab("all")}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
-                      browserTab === "all"
-                        ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBrowserTab("ifc")}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
-                      browserTab === "ifc"
-                        ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
-                        : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                    }`}
-                  >
-                    IFC
-                  </button>
+            ) : (
+              /* Persistent Empty State when nothing is selected */
+              <div className="flex flex-col items-center justify-center p-6 text-center h-full min-h-[160px] text-[var(--text-muted)] space-y-2 select-none">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)]">
+                  <LuSlidersHorizontal className="h-5 w-5 text-amber-500 opacity-60" />
                 </div>
+                <p className="text-xs font-semibold text-[var(--text-body)]">No Element Selected</p>
+                <p className="text-[10px] text-[var(--text-muted)] max-w-[200px] leading-relaxed">
+                  Click any wall, door, window, or slab in the viewport to inspect and modify properties.
+                </p>
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* Browser body */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 thin-scroll text-xs space-y-2">
-                {browserTab === "all" ? (
-                  <>
-                    {/* Active Level selector — lives here, NOT in the ribbon */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
-                        Active Level
-                      </div>
-                      <select
-                        value={selectedFloor || ""}
-                        onChange={(e) => setSelectedFloor(e.target.value || null)}
-                        className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
-                      >
-                        <option value="">All Levels (Building)</option>
-                        {floors.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name} ({f.elevation != null ? `${f.elevation.toFixed(2)} m` : "Level"})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+        {/* -- Horizontal splitter ----------------------------------------- */}
+        <div
+          onMouseDown={onSplitterMouseDown}
+          className="h-2 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/40 hover:bg-amber-500/40 transition-colors group"
+          title="Drag to resize split"
+        >
+          <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-amber-500" />
+        </div>
 
-                    {/* Levels & Stories tree */}
-                    <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
-                      <button 
-                        type="button" 
-                        onClick={() => setFloorsOpen(!floorsOpen)} 
-                        className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-amber-500 transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <LuLayers className="h-3 w-3 text-amber-500" />
-                          Building Levels & Stories
-                        </div>
-                        <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-amber-400 bg-[var(--surface-overlay)]/50 transition-colors">
-                          {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" />}
-                        </div>
-                      </button>
-                      {floorsOpen && <ToolFloorsSection />}
-                      
-                      {/* Views tree */}
-                      <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 mt-2">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
-                          <LuEye className="h-3 w-3 text-amber-500" />
-                          Views
-                        </div>
-                        <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)] space-y-1">
-                          {[
-                            { id: 'free', label: '3D View' },
-                            { id: 'north', label: 'North Elevation' },
-                            { id: 'south', label: 'South Elevation' },
-                            { id: 'east', label: 'East Elevation' },
-                            { id: 'west', label: 'West Elevation' },
-                          ].map(v => (
-                            <button 
-                              key={v.id} 
-                              onClick={() => setViewPreset(v.id as any)} 
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-amber-500 transition-colors text-left w-full group"
-                            >
-                              <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500 transition-colors" />
-                              {v.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  /* IFC Tree tab */
-                  <div className="h-full flex-1">
-                    <IfcStructureTree structure={structure} loading={loading} />
-                  </div>
-                )}
-              </div>
+        {/* -- PROJECT BROWSER (bottom portion) --------------------------- */}
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Browser header + tabs */}
+          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 bg-[var(--surface-overlay)]/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+              Project Browser
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setBrowserTab("all")}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                  browserTab === "all"
+                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setBrowserTab("ifc")}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                  browserTab === "ifc"
+                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                }`}
+              >
+                IFC
+              </button>
             </div>
-      </aside>
+          </div>
 
-      {/* Edit Type Dialog */}
-      <EditTypeDialog
-        typeDef={currentType}
-        isOpen={editTypeOpen}
-        onClose={() => setEditTypeOpen(false)}
-        onSave={handleTypeSave}
-      />
+          {/* Browser body */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 thin-scroll text-xs space-y-2">
+            {browserTab === "all" ? (
+              <>
+                {/* Active Level selector — lives here, NOT in the ribbon */}
+                <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
+                    Active Level
+                  </div>
+                  <select
+                    value={selectedFloor || ""}
+                    onChange={(e) => setSelectedFloor(e.target.value || null)}
+                    className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
+                  >
+                    <option value="">All Levels (Building)</option>
+                    {floors.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({f.elevation != null ? `${f.elevation.toFixed(2)} m` : "Level"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Levels & Stories tree */}
+                <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setFloorsOpen(!floorsOpen)} 
+                    className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-amber-500 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <LuLayers className="h-3 w-3 text-amber-500" />
+                      Building Levels & Stories
+                    </div>
+                    <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-amber-400 bg-[var(--surface-overlay)]/50 transition-colors">
+                      {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" />}
+                    </div>
+                  </button>
+                  {floorsOpen && <ToolFloorsSection />}
+                  
+                  {/* Views tree */}
+                  <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 mt-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
+                      <LuEye className="h-3 w-3 text-amber-500" />
+                      Views
+                    </div>
+                    <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)] space-y-1">
+                      {[
+                        { id: 'free', label: '3D View' },
+                        { id: 'north', label: 'North Elevation' },
+                        { id: 'south', label: 'South Elevation' },
+                        { id: 'east', label: 'East Elevation' },
+                        { id: 'west', label: 'West Elevation' },
+                      ].map(v => (
+                        <button 
+                          key={v.id} 
+                          onClick={() => setViewPreset(v.id as any)} 
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-amber-500 transition-colors text-left w-full group"
+                        >
+                          <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500 transition-colors" />
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* IFC Tree tab */
+              <div className="h-full flex-1">
+                <IfcStructureTree structure={structure} loading={loading} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* In-dock Slide-Over Edit Type Panel */}
+        <EditTypeDialog
+          typeDef={currentType}
+          isOpen={editTypeOpen}
+          onClose={() => setEditTypeOpen(false)}
+          onSave={handleTypeSave}
+        />
+      </aside>
     </>
   );
 }
