@@ -134,6 +134,7 @@ export default function ToolRightPanel({
   const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
   const selectedSketchLineId = useLayoutDrawingStore((s) => s.selectedSketchLineId);
   const deleteSketchLine = useLayoutDrawingStore((s) => s.deleteSketchLine);
+  const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
   const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
 
   const placements = useToolMarkupStore((s) => s.placements);
@@ -147,16 +148,28 @@ export default function ToolRightPanel({
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId);
 
+  const hasLineSelection = Boolean(selectedSketchLine || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedSketchLine || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || hasLineSelection || selectedPlacement
   );
 
-  // IFC spatial tree hook
-  const activeModelId = useAppStore((s) => s.activeModelId);
-  const { structure, loading } = useIfcStructure(Boolean(activeModelId));
-
-  // Active level helper
-  const currentFloorObj = floors.find((f) => f.id === selectedFloor);
+  const propertiesTitle = selectedWall
+    ? "Wall Properties"
+    : selectedDoor
+    ? "Door Properties"
+    : selectedWindow
+    ? "Window Properties"
+    : selectedSlab
+    ? selectedSlab.kind === "roof"
+      ? "Roof Properties"
+      : "Floor Properties"
+    : selectedSketchLine
+    ? "Line Properties"
+    : sketchLines.length > 0
+    ? "Sketch Lines"
+    : selectedPlacement
+    ? "Markup Properties"
+    : "Properties";
 
   // Type definitions
   const activeTypeKey = selectedWall
@@ -215,6 +228,10 @@ export default function ToolRightPanel({
       ).toFixed(2)
     : "0.00";
 
+  // IFC spatial tree hook
+  const activeModelId = useAppStore((s) => s.activeModelId);
+  const { structure, loading } = useIfcStructure(Boolean(activeModelId));
+
   // -- Left edge resize drag -------------------------------------------------
   const isResizingRef = useRef(false);
   const resizeStartXRef = useRef(0);
@@ -244,7 +261,7 @@ export default function ToolRightPanel({
     [panelWidth, setPanelWidth]
   );
 
-  // -- Horizontal splitter drag (Properties / Layout split) -----------------
+  // -- Horizontal splitter drag ---------------------------------------------
   const isSplitDraggingRef = useRef(false);
   const splitStartYRef = useRef(0);
   const splitStartHeightRef = useRef(220);
@@ -273,9 +290,6 @@ export default function ToolRightPanel({
     [propHeight]
   );
 
-  // -------------------------------------------------------------------------
-  // RENDER
-  // -------------------------------------------------------------------------
   return (
     <>
       {!rightPanelOpen && (
@@ -296,7 +310,6 @@ export default function ToolRightPanel({
         } ${rightPanelOpen ? "translate-x-0" : "translate-x-full"}`}
         style={{ width: panelWidth }}
       >
-        {/* -- Left resize handle -------------------------------------------- */}
         {!isFloating && rightPanelOpen && (
           <div
             onMouseDown={onResizeMouseDown}
@@ -305,7 +318,6 @@ export default function ToolRightPanel({
           />
         )}
 
-        {/* -- Panel top header (Project Name + Status) --------------------- */}
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/60">
           <div className="flex items-center gap-2 min-w-0">
             <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
@@ -313,7 +325,6 @@ export default function ToolRightPanel({
               {activeModelLabel || "Architecture Project"}
             </span>
           </div>
-
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
@@ -324,19 +335,17 @@ export default function ToolRightPanel({
           </button>
         </div>
 
-        {/* -- PROPERTIES (top portion) ----------------------------------- */}
         <div
           className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
           style={{ height: propHeight, minHeight: 120 }}
         >
-          {/* Properties header */}
           <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-3.5 bg-[var(--surface-overlay)]/40">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
-              <LuSlidersHorizontal className="h-3 w-3" />
-              Properties
+            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5 truncate">
+              <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
+              {propertiesTitle}
             </span>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <UnifiedButton
                 size="xs"
                 variant="secondary"
@@ -472,6 +481,100 @@ export default function ToolRightPanel({
                         className="w-full"
                       >
                         Delete Line
+                      </UnifiedButton>
+                    </div>
+                  </div>
+                ) : sketchLines.length > 0 &&
+                  !selectedWall &&
+                  !selectedDoor &&
+                  !selectedWindow &&
+                  !selectedSlab &&
+                  !selectedPlacement ? (
+                  <div className="space-y-2">
+                    <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                        Element
+                      </div>
+                      <div className="font-semibold text-xs text-[var(--text-strong)] mt-0.5">
+                        Sketch Lines Chain ({sketchLines.length} Segments)
+                      </div>
+                    </div>
+
+                    <PropSection
+                      open={openSections.dimensions}
+                      onToggle={() => toggleSection("dimensions")}
+                      icon={<LuRuler className="h-3.5 w-3.5 text-yellow-400" />}
+                      label="Chain Geometry"
+                    >
+                      <PropRow label="Segments">
+                        <span className="font-mono font-semibold text-yellow-400">
+                          {sketchLines.length} lines
+                        </span>
+                      </PropRow>
+                      <PropRow label="Total Perimeter">
+                        <span className="font-mono font-semibold text-[var(--text-strong)]">
+                          {Math.round(
+                            sketchLines.reduce(
+                              (sum, l) =>
+                                sum +
+                                Math.hypot(
+                                  l.endXmm - l.startXmm,
+                                  l.endYmm - l.startYmm,
+                                ),
+                              0,
+                            ),
+                          )}{" "}
+                          mm
+                        </span>
+                      </PropRow>
+                    </PropSection>
+
+                    <PropSection
+                      open={openSections.identity}
+                      onToggle={() => toggleSection("identity")}
+                      icon={<LuLayers className="h-3.5 w-3.5 text-yellow-400" />}
+                      label="Chain & Loop"
+                    >
+                      <PropRow label="Status">
+                        {detectLoopsFromSegments(sketchLines).isFullyClosed ? (
+                          <span className="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/30">
+                            Closed Loop
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-[var(--text-muted)]">
+                            Open Chain ({sketchLines.length} segments)
+                          </span>
+                        )}
+                      </PropRow>
+                    </PropSection>
+
+                    <div className="pt-2 border-t border-[var(--panel-divider)]/40 space-y-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <UnifiedButton
+                          size="xs"
+                          variant="primary"
+                          onClick={() => convertSketchToSlab("floor")}
+                          className="w-full"
+                        >
+                          To Floor
+                        </UnifiedButton>
+                        <UnifiedButton
+                          size="xs"
+                          variant="primary"
+                          onClick={() => convertSketchToSlab("roof")}
+                          className="w-full"
+                        >
+                          To Roof
+                        </UnifiedButton>
+                      </div>
+                      <UnifiedButton
+                        size="xs"
+                        variant="danger"
+                        onClick={clearSketchLines}
+                        icon={<LuTrash2 className="h-3 w-3" />}
+                        className="w-full"
+                      >
+                        Clear All Lines
                       </UnifiedButton>
                     </div>
                   </div>
