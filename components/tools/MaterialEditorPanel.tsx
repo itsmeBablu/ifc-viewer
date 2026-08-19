@@ -269,18 +269,16 @@ export default function MaterialEditorPanel({
                 <input
                   type="text"
                   value={selectedMat.name}
-                  disabled={selectedMat.isPreset}
                   onChange={(e) => updateMaterial(selectedMat.id, { name: e.target.value })}
-                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)] font-medium disabled:opacity-60"
+                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)] font-medium"
                 />
               </div>
               <div className="space-y-0.5">
                 <label className="text-[10px] font-semibold text-[var(--text-muted)]">Category</label>
                 <select
                   value={selectedMat.category}
-                  disabled={selectedMat.isPreset}
                   onChange={(e) => updateMaterial(selectedMat.id, { category: e.target.value as any })}
-                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)] disabled:opacity-60"
+                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)]"
                 >
                   <option value="Masonry">Masonry</option>
                   <option value="Concrete">Concrete</option>

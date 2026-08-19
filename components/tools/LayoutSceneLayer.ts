@@ -844,21 +844,25 @@ export default class LayoutSceneLayer {
     lines: LayoutSketchLine[],
     draw: { levelId: string; points: { xMm: number; yMm: number }[]; cursor: { xMm: number; yMm: number } | null } | null,
     gapPoints: { xMm: number; yMm: number }[] = [],
-    elevMm: number = 0,
+    levels: LayoutLevel[] = [],
     selectedLineId: string | null = null,
+    fallbackElevMm: number = 0,
   ) {
     this.disposeGroup(this.sketchGroup);
     this.sketchGroup.clear();
 
-    const y = fromMm(elevMm) + 0.06;
+    const levelMap = new Map(levels.map((lvl) => [lvl.id, lvl.elevationMm]));
     const sketchYellow = 0xfacc15;
     const selectedCyan = 0x38bdf8;
     const gapRed = 0xef4444;
 
-    // 1. Render placed sketch lines as high-contrast ribbons / thick lines + node spheres
+    // 1. Render placed sketch lines on ALL floors
     for (const l of lines) {
       const isSelected = l.id === selectedLineId;
       const col = isSelected ? selectedCyan : sketchYellow;
+      const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
+      const y = fromMm(elevMm) + 0.08;
+
       const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
       const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
 
@@ -866,15 +870,18 @@ export default class LayoutSceneLayer {
       const dz = p2.z - p1.z;
       const segLen = Math.hypot(dx, dz);
       if (segLen > 0.001) {
-        const segGeo = new THREE.CylinderGeometry(0.075, 0.075, segLen, 12);
+        const segGeo = new THREE.CylinderGeometry(0.06, 0.06, segLen, 12);
         segGeo.rotateZ(Math.PI / 2);
         const segMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
-          emissiveIntensity: isSelected ? 0.85 : 0.6,
+          emissiveIntensity: isSelected ? 0.95 : 0.75,
           roughness: 0.2,
           metalness: 0.1,
-          depthTest: false,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: true,
+          depthWrite: true,
         });
         const segMesh = new THREE.Mesh(segGeo, segMat);
         segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
@@ -885,12 +892,17 @@ export default class LayoutSceneLayer {
       }
 
       for (const pt of [p1, p2]) {
-        const sphereGeo = new THREE.SphereGeometry(0.035, 12, 10);
+        const sphereGeo = new THREE.SphereGeometry(0.04, 12, 10);
         const sphereMat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
-          emissiveIntensity: isSelected ? 0.9 : 0.65,
-          depthTest: false,
+          emissiveIntensity: isSelected ? 0.95 : 0.8,
+          roughness: 0.2,
+          metalness: 0.1,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: true,
+          depthWrite: true,
         });
         const sphere = new THREE.Mesh(sphereGeo, sphereMat);
         sphere.position.copy(pt);
@@ -902,6 +914,8 @@ export default class LayoutSceneLayer {
 
     // 2. Render in-progress drawing chain and rubberband cursor line
     if (draw && draw.points.length > 0) {
+      const drawElevMm = levelMap.get(draw.levelId) ?? fallbackElevMm;
+      const drawY = fromMm(drawElevMm) + 0.09;
       const pts = [...draw.points];
       if (draw.cursor) pts.push(draw.cursor);
 
@@ -909,23 +923,28 @@ export default class LayoutSceneLayer {
         for (let i = 0; i < pts.length - 1; i++) {
           const a = pts[i];
           const b = pts[i + 1];
-          const p1 = new THREE.Vector3(fromMm(a.xMm), y + 0.01, fromMm(a.yMm));
-          const p2 = new THREE.Vector3(fromMm(b.xMm), y + 0.01, fromMm(b.yMm));
+          const p1 = new THREE.Vector3(fromMm(a.xMm), drawY, fromMm(a.yMm));
+          const p2 = new THREE.Vector3(fromMm(b.xMm), drawY, fromMm(b.yMm));
           const dx = p2.x - p1.x;
           const dz = p2.z - p1.z;
           const segLen = Math.hypot(dx, dz);
           if (segLen > 0.001) {
-            const segGeo = new THREE.CylinderGeometry(0.04, 0.04, segLen, 12);
+            const segGeo = new THREE.CylinderGeometry(0.045, 0.045, segLen, 12);
             segGeo.rotateZ(Math.PI / 2);
             const isRubberband = i === pts.length - 2 && draw.cursor != null;
             const segMat = new THREE.MeshStandardMaterial({
               color: isRubberband ? 0xfde047 : 0xfacc15,
               emissive: 0xfacc15,
-              emissiveIntensity: isRubberband ? 0.85 : 0.6,
-              depthTest: false,
+              emissiveIntensity: isRubberband ? 0.9 : 0.7,
+              roughness: 0.2,
+              metalness: 0.1,
+              transparent: true,
+              opacity: 0.95,
+              depthTest: true,
+              depthWrite: true,
             });
             const segMesh = new THREE.Mesh(segGeo, segMat);
-            segMesh.position.set((p1.x + p2.x) / 2, y + 0.01, (p1.z + p2.z) / 2);
+            segMesh.position.set((p1.x + p2.x) / 2, drawY, (p1.z + p2.z) / 2);
             segMesh.rotation.y = -Math.atan2(dz, dx);
             segMesh.renderOrder = 105;
             this.sketchGroup.add(segMesh);
@@ -936,15 +955,20 @@ export default class LayoutSceneLayer {
 
     // 3. Render glowing gap markers if any
     for (const gp of gapPoints) {
-      const gapGeo = new THREE.SphereGeometry(0.05, 14, 10);
+      const gapGeo = new THREE.SphereGeometry(0.055, 14, 10);
       const gapMat = new THREE.MeshStandardMaterial({
         color: gapRed,
         emissive: gapRed,
-        emissiveIntensity: 0.9,
-        depthTest: false,
+        emissiveIntensity: 0.95,
+        roughness: 0.2,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: true,
+        depthWrite: true,
       });
       const gapMesh = new THREE.Mesh(gapGeo, gapMat);
-      gapMesh.position.set(fromMm(gp.xMm), y + 0.05, fromMm(gp.yMm));
+      gapMesh.position.set(fromMm(gp.xMm), fromMm(fallbackElevMm) + 0.1, fromMm(gp.yMm));
       gapMesh.renderOrder = 110;
       this.sketchGroup.add(gapMesh);
     }
@@ -966,10 +990,15 @@ export default class LayoutSceneLayer {
     this.windowMeshes.clear();
     this.slabMeshes.clear();
     for (const mesh of this.levelSlabs.values()) {
+      this.group.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
     this.levelSlabs.clear();
+    this.disposeGroup(this.endpointGroup);
+    this.endpointGroup.clear();
+    this.disposeGroup(this.sketchGroup);
+    this.sketchGroup.clear();
     for (const [id, mesh] of this.underlayMeshes) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
@@ -1253,7 +1282,7 @@ export default class LayoutSceneLayer {
         customMat.opacity < 0.99 ||
         Boolean(customMat.transmission && customMat.transmission > 0);
 
-      const effectiveColor = colorStr || customMat.color;
+      const effectiveColor = customMat.color || colorStr || "#d6d3d1";
       mat.color.setStyle(effectiveColor);
 
       if (this.currentRenderMode === "realistic" && customMat.hatchStyle && customMat.hatchStyle !== "solid") {
