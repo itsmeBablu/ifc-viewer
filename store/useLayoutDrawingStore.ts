@@ -23,10 +23,12 @@ import {
   type LayoutPresets,
   type LayoutRoom,
   type LayoutSlab,
+  type LayoutSketchLine,
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
 } from "@/lib/layoutDrawing";
+import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import {
   idbDeleteDoor,
   idbDeleteLevel,
@@ -81,6 +83,15 @@ export type WallDrawState = {
   snapType?: "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "extension" | null;
 } | null;
 
+export type SketchDrawState = {
+  levelId: string;
+  points: { xMm: number; yMm: number }[];
+  cursor: { xMm: number; yMm: number } | null;
+  angleDeg: number | null;
+  angleSnapped: boolean;
+  lengthMm: number | null;
+} | null;
+
 export type SlabDrawState = {
   kind: "floor" | "roof";
   levelId: string;
@@ -110,6 +121,9 @@ type LayoutDrawingState = {
   windows: LayoutWindow[];
   slabs: LayoutSlab[];
   layoutRooms: LayoutRoom[];
+  sketchLines: LayoutSketchLine[];
+  sketchDraw: SketchDrawState;
+  gapHighlightPoints: { xMm: number; yMm: number }[];
   drawingScale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500";
   unitSystem: "metric" | "imperial";
   underlays: ReferenceUnderlay[];
@@ -214,7 +228,7 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutDoor,
-        "positionMm" | "widthMm" | "heightMm" | "hinge" | "swing"
+        "positionMm" | "widthMm" | "heightMm" | "hinge" | "swing" | "style" | "headShape" | "color" | "material"
       >
     >,
   ) => Promise<void>;
@@ -242,6 +256,7 @@ type LayoutDrawingState = {
         | "sillHeightMm"
         | "headShape"
         | "color"
+        | "material"
       >
     >,
   ) => Promise<void>;
@@ -315,6 +330,19 @@ type LayoutDrawingState = {
   addCalibratePoint: (pt: { xMm: number; yMm: number }) => void;
   commitCalibrateDistance: (distanceMm: number) => Promise<void>;
 
+  // Lines / Sketch tool
+  beginSketchLineDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateSketchLineCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  addSketchLinePoint: (point: { xMm: number; yMm: number }) => Promise<LayoutSketchLine | null>;
+  finishSketchLineDraw: () => void;
+  cancelSketchLineDraw: () => void;
+  clearSketchLines: () => void;
+  convertSketchToSlab: (kind: "floor" | "roof") => Promise<{
+    success: boolean;
+    error?: string;
+    gapPoints?: { xMm: number; yMm: number }[];
+  }>;
+
   clearLayoutSelection: () => void;
 };
 
@@ -331,9 +359,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   doors: [],
   windows: [],
   slabs: [],
-    layoutRooms: [],
-    drawingScale: "1:100",
-    unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
+  layoutRooms: [],
+  sketchLines: [],
+  sketchDraw: null,
+  gapHighlightPoints: [],
+  drawingScale: "1:100",
+  unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
@@ -894,6 +925,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       endYmm: end.yMm,
       thicknessMm,
       heightMm,
+      material: "concrete",
+      color: "#878683",
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
@@ -1320,6 +1353,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       widthMm,
       heightMm,
       sillHeightMm,
+      color: "#1e293b",
       createdAt: Date.now(),
     };
     await idbPutWindow(win);
@@ -1568,5 +1602,202 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       calibratePoints: [],
       lastMutatedAt: Date.now(),
     });
+  },
+
+  // -- Lines / Sketch Tool Implementation ------------------------------------
+  beginSketchLineDraw: (levelId, start) => {
+    const underSnap = snapPlanToUnderlayLines(start, get().underlays, levelId);
+    const pt = { xMm: underSnap.xMm, yMm: underSnap.yMm };
+    set({
+      sketchDraw: {
+        levelId,
+        points: [pt],
+        cursor: pt,
+        angleDeg: null,
+        angleSnapped: false,
+        lengthMm: null,
+      },
+      wallDraw: null,
+      slabDraw: null,
+      armedLayoutTool: "lines",
+      gapHighlightPoints: [],
+    });
+  },
+
+  updateSketchLineCursor: (cursor) => {
+    const draw = get().sketchDraw;
+    if (!draw) return;
+    if (!cursor) {
+      set({
+        sketchDraw: {
+          ...draw,
+          cursor: null,
+          angleDeg: null,
+          angleSnapped: false,
+          lengthMm: null,
+        },
+      });
+      return;
+    }
+    const last = draw.points[draw.points.length - 1];
+    if (!last) {
+      const underSnap = snapPlanToUnderlayLines(cursor, get().underlays, draw.levelId);
+      set({
+        sketchDraw: {
+          ...draw,
+          cursor: { xMm: underSnap.xMm, yMm: underSnap.yMm },
+        },
+      });
+      return;
+    }
+    const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
+    const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
+    const point = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    const lengthMm = Math.hypot(point.xMm - last.xMm, point.yMm - last.yMm);
+    set({
+      sketchDraw: {
+        ...draw,
+        cursor: point,
+        angleDeg: snapped.angleDeg,
+        angleSnapped: snapped.snapped || underSnap.snapped,
+        lengthMm,
+      },
+    });
+  },
+
+  addSketchLinePoint: async (point) => {
+    const draw = get().sketchDraw;
+    const projectId = get().projectId;
+    if (!draw || !projectId) return null;
+    const last = draw.points[draw.points.length - 1];
+    if (!last) {
+      set({
+        sketchDraw: {
+          ...draw,
+          points: [point],
+          cursor: point,
+          angleDeg: null,
+          angleSnapped: false,
+          lengthMm: null,
+        },
+      });
+      return null;
+    }
+    const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    const snapped = snapWallEndpointMm(last, point, { prevFrom });
+    const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
+    const end = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    const dx = end.xMm - last.xMm;
+    const dy = end.yMm - last.yMm;
+    if (Math.hypot(dx, dy) < 50) return null;
+
+    const line: LayoutSketchLine = {
+      id: newLayoutId("line"),
+      projectId,
+      levelId: draw.levelId,
+      startXmm: last.xMm,
+      startYmm: last.yMm,
+      endXmm: end.xMm,
+      endYmm: end.yMm,
+      createdAt: Date.now(),
+    };
+
+    pushWerkzeugHistory();
+    set({
+      sketchLines: [...get().sketchLines, line],
+      lastMutatedAt: Date.now(),
+      gapHighlightPoints: [],
+      sketchDraw: {
+        ...draw,
+        points: [...draw.points, end],
+        cursor: end,
+        angleDeg: snapped.angleDeg,
+        angleSnapped: snapped.snapped,
+        lengthMm: Math.hypot(dx, dy),
+      },
+    });
+    return line;
+  },
+
+  finishSketchLineDraw: () => set({ sketchDraw: null }),
+  cancelSketchLineDraw: () => set({ sketchDraw: null, armedLayoutTool: null }),
+  clearSketchLines: () => set({ sketchLines: [], sketchDraw: null, gapHighlightPoints: [] }),
+
+  convertSketchToSlab: async (kind) => {
+    const lines = get().sketchLines;
+    if (!lines || lines.length < 3) {
+      return {
+        success: false,
+        error: "At least 3 connected line segments are required to form a closed shape.",
+      };
+    }
+
+    const projectId = get().projectId;
+    if (!projectId) return { success: false, error: "No active project." };
+
+    const levelId = lines[0].levelId || get().levels[0]?.id || "default";
+    const level = get().levels.find((l) => l.id === levelId);
+
+    const result = detectLoopsFromSegments(lines);
+
+    if (!result.isFullyClosed || result.outerLoops.length === 0) {
+      set({ gapHighlightPoints: result.gapPoints });
+      return {
+        success: false,
+        error: "The sketched shape is not fully closed. Check highlighted endpoints for gaps.",
+        gapPoints: result.gapPoints,
+      };
+    }
+
+    pushWerkzeugHistory();
+
+    // Convert outer loops to slabs (with nested holes if present)
+    for (const outer of result.outerLoops) {
+      const holes = result.nestedHoles.get(outer) || [];
+      const xs = outer.points.map((p) => p.xMm);
+      const ys = outer.points.map((p) => p.yMm);
+      const minXmm = Math.min(...xs);
+      const maxXmm = Math.max(...xs);
+      const minYmm = Math.min(...ys);
+      const maxYmm = Math.max(...ys);
+
+      const thicknessMm = get().draftSlabThicknessMm;
+      const elevationOffsetMm =
+        kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+
+      const slab: LayoutSlab = {
+        id: newLayoutId(kind === "roof" ? "roof" : "floor"),
+        projectId,
+        levelId,
+        kind,
+        minXmm,
+        minYmm,
+        maxXmm,
+        maxYmm,
+        thicknessMm,
+        elevationOffsetMm,
+        boundary: outer.points,
+        holes: holes.map((h) => h.points),
+        createdAt: Date.now(),
+      };
+
+      await idbPutSlab(slab);
+      set((s) => ({
+        slabs: [...s.slabs, slab],
+        selectedSlabId: slab.id,
+      }));
+    }
+
+    // Clear the sketched lines after successful conversion
+    set({
+      sketchLines: [],
+      sketchDraw: null,
+      gapHighlightPoints: [],
+      armedLayoutTool: null,
+      lastMutatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 }));

@@ -64,6 +64,7 @@ export type LayoutDoor = {
   style?: "wood" | "metal" | "glass" | "double";
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
+  material?: string;
 };
 
 export type LayoutWindow = {
@@ -79,6 +80,7 @@ export type LayoutWindow = {
   // -- Section 6: Head shape + color -------------------------------------
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
+  material?: string;
 };
 
 /** Horizontal slab — floor plate or roof plate. */
@@ -125,7 +127,18 @@ export function normalizeDoor(
   };
 }
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof";
+export type LayoutSketchLine = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  createdAt: number;
+};
+
+export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "lines";
 
 export type LayoutPresets = {
   wallThicknessMm: number[];

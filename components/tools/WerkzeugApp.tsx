@@ -122,6 +122,7 @@ export default function WerkzeugApp() {
   const [isLandscape, setIsLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(320);
   const dragDepthRef = useRef(0);
 
   const rooms = useAppStore((s) => s.rooms);
@@ -447,8 +448,11 @@ export default function WerkzeugApp() {
         {/* Contextual Ribbon Options Bar */}
         <ToolOptionsBar />
 
-        {/* 3D CAD Viewport Canvas */}
-        <main className="fixed inset-0 z-0 bg-[#0c0d12]">
+        {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
+        <main
+          className="fixed inset-y-0 left-0 z-0 bg-[#0c0d12] transition-[right] duration-200"
+          style={{ right: isDesktop && rightPanelOpen ? panelWidth : 0 }}
+        >
           <WerkzeugViewer3D
             ref={viewerRef}
             onPointerMove={handlePointerMove}
@@ -464,11 +468,13 @@ export default function WerkzeugApp() {
           active={pointerOverViewer}
         />
 
-        {/* Right Panel: Properties + Project Browser (unified) */}
+        {/* Right Panel: Properties + Layout (full-height docked on desktop) */}
         {isDesktop && (
           <ToolRightPanel
             onFile={handleFile}
             isLoadingModel={isLoadingModel}
+            panelWidth={panelWidth}
+            onPanelWidthChange={setPanelWidth}
           />
         )}
 

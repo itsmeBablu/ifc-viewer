@@ -2237,6 +2237,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       } else {
         layer.setSlabPreview(null, null, 0, 200, "floor");
       }
+      // Sync Lines sketch layer
+      layer.syncSketch(
+        s.sketchLines || [],
+        s.sketchDraw,
+        s.gapHighlightPoints || [],
+        activeLevel?.elevationMm ?? 0
+      );
       const tp = s.tracePreview;
       const cand = tp?.candidates[tp.index] ?? null;
       if (cand && !s.wallDraw) {
@@ -4025,6 +4032,48 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
 
+        if (layoutStore.sketchDraw && cam && layoutLayer) {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          if (!camRay) return;
+          raycaster.current.setFromCamera(pointerNdc.current, camRay);
+          const hit = layoutLayer.pickLayout(raycaster.current);
+          let pt: THREE.Vector3 | null =
+            hit?.kind === "ground" || hit?.kind === "underlay"
+              ? hit.point
+              : null;
+          if (!pt) {
+            const roots: THREE.Object3D[] = [layoutLayer.group];
+            if (shellCloneRef.current) roots.push(shellCloneRef.current);
+            const surface = pickMarkupSurface(raycaster.current, roots);
+            pt = surface?.point ?? null;
+          }
+          if (pt) {
+            const ms = useToolMarkupStore.getState();
+            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+            layoutStore.updateSketchLineCursor({
+              xMm: toMm(pt.x),
+              yMm: toMm(pt.z),
+            });
+            const after = useLayoutDrawingStore.getState().sketchDraw;
+            if (after?.lengthMm != null) {
+              const parts = [`${Math.round(after.lengthMm)} mm`];
+              if (after.angleDeg != null) {
+                parts.push(
+                  `${after.angleDeg}°${after.angleSnapped ? " ✦" : ""}`,
+                );
+              }
+              ms.setDragSnapHint({
+                text: parts.join(" · "),
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            }
+          }
+          useToolMarkupStore.getState().setSceneHoverTip(null);
+          canvas.style.cursor = "crosshair";
+          return;
+        }
+
         // Tier 2: hover auto-trace preview for wall / door / window
         if (
           (layoutStore.armedLayoutTool === "wall" ||
@@ -4668,6 +4717,37 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   void layoutStore.addSlabCorner(plan);
                   return;
                 }
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "lines") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (
+                layoutHit?.kind === "ground" ||
+                layoutHit?.kind === "underlay"
+              ) {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!layoutStore.sketchDraw) {
+                  layoutStore.beginSketchLineDraw(levelId, plan);
+                } else if (e.detail >= 2) {
+                  void layoutStore.addSketchLinePoint(plan).then(() => {
+                    layoutStore.finishSketchLineDraw();
+                  });
+                } else {
+                  void layoutStore.addSketchLinePoint(plan);
+                }
+                return;
               }
             }
 

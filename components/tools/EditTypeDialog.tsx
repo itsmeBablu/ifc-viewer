@@ -204,11 +204,11 @@ export default function EditTypeDialog({
   };
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-[var(--popover-bg)] backdrop-blur-xl border border-[var(--panel-divider)] rounded-[2rem] shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200 select-none">
+    <div className="absolute inset-0 z-30 flex flex-col bg-[var(--popover-bg)] backdrop-blur-2xl border-l border-[var(--panel-divider)] shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200 select-none">
       {/* Header */}
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/70">
         <div className="flex items-center gap-2 truncate">
-          <LuSlidersHorizontal className="h-4 w-4 text-amber-500 shrink-0" />
+          <LuSlidersHorizontal className="h-4 w-4 text-yellow-400 shrink-0" />
           <span className="font-bold text-xs text-[var(--text-strong)] truncate">
             Edit Type — {formData.name}
           </span>
@@ -223,10 +223,10 @@ export default function EditTypeDialog({
         </button>
       </div>
 
-      {/* Form Body */}
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3.5 space-y-3 thin-scroll text-xs">
+      {/* Form Body (Dense, Compact, Thin Dividers) */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3.5 space-y-2.5 thin-scroll text-xs">
         {/* Note Banner */}
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-600 dark:text-amber-400">
+        <div className="flex items-start gap-2 rounded-xl border border-yellow-400/30 bg-yellow-400/10 p-2 text-yellow-500 dark:text-yellow-400">
           <LuInfo className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <div className="text-[10px] leading-relaxed">
             <strong>Global Type Parameters:</strong> Changes apply to <strong>all instances</strong> of this type in the project.
@@ -234,19 +234,19 @@ export default function EditTypeDialog({
         </div>
 
         {/* Type Name */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Type Name</label>
+        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">Type Name</label>
           <input
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-medium text-xs text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
+            className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-medium text-xs text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
           />
         </div>
 
         {/* Construction Dimensions */}
-        <div className="space-y-2.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
             Dimensions
           </div>
 
@@ -312,8 +312,8 @@ export default function EditTypeDialog({
         </div>
 
         {/* Materials & Finishes */}
-        <div className="space-y-2.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
             Materials & Function
           </div>
 
@@ -377,7 +377,7 @@ export default function EditTypeDialog({
           </button>
           <button
             type="submit"
-            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition-all"
+            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all"
           >
             <LuCheck className="h-3.5 w-3.5" />
             <span>Apply</span>

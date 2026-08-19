@@ -12,6 +12,7 @@ import {
   type LayoutDoor,
   type LayoutLevel,
   type LayoutSlab,
+  type LayoutSketchLine,
   type LayoutWall,
   type LayoutWindow,
   type WallCenterlineMm,
@@ -28,13 +29,13 @@ import { useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 
 const WALL_COLOR = 0xd6d3d1;
-const WALL_SEL = 0xf59e0b;
+const WALL_SEL = 0xfacc15;
 const DOOR_COLOR = 0x78716c;
 const WINDOW_COLOR = 0x38bdf8;
 const FLOOR_COLOR = 0xa8a29e;
-const FLOOR_SEL = 0xf59e0b;
+const FLOOR_SEL = 0xfacc15;
 const ROOF_COLOR = 0x78716c;
-const ROOF_SEL = 0xfbbf24;
+const ROOF_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
@@ -53,6 +54,7 @@ export default class LayoutSceneLayer {
   private endpointGroup = new THREE.Group();
   private endpointStart: THREE.Mesh | null = null;
   private endpointEnd: THREE.Mesh | null = null;
+  private sketchGroup = new THREE.Group();
 
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
@@ -61,7 +63,9 @@ export default class LayoutSceneLayer {
   constructor() {
     this.group.name = "layout-drawing-layer";
     this.endpointGroup.name = "layout-wall-endpoints";
+    this.sketchGroup.name = "layout-sketch-lines";
     this.group.add(this.endpointGroup);
+    this.group.add(this.sketchGroup);
   }
 
   ensureGround(elevationMm = 0) {
@@ -574,10 +578,94 @@ export default class LayoutSceneLayer {
       "position",
       new THREE.Float32BufferAttribute(positions, 3),
     );
-    const mat = new THREE.LineBasicMaterial({ color: 0xf59e0b });
+    const mat = new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 2 });
     this.previewLine = new THREE.Line(geo, mat);
     this.previewLine.userData.isLayoutPreview = true;
     this.group.add(this.previewLine);
+  }
+
+  /**
+   * Syncs sketch lines, live drawn segment, and gap error highlight markers.
+   */
+  syncSketch(
+    lines: LayoutSketchLine[],
+    draw: { points: { xMm: number; yMm: number }[]; cursor: { xMm: number; yMm: number } | null } | null,
+    gapPoints: { xMm: number; yMm: number }[],
+    elevationMm: number,
+  ) {
+    this.disposeGroup(this.sketchGroup);
+
+    if (lines.length === 0 && !draw && gapPoints.length === 0) return;
+
+    const y = fromMm(elevationMm) + 0.025;
+
+    // 1. Render established sketch lines
+    if (lines.length > 0) {
+      const positions: number[] = [];
+      for (const line of lines) {
+        positions.push(
+          fromMm(line.startXmm), y, fromMm(line.startYmm),
+          fromMm(line.endXmm), y, fromMm(line.endYmm)
+        );
+
+        // Vertex node dots
+        const dotGeo = new THREE.SphereGeometry(fromMm(60), 8, 8);
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false });
+        const dotStart = new THREE.Mesh(dotGeo, dotMat);
+        dotStart.position.set(fromMm(line.startXmm), y + 0.005, fromMm(line.startYmm));
+        const dotEnd = new THREE.Mesh(dotGeo, dotMat);
+        dotEnd.position.set(fromMm(line.endXmm), y + 0.005, fromMm(line.endYmm));
+        this.sketchGroup.add(dotStart, dotEnd);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 3 });
+      const lineSegs = new THREE.LineSegments(geo, mat);
+      this.sketchGroup.add(lineSegs);
+    }
+
+    // 2. Render active drawing rubberband
+    if (draw && draw.points.length > 0) {
+      const last = draw.points[draw.points.length - 1];
+      const cur = draw.cursor;
+      if (last && cur) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute([
+            fromMm(last.xMm), y, fromMm(last.yMm),
+            fromMm(cur.xMm), y, fromMm(cur.yMm),
+          ], 3)
+        );
+        const mat = new THREE.LineDashedMaterial({
+          color: 0xfde047,
+          dashSize: 0.1,
+          gapSize: 0.05,
+        });
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        this.sketchGroup.add(line);
+      }
+    }
+
+    // 3. Render gap highlight markers (red pulsing spheres)
+    if (gapPoints && gapPoints.length > 0) {
+      for (const gp of gapPoints) {
+        const sphereGeo = new THREE.SphereGeometry(fromMm(120), 16, 12);
+        const sphereMat = new THREE.MeshStandardMaterial({
+          color: 0xef4444,
+          emissive: 0xdc2626,
+          emissiveIntensity: 0.8,
+          roughness: 0.2,
+          depthTest: false,
+        });
+        const mesh = new THREE.Mesh(sphereGeo, sphereMat);
+        mesh.position.set(fromMm(gp.xMm), y + 0.04, fromMm(gp.yMm));
+        mesh.renderOrder = 30;
+        this.sketchGroup.add(mesh);
+      }
+    }
   }
 
   /**

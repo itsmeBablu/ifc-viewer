@@ -56,15 +56,22 @@ type BrowserTab = "all" | "ifc";
 export default function ToolRightPanel({
   onFile,
   isLoadingModel = false,
+  panelWidth: controlledPanelWidth,
+  onPanelWidthChange,
 }: {
   onFile?: (file: File) => void;
   isLoadingModel?: boolean;
+  panelWidth?: number;
+  onPanelWidthChange?: (w: number) => void;
 }) {
   // -- Panel open/width state ------------------------------------------------
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const [internalPanelWidth, setInternalPanelWidth] = useState(DEFAULT_WIDTH);
+  const panelWidth = controlledPanelWidth ?? internalPanelWidth;
+  const setPanelWidth = onPanelWidthChange ?? setInternalPanelWidth;
+
   const [browserTab, setBrowserTab] = useState<BrowserTab>("all");
   const [floorsOpen, setFloorsOpen] = useState(true);
   const [isFloating, setIsFloating] = useState(false);
@@ -75,7 +82,7 @@ export default function ToolRightPanel({
     const handleResize = () => {
       setIsFloating(window.innerWidth < 768);
       if (!isSplitDraggingRef.current) {
-        setPropHeight(Math.max(200, Math.round((window.innerHeight - 192) / 2)));
+        setPropHeight(Math.max(200, Math.round((window.innerHeight - 120) / 2)));
       }
     };
     handleResize();
@@ -118,18 +125,14 @@ export default function ToolRightPanel({
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
   const selectWall = useLayoutDrawingStore((s) => s.selectWall);
-  const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
+  const selectDoor = useLayoutDrawingStore((s) => s.selectDoor);
+  const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
+  const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
 
   const placements = useToolMarkupStore((s) => s.placements);
-  const notes = useToolMarkupStore((s) => s.notes);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
-  const selectedNoteId = useToolMarkupStore((s) => s.selectedNoteId);
-  const selectPlacement = useToolMarkupStore((s) => s.selectPlacement);
-  const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
-
-  const { structure, loading } = useIfcStructure(true);
-
-  // -- Derived selections ----------------------------------------------------
+  
+  // Derive selection objects
   const selectedWall = walls.find((w) => w.id === selectedWallId);
   const selectedDoor = doors.find((d) => d.id === selectedDoorId);
   const selectedWindow = windows.find((w) => w.id === selectedWindowId);
@@ -140,113 +143,100 @@ export default function ToolRightPanel({
     selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedPlacement
   );
 
+  // IFC spatial tree hook
+  const activeModelId = useAppStore((s) => s.activeModelId);
+  const { structure, loading } = useIfcStructure(Boolean(activeModelId));
+
+  // Active level helper
   const currentFloorObj = floors.find((f) => f.id === selectedFloor);
 
-  // -- Type selector helpers -------------------------------------------------
-  const getActiveTypeKey = (): string => {
-    if (selectedWall) {
-      if (selectedWall.thicknessMm === 100) return "wall-interior-100";
-      if (selectedWall.thicknessMm === 150) return "wall-interior-150";
-      if (selectedWall.thicknessMm === 300) return "wall-exterior-300";
-      if (selectedWall.thicknessMm === 365) return "wall-exterior-365";
-      return "wall-generic-200";
-    }
-    if (selectedDoor) {
-      if (selectedDoor.widthMm === 800) return "door-single-800";
-      if (selectedDoor.widthMm === 1800) return "door-double-1800";
-      return "door-single-900";
-    }
-    if (selectedWindow) {
-      if (selectedWindow.widthMm === 1000) return "win-fixed-1000";
-      if (selectedWindow.widthMm === 2000) return "win-pano-2000";
-      return "win-double-1200";
-    }
-    if (selectedSlab) {
-      return selectedSlab.kind === "roof" ? "slab-roof-300" : "slab-floor-200";
-    }
-    return "wall-generic-200";
-  };
+  // Type definitions
+  const activeTypeKey = selectedWall
+    ? "basic-exterior-200"
+    : selectedDoor
+    ? "standard-door-900"
+    : selectedWindow
+    ? "standard-window-1200"
+    : selectedSlab
+    ? "concrete-slab-200"
+    : "basic-exterior-200";
 
-  const activeTypeKey = getActiveTypeKey();
-  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
+  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES["basic-exterior-200"];
 
-  const handleTypeChange = (newTypeKey: string) => {
-    const target = types[newTypeKey];
-    if (!target) return;
-    if (selectedWall && target.thicknessMm) {
-      updateWall(selectedWall.id, { thicknessMm: target.thicknessMm });
-    } else if (selectedDoor && target.widthMm && target.heightMm) {
-      updateDoor(selectedDoor.id, { widthMm: target.widthMm, heightMm: target.heightMm });
-    } else if (selectedWindow && target.widthMm && target.heightMm) {
-      updateWindow(selectedWindow.id, {
-        widthMm: target.widthMm,
-        heightMm: target.heightMm,
-        sillHeightMm: target.sillHeightMm ?? 900,
+  const handleTypeChange = (typeId: string) => {
+    const tDef = types[typeId];
+    if (!tDef) return;
+    if (selectedWall && tDef.category === "Wall") {
+      updateWall(selectedWall.id, {
+        thicknessMm: tDef.thicknessMm || selectedWall.thicknessMm,
+        heightMm: tDef.heightMm || selectedWall.heightMm,
       });
-    } else if (selectedSlab && target.thicknessMm) {
-      updateSlab(selectedSlab.id, { thicknessMm: target.thicknessMm });
+    } else if (selectedDoor && tDef.category === "Door") {
+      updateDoor(selectedDoor.id, {
+        widthMm: tDef.widthMm || selectedDoor.widthMm,
+        heightMm: tDef.heightMm || selectedDoor.heightMm,
+      });
+    } else if (selectedWindow && tDef.category === "Window") {
+      updateWindow(selectedWindow.id, {
+        widthMm: tDef.widthMm || selectedWindow.widthMm,
+        heightMm: tDef.heightMm || selectedWindow.heightMm,
+      });
+    } else if (selectedSlab && (tDef.category === "Floor" || tDef.category === "Roof")) {
+      updateSlab(selectedSlab.id, {
+        thicknessMm: tDef.thicknessMm || selectedSlab.thicknessMm,
+      });
     }
   };
 
   const handleTypeSave = (updated: ElementTypeDefinition) => {
     setTypes((prev) => ({ ...prev, [updated.id]: updated }));
-    if (updated.category === "Wall" && updated.thicknessMm) {
-      walls.forEach((w) => {
-        if (w.thicknessMm === currentType.thicknessMm) {
-          updateWall(w.id, { thicknessMm: updated.thicknessMm });
-        }
-      });
-    } else if (updated.category === "Door" && updated.widthMm && updated.heightMm) {
-      doors.forEach((d) => {
-        if (d.widthMm === currentType.widthMm) {
-          updateDoor(d.id, { widthMm: updated.widthMm, heightMm: updated.heightMm });
-        }
-      });
-    }
+    handleTypeChange(updated.id);
   };
 
-  // -- Wall metrics ----------------------------------------------------------
+  // Dimensions formatted
   const wallLen = selectedWall ? Math.round(wallLengthMm(selectedWall)) : 0;
   const wallArea = selectedWall
     ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2)
-    : "0";
+    : "0.00";
   const wallVol = selectedWall
     ? (
-        (wallLen * (selectedWall.heightMm || 3000) * selectedWall.thicknessMm) /
+        (wallLen *
+          (selectedWall.heightMm || 3000) *
+          selectedWall.thicknessMm) /
         1_000_000_000
-      ).toFixed(3)
-    : "0";
+      ).toFixed(2)
+    : "0.00";
 
-  // -- Left-edge resize drag -------------------------------------------------
-  const isDraggingRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const dragStartWidthRef = useRef(DEFAULT_WIDTH);
+  // -- Left edge resize drag -------------------------------------------------
+  const isResizingRef = useRef(false);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(DEFAULT_WIDTH);
 
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      isDraggingRef.current = true;
-      dragStartXRef.current = e.clientX;
-      dragStartWidthRef.current = panelWidth;
+      isResizingRef.current = true;
+      resizeStartXRef.current = e.clientX;
+      resizeStartWidthRef.current = panelWidth;
 
       const onMove = (ev: MouseEvent) => {
-        if (!isDraggingRef.current) return;
-        const delta = dragStartXRef.current - ev.clientX;
-        const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidthRef.current + delta));
+        if (!isResizingRef.current) return;
+        const delta = resizeStartXRef.current - ev.clientX;
+        const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizeStartWidthRef.current + delta));
         setPanelWidth(next);
       };
       const onUp = () => {
-        isDraggingRef.current = false;
+        isResizingRef.current = false;
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
       };
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     },
-    [panelWidth]
+    [panelWidth, setPanelWidth]
   );
 
-  // -- Horizontal splitter drag (Properties / Browser split) -----------------
+  // -- Horizontal splitter drag (Properties / Layout split) -----------------
   const isSplitDraggingRef = useRef(false);
   const splitStartYRef = useRef(0);
   const splitStartHeightRef = useRef(220);
@@ -261,7 +251,7 @@ export default function ToolRightPanel({
       const onMove = (ev: MouseEvent) => {
         if (!isSplitDraggingRef.current) return;
         const delta = ev.clientY - splitStartYRef.current;
-        const next = Math.min(480, Math.max(80, splitStartHeightRef.current + delta));
+        const next = Math.min(520, Math.max(80, splitStartHeightRef.current + delta));
         setPropHeight(next);
       };
       const onUp = () => {
@@ -282,55 +272,58 @@ export default function ToolRightPanel({
     <>
       {!rightPanelOpen && (
         <button
-          className="fixed right-4 top-[88px] z-30 flex h-10 w-10 items-center justify-center rounded-full liquid-glass-panel hover:bg-amber-500/10 text-[var(--text-strong)] transition-all shadow-xl border border-[var(--panel-divider)]"
+          className="fixed right-3 top-[80px] z-30 flex h-10 w-10 items-center justify-center rounded-xl liquid-glass-panel hover:bg-yellow-400/10 text-[var(--text-strong)] transition-all shadow-xl border border-[var(--panel-divider)]"
           onClick={() => setRightPanelOpen(true)}
-          title="Expand Panel"
+          title="Expand Layout & Properties Panel"
         >
           <LuChevronLeft className="h-5 w-5" />
         </button>
       )}
 
       <aside
-        className={`fixed right-4 top-[88px] bottom-16 z-30 flex flex-col liquid-glass-panel transition-transform duration-300 select-none overflow-hidden ${
-          rightPanelOpen ? "translate-x-0" : "translate-x-[calc(100%+2rem)]"
-        }`}
+        className={`fixed z-30 flex flex-col transition-transform duration-300 select-none overflow-hidden ${
+          isFloating
+            ? "right-4 top-[88px] bottom-16 liquid-glass-panel"
+            : "top-0 bottom-0 right-0 h-full liquid-glass-dock border-l border-y-0 border-r-0 rounded-none shadow-2xl"
+        } ${rightPanelOpen ? "translate-x-0" : "translate-x-full"}`}
         style={{ width: panelWidth }}
       >
         {/* -- Left resize handle -------------------------------------------- */}
         {!isFloating && rightPanelOpen && (
           <div
             onMouseDown={onResizeMouseDown}
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group hover:bg-amber-500/40 transition-colors"
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-20 group hover:bg-yellow-400/50 transition-colors"
             title="Drag to resize panel"
           />
         )}
 
-        {/* -- Panel top header ---------------------------------------------- */}
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3">
+        {/* -- Panel top header (Project Name + Status) --------------------- */}
+        <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/60">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+            <span className="font-bold text-xs text-[var(--text-strong)] truncate">
+              {activeModelLabel || "Architecture Project"}
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={() => setRightPanelOpen(false)}
             title="Collapse Panel"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
           >
             <LuChevronRight className="h-4 w-4" />
           </button>
-
-          <div className="flex items-center gap-1.5 ml-1">
-              <LuSlidersHorizontal className="h-3.5 w-3.5 text-amber-500" />
-              <span className="font-black text-[11px] text-[var(--text-strong)] tracking-widest uppercase font-mono">
-                Project Layout
-              </span>
-            </div>
         </div>
-            {/* -- PROPERTIES (top portion) ----------------------------------- */}
+
+        {/* -- PROPERTIES (top portion) ----------------------------------- */}
         <div
           className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
           style={{ height: propHeight, minHeight: 120 }}
         >
           {/* Properties header */}
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 bg-[var(--surface-overlay)]/40">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-3.5 bg-[var(--surface-overlay)]/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
               <LuSlidersHorizontal className="h-3 w-3" />
               Properties
             </span>
@@ -339,10 +332,10 @@ export default function ToolRightPanel({
               <button
                 type="button"
                 onClick={() => setMaterialEditorOpen(true)}
-                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-bold text-[10px] hover:border-amber-400 hover:text-amber-500 transition-all"
-                title="Open Material Editor (3ds Max style)"
+                className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-bold text-[10px] hover:border-yellow-400 hover:text-yellow-400 transition-all"
+                title="Open Material Editor"
               >
-                <LuPalette className="h-2.5 w-2.5 text-amber-500" />
+                <LuPalette className="h-2.5 w-2.5 text-yellow-400" />
                 <span>Materials</span>
               </button>
 
@@ -350,7 +343,7 @@ export default function ToolRightPanel({
                 <button
                   type="button"
                   onClick={() => setEditTypeOpen(true)}
-                  className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] hover:bg-amber-500/20 transition-all"
+                  className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-yellow-400/40 bg-yellow-400/10 text-yellow-400 font-bold text-[10px] hover:bg-yellow-400/20 transition-all"
                 >
                   <LuSlidersHorizontal className="h-2.5 w-2.5" />
                   <span>Edit Type</span>
@@ -359,19 +352,19 @@ export default function ToolRightPanel({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-3 text-xs">
+          <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-2 text-xs">
             {hasSelection ? (
               <>
-                {/* Type Selector */}
+                {/* Type Selector (Compact, Thin Divider) */}
                 {(selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
-                  <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3 shadow-sm space-y-2">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                  <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
                       Type
                     </div>
                     <select
                       value={activeTypeKey}
                       onChange={(e) => handleTypeChange(e.target.value)}
-                      className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-semibold text-xs text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 font-semibold text-xs text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
                     >
                       {Object.values(types)
                         .filter((t) => {
@@ -390,12 +383,12 @@ export default function ToolRightPanel({
                   </div>
                 )}
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {/* Identity */}
                   <PropSection
                     open={openSections.identity}
                     onToggle={() => toggleSection("identity")}
-                    icon={<LuFileText className="h-3.5 w-3.5 text-amber-500" />}
+                    icon={<LuFileText className="h-3.5 w-3.5 text-yellow-400" />}
                     label="Identity Data"
                   >
                     <PropRow label="Mark / ID">
@@ -422,7 +415,7 @@ export default function ToolRightPanel({
                   <PropSection
                     open={openSections.dimensions}
                     onToggle={() => toggleSection("dimensions")}
-                    icon={<LuRuler className="h-3.5 w-3.5 text-amber-500" />}
+                    icon={<LuRuler className="h-3.5 w-3.5 text-yellow-400" />}
                     label="Dimensions"
                   >
                     {selectedWall && (
@@ -437,10 +430,10 @@ export default function ToolRightPanel({
                           <span className="font-mono font-semibold text-[var(--text-strong)]">{selectedWall.heightMm || 3000} mm</span>
                         </PropRow>
                         <PropRow label="Area">
-                          <span className="font-mono font-semibold text-emerald-500">{wallArea} m²</span>
+                          <span className="font-mono font-semibold text-emerald-400">{wallArea} m²</span>
                         </PropRow>
                         <PropRow label="Volume">
-                          <span className="font-mono font-semibold text-sky-500">{wallVol} m³</span>
+                          <span className="font-mono font-semibold text-sky-400">{wallVol} m³</span>
                         </PropRow>
                       </>
                     )}
@@ -448,7 +441,7 @@ export default function ToolRightPanel({
                       <>
                         <PropRow label="Width"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.widthMm} mm</span></PropRow>
                         <PropRow label="Height"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedDoor.heightMm} mm</span></PropRow>
-                        <PropRow label="Opening Area"><span className="font-mono font-semibold text-emerald-500">{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span></PropRow>
+                        <PropRow label="Opening Area"><span className="font-mono font-semibold text-emerald-400">{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span></PropRow>
                       </>
                     )}
                     {selectedWindow && (
@@ -461,7 +454,7 @@ export default function ToolRightPanel({
                     {selectedSlab && (
                       <>
                         <PropRow label="Thickness"><span className="font-mono font-semibold text-[var(--text-strong)]">{selectedSlab.thicknessMm} mm</span></PropRow>
-                        <PropRow label="Area"><span className="font-mono font-semibold text-emerald-500">{(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²</span></PropRow>
+                        <PropRow label="Area"><span className="font-mono font-semibold text-emerald-400">{(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²</span></PropRow>
                       </>
                     )}
                     {selectedPlacement && (
@@ -473,10 +466,10 @@ export default function ToolRightPanel({
                   <PropSection
                     open={openSections.constraints}
                     onToggle={() => toggleSection("constraints")}
-                    icon={<LuLayers className="h-3.5 w-3.5 text-amber-500" />}
+                    icon={<LuLayers className="h-3.5 w-3.5 text-yellow-400" />}
                     label="Constraints"
                   >
-                    <PropRow label="Base Constraint"><span className="font-semibold text-amber-500">{currentFloorObj ? currentFloorObj.name : "Level 1"}</span></PropRow>
+                    <PropRow label="Base Constraint"><span className="font-semibold text-yellow-400">{currentFloorObj ? currentFloorObj.name : "Level 1"}</span></PropRow>
                     <PropRow label="Base Offset"><span className="font-mono text-[var(--text-strong)]">0 mm</span></PropRow>
                   </PropSection>
 
@@ -484,7 +477,7 @@ export default function ToolRightPanel({
                   <PropSection
                     open={openSections.materials}
                     onToggle={() => toggleSection("materials")}
-                    icon={<LuBox className="h-3.5 w-3.5 text-amber-500" />}
+                    icon={<LuBox className="h-3.5 w-3.5 text-yellow-400" />}
                     label="Materials & Finish"
                   >
                     <div className="flex items-center justify-between">
@@ -492,7 +485,7 @@ export default function ToolRightPanel({
                       <button
                         type="button"
                         onClick={() => setMaterialEditorOpen(true)}
-                        className="flex items-center gap-1 font-semibold text-amber-500 hover:underline"
+                        className="flex items-center gap-1 font-semibold text-yellow-400 hover:underline"
                         title="Click to change material in Material Editor"
                       >
                         <LuPalette className="h-3 w-3" />
@@ -505,7 +498,7 @@ export default function ToolRightPanel({
                         <button
                           type="button"
                           onClick={() => setMaterialEditorOpen(true)}
-                          className="font-semibold text-amber-500 hover:underline"
+                          className="font-semibold text-yellow-400 hover:underline"
                         >
                           <span>{selectedDoor.style || "Standard"}</span>
                         </button>
@@ -518,7 +511,7 @@ export default function ToolRightPanel({
                   <PropSection
                     open={openSections.ifc}
                     onToggle={() => toggleSection("ifc")}
-                    icon={<LuShieldCheck className="h-3.5 w-3.5 text-amber-500" />}
+                    icon={<LuShieldCheck className="h-3.5 w-3.5 text-yellow-400" />}
                     label="IFC / BIM Data"
                   >
                     <PropRow label="Export Entity">
@@ -533,7 +526,7 @@ export default function ToolRightPanel({
               /* Persistent Empty State when nothing is selected */
               <div className="flex flex-col items-center justify-center p-6 text-center h-full min-h-[160px] text-[var(--text-muted)] space-y-2 select-none">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)]">
-                  <LuSlidersHorizontal className="h-5 w-5 text-amber-500 opacity-60" />
+                  <LuSlidersHorizontal className="h-5 w-5 text-yellow-400 opacity-60" />
                 </div>
                 <p className="text-xs font-semibold text-[var(--text-body)]">No Element Selected</p>
                 <p className="text-[10px] text-[var(--text-muted)] max-w-[200px] leading-relaxed">
@@ -547,18 +540,18 @@ export default function ToolRightPanel({
         {/* -- Horizontal splitter ----------------------------------------- */}
         <div
           onMouseDown={onSplitterMouseDown}
-          className="h-2 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/40 hover:bg-amber-500/40 transition-colors group"
+          className="h-2 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
           title="Drag to resize split"
         >
-          <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-amber-500" />
+          <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-yellow-400" />
         </div>
 
-        {/* -- PROJECT BROWSER (bottom portion) --------------------------- */}
+        {/* -- LAYOUT (formerly Project Browser) -------------------------- */}
         <div className="flex flex-col flex-1 min-h-0">
-          {/* Browser header + tabs */}
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-3 bg-[var(--surface-overlay)]/40">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
-              Project Browser
+          {/* Layout header + tabs */}
+          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-3.5 bg-[var(--surface-overlay)]/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+              Layout
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -566,7 +559,7 @@ export default function ToolRightPanel({
                 onClick={() => setBrowserTab("all")}
                 className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
                   browserTab === "all"
-                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
+                    ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
                     : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                 }`}
               >
@@ -577,7 +570,7 @@ export default function ToolRightPanel({
                 onClick={() => setBrowserTab("ifc")}
                 className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
                   browserTab === "ifc"
-                    ? "bg-amber-500/20 text-amber-500 border border-amber-400/40"
+                    ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
                     : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                 }`}
               >
@@ -586,19 +579,19 @@ export default function ToolRightPanel({
             </div>
           </div>
 
-          {/* Browser body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 thin-scroll text-xs space-y-2">
+          {/* Layout body (Compact, Thin Dividers) */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 thin-scroll text-xs space-y-2.5">
             {browserTab === "all" ? (
               <>
-                {/* Active Level selector — lives here, NOT in the ribbon */}
-                <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-2">
+                {/* Active Level selector */}
+                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
                     Active Level
                   </div>
                   <select
                     value={selectedFloor || ""}
                     onChange={(e) => setSelectedFloor(e.target.value || null)}
-                    className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-strong)] focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
                   >
                     <option value="">All Levels (Building)</option>
                     {floors.map((f) => (
@@ -610,46 +603,46 @@ export default function ToolRightPanel({
                 </div>
 
                 {/* Levels & Stories tree */}
-                <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2">
+                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
                   <button 
                     type="button" 
                     onClick={() => setFloorsOpen(!floorsOpen)} 
-                    className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-amber-500 transition-colors cursor-pointer group"
+                    className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-yellow-400 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-1.5">
-                      <LuLayers className="h-3 w-3 text-amber-500" />
+                      <LuLayers className="h-3 w-3 text-yellow-400" />
                       Building Levels & Stories
                     </div>
-                    <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-amber-400 bg-[var(--surface-overlay)]/50 transition-colors">
-                      {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500" />}
+                    <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-yellow-400 bg-[var(--surface-overlay)]/50 transition-colors">
+                      {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" />}
                     </div>
                   </button>
                   {floorsOpen && <ToolFloorsSection />}
-                  
-                  {/* Views tree */}
-                  <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 py-2 mt-2">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
-                      <LuEye className="h-3 w-3 text-amber-500" />
-                      Views
-                    </div>
-                    <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)] space-y-1">
-                      {[
-                        { id: 'free', label: '3D View' },
-                        { id: 'north', label: 'North Elevation' },
-                        { id: 'south', label: 'South Elevation' },
-                        { id: 'east', label: 'East Elevation' },
-                        { id: 'west', label: 'West Elevation' },
-                      ].map(v => (
-                        <button 
-                          key={v.id} 
-                          onClick={() => setViewPreset(v.id as any)} 
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-amber-500 transition-colors text-left w-full group"
-                        >
-                          <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-amber-500 transition-colors" />
-                          {v.label}
-                        </button>
-                      ))}
-                    </div>
+                </div>
+
+                {/* Views tree */}
+                <div className="pt-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
+                    <LuEye className="h-3 w-3 text-yellow-400" />
+                    Views
+                  </div>
+                  <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)]/40 space-y-1">
+                    {[
+                      { id: 'free', label: '3D View' },
+                      { id: 'north', label: 'North Elevation' },
+                      { id: 'south', label: 'South Elevation' },
+                      { id: 'east', label: 'East Elevation' },
+                      { id: 'west', label: 'West Elevation' },
+                    ].map(v => (
+                      <button 
+                        key={v.id} 
+                        onClick={() => setViewPreset(v.id as any)} 
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                      >
+                        <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400 transition-colors" />
+                        {v.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </>
