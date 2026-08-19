@@ -4256,6 +4256,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const surface = pickMarkupSurface(raycaster.current, roots);
             pt = surface?.point ?? null;
           }
+          if (!pt) {
+            const ms = useToolMarkupStore.getState();
+            const activeLvl =
+              layoutStore.levels.find((l) => l.id === ms.markupFloorId) ??
+              layoutStore.levels[0];
+            const levelElevMm = activeLvl?.elevationMm ?? 0;
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+            const targetPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+              pt = targetPt;
+            }
+          }
           if (pt) {
             const ms = useToolMarkupStore.getState();
             if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
@@ -4777,6 +4789,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (shellCloneRef.current) roots.push(shellCloneRef.current);
                 const surface = pickMarkupSurface(raycaster.current, roots);
                 if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
               }
               if (!plan) {
                 const activeLvl =

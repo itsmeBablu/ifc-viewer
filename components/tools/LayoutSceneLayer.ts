@@ -47,8 +47,8 @@ export default class LayoutSceneLayer {
   private doorMeshes = new Map<string, THREE.Group>();
   private windowMeshes = new Map<string, THREE.Group>();
   private slabMeshes = new Map<string, THREE.Mesh>();
-  private previewLine: THREE.Line | null = null;
-  private slabPreview: THREE.Mesh | null = null;
+  private previewLine: THREE.Group | null = null;
+  private slabPreview: THREE.Group | null = null;
   private tracePreviewGroup: THREE.Group | null = null;
   private ground: THREE.Mesh | null = null;
   private levelSlabs = new Map<string, THREE.Mesh>();
@@ -565,29 +565,80 @@ export default class LayoutSceneLayer {
     elevationMm: number,
   ) {
     if (this.previewLine) {
+      this.disposeGroup(this.previewLine);
       this.group.remove(this.previewLine);
-      this.previewLine.geometry.dispose();
-      (this.previewLine.material as THREE.Material).dispose();
       this.previewLine = null;
     }
     if (points.length === 0) return;
     const pts = [...points];
     if (cursor) pts.push(cursor);
     if (pts.length < 2) return;
-    const y = fromMm(elevationMm) + 0.02;
-    const positions: number[] = [];
+
+    const g = new THREE.Group();
+    g.name = "layout-wall-preview";
+
+    const y = fromMm(elevationMm) + 0.08;
+    const col = 0xfacc15;
+    const RIBBON_W = 0.08;
+    const RIBBON_H = 0.04;
+
+    const positions: THREE.Vector3[] = [];
     for (const p of pts) {
-      positions.push(fromMm(p.xMm), y, fromMm(p.yMm));
+      positions.push(new THREE.Vector3(fromMm(p.xMm), y, fromMm(p.yMm)));
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    const mat = new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 2 });
-    this.previewLine = new THREE.Line(geo, mat);
-    this.previewLine.userData.isLayoutPreview = true;
-    this.group.add(this.previewLine);
+
+    // 1. Centerline basic line
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(positions);
+    const lineMat = new THREE.LineBasicMaterial({ color: col, linewidth: 2 });
+    const lineMesh = new THREE.Line(lineGeo, lineMat);
+    lineMesh.renderOrder = 150;
+    lineMesh.frustumCulled = false;
+    g.add(lineMesh);
+
+    // 2. Ribbon segments for 2D/3D plan view visibility
+    for (let i = 0; i < positions.length - 1; i++) {
+      const p1 = positions[i];
+      const p2 = positions[i + 1];
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.001) {
+        const segGeo = new THREE.BoxGeometry(len, RIBBON_H, RIBBON_W * 2);
+        const segMat = new THREE.MeshBasicMaterial({
+          color: col,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: false,
+        });
+        const segMesh = new THREE.Mesh(segGeo, segMat);
+        segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
+        segMesh.rotation.y = -Math.atan2(dz, dx);
+        segMesh.renderOrder = 151;
+        segMesh.frustumCulled = false;
+        g.add(segMesh);
+      }
+    }
+
+    // 3. Node discs
+    for (const pt of positions) {
+      const discGeo = new THREE.CircleGeometry(0.06, 16);
+      discGeo.rotateX(-Math.PI / 2);
+      const discMat = new THREE.MeshBasicMaterial({
+        color: col,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.copy(pt);
+      disc.position.y = y + 0.005;
+      disc.renderOrder = 152;
+      disc.frustumCulled = false;
+      g.add(disc);
+    }
+
+    this.previewLine = g;
+    this.group.add(g);
   }
 
 
@@ -732,9 +783,8 @@ export default class LayoutSceneLayer {
     kind: "floor" | "roof",
   ) {
     if (this.slabPreview) {
+      this.disposeGroup(this.slabPreview);
       this.group.remove(this.slabPreview);
-      this.slabPreview.geometry.dispose();
-      (this.slabPreview.material as THREE.Material).dispose();
       this.slabPreview = null;
     }
     if (!start || !cursor) return;
@@ -743,9 +793,20 @@ export default class LayoutSceneLayer {
     const minY = Math.min(start.yMm, cursor.yMm);
     const maxY = Math.max(start.yMm, cursor.yMm);
     if (maxX - minX < 10 || maxY - minY < 10) return;
-    const w = fromMm(maxX - minX);
-    const d = fromMm(maxY - minY);
+
+    const g = new THREE.Group();
+    g.name = "layout-slab-preview";
+
+    const x1 = fromMm(minX);
+    const x2 = fromMm(maxX);
+    const z1 = fromMm(minY);
+    const z2 = fromMm(maxY);
+    const w = x2 - x1;
+    const d = z2 - z1;
     const t = fromMm(Math.max(50, thicknessMm));
+    const topY = fromMm(elevationMm) + (kind === "roof" ? 0 : t) + 0.02;
+
+    // 1. Semi-transparent volume box
     const geo = new THREE.BoxGeometry(w, t, d);
     const mat = new THREE.MeshStandardMaterial({
       color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
@@ -753,14 +814,83 @@ export default class LayoutSceneLayer {
       opacity: 0.45,
       depthWrite: false,
     });
-    this.slabPreview = new THREE.Mesh(geo, mat);
-    this.slabPreview.position.set(
-      fromMm((minX + maxX) / 2),
+    const boxMesh = new THREE.Mesh(geo, mat);
+    boxMesh.position.set(
+      (x1 + x2) / 2,
       fromMm(elevationMm) + (kind === "roof" ? -t / 2 : t / 2),
-      fromMm((minY + maxY) / 2),
+      (z1 + z2) / 2,
     );
-    this.slabPreview.userData.isLayoutPreview = true;
-    this.group.add(this.slabPreview);
+    boxMesh.userData.isLayoutPreview = true;
+    g.add(boxMesh);
+
+    // 2. Bright yellow perimeter drawing line on the top surface
+    const perimeterPts = [
+      new THREE.Vector3(x1, topY, z1),
+      new THREE.Vector3(x2, topY, z1),
+      new THREE.Vector3(x2, topY, z2),
+      new THREE.Vector3(x1, topY, z2),
+      new THREE.Vector3(x1, topY, z1),
+    ];
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(perimeterPts);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0xfacc15,
+      linewidth: 2,
+    });
+    const lineMesh = new THREE.Line(lineGeo, lineMat);
+    lineMesh.renderOrder = 150;
+    lineMesh.frustumCulled = false;
+    g.add(lineMesh);
+
+    // 3. Thick flat boundary ribbons for top view visibility
+    const col = 0xfacc15;
+    const RIBBON_W = 0.06;
+    const RIBBON_H = 0.02;
+
+    const makeRibbonSegment = (p1: THREE.Vector3, p2: THREE.Vector3) => {
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) return;
+      const segGeo = new THREE.BoxGeometry(len, RIBBON_H, RIBBON_W * 2);
+      const segMat = new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+      });
+      const segMesh = new THREE.Mesh(segGeo, segMat);
+      segMesh.position.set((p1.x + p2.x) / 2, topY, (p1.z + p2.z) / 2);
+      segMesh.rotation.y = -Math.atan2(dz, dx);
+      segMesh.renderOrder = 151;
+      segMesh.frustumCulled = false;
+      g.add(segMesh);
+    };
+
+    makeRibbonSegment(perimeterPts[0], perimeterPts[1]);
+    makeRibbonSegment(perimeterPts[1], perimeterPts[2]);
+    makeRibbonSegment(perimeterPts[2], perimeterPts[3]);
+    makeRibbonSegment(perimeterPts[3], perimeterPts[4]);
+
+    // 4. Corner dots (discs in XZ plane at 4 corners)
+    for (const pt of [perimeterPts[0], perimeterPts[1], perimeterPts[2], perimeterPts[3]]) {
+      const discGeo = new THREE.CircleGeometry(0.08, 16);
+      discGeo.rotateX(-Math.PI / 2);
+      const discMat = new THREE.MeshBasicMaterial({
+        color: col,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const disc = new THREE.Mesh(discGeo, discMat);
+      disc.position.copy(pt);
+      disc.position.y = topY + 0.005;
+      disc.renderOrder = 152;
+      disc.frustumCulled = false;
+      g.add(disc);
+    }
+
+    this.slabPreview = g;
+    this.group.add(g);
   }
 
   pickLayout(
@@ -1044,12 +1174,11 @@ export default class LayoutSceneLayer {
     this.endpointEnd = null;
     this.endpointGroup.clear();
     if (this.previewLine) {
-      this.previewLine.geometry.dispose();
-      (this.previewLine.material as THREE.Material).dispose();
+      this.disposeGroup(this.previewLine);
+      this.previewLine = null;
     }
     if (this.slabPreview) {
-      this.slabPreview.geometry.dispose();
-      (this.slabPreview.material as THREE.Material).dispose();
+      this.disposeGroup(this.slabPreview);
       this.slabPreview = null;
     }
     if (this.tracePreviewGroup) {
