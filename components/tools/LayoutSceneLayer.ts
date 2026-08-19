@@ -186,13 +186,15 @@ export default class LayoutSceneLayer {
         opts.activeLevelId == null ||
         wall.levelId === opts.activeLevelId;
       const cl = joins.get(wall.id) ?? wall;
+      const wallDoors = doors.filter((d) => d.wallId === wall.id);
+      const wallWindows = windows.filter((w) => w.wallId === wall.id);
       let mesh = this.wallMeshes.get(wall.id);
       if (!mesh) {
-        mesh = this.createWallMesh(wall, elev, cl);
+        mesh = this.createWallMesh(wall, elev, cl, wallDoors, wallWindows);
         this.wallMeshes.set(wall.id, mesh);
         this.group.add(mesh);
       } else {
-        this.updateWallMesh(mesh, wall, elev, cl);
+        this.updateWallMesh(mesh, wall, elev, cl, wallDoors, wallWindows);
       }
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -1048,18 +1050,30 @@ export default class LayoutSceneLayer {
     }
   }
 
-  private buildWallGeometry(wall: LayoutWall, cl: WallCenterlineMm): THREE.BufferGeometry {
-    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcStartAngleDeg != null && wall.arcEndAngleDeg != null) {
+  private buildWallGeometry(
+    wall: LayoutWall,
+    cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
+  ): THREE.BufferGeometry {
+    if (
+      wall.curved &&
+      wall.arcRadiusMm != null &&
+      wall.arcCenterXmm != null &&
+      wall.arcCenterYmm != null &&
+      wall.arcStartAngleDeg != null &&
+      wall.arcEndAngleDeg != null
+    ) {
       const r = fromMm(wall.arcRadiusMm);
       const thick = fromMm(wall.thicknessMm);
       const height = fromMm(wall.heightMm);
-      
+
       const startRad = (wall.arcStartAngleDeg * Math.PI) / 180;
       const endRad = (wall.arcEndAngleDeg * Math.PI) / 180;
-      
+
       const rInner = r - thick / 2;
       const rOuter = r + thick / 2;
-      
+
       const shape = new THREE.Shape();
       const x0 = rInner * Math.cos(startRad);
       const y0 = rInner * Math.sin(startRad);
@@ -1068,20 +1082,131 @@ export default class LayoutSceneLayer {
       shape.lineTo(rOuter * Math.cos(endRad), rOuter * Math.sin(endRad));
       shape.absarc(0, 0, rOuter, endRad, startRad, true);
       shape.lineTo(x0, y0);
-      
+
       const extrudeSettings = {
         depth: height,
         bevelEnabled: false,
         steps: 1,
         curveSegments: 32,
       };
-      
-      return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+      const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geo.computeVertexNormals();
+      return geo;
     } else {
       const dx = cl.endXmm - cl.startXmm;
       const dy = cl.endYmm - cl.startYmm;
       const len = Math.max(50, Math.hypot(dx, dy));
-      return new THREE.BoxGeometry(fromMm(len), fromMm(wall.heightMm), fromMm(wall.thicknessMm));
+      const wallHeightMm = wall.heightMm || 3000;
+      const wallThickMm = wall.thicknessMm || 200;
+      const lenM = fromMm(len);
+      const heightM = fromMm(wallHeightMm);
+      const thickM = fromMm(wallThickMm);
+      const halfLen = lenM / 2;
+      const halfHeight = heightM / 2;
+
+      // Build outer wall 2D profile (local X: along wall length, local Y: height)
+      const shape = new THREE.Shape();
+      shape.moveTo(-halfLen, -halfHeight);
+      shape.lineTo(halfLen, -halfHeight);
+      shape.lineTo(halfLen, halfHeight);
+      shape.lineTo(-halfLen, halfHeight);
+      shape.closePath();
+
+      // Hosted openings (doors + windows)
+      const openings: {
+        posMm: number;
+        widthMm: number;
+        heightMm: number;
+        sillMm: number;
+        headShape?: string;
+      }[] = [
+        ...doors.map((d) => ({
+          posMm: d.positionMm,
+          widthMm: d.widthMm || 900,
+          heightMm: d.heightMm || 2100,
+          sillMm: 0,
+          headShape: d.headShape,
+        })),
+        ...windows.map((w) => ({
+          posMm: w.positionMm,
+          widthMm: w.widthMm || 1200,
+          heightMm: w.heightMm || 1400,
+          sillMm: w.sillHeightMm ?? 900,
+          headShape: w.headShape,
+        })),
+      ];
+
+      for (const op of openings) {
+        const holeCenterX = fromMm(op.posMm) - halfLen;
+        const holeHalfW = fromMm(op.widthMm) / 2;
+        const holeYBottom = fromMm(op.sillMm) - halfHeight;
+        const holeYTop = fromMm(op.sillMm + op.heightMm) - halfHeight;
+
+        const x1 = holeCenterX - holeHalfW;
+        const x2 = holeCenterX + holeHalfW;
+        const y1 = Math.max(-halfHeight - 0.001, holeYBottom);
+        const y2 = Math.min(halfHeight + 0.001, holeYTop);
+
+        // Verify valid opening geometry inside wall boundaries
+        if (x2 > -halfLen && x1 < halfLen && y2 > y1) {
+          const clampedX1 = Math.max(-halfLen + 0.001, x1);
+          const clampedX2 = Math.min(halfLen - 0.001, x2);
+          const clampedHoleHalfW = (clampedX2 - clampedX1) / 2;
+          const clampedCenterX = (clampedX1 + clampedX2) / 2;
+
+          const hole = new THREE.Path();
+          if (op.headShape === "arched" && y2 - y1 > clampedHoleHalfW) {
+            const rectH = y2 - y1 - clampedHoleHalfW;
+            const archBaseY = y1 + rectH;
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, archBaseY);
+            hole.absarc(
+              clampedCenterX,
+              archBaseY,
+              clampedHoleHalfW,
+              0,
+              Math.PI,
+              false,
+            );
+            hole.lineTo(clampedX1, y1);
+          } else if (
+            op.headShape === "triangular" &&
+            y2 - y1 > clampedHoleHalfW / 2
+          ) {
+            const rectH = y2 - y1 - clampedHoleHalfW / 2;
+            const triBaseY = y1 + rectH;
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, triBaseY);
+            hole.lineTo(clampedCenterX, y2);
+            hole.lineTo(clampedX1, triBaseY);
+            hole.lineTo(clampedX1, y1);
+          } else {
+            hole.moveTo(clampedX1, y1);
+            hole.lineTo(clampedX2, y1);
+            hole.lineTo(clampedX2, y2);
+            hole.lineTo(clampedX1, y2);
+            hole.lineTo(clampedX1, y1);
+          }
+          hole.closePath();
+          shape.holes.push(hole);
+        }
+      }
+
+      const extrudeSettings = {
+        depth: thickM,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 24,
+      };
+
+      const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      // Center along extrusion axis (Z) so wall positioning matches existing transformations
+      geo.translate(0, 0, -thickM / 2);
+      geo.computeVertexNormals();
+      return geo;
     }
   }
 
@@ -1089,8 +1214,10 @@ export default class LayoutSceneLayer {
     wall: LayoutWall,
     elevMm: number,
     cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
   ): THREE.Mesh {
-    const geo = this.buildWallGeometry(wall, cl);
+    const geo = this.buildWallGeometry(wall, cl, doors, windows);
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.85,
       metalness: 0.05,
@@ -1099,7 +1226,7 @@ export default class LayoutSceneLayer {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutWallId = wall.id;
     mesh.userData.kind = "layout-wall";
-    this.updateWallMesh(mesh, wall, elevMm, cl);
+    this.updateWallMesh(mesh, wall, elevMm, cl, doors, windows);
     return mesh;
   }
 
@@ -1108,12 +1235,23 @@ export default class LayoutSceneLayer {
     wall: LayoutWall,
     elevMm: number,
     cl: WallCenterlineMm,
+    doors: LayoutDoor[] = [],
+    windows: LayoutWindow[] = [],
   ) {
     mesh.geometry.dispose();
-    mesh.geometry = this.buildWallGeometry(wall, cl);
-    
-    if (wall.curved && wall.arcRadiusMm != null && wall.arcCenterXmm != null && wall.arcCenterYmm != null) {
-      mesh.position.set(fromMm(wall.arcCenterXmm), fromMm(elevMm), fromMm(wall.arcCenterYmm));
+    mesh.geometry = this.buildWallGeometry(wall, cl, doors, windows);
+
+    if (
+      wall.curved &&
+      wall.arcRadiusMm != null &&
+      wall.arcCenterXmm != null &&
+      wall.arcCenterYmm != null
+    ) {
+      mesh.position.set(
+        fromMm(wall.arcCenterXmm),
+        fromMm(elevMm),
+        fromMm(wall.arcCenterYmm),
+      );
       mesh.rotation.set(-Math.PI / 2, 0, 0);
     } else {
       const height = fromMm(wall.heightMm);
