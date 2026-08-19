@@ -855,6 +855,54 @@ export default class LayoutSceneLayer {
     const sketchYellow = 0xfacc15;
     const selectedCyan = 0x38bdf8;
     const gapRed = 0xef4444;
+    // Ribbon dimensions: width visible from top, height visible from side
+    const RIBBON_W = 0.08; // half-width in local Z (visible from top-down)
+    const RIBBON_H = 0.04; // half-height in local Y (visible from side)
+
+    const makeSegMat = (col: number, emissiveI: number) =>
+      new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: true,
+        depthWrite: true,
+        side: THREE.DoubleSide,
+      });
+
+    const makeSegment = (
+      p1: THREE.Vector3,
+      p2: THREE.Vector3,
+      y: number,
+      col: number,
+      emI: number,
+      lineId: string | null,
+      renderOrd: number,
+    ) => {
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const segLen = Math.hypot(dx, dz);
+      if (segLen < 0.001) return;
+
+      // Flat ribbon box: length along X, thin Y, visible width Z
+      const segGeo = new THREE.BoxGeometry(segLen, RIBBON_H * 2, RIBBON_W * 2);
+      const segMat = makeSegMat(col, emI);
+      const segMesh = new THREE.Mesh(segGeo, segMat);
+      segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
+      segMesh.rotation.y = -Math.atan2(dz, dx);
+      if (lineId) segMesh.userData.layoutSketchLineId = lineId;
+      segMesh.renderOrder = renderOrd;
+      segMesh.frustumCulled = false;
+      this.sketchGroup.add(segMesh);
+
+      // Complementary THREE.Line on top for guaranteed 1px visibility at any zoom
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const lineMat = new THREE.LineBasicMaterial({ color: col, linewidth: 2 });
+      const lineMesh = new THREE.Line(lineGeo, lineMat);
+      lineMesh.renderOrder = renderOrd + 1;
+      lineMesh.frustumCulled = false;
+      if (lineId) lineMesh.userData.layoutSketchLineId = lineId;
+      this.sketchGroup.add(lineMesh);
+    };
 
     // 1. Render placed sketch lines on ALL floors
     for (const l of lines) {
@@ -866,49 +914,27 @@ export default class LayoutSceneLayer {
       const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
       const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
 
-      const dx = p2.x - p1.x;
-      const dz = p2.z - p1.z;
-      const segLen = Math.hypot(dx, dz);
-      if (segLen > 0.001) {
-        const segGeo = new THREE.CylinderGeometry(0.06, 0.06, segLen, 12);
-        segGeo.rotateZ(Math.PI / 2);
-        const segMat = new THREE.MeshStandardMaterial({
-          color: col,
-          emissive: col,
-          emissiveIntensity: isSelected ? 0.95 : 0.75,
-          roughness: 0.2,
-          metalness: 0.1,
-          transparent: true,
-          opacity: 0.95,
-          depthTest: true,
-          depthWrite: true,
-        });
-        const segMesh = new THREE.Mesh(segGeo, segMat);
-        segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
-        segMesh.rotation.y = -Math.atan2(dz, dx);
-        segMesh.userData.layoutSketchLineId = l.id;
-        segMesh.renderOrder = 100;
-        this.sketchGroup.add(segMesh);
-      }
+      makeSegment(p1, p2, y, col, isSelected ? 0.95 : 0.75, l.id, 100);
 
+      // Node dots — flat disc (CircleGeometry in XZ plane)
       for (const pt of [p1, p2]) {
-        const sphereGeo = new THREE.SphereGeometry(0.04, 12, 10);
-        const sphereMat = new THREE.MeshStandardMaterial({
+        const discGeo = new THREE.CircleGeometry(0.06, 16);
+        discGeo.rotateX(-Math.PI / 2); // lay flat in XZ
+        const discMat = new THREE.MeshBasicMaterial({
           color: col,
-          emissive: col,
-          emissiveIntensity: isSelected ? 0.95 : 0.8,
-          roughness: 0.2,
-          metalness: 0.1,
+          side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,
           depthTest: true,
           depthWrite: true,
         });
-        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-        sphere.position.copy(pt);
-        sphere.userData.layoutSketchLineId = l.id;
-        sphere.renderOrder = 102;
-        this.sketchGroup.add(sphere);
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.position.copy(pt);
+        disc.position.y = y + 0.005; // just above ribbon
+        disc.userData.layoutSketchLineId = l.id;
+        disc.renderOrder = 102;
+        disc.frustumCulled = false;
+        this.sketchGroup.add(disc);
       }
     }
 
@@ -925,51 +951,44 @@ export default class LayoutSceneLayer {
           const b = pts[i + 1];
           const p1 = new THREE.Vector3(fromMm(a.xMm), drawY, fromMm(a.yMm));
           const p2 = new THREE.Vector3(fromMm(b.xMm), drawY, fromMm(b.yMm));
-          const dx = p2.x - p1.x;
-          const dz = p2.z - p1.z;
-          const segLen = Math.hypot(dx, dz);
-          if (segLen > 0.001) {
-            const segGeo = new THREE.CylinderGeometry(0.045, 0.045, segLen, 12);
-            segGeo.rotateZ(Math.PI / 2);
-            const isRubberband = i === pts.length - 2 && draw.cursor != null;
-            const segMat = new THREE.MeshStandardMaterial({
-              color: isRubberband ? 0xfde047 : 0xfacc15,
-              emissive: 0xfacc15,
-              emissiveIntensity: isRubberband ? 0.9 : 0.7,
-              roughness: 0.2,
-              metalness: 0.1,
-              transparent: true,
-              opacity: 0.95,
-              depthTest: true,
-              depthWrite: true,
-            });
-            const segMesh = new THREE.Mesh(segGeo, segMat);
-            segMesh.position.set((p1.x + p2.x) / 2, drawY, (p1.z + p2.z) / 2);
-            segMesh.rotation.y = -Math.atan2(dz, dx);
-            segMesh.renderOrder = 105;
-            this.sketchGroup.add(segMesh);
-          }
+          const isRubberband = i === pts.length - 2 && draw.cursor != null;
+          const col = isRubberband ? 0xfde047 : 0xfacc15;
+          makeSegment(p1, p2, drawY, col, isRubberband ? 0.9 : 0.7, null, 105);
         }
+      }
+
+      // Draw-in-progress node dots
+      for (const dp of draw.points) {
+        const discGeo = new THREE.CircleGeometry(0.05, 14);
+        discGeo.rotateX(-Math.PI / 2);
+        const discMat = new THREE.MeshBasicMaterial({
+          color: 0xfacc15,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.position.set(fromMm(dp.xMm), drawY + 0.005, fromMm(dp.yMm));
+        disc.renderOrder = 107;
+        disc.frustumCulled = false;
+        this.sketchGroup.add(disc);
       }
     }
 
     // 3. Render glowing gap markers if any
     for (const gp of gapPoints) {
-      const gapGeo = new THREE.SphereGeometry(0.055, 14, 10);
-      const gapMat = new THREE.MeshStandardMaterial({
+      const gapGeo = new THREE.CircleGeometry(0.07, 16);
+      gapGeo.rotateX(-Math.PI / 2);
+      const gapMat = new THREE.MeshBasicMaterial({
         color: gapRed,
-        emissive: gapRed,
-        emissiveIntensity: 0.95,
-        roughness: 0.2,
-        metalness: 0.1,
+        side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.95,
-        depthTest: true,
-        depthWrite: true,
       });
       const gapMesh = new THREE.Mesh(gapGeo, gapMat);
       gapMesh.position.set(fromMm(gp.xMm), fromMm(fallbackElevMm) + 0.1, fromMm(gp.yMm));
       gapMesh.renderOrder = 110;
+      gapMesh.frustumCulled = false;
       this.sketchGroup.add(gapMesh);
     }
   }
