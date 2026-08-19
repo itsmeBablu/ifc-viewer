@@ -317,8 +317,9 @@ export default function ToolRibbon({
   const ribbonContentRef = useRef<HTMLDivElement>(null);
 
   // Determine what is currently selected for contextual Modify tab
+  const isSketching = Boolean(armedLayoutTool === "lines" || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId
+    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId || isSketching
   );
 
   const contextualModifyTitle = selectedWallId
@@ -331,6 +332,8 @@ export default function ToolRibbon({
     ? "Modify | Floors"
     : selectedPlacementId
     ? "Modify | 3D Shapes"
+    : isSketching
+    ? `Sketch (${sketchLines.length} ${sketchLines.length === 1 ? "Line" : "Lines"})`
     : null;
 
   // Auto switch to contextual Modify tab when selection occurs
@@ -723,95 +726,171 @@ export default function ToolRibbon({
       </Cluster>
 
       {/* Category-specific controls */}
-      <Cluster label="Element Controls">
-        {selectedWallId && (
+      {isSketching && !selectedWallId && !selectedDoorId && !selectedWindowId && !selectedSlabId && !selectedPlacementId ? (
+        <Cluster label="Sketch Loop Actions">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <LuPencil className="h-4 w-4 text-yellow-400" />
+            <span className="text-xs font-bold text-[var(--text-strong)]">
+              {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
+            </span>
+          </div>
+
           <RibbonBtn
-            onClick={() => {
-              const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
-              if (wall) {
-                useLayoutDrawingStore.getState().updateWall(wall.id, {
-                  startXmm: wall.endXmm,
-                  startYmm: wall.endYmm,
-                  endXmm: wall.startXmm,
-                  endYmm: wall.startYmm,
-                });
+            active
+            onClick={async () => {
+              const res = await convertSketchToSlab("floor");
+              if (!res.success && res.error) {
+                setSketchError(res.error);
+              } else {
+                setSketchError(null);
               }
             }}
-            title="Flip wall direction (Spacebar)"
+            title="Convert closed sketch loop into Floor slab"
           >
-            <MdOutlineFlip className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Flip Wall</span>
+            <IconMarkupFloor className="h-4 w-4" />
+            <span className="text-[9px]">To Floor</span>
           </RibbonBtn>
-        )}
 
-        {selectedDoorId && (
-          <>
+          <RibbonBtn
+            active
+            onClick={async () => {
+              const res = await convertSketchToSlab("roof");
+              if (!res.success && res.error) {
+                setSketchError(res.error);
+              } else {
+                setSketchError(null);
+              }
+            }}
+            title="Convert closed sketch loop into Roof slab"
+          >
+            <IconMarkupRoof className="h-4 w-4" />
+            <span className="text-[9px]">To Roof</span>
+          </RibbonBtn>
+
+          <RibbonBtn
+            danger
+            onClick={() => {
+              clearSketchLines();
+              setSketchError(null);
+            }}
+            title="Clear all drawn sketch lines"
+          >
+            <LuTrash2 className="h-4 w-4" />
+            <span className="text-[9px]">Clear</span>
+          </RibbonBtn>
+
+          {(sketchError || gapHighlightPoints.length > 0) && (
+            <div className="flex flex-col justify-center gap-0.5 px-2 py-1 rounded-lg bg-amber-400/10 border border-amber-400/30 max-w-xs">
+              {sketchError && (
+                <span className="text-[10px] font-semibold text-rose-400 leading-tight">
+                  {sketchError}
+                </span>
+              )}
+              {gapHighlightPoints.length > 0 && (
+                <span className="text-[9.5px] font-semibold text-amber-400 leading-tight">
+                  ✦ {gapHighlightPoints.length} gap {gapHighlightPoints.length === 1 ? "point" : "points"}
+                </span>
+              )}
+            </div>
+          )}
+        </Cluster>
+      ) : (
+        <Cluster label="Element Controls">
+          {selectedWallId && (
             <RibbonBtn
               onClick={() => {
-                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                if (door) {
-                  useLayoutDrawingStore.getState().updateDoor(door.id, {
-                    hinge: door.hinge === "start" ? "end" : "start",
+                const wall = useLayoutDrawingStore.getState().walls.find((w) => w.id === selectedWallId);
+                if (wall) {
+                  useLayoutDrawingStore.getState().updateWall(wall.id, {
+                    startXmm: wall.endXmm,
+                    startYmm: wall.endYmm,
+                    endXmm: wall.startXmm,
+                    endYmm: wall.startYmm,
                   });
                 }
               }}
-              title="Flip hinge hand"
+              title="Flip wall direction (Spacebar)"
+            >
+              <MdOutlineFlip className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Flip Wall</span>
+            </RibbonBtn>
+          )}
+
+          {selectedDoorId && (
+            <>
+              <RibbonBtn
+                onClick={() => {
+                  const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                  if (door) {
+                    useLayoutDrawingStore.getState().updateDoor(door.id, {
+                      hinge: door.hinge === "start" ? "end" : "start",
+                    });
+                  }
+                }}
+                title="Flip hinge hand"
+              >
+                <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Flip Hand</span>
+              </RibbonBtn>
+              <RibbonBtn
+                onClick={() => {
+                  const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
+                  if (door) {
+                    useLayoutDrawingStore.getState().updateDoor(door.id, {
+                      swing: door.swing === 1 ? -1 : 1,
+                    });
+                  }
+                }}
+                title="Flip swing direction"
+              >
+                <LuRotateCw className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Flip Swing</span>
+              </RibbonBtn>
+            </>
+          )}
+
+          {selectedWindowId && (
+            <RibbonBtn
+              onClick={() => {
+                const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
+                if (win) {
+                  useLayoutDrawingStore.getState().updateWindow(win.id, { positionMm: win.positionMm });
+                }
+              }}
+              title="Flip window"
             >
               <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-              <span className="text-[9px]">Flip Hand</span>
+              <span className="text-[9px]">Flip Window</span>
             </RibbonBtn>
+          )}
+
+          {selectedPlacementId && (
             <RibbonBtn
-              onClick={() => {
-                const door = useLayoutDrawingStore.getState().doors.find((d) => d.id === selectedDoorId);
-                if (door) {
-                  useLayoutDrawingStore.getState().updateDoor(door.id, {
-                    swing: door.swing === 1 ? -1 : 1,
-                  });
-                }
-              }}
-              title="Flip swing direction"
+              onClick={() => duplicatePlacement(selectedPlacementId)}
+              title="Duplicate shape"
             >
-              <LuRotateCw className="h-4 w-4 text-amber-500" />
-              <span className="text-[9px]">Flip Swing</span>
+              <LuCopy className="h-4 w-4 text-amber-500" />
+              <span className="text-[9px]">Duplicate</span>
             </RibbonBtn>
-          </>
-        )}
-
-        {selectedWindowId && (
-          <RibbonBtn
-            onClick={() => {
-              const win = useLayoutDrawingStore.getState().windows.find((w) => w.id === selectedWindowId);
-              if (win) {
-                useLayoutDrawingStore.getState().updateWindow(win.id, { positionMm: win.positionMm });
-              }
-            }}
-            title="Flip window"
-          >
-            <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Flip Window</span>
-          </RibbonBtn>
-        )}
-
-        {selectedPlacementId && (
-          <RibbonBtn
-            onClick={() => duplicatePlacement(selectedPlacementId)}
-            title="Duplicate shape"
-          >
-            <LuCopy className="h-4 w-4 text-amber-500" />
-            <span className="text-[9px]">Duplicate</span>
-          </RibbonBtn>
-        )}
-      </Cluster>
+          )}
+        </Cluster>
+      )}
 
       {/* Deselect */}
       <div className="flex flex-col items-center gap-1">
         <button
           type="button"
-          onClick={clearCurrentSelection}
-          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all"
+          onClick={() => {
+            if (isSketching) {
+              clearSketchLines();
+              setSketchError(null);
+            }
+            clearCurrentSelection();
+          }}
+          className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 min-w-[50px] border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-all cursor-pointer"
         >
           <span className="text-xs font-bold">Esc</span>
-          <span className="text-[10px]">Deselect</span>
+          <span className="text-[10px]">Finish</span>
         </button>
         <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
           Finish
@@ -1023,73 +1102,6 @@ export default function ToolRibbon({
           </span>
         </div>
 
-      {/* -- Lines / Sketch Conversion Toolbar (Floating) ------------ */}
-      {(sketchLines.length > 0 || armedLayoutTool === "lines") && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 liquid-glass-panel px-3.5 py-1.5 shadow-2xl rounded-2xl border border-yellow-400/50 animate-in fade-in slide-in-from-top-2 select-none pointer-events-auto">
-          <div className="flex items-center gap-1.5 pr-2 border-r border-[var(--panel-divider)]">
-            <LuPencil className="h-3.5 w-3.5 text-yellow-400" />
-            <span className="text-xs font-bold text-[var(--text-strong)]">
-              {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={async () => {
-              const res = await convertSketchToSlab("floor");
-              if (!res.success && res.error) {
-                setSketchError(res.error);
-              } else {
-                setSketchError(null);
-              }
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
-          >
-            <IconMarkupFloor className="h-3.5 w-3.5" />
-            <span>Convert to Floor</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={async () => {
-              const res = await convertSketchToSlab("roof");
-              if (!res.success && res.error) {
-                setSketchError(res.error);
-              } else {
-                setSketchError(null);
-              }
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
-          >
-            <IconMarkupRoof className="h-3.5 w-3.5" />
-            <span>Convert to Roof</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              clearSketchLines();
-              setSketchError(null);
-            }}
-            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors cursor-pointer"
-            title="Clear Lines"
-          >
-            <LuTrash2 className="h-3.5 w-3.5" />
-          </button>
-
-          {sketchError && (
-            <span className="text-[11px] font-semibold text-rose-400 ml-1">
-              {sketchError}
-            </span>
-          )}
-          {gapHighlightPoints.length > 0 && (
-            <span className="text-[11px] font-semibold text-amber-400 ml-1">
-              ✦ Highlighted {gapHighlightPoints.length} gap {gapHighlightPoints.length === 1 ? "point" : "points"}
-            </span>
-          )}
-        </div>
-      )}
-
       {/* -- Main Tool Island (Desktop & iPad) ----------------------- */}
       {isTouchMode ? (
         /* iPad Combined Single Thin Bar (Section 4) */
@@ -1142,14 +1154,60 @@ export default function ToolRibbon({
             </button>
           </div>
 
-          {/* Center: Dropdown-only Tool Groups */}
-          <div className="flex items-center gap-1">
-            {buildCluster}
-            {roomsCluster}
-            {shapesCluster}
-            {annotateCluster}
-            {snapsCluster}
-          </div>
+          {/* Center: Dropdown-only Tool Groups or Sketch Actions */}
+          {isSketching ? (
+            <div className="flex items-center gap-1.5 animate-in fade-in">
+              <span className="text-xs font-bold text-yellow-400 px-1.5">
+                {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
+              </span>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await convertSketchToSlab("floor");
+                  if (!res.success && res.error) setSketchError(res.error);
+                  else setSketchError(null);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
+              >
+                <IconMarkupFloor className="h-3.5 w-3.5" />
+                <span>To Floor</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await convertSketchToSlab("roof");
+                  if (!res.success && res.error) setSketchError(res.error);
+                  else setSketchError(null);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-yellow-400 text-slate-950 font-bold text-xs hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all cursor-pointer"
+              >
+                <IconMarkupRoof className="h-3.5 w-3.5" />
+                <span>To Roof</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  clearSketchLines();
+                  setSketchError(null);
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors cursor-pointer"
+                title="Clear Lines"
+              >
+                <LuTrash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {buildCluster}
+              {roomsCluster}
+              {shapesCluster}
+              {annotateCluster}
+              {snapsCluster}
+            </div>
+          )}
 
           {/* Right: Theme Toggle */}
           <div className="flex items-center gap-2">
