@@ -19,9 +19,10 @@ import {
 } from "@/store/materialStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { renderMaterialSphere } from "@/lib/materialSpherePreview";
+import UnifiedButton from "@/components/common/UnifiedButton";
 
 const HATCH_OPTIONS: { id: HatchStyle; label: string; icon: string }[] = [
-  { id: "solid", label: "Solid", icon: "■" },
+  { id: "solid", label: "None (Solid)", icon: "■" },
   { id: "diagonal", label: "Diagonal", icon: "///" },
   { id: "cross", label: "Cross-Hatch", icon: "✕✕" },
   { id: "brick", label: "Brick", icon: "☲" },
@@ -30,6 +31,17 @@ const HATCH_OPTIONS: { id: HatchStyle; label: string; icon: string }[] = [
   { id: "zigzag", label: "Insulation", icon: "⌇⌇" },
   { id: "wood", label: "Wood Grain", icon: "≋" },
 ];
+
+const CATEGORIES = [
+  "All",
+  "Masonry",
+  "Concrete",
+  "Wood",
+  "Glass",
+  "Metal",
+  "Finishes",
+  "Custom",
+] as const;
 
 const PRESET_COLORS = [
   "#878683", "#a0522d", "#8b5a2b", "#bae6fd", "#94a3b8", "#f8fafc",
@@ -51,6 +63,8 @@ export default function MaterialEditorPanel({
   const updateMaterial = useMaterialStore((s) => s.updateMaterial);
   const deleteMaterial = useMaterialStore((s) => s.deleteMaterial);
 
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+
   // Selection stores for per-part assignment
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
@@ -61,8 +75,17 @@ export default function MaterialEditorPanel({
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
 
+  const filteredMaterials =
+    selectedCategory === "All"
+      ? materials
+      : materials.filter(
+          (m) =>
+            m.category.toLowerCase() === selectedCategory.toLowerCase() ||
+            (selectedCategory === "Custom" && !m.isPreset),
+        );
+
   const selectedMat =
-    materials.find((m) => m.id === selectedMaterialId) || materials[0];
+    materials.find((m) => m.id === selectedMaterialId) || filteredMaterials[0] || materials[0];
 
   const [partTarget, setPartTarget] = useState<"primary" | "frame" | "panel">("primary");
 
@@ -77,7 +100,10 @@ export default function MaterialEditorPanel({
       metalness: selectedMat?.metalness ?? 0.1,
       opacity: selectedMat?.opacity ?? 1.0,
       transmission: selectedMat?.transmission ?? 0.0,
-      hatchStyle: selectedMat?.hatchStyle || "diagonal",
+      hatchStyle: selectedMat?.hatchStyle || "solid",
+      hatchScaleMm: 200,
+      tilingScale: 1.0,
+      bumpScale: 0.2,
     });
     setSelectedMaterialId(newMat.id);
   };
@@ -123,7 +149,7 @@ export default function MaterialEditorPanel({
         <div className="flex items-center gap-2">
           <LuPalette className="h-4 w-4 text-yellow-400" />
           <span className="font-bold text-xs text-[var(--text-strong)]">
-            Material Editor (3ds Max Style)
+            Material Library & Shader Editor
           </span>
         </div>
         <button
@@ -139,24 +165,42 @@ export default function MaterialEditorPanel({
       {/* Main Body (Dense, Compact, Thin Dividers) */}
       <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 thin-scroll text-xs">
         {/* Swatch Library Grid with 3D Sphere Previews */}
-        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1.5">
+        <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
               <LuBox className="h-3 w-3" />
-              Material Library (Sphere Previews)
+              Presets & Custom Materials
             </span>
-            <button
-              type="button"
+            <UnifiedButton
+              size="xs"
+              variant="primary"
               onClick={handleCreateNew}
-              className="flex items-center gap-1 rounded-md px-2 py-0.5 border border-yellow-400/40 bg-yellow-400/10 text-yellow-500 dark:text-yellow-400 font-bold text-[10px] hover:bg-yellow-400/20 transition-all"
+              icon={<LuPlus className="h-3 w-3" />}
             >
-              <LuPlus className="h-3 w-3" />
-              <span>New Material</span>
-            </button>
+              New
+            </UnifiedButton>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {materials.map((mat) => {
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto thin-scroll pb-1">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 transition-all border ${
+                  selectedCategory === cat
+                    ? "bg-yellow-400 border-yellow-300 text-slate-950 shadow-sm"
+                    : "bg-[var(--surface-overlay)] border-[var(--panel-divider)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto thin-scroll p-0.5">
+            {filteredMaterials.map((mat) => {
               const isSelected = mat.id === selectedMaterialId;
               const sphereUrl = renderMaterialSphere(mat, 52);
               return (
@@ -164,20 +208,20 @@ export default function MaterialEditorPanel({
                   key={mat.id}
                   type="button"
                   onClick={() => setSelectedMaterialId(mat.id)}
-                  className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all text-center group ${
+                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all text-center group ${
                     isSelected
                       ? "border-yellow-400 bg-yellow-400/15 shadow-md ring-1 ring-yellow-400/50"
                       : "border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 hover:border-yellow-400/50"
                   }`}
                 >
                   {/* 3D Rendered Sphere Preview */}
-                  <div className="h-10 w-10 flex items-center justify-center relative">
+                  <div className="h-9 w-9 flex items-center justify-center relative">
                     {sphereUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={sphereUrl}
                         alt={mat.name}
-                        className="h-10 w-10 object-contain drop-shadow-md"
+                        className="h-9 w-9 object-contain drop-shadow-md"
                       />
                     ) : (
                       <div
@@ -185,11 +229,11 @@ export default function MaterialEditorPanel({
                         style={{ backgroundColor: mat.color }}
                       />
                     )}
-                    <span className="absolute bottom-0 right-0 text-[8px] font-mono font-bold bg-black/60 text-white rounded px-0.5 border border-white/20">
+                    <span className="absolute bottom-0 right-0 text-[7.5px] font-mono font-bold bg-black/60 text-white rounded px-0.5 border border-white/20">
                       {HATCH_OPTIONS.find((h) => h.id === mat.hatchStyle)?.icon || "■"}
                     </span>
                   </div>
-                  <span className="mt-1 truncate text-[10px] font-semibold text-[var(--text-strong)] w-full">
+                  <span className="mt-1 truncate text-[9.5px] font-semibold text-[var(--text-strong)] w-full">
                     {mat.name}
                   </span>
                 </button>
@@ -346,7 +390,7 @@ export default function MaterialEditorPanel({
               </div>
 
               {/* 2D Plan Hatch Pattern */}
-              <div className="space-y-1 pt-1">
+              <div className="space-y-1.5 pt-1 border-t border-[var(--panel-divider)]/40">
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   2D Plan Hatch Pattern
                 </label>
@@ -367,6 +411,87 @@ export default function MaterialEditorPanel({
                       <span className="text-[9px] mt-0.5 truncate">{h.label}</span>
                     </button>
                   ))}
+                </div>
+
+                {/* Hatch Size / Spacing Slider */}
+                {selectedMat.hatchStyle !== "solid" && (
+                  <div className="space-y-1 pt-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[var(--text-body)]">Hatch Line Spacing:</span>
+                      <span className="font-mono font-bold text-yellow-400">
+                        {selectedMat.hatchScaleMm || 200} mm
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="50"
+                      max="1000"
+                      step="25"
+                      value={selectedMat.hatchScaleMm || 200}
+                      disabled={selectedMat.isPreset}
+                      onChange={(e) =>
+                        updateMaterial(selectedMat.id, {
+                          hatchScaleMm: parseInt(e.target.value, 10),
+                        })
+                      }
+                      className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Advanced Surface Mapping Controls (Section 10) */}
+              <div className="space-y-2 pt-2 border-t border-[var(--panel-divider)]/40">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                  Surface Texture & Relief
+                </label>
+
+                {/* Texture Tiling / Scale */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--text-body)]">Tiling / UV Scale:</span>
+                    <span className="font-mono font-bold text-yellow-400">
+                      {(selectedMat.tilingScale || 1.0).toFixed(1)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="5.0"
+                    step="0.1"
+                    value={selectedMat.tilingScale || 1.0}
+                    disabled={selectedMat.isPreset}
+                    onChange={(e) =>
+                      updateMaterial(selectedMat.id, {
+                        tilingScale: parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                  />
+                </div>
+
+                {/* Bump / Normal Relief */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--text-body)]">Surface Bump / Depth:</span>
+                    <span className="font-mono font-bold text-yellow-400">
+                      {Math.round((selectedMat.bumpScale ?? 0.2) * 50)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="2.0"
+                    step="0.05"
+                    value={selectedMat.bumpScale ?? 0.2}
+                    disabled={selectedMat.isPreset}
+                    onChange={(e) =>
+                      updateMaterial(selectedMat.id, {
+                        bumpScale: parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full accent-yellow-400 cursor-pointer disabled:opacity-60"
+                  />
                 </div>
               </div>
             </div>
@@ -407,19 +532,18 @@ export default function MaterialEditorPanel({
             </div>
           )}
 
-          <button
-            type="button"
+          <UnifiedButton
+            variant="primary"
+            size="md"
             disabled={!hasSelection}
             onClick={handleAssignToSelected}
-            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-yellow-400 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-yellow-300 shadow-md shadow-yellow-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            icon={<LuCheck className="h-4 w-4" />}
+            className="w-full"
           >
-            <LuCheck className="h-4 w-4" />
-            <span>
-              {hasSelection
-                ? `Apply "${selectedMat?.name}" to Selection`
-                : "Select an element to assign"}
-            </span>
-          </button>
+            {hasSelection
+              ? `Apply "${selectedMat?.name}" to Selection`
+              : "Select an element to assign"}
+          </UnifiedButton>
         </div>
       </div>
     </div>

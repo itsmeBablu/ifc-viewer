@@ -1163,7 +1163,7 @@ export default class LayoutSceneLayer {
           customMat.hatchStyle,
           "#27272a",
           effectiveColor,
-          8,
+          customMat.hatchScaleMm || 200,
         );
       }
       return;
@@ -1595,8 +1595,14 @@ export default class LayoutSceneLayer {
       frameMat.color.setStyle(colorStr || customFrame.color);
     } else if (colorStr) {
       frameMat.color.setStyle(colorStr);
+    } else if (category === "window") {
+      frameMat.color.setHex(0x27272a); // dark metal frame
+      frameMat.roughness = 0.35;
+      frameMat.metalness = 0.85;
     } else {
-      frameMat.color.setHex(category === "door" ? 0x78716c : 0x0284c7);
+      frameMat.color.setHex(0x52525b); // door frame
+      frameMat.roughness = 0.5;
+      frameMat.metalness = 0.2;
     }
 
     const customPanel = useMaterialStore.getState().getMaterial(panelMatId);
@@ -1624,24 +1630,25 @@ export default class LayoutSceneLayer {
       return { frameMat, panelMat };
     }
 
-    if (style === "wood") {
+    if (category === "window" || style === "glass") {
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xa8d8ea,
+        transparent: true,
+        opacity: 0.35,
+        roughness: 0.05,
+        metalness: 0.08,
+        transmission: 0.92,
+        thickness: 0.02,
+      });
+      return { frameMat, panelMat: glassMat };
+    } else if (style === "wood" || category === "door") {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0x8b5a2b);
-      (panelMat as THREE.MeshStandardMaterial).roughness = 0.8;
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.65;
+      (panelMat as THREE.MeshStandardMaterial).metalness = 0.02;
     } else if (style === "metal") {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0xd1d5db);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.3;
       (panelMat as THREE.MeshStandardMaterial).metalness = 0.9;
-    } else if (style === "glass" || category === "window") {
-      const glassMat = new THREE.MeshPhysicalMaterial({
-        color: 0xbae6fd,
-        transparent: true,
-        opacity: 0.4,
-        roughness: 0.1,
-        metalness: 0.1,
-        transmission: 0.9,
-        thickness: 0.02,
-      });
-      return { frameMat, panelMat: glassMat };
     } else {
       (panelMat as THREE.MeshStandardMaterial).color.copy(frameMat.color);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.7;

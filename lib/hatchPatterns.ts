@@ -10,15 +10,18 @@ export function getHatchCanvasTexture(
   hatchStyle: HatchStyle,
   strokeColor = "#3f3f46",
   bgColor = "#ffffff",
-  scale = 16
-): THREE.CanvasTexture {
-  const cacheKey = `${hatchStyle}_${strokeColor}_${bgColor}_${scale}`;
+  scaleMm = 200
+): THREE.CanvasTexture | null {
+  if (!hatchStyle || hatchStyle === "solid") {
+    return null;
+  }
+
+  const cacheKey = `${hatchStyle}_${strokeColor}_${bgColor}_${scaleMm}`;
   if (textureCache.has(cacheKey)) {
     return textureCache.get(cacheKey)!;
   }
 
   if (typeof document === "undefined") {
-    // SSR fallback dummy texture
     const dummy = new THREE.CanvasTexture({} as HTMLCanvasElement);
     return dummy;
   }
@@ -164,9 +167,7 @@ export function getHatchCanvasTexture(
         ctx.stroke();
         break;
 
-      case "solid":
       default:
-        // Plain solid
         break;
     }
   }
@@ -174,7 +175,8 @@ export function getHatchCanvasTexture(
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(scale, scale);
+  const repeat = Math.max(0.5, Math.min(50, 1000 / scaleMm));
+  texture.repeat.set(repeat, repeat);
   texture.needsUpdate = true;
 
   textureCache.set(cacheKey, texture);
