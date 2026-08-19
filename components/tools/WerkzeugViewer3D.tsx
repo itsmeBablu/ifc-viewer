@@ -1339,13 +1339,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     // Remount when view-cube layout changes (HMR keeps the old instance otherwise).
   }, [VIEW_CUBE_LAYOUT.revision]);
 
-  // Werkzeug: canvas only clears the arrow strip; shift the cube left of the open dock.
+  // Werkzeug: shift the cube left of the open properties dock so it sits exactly next to it.
   useEffect(() => {
     const cube = viewCubeRef.current;
     if (!cube) return;
     const dockCoverPx =
-      toolMode && rightPanelOpen
-        ? Math.max(0, toolRightPanelWidthPx - TOOL_RIGHT_PANEL_PEEK_PX)
+      toolMode
+        ? (rightPanelOpen ? toolRightPanelWidthPx : TOOL_RIGHT_PANEL_PEEK_PX)
         : 0;
     cube.setMargins({
       marginRight: VIEW_CUBE_LAYOUT.marginRight + dockCoverPx,

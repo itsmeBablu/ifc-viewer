@@ -150,9 +150,10 @@ export default function ToolRightPanel({
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
 
-  const [browserSearch, setBrowserSearch] = useState("");
-  const [elementsCategoryFilter, setElementsCategoryFilter] = useState<string>("all");
-  const [elementsTreeOpen, setElementsTreeOpen] = useState(true);
+  const browserSearch = useLayoutDrawingStore((s) => s.browserSearch);
+  const elementsCategoryFilter = useLayoutDrawingStore((s) => s.elementsCategoryFilter);
+  const [views3DOpen, setViews3DOpen] = useState(true);
+  const [viewsSidesOpen, setViewsSidesOpen] = useState(true);
 
   const getViewTitle = () => {
     if (viewPreset === "top") {
@@ -900,38 +901,6 @@ export default function ToolRightPanel({
           <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 thin-scroll text-xs space-y-2.5">
             {browserTab === "all" ? (
               <>
-                {/* Real-Time Filter & Search Input */}
-                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40 space-y-1.5">
-                  <div className="relative">
-                    <LuSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={browserSearch}
-                      onChange={(e) => setBrowserSearch(e.target.value)}
-                      placeholder="Filter elements, levels, materials…"
-                      className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] pl-8 pr-2 py-1 text-[11px] text-[var(--text-strong)] placeholder:text-slate-500 focus:border-yellow-400 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Category Pills */}
-                  <div className="flex flex-wrap gap-1">
-                    {["all", "wall", "door", "window", "slab", "column", "beam", "grid"].map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setElementsCategoryFilter(cat)}
-                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase transition-colors ${
-                          elementsCategoryFilter === cat
-                            ? "bg-yellow-400 text-slate-950 shadow-sm"
-                            : "bg-[var(--surface-overlay)] text-slate-400 hover:text-slate-200"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Levels & Stories tree */}
                 <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
                   <button 
@@ -950,199 +919,66 @@ export default function ToolRightPanel({
                   {floorsOpen && <ToolFloorsSection />}
                 </div>
 
-                {/* Elements Browser Tree */}
-                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
-                  <button
-                    type="button"
-                    onClick={() => setElementsTreeOpen(!elementsTreeOpen)}
-                    className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-yellow-400 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <LuBox className="h-3 w-3 text-yellow-400" />
-                      Model Elements (
-                      {walls.length + doors.length + windows.length + slabs.length + columns.length + beams.length + gridLines.length}
-                      )
-                    </div>
-                    <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-yellow-400 bg-[var(--surface-overlay)]/50 transition-colors">
-                      {elementsTreeOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" />}
-                    </div>
-                  </button>
-
-                  {elementsTreeOpen && (
-                    <div className="space-y-1 ml-1 pl-2 border-l border-[var(--panel-divider)]/40">
-                      {/* Walls */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "wall") &&
-                        walls
-                          .filter((w) => !browserSearch || w.id.toLowerCase().includes(browserSearch.toLowerCase()) || (w.material || "").toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((w, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "wall" && e.id === w.id);
-                            return (
-                              <button
-                                key={w.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "wall", id: w.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Wall #{idx + 1} ({Math.round(wallLengthMm(w))}mm)</span>
-                                <span className="font-mono text-[9px] opacity-60">W-{w.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Doors */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "door") &&
-                        doors
-                          .filter((d) => !browserSearch || d.id.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((d, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "door" && e.id === d.id);
-                            return (
-                              <button
-                                key={d.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "door", id: d.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Door #{idx + 1} ({d.widthMm}x{d.heightMm})</span>
-                                <span className="font-mono text-[9px] opacity-60">D-{d.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Windows */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "window") &&
-                        windows
-                          .filter((win) => !browserSearch || win.id.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((win, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "window" && e.id === win.id);
-                            return (
-                              <button
-                                key={win.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "window", id: win.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Window #{idx + 1} ({win.widthMm}x{win.heightMm})</span>
-                                <span className="font-mono text-[9px] opacity-60">WN-{win.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Slabs */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "slab") &&
-                        slabs
-                          .filter((sl) => !browserSearch || sl.id.toLowerCase().includes(browserSearch.toLowerCase()) || sl.kind.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((sl, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "slab" && e.id === sl.id);
-                            return (
-                              <button
-                                key={sl.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "slab", id: sl.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span className="capitalize">{sl.kind} Slab #{idx + 1}</span>
-                                <span className="font-mono text-[9px] opacity-60">SL-{sl.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Columns */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "column") &&
-                        columns
-                          .filter((c) => !browserSearch || c.id.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((c, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "column" && e.id === c.id);
-                            return (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "column", id: c.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Column #{idx + 1} ({c.widthMm}x{c.depthMm})</span>
-                                <span className="font-mono text-[9px] opacity-60">CL-{c.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Beams */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "beam") &&
-                        beams
-                          .filter((b) => !browserSearch || b.id.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((b, idx) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "beam" && e.id === b.id);
-                            return (
-                              <button
-                                key={b.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "beam", id: b.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Beam #{idx + 1} ({b.widthMm}x{b.depthMm})</span>
-                                <span className="font-mono text-[9px] opacity-60">BM-{b.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-
-                      {/* Grids */}
-                      {(elementsCategoryFilter === "all" || elementsCategoryFilter === "grid") &&
-                        gridLines
-                          .filter((g) => !browserSearch || g.label.toLowerCase().includes(browserSearch.toLowerCase()))
-                          .map((g) => {
-                            const isSelected = selectedElements.some((e) => e.kind === "grid" && e.id === g.id);
-                            return (
-                              <button
-                                key={g.id}
-                                type="button"
-                                onClick={() => selectElement({ kind: "grid", id: g.id }, "replace")}
-                                className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                                  isSelected ? "bg-yellow-400/20 text-yellow-400 font-bold" : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                                }`}
-                              >
-                                <span>Grid Line {g.label}</span>
-                                <span className="font-mono text-[9px] opacity-60">GR-{g.id.slice(-4)}</span>
-                              </button>
-                            );
-                          })}
-                    </div>
-                  )}
-                </div>
-
                 {/* Views tree */}
                 <div className="pt-1">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
                     <LuEye className="h-3 w-3 text-yellow-400" />
                     Views
                   </div>
-                  <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)]/40 space-y-1">
-                    {[
-                      { id: 'free', label: '3D View' },
-                      { id: 'north', label: 'North Elevation' },
-                      { id: 'south', label: 'South Elevation' },
-                      { id: 'east', label: 'East Elevation' },
-                      { id: 'west', label: 'West Elevation' },
-                    ].map(v => (
-                      <button 
-                        key={v.id} 
-                        onClick={() => setViewPreset(v.id as any)} 
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                  <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)]/40 space-y-2">
+                    {/* 3D Views */}
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setViews3DOpen(!views3DOpen)}
+                        className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
                       >
-                        <LuChevronRight className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400 transition-colors" />
-                        {v.label}
+                        <span>3D Views</span>
+                        {views3DOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
                       </button>
-                    ))}
+                      {views3DOpen && (
+                        <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
+                          <button 
+                            onClick={() => setViewPreset("free")} 
+                            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                          >
+                            <LuChevronRight className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                            3D View
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* All Sides (Elevations) */}
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewsSidesOpen(!viewsSidesOpen)}
+                        className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
+                      >
+                        <span>All Sides</span>
+                        {viewsSidesOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
+                      </button>
+                      {viewsSidesOpen && (
+                        <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
+                          {[
+                            { id: 'north', label: 'North Elevation' },
+                            { id: 'south', label: 'South Elevation' },
+                            { id: 'east', label: 'East Elevation' },
+                            { id: 'west', label: 'West Elevation' },
+                          ].map(v => (
+                            <button 
+                              key={v.id} 
+                              onClick={() => setViewPreset(v.id as any)} 
+                              className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                            >
+                              <LuChevronRight className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                              {v.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </>

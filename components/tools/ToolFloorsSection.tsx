@@ -31,6 +31,7 @@ export default function ToolFloorsSection({
 }) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
+  const setFloors = useAppStore((s) => s.setFloors);
   const rooms = useAppStore((s) => s.rooms);
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -71,7 +72,29 @@ export default function ToolFloorsSection({
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const popupRef = useRef<HTMLDivElement>(null);
 
+  const [allFloorsExpanded, setAllFloorsExpanded] = useState(true);
+  const [editingLevelId, setEditingLevelId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    levelId: string;
+    levelName: string;
+    kind: "layout" | "ifc";
+  } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onDoc = () => setContextMenu(null);
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [contextMenu]);
+
   const activeId = markupFloorId ?? selectedFloor;
+
+  const updateIfcFloorName = (id: string, name: string) => {
+    const updated = floors.map((f) => (f.id === id ? { ...f, name } : f));
+    setFloors(updated);
+  };
 
   useEffect(() => {
     if (!popupLevelId) return;
@@ -185,25 +208,43 @@ export default function ToolFloorsSection({
           onClick={() => {
             select(null);
             setPopupLevelId(null);
+            setAllFloorsExpanded(!allFloorsExpanded);
           }}
-          className={`mb-0.5 w-full rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition duration-150 ${
+          className={`mb-0.5 w-full rounded-lg px-2 py-1.5 flex items-center justify-between text-[11px] font-semibold transition duration-150 ${
             activeId == null
               ? "bg-amber-100 text-amber-950"
               : "text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
           }`}
         >
-          {t(uiLanguage, "markupAllFloors")}
+          <span>{t(uiLanguage, "markupAllFloors")}</span>
+          {allFloorsExpanded ? (
+            <span className="text-[10px] text-zinc-500">▼</span>
+          ) : (
+            <span className="text-[10px] text-zinc-500">▶</span>
+          )}
         </button>
 
-        {floorRows.map((row) => {
+        {allFloorsExpanded && floorRows.map((row) => {
           const active = activeId === row.id;
           const underlay = underlayFor(row.id);
           const layoutLevel = levels.find((l) => l.id === row.id);
           return (
             <div
               key={row.id}
-              className={`mb-0.5 rounded-lg px-1 py-0.5 ${
-                active ? "bg-sky-100 text-sky-950" : ""
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  levelId: row.id,
+                  levelName: row.name,
+                  kind: row.kind,
+                });
+                select(row.id, true);
+              }}
+              className={`mb-0.5 rounded-lg px-1 py-0.5 transition duration-150 ${
+                active ? "bg-sky-100 text-sky-950" : "hover:bg-[var(--surface-muted)]/40"
               }`}
             >
               <div className="flex items-center gap-1">
@@ -215,31 +256,41 @@ export default function ToolFloorsSection({
                 >
                   ↕
                 </button>
-                {layoutLevel ? (
+                {editingLevelId === row.id ? (
                   <input
                     type="text"
-                    defaultValue={layoutLevel.name}
-                    key={`${row.id}-name-${layoutLevel.name}`}
-                    onClick={() => select(row.id, true)}
+                    defaultValue={row.name}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
                     onBlur={(e) => {
                       const name = e.target.value.trim();
-                      if (name && name !== layoutLevel.name) {
-                        void updateLevel(row.id, { name });
-                      } else {
-                        e.target.value = layoutLevel.name;
+                      if (name && name !== row.name) {
+                        if (row.kind === "layout") {
+                          void updateLevel(row.id, { name });
+                        } else {
+                          updateIfcFloorName(row.id, name);
+                        }
                       }
+                      setEditingLevelId(null);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter")
+                      if (e.key === "Enter") {
                         (e.target as HTMLInputElement).blur();
+                      } else if (e.key === "Escape") {
+                        setEditingLevelId(null);
+                      }
                     }}
-                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-[11px] font-semibold outline-none focus:border-sky-300 focus:bg-white/80"
+                    className="min-w-0 flex-1 rounded border border-sky-400 bg-white px-1 py-0.5 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-sky-300"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => select(row.id, true)}
-                    className="min-w-0 flex-1 truncate px-1 py-1 text-left text-[11px] font-semibold"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setEditingLevelId(row.id);
+                    }}
+                    className="min-w-0 flex-1 truncate px-1 py-1 text-left text-[11px] font-semibold select-none cursor-pointer"
                   >
                     {row.name}
                   </button>
@@ -498,6 +549,41 @@ export default function ToolFloorsSection({
           </div>,
           (document.fullscreenElement as HTMLElement | null) ?? document.body,
         )}
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            zIndex: 10000,
+          }}
+          className="context-menu-surface min-w-[150px] rounded-lg border border-zinc-200/50 bg-white/95 p-1 shadow-lg backdrop-blur-md text-[11px] text-zinc-800"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setUploadLevelId(contextMenu.levelId);
+              setContextMenu(null);
+              setTimeout(() => fileInputRef.current?.click(), 50);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors"
+          >
+            Attach DWG/PDF
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingLevelId(contextMenu.levelId);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors"
+          >
+            Rename
+          </button>
+        </div>
+      )}
     </div>
   );
 }
