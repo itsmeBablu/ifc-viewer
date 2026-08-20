@@ -112,6 +112,8 @@ export type LayoutSlab = {
   holes?: { xMm: number; yMm: number }[][];
   // -- Section 8: Roof per-edge slope control ----------------------------
   edgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[];
+  /** Boundary was inferred from an enclosed wall region and follows wall edits. */
+  autoBoundaryFromWalls?: boolean;
   // -- Section 9: Material & color ---------------------------------------
   color?: string;
   material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
@@ -490,6 +492,18 @@ export type WallCenterlineMm = {
 
 const JOIN_EPS_MM = 80;
 
+export type PlanSnapType =
+  | "endpoint"
+  | "midpoint"
+  | "intersection"
+  | "perpendicular";
+
+export type PlanSnapResult = {
+  point: { xMm: number; yMm: number };
+  type: PlanSnapType | null;
+  wallId?: string;
+};
+
 function lineLineIntersection(
   ax: number,
   ay: number,
@@ -528,6 +542,110 @@ function distPointSeg(
   const x = ax + t * dx;
   const y = ay + t * dy;
   return { dist: Math.hypot(px - x, py - y), t, x, y };
+}
+
+/**
+ * CAD plan snap shared by wall drawing and slab boundary picking.
+ * Priority is endpoint -> intersection -> midpoint -> perpendicular projection.
+ */
+export function snapPlanPointToWalls(
+  point: { xMm: number; yMm: number },
+  walls: LayoutWall[],
+  levelId: string,
+  toleranceMm = 140,
+): PlanSnapResult {
+  const straight = walls.filter((w) => w.levelId === levelId && !w.curved);
+  const candidates: Array<{
+    point: { xMm: number; yMm: number };
+    type: PlanSnapType;
+    wallId?: string;
+    priority: number;
+    distance: number;
+  }> = [];
+  const add = (
+    xMm: number,
+    yMm: number,
+    type: PlanSnapType,
+    priority: number,
+    wallId?: string,
+  ) => {
+    const distance = Math.hypot(point.xMm - xMm, point.yMm - yMm);
+    if (distance <= toleranceMm) {
+      candidates.push({
+        point: { xMm: Math.round(xMm), yMm: Math.round(yMm) },
+        type,
+        wallId,
+        priority,
+        distance,
+      });
+    }
+  };
+
+  for (const wall of straight) {
+    add(wall.startXmm, wall.startYmm, "endpoint", 0, wall.id);
+    add(wall.endXmm, wall.endYmm, "endpoint", 0, wall.id);
+    add(
+      (wall.startXmm + wall.endXmm) / 2,
+      (wall.startYmm + wall.endYmm) / 2,
+      "midpoint",
+      2,
+      wall.id,
+    );
+    const projected = distPointSeg(
+      point.xMm,
+      point.yMm,
+      wall.startXmm,
+      wall.startYmm,
+      wall.endXmm,
+      wall.endYmm,
+    );
+    if (projected.t > 0.01 && projected.t < 0.99) {
+      add(projected.x, projected.y, "perpendicular", 3, wall.id);
+    }
+  }
+
+  for (let i = 0; i < straight.length; i++) {
+    for (let j = i + 1; j < straight.length; j++) {
+      const a = straight[i];
+      const b = straight[j];
+      const hit = lineLineIntersection(
+        a.startXmm,
+        a.startYmm,
+        a.endXmm,
+        a.endYmm,
+        b.startXmm,
+        b.startYmm,
+        b.endXmm,
+        b.endYmm,
+      );
+      if (!hit) continue;
+      const onA = distPointSeg(
+        hit.x,
+        hit.y,
+        a.startXmm,
+        a.startYmm,
+        a.endXmm,
+        a.endYmm,
+      );
+      const onB = distPointSeg(
+        hit.x,
+        hit.y,
+        b.startXmm,
+        b.startYmm,
+        b.endXmm,
+        b.endYmm,
+      );
+      if (onA.dist <= 1 && onB.dist <= 1) {
+        add(hit.x, hit.y, "intersection", 1);
+      }
+    }
+  }
+
+  candidates.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
+  const best = candidates[0];
+  return best
+    ? { point: best.point, type: best.type, wallId: best.wallId }
+    : { point: { ...point }, type: null };
 }
 
 /**
@@ -728,19 +846,31 @@ export function solveWallJunctions(
       });
     }
 
-    // Cluster endpoints into junction nodes (tolerance: 80mm)
+    // Cluster endpoints into junction nodes. Use transitive clustering so a
+    // slightly noisy multi-wall node is still solved as one junction.
     const visited = new Set<number>();
     for (let i = 0; i < endpoints.length; i++) {
       if (visited.has(i)) continue;
       const cluster: EndpointRef[] = [endpoints[i]];
       visited.add(i);
 
-      for (let j = i + 1; j < endpoints.length; j++) {
-        if (visited.has(j)) continue;
-        const d = Math.hypot(endpoints[i].xMm - endpoints[j].xMm, endpoints[i].yMm - endpoints[j].yMm);
-        if (d <= JOIN_EPS_MM * 1.5) {
-          cluster.push(endpoints[j]);
-          visited.add(j);
+      for (let cursor = 0; cursor < cluster.length; cursor++) {
+        const seed = cluster[cursor];
+        for (let j = 0; j < endpoints.length; j++) {
+          if (visited.has(j)) continue;
+          const candidate = endpoints[j];
+          const d = Math.hypot(
+            seed.xMm - candidate.xMm,
+            seed.yMm - candidate.yMm,
+          );
+          const tolerance = Math.max(
+            JOIN_EPS_MM,
+            Math.min(180, (seed.halfThick + candidate.halfThick) * 0.75),
+          );
+          if (d <= tolerance) {
+            cluster.push(candidate);
+            visited.add(j);
+          }
         }
       }
 

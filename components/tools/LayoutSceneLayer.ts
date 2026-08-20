@@ -1452,6 +1452,11 @@ export default class LayoutSceneLayer {
       { xMm: slab.minXmm, yMm: slab.maxYmm },
     ];
 
+    if (slab.kind === "roof" && !slab.holes?.length) {
+      const roof = this.buildPitchedRoofGeometry(slab, boundary);
+      if (roof) return roof;
+    }
+
     const shape = new THREE.Shape();
     shape.moveTo(fromMm(boundary[0].xMm), fromMm(boundary[0].yMm));
     for (let i = 1; i < boundary.length; i++) {
@@ -1535,6 +1540,91 @@ export default class LayoutSceneLayer {
     }
 
     return geo;
+  }
+
+  /** Build an explicit watertight hip roof with a real ridge/apex vertex. */
+  private buildPitchedRoofGeometry(
+    slab: LayoutSlab,
+    boundary: { xMm: number; yMm: number }[],
+  ): THREE.BufferGeometry | null {
+    if (boundary.length < 3) return null;
+    let turnSign = 0;
+    for (let i = 0; i < boundary.length; i++) {
+      const a = boundary[i];
+      const b = boundary[(i + 1) % boundary.length];
+      const c = boundary[(i + 2) % boundary.length];
+      const cross =
+        (b.xMm - a.xMm) * (c.yMm - b.yMm) -
+        (b.yMm - a.yMm) * (c.xMm - b.xMm);
+      if (Math.abs(cross) < 1e-3) continue;
+      const sign = Math.sign(cross);
+      if (turnSign && sign !== turnSign) return null;
+      turnSign = sign;
+    }
+
+    let points = boundary.map(
+      (point) => new THREE.Vector2(fromMm(point.xMm), fromMm(point.yMm)),
+    );
+    if (turnSign < 0) points = points.reverse();
+    const center = points.reduce(
+      (sum, point) => sum.add(point),
+      new THREE.Vector2(),
+    ).multiplyScalar(1 / points.length);
+    const distanceToEdge = (p: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) => {
+      const ab = b.clone().sub(a);
+      const lenSq = ab.lengthSq();
+      const t = lenSq > 0
+        ? THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / lenSq, 0, 1)
+        : 0;
+      return p.distanceTo(a.clone().addScaledVector(ab, t));
+    };
+    const minRun = Math.min(
+      ...points.map((point, index) =>
+        distanceToEdge(center, point, points[(index + 1) % points.length]),
+      ),
+    );
+    const pitchedEdges = slab.edgeSlopes?.filter((edge) => edge.isSloped) ?? [];
+    const pitchDeg = pitchedEdges.length
+      ? pitchedEdges.reduce((sum, edge) => sum + edge.pitchDeg, 0) / pitchedEdges.length
+      : 30;
+    const rise = Math.max(0.05, minRun * Math.tan(THREE.MathUtils.degToRad(pitchDeg)));
+    const eaveZ = fromMm(Math.max(50, slab.thicknessMm));
+    const positions: number[] = [];
+    const pushTriangle = (
+      a: [number, number, number],
+      b: [number, number, number],
+      c: [number, number, number],
+    ) => positions.push(...a, ...b, ...c);
+
+    const triangles = THREE.ShapeUtils.triangulateShape(points, []);
+    for (const triangle of triangles) {
+      const [a, b, c] = triangle.map((index) => points[index]);
+      pushTriangle([c.x, c.y, 0], [b.x, b.y, 0], [a.x, a.y, 0]);
+    }
+
+    const apex: [number, number, number] = [center.x, center.y, eaveZ + rise];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      pushTriangle([a.x, a.y, eaveZ], [b.x, b.y, eaveZ], apex);
+      pushTriangle([a.x, a.y, 0], [b.x, b.y, 0], [b.x, b.y, eaveZ]);
+      pushTriangle([a.x, a.y, 0], [b.x, b.y, eaveZ], [a.x, a.y, eaveZ]);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    const uv: number[] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      uv.push(positions[i], positions[i + 1]);
+    }
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
   }
 
   setRenderMode(mode: RenderMode) {

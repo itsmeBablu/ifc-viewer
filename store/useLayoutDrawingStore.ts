@@ -17,6 +17,7 @@ import {
   rememberDoorSize,
   rememberNumber,
   rememberWindowSize,
+  snapPlanPointToWalls,
   snapWallEndpointMm,
   trimWallPair,
   type LayoutBeam,
@@ -35,7 +36,10 @@ import {
   type SelectedElementRef,
   type WallType,
 } from "@/lib/layoutDrawing";
-import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
+import {
+  detectLoopsFromSegments,
+  isPointInsidePolygon,
+} from "@/lib/linesLoopDetector";
 import {
   idbDeleteBeam,
   idbDeleteColumn,
@@ -447,6 +451,48 @@ type LayoutDrawingState = {
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
   await idbPutPresets(projectId, presets);
+}
+
+function wallRegionAtPoint(
+  walls: LayoutWall[],
+  levelId: string,
+  point: { xMm: number; yMm: number },
+) {
+  const loops = detectLoopsFromSegments(
+    walls.filter((wall) => wall.levelId === levelId && !wall.curved),
+    140,
+  ).closedLoops;
+  return loops
+    .filter((loop) => isPointInsidePolygon(point, loop.points))
+    .sort((a, b) => a.areaSqMm - b.areaSqMm)[0] ?? null;
+}
+
+function refreshAutoSlabBoundaries(
+  walls: LayoutWall[],
+  slabs: LayoutSlab[],
+): LayoutSlab[] {
+  return slabs.map((slab) => {
+    if (!slab.autoBoundaryFromWalls || !slab.boundary?.length) return slab;
+    const center = slab.boundary.reduce(
+      (sum, point) => ({
+        xMm: sum.xMm + point.xMm / slab.boundary!.length,
+        yMm: sum.yMm + point.yMm / slab.boundary!.length,
+      }),
+      { xMm: 0, yMm: 0 },
+    );
+    const region = wallRegionAtPoint(walls, slab.levelId, center);
+    if (!region) return slab;
+    const xs = region.points.map((point) => point.xMm);
+    const ys = region.points.map((point) => point.yMm);
+    return {
+      ...slab,
+      boundary: region.points,
+      minXmm: Math.min(...xs),
+      minYmm: Math.min(...ys),
+      maxXmm: Math.max(...xs),
+      maxYmm: Math.max(...ys),
+    };
+  });
 }
 
 export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
@@ -943,7 +989,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().underlays,
       levelId,
     );
-    const pt = { xMm: underSnap.xMm, yMm: underSnap.yMm };
+    const wallSnap = snapPlanPointToWalls(
+      { xMm: underSnap.xMm, yMm: underSnap.yMm },
+      get().walls,
+      levelId,
+    );
+    const pt = wallSnap.point;
     set({
       wallDraw: {
         levelId,
@@ -952,6 +1003,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         angleDeg: null,
         angleSnapped: false,
         lengthMm: null,
+        snapType: wallSnap.type,
       },
       slabDraw: null,
       tracePreview: null,
@@ -997,9 +1049,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().underlays,
       draw.levelId,
     );
-    const point = underSnap.snapped
+    const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
+    const wallSnap = snapPlanPointToWalls(
+      underPoint,
+      get().walls,
+      draw.levelId,
+    );
+    const point = wallSnap.point;
     const lengthMm = Math.hypot(point.xMm - last.xMm, point.yMm - last.yMm);
     set({
       wallDraw: {
@@ -1008,6 +1066,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         angleDeg: snapped.angleDeg,
         angleSnapped: snapped.snapped || underSnap.snapped,
         lengthMm,
+        snapType: wallSnap.type,
       },
     });
   },
@@ -1038,9 +1097,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().underlays,
       draw.levelId,
     );
-    const end = underSnap.snapped
+    const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
+    const wallSnap = snapPlanPointToWalls(
+      underPoint,
+      get().walls,
+      draw.levelId,
+    );
+    const end = wallSnap.point;
     const dx = end.xMm - last.xMm;
     const dy = end.yMm - last.yMm;
     if (Math.hypot(dx, dy) < 50) return null;
@@ -1087,8 +1152,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       wallThicknessMm: rememberNumber(get().presets.wallThicknessMm, thicknessMm),
     };
     await persistPresets(projectId, presets);
+    const nextWalls = [...get().walls, wall];
+    const nextSlabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
     set({
-      walls: [...get().walls, wall],
+      walls: nextWalls,
+      slabs: nextSlabs,
       presets,
       draftWallThicknessMm: autoThickness
         ? thicknessMm
@@ -1101,8 +1169,14 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         angleDeg: snapped.angleDeg,
         angleSnapped: snapped.snapped,
         lengthMm: Math.hypot(dx, dy),
+        snapType: wallSnap.type,
       },
     });
+    await Promise.all(
+      nextSlabs
+        .filter((slab) => slab.autoBoundaryFromWalls)
+        .map((slab) => idbPutSlab(slab)),
+    );
     return wall;
   },
 
@@ -1133,10 +1207,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().underlays,
       draw.levelId,
     );
+    const wallSnap = snapPlanPointToWalls(
+      { xMm: underSnap.xMm, yMm: underSnap.yMm },
+      get().walls,
+      draw.levelId,
+    );
     set({
       slabDraw: {
         ...draw,
-        cursor: { xMm: underSnap.xMm, yMm: underSnap.yMm },
+        cursor: wallSnap.point,
       },
     });
   },
@@ -1150,8 +1229,43 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().underlays,
       draw.levelId,
     );
-    const pt = { xMm: underSnap.xMm, yMm: underSnap.yMm };
+    const pt = snapPlanPointToWalls(
+      { xMm: underSnap.xMm, yMm: underSnap.yMm },
+      get().walls,
+      draw.levelId,
+    ).point;
     if (!draw.start) {
+      const region =
+        draw.kind === "floor"
+          ? wallRegionAtPoint(get().walls, draw.levelId, pt)
+          : null;
+      if (region) {
+        const xs = region.points.map((p) => p.xMm);
+        const ys = region.points.map((p) => p.yMm);
+        const slab: LayoutSlab = {
+          id: newLayoutId("floor"),
+          projectId,
+          levelId: draw.levelId,
+          kind: "floor",
+          minXmm: Math.min(...xs),
+          minYmm: Math.min(...ys),
+          maxXmm: Math.max(...xs),
+          maxYmm: Math.max(...ys),
+          boundary: region.points,
+          autoBoundaryFromWalls: true,
+          thicknessMm: get().draftSlabThicknessMm,
+          elevationOffsetMm: 0,
+          createdAt: Date.now(),
+        };
+        pushWerkzeugHistory();
+        await idbPutSlab(slab);
+        set({
+          slabs: [...get().slabs, slab],
+          selectedSlabId: slab.id,
+          lastMutatedAt: Date.now(),
+        });
+        return slab;
+      }
       set({
         slabDraw: { ...draw, start: pt, cursor: pt },
       });
@@ -1300,11 +1414,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!wall) return;
     const next = { ...wall, ...patch };
     // Optimistic UI — keep endpoint/move drags responsive.
+    const nextWalls = get().walls.map((w) => (w.id === id ? next : w));
+    const nextSlabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
     set({
-      walls: get().walls.map((w) => (w.id === id ? next : w)),
+      walls: nextWalls,
+      slabs: nextSlabs,
       lastMutatedAt: Date.now(),
     });
     await idbPutWall(next);
+    await Promise.all(
+      nextSlabs
+        .filter((slab) => slab.autoBoundaryFromWalls)
+        .map((slab) => idbPutSlab(slab)),
+    );
     if (patch.thicknessMm != null && get().projectId) {
       const presets = {
         ...get().presets,
