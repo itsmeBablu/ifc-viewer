@@ -272,7 +272,7 @@ function attachAlignedOutline(
 }
 
 /** Color-matched rim — shared by basic 3D and presentation selection. */
-function attachColorOutline(mesh: THREE.Mesh, hex: string) {
+function attachColorOutline(mesh: THREE.Mesh, _hex: string) {
   clearSelectionOutlines(mesh);
   const geom = mesh.geometry;
   if (!geom.boundingBox) geom.computeBoundingBox();
@@ -281,22 +281,21 @@ function attachColorOutline(mesh: THREE.Mesh, hex: string) {
   const center = box.getCenter(new THREE.Vector3());
   const inflate = 1.012;
   const sourceEdges = new THREE.EdgesGeometry(geom, 12);
-  const wideGeometry = new LineSegmentsGeometry().fromEdgesGeometry(sourceEdges);
+  const boundaryGeometry = new LineSegmentsGeometry().fromEdgesGeometry(sourceEdges);
   sourceEdges.dispose();
-  const wideMaterial = new LineMaterial({
-    color: new THREE.Color(hex).getHex(),
+  const viewportWidth = typeof window === "undefined" ? 1920 : window.innerWidth;
+  const viewportHeight = typeof window === "undefined" ? 1080 : window.innerHeight;
+  const boundaryMaterial = new LineMaterial({
+    color: 0x09090b,
     transparent: true,
-    opacity: 0.86,
-    linewidth: 5,
+    opacity: 0.72,
+    linewidth: 4.5,
     depthTest: false,
     depthWrite: false,
     alphaToCoverage: true,
   });
-  wideMaterial.resolution.set(
-    typeof window === "undefined" ? 1920 : window.innerWidth,
-    typeof window === "undefined" ? 1080 : window.innerHeight,
-  );
-  const boundary = new LineSegments2(wideGeometry, wideMaterial);
+  boundaryMaterial.resolution.set(viewportWidth, viewportHeight);
+  const boundary = new LineSegments2(boundaryGeometry, boundaryMaterial);
   boundary.scale.setScalar(inflate);
   boundary.position.copy(center).multiplyScalar(1 - inflate);
   boundary.userData.isSelectionOutline = true;
