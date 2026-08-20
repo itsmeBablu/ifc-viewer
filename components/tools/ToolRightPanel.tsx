@@ -83,7 +83,7 @@ export default function ToolRightPanel({
 
   useEffect(() => {
     const handleResize = () => {
-      setIsFloating(window.innerWidth < 768);
+      setIsFloating(window.innerWidth < 1100);
       if (!isSplitDraggingRef.current) {
         setPropHeight(Math.max(200, Math.round((window.innerHeight - 120) / 2)));
       }

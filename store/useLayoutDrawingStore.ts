@@ -176,6 +176,13 @@ type LayoutDrawingState = {
   selectedDoorId: string | null;
   selectedWindowId: string | null;
   selectedSlabId: string | null;
+  slabBoundaryEdit: {
+    slabId: string;
+    phase: "selected" | "editing";
+    originalBoundary: { xMm: number; yMm: number }[];
+    originalAutoBoundaryFromWalls?: boolean;
+  } | null;
+  lockedElementKeys: string[];
   selectedUnderlayId: string | null;
   /** Two-point calibrate mode for the selected underlay. */
   calibrateUnderlayId: string | null;
@@ -362,6 +369,11 @@ type LayoutDrawingState = {
   deleteSlab: (id: string) => Promise<void>;
   selectSlab: (id: string | null) => void;
   duplicateSlab: (id: string) => Promise<LayoutSlab | null>;
+  beginSlabBoundaryEdit: (id: string) => void;
+  updateSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
+  commitSlabBoundaryEdit: () => Promise<void>;
+  cancelSlabBoundaryEdit: () => void;
+  toggleElementLock: (ref: SelectedElementRef) => void;
 
   addUnderlayFromFile: (
     levelId: string,
@@ -530,6 +542,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   selectedDoorId: null,
   selectedWindowId: null,
   selectedSlabId: null,
+  slabBoundaryEdit: null,
+  lockedElementKeys: [],
   selectedUnderlayId: null,
   calibrateUnderlayId: null,
   calibratePoints: [],
@@ -1319,6 +1333,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   cancelSlabDraw: () => set({ slabDraw: null, armedLayoutTool: null }),
 
   updateSlab: async (id, patch) => {
+    if (get().lockedElementKeys.includes(`slab:${id}`)) return;
     const cur = get().slabs.find((s) => s.id === id);
     if (!cur) return;
     pushWerkzeugHistory();
@@ -1341,6 +1356,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteSlab: async (id) => {
+    if (get().lockedElementKeys.includes(`slab:${id}`)) return;
     pushWerkzeugHistory();
     await idbDeleteSlab(id);
     set({
@@ -1414,7 +1430,114 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return clone;
   },
 
+  beginSlabBoundaryEdit: (id) => {
+    if (get().lockedElementKeys.includes(`slab:${id}`)) return;
+    const slab = get().slabs.find((item) => item.id === id);
+    if (!slab) return;
+    const boundary = slab.boundary?.length
+      ? slab.boundary
+      : [
+          { xMm: slab.minXmm, yMm: slab.minYmm },
+          { xMm: slab.maxXmm, yMm: slab.minYmm },
+          { xMm: slab.maxXmm, yMm: slab.maxYmm },
+          { xMm: slab.minXmm, yMm: slab.maxYmm },
+        ];
+    set({
+      slabBoundaryEdit: {
+        slabId: id,
+        phase: "editing",
+        originalBoundary: boundary.map((point) => ({ ...point })),
+        originalAutoBoundaryFromWalls: slab.autoBoundaryFromWalls,
+      },
+    });
+  },
+
+  updateSlabBoundaryVertex: (index, point) => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit || edit.phase !== "editing") return;
+    const slab = get().slabs.find((item) => item.id === edit.slabId);
+    if (!slab) return;
+    const boundary = (slab.boundary?.length ? slab.boundary : edit.originalBoundary).map(
+      (vertex, vertexIndex) => vertexIndex === index ? { ...point } : { ...vertex },
+    );
+    if (boundary.length < 3) return;
+    const xs = boundary.map((vertex) => vertex.xMm);
+    const ys = boundary.map((vertex) => vertex.yMm);
+    set({
+      slabs: get().slabs.map((item) => item.id === slab.id ? {
+        ...item,
+        boundary,
+        minXmm: Math.min(...xs),
+        minYmm: Math.min(...ys),
+        maxXmm: Math.max(...xs),
+        maxYmm: Math.max(...ys),
+        autoBoundaryFromWalls: false,
+      } : item),
+    });
+  },
+
+  commitSlabBoundaryEdit: async () => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit) return;
+    const draft = get().slabs.find((item) => item.id === edit.slabId);
+    if (!draft) return;
+    const originalXs = edit.originalBoundary.map((point) => point.xMm);
+    const originalYs = edit.originalBoundary.map((point) => point.yMm);
+    const original = {
+      ...draft,
+      boundary: edit.originalBoundary.map((point) => ({ ...point })),
+      minXmm: Math.min(...originalXs),
+      minYmm: Math.min(...originalYs),
+      maxXmm: Math.max(...originalXs),
+      maxYmm: Math.max(...originalYs),
+      autoBoundaryFromWalls: edit.originalAutoBoundaryFromWalls,
+    };
+    set({ slabs: get().slabs.map((item) => item.id === original.id ? original : item) });
+    pushWerkzeugHistory();
+    set({
+      slabs: get().slabs.map((item) => item.id === draft.id ? draft : item),
+      slabBoundaryEdit: null,
+      lastMutatedAt: Date.now(),
+    });
+    await idbPutSlab(draft);
+  },
+
+  cancelSlabBoundaryEdit: () => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit) return;
+    const slab = get().slabs.find((item) => item.id === edit.slabId);
+    if (!slab) {
+      set({ slabBoundaryEdit: null });
+      return;
+    }
+    const boundary = edit.originalBoundary.map((point) => ({ ...point }));
+    const xs = boundary.map((point) => point.xMm);
+    const ys = boundary.map((point) => point.yMm);
+    set({
+      slabs: get().slabs.map((item) => item.id === slab.id ? {
+        ...item,
+        boundary,
+        minXmm: Math.min(...xs),
+        minYmm: Math.min(...ys),
+        maxXmm: Math.max(...xs),
+        maxYmm: Math.max(...ys),
+        autoBoundaryFromWalls: edit.originalAutoBoundaryFromWalls,
+      } : item),
+      slabBoundaryEdit: null,
+    });
+  },
+
+  toggleElementLock: (ref) => set((state) => {
+    const key = `${ref.kind}:${ref.id}`;
+    return {
+      lockedElementKeys: state.lockedElementKeys.includes(key)
+        ? state.lockedElementKeys.filter((item) => item !== key)
+        : [...state.lockedElementKeys, key],
+    };
+  }),
+
   updateWall: async (id, patch) => {
+    if (get().lockedElementKeys.includes(`wall:${id}`)) return;
     pushWerkzeugHistory();
 
     const wall = get().walls.find((w) => w.id === id);
@@ -1452,6 +1575,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteWall: async (id) => {
+    if (get().lockedElementKeys.includes(`wall:${id}`)) return;
     pushWerkzeugHistory();
 
     const doors = get().doors.filter((d) => d.wallId === id);
@@ -1616,6 +1740,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   updateDoor: async (id, patch) => {
+    if (get().lockedElementKeys.includes(`door:${id}`)) return;
     pushWerkzeugHistory();
 
     const door = get().doors.find((d) => d.id === id);
@@ -1651,6 +1776,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteDoor: async (id) => {
+    if (get().lockedElementKeys.includes(`door:${id}`)) return;
     pushWerkzeugHistory();
 
     await idbDeleteDoor(id);
@@ -1760,6 +1886,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   updateWindow: async (id, patch) => {
+    if (get().lockedElementKeys.includes(`window:${id}`)) return;
     pushWerkzeugHistory();
 
     const win = get().windows.find((w) => w.id === id);
@@ -1799,6 +1926,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteWindow: async (id) => {
+    if (get().lockedElementKeys.includes(`window:${id}`)) return;
     pushWerkzeugHistory();
 
     await idbDeleteWindow(id);
@@ -2320,6 +2448,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setMarqueeBox: (box) => set({ marqueeBox: box }),
 
   deleteSelected: async () => {
+    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
     const sel = get().selectedElements;
     if (sel.length === 0) return;
     pushWerkzeugHistory();
@@ -2369,6 +2498,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   moveSelected: async (deltaXmm, deltaYmm) => {
+    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
     const sel = get().selectedElements;
     if (sel.length === 0 || (deltaXmm === 0 && deltaYmm === 0)) return;
     pushWerkzeugHistory();
@@ -2714,6 +2844,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   rotateSelected: async (center, angleDeg) => {
+    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
     const sel = get().selectedElements;
     if (sel.length === 0 || angleDeg === 0) return;
     pushWerkzeugHistory();
@@ -2768,6 +2899,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   scaleSelected: async (origin, scaleFactor) => {
+    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
     const sel = get().selectedElements;
     if (sel.length === 0 || scaleFactor <= 0 || scaleFactor === 1) return;
     pushWerkzeugHistory();

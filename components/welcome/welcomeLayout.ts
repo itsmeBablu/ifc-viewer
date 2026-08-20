@@ -66,7 +66,7 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
     bodyTextClass: "text-xs font-semibold text-[var(--text-body)]",
     actionsClass: "welcome-mobile-actions flex shrink-0 flex-row gap-2 pt-1.5",
     primaryBtnClass:
-      "order-2 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md text-sm px-3 py-2.5 rounded-xl",
+      "btn-v-yellow btn-liquid-hover order-2 min-h-11 flex-1 active:scale-[0.98] backdrop-blur-md text-sm px-3 py-2.5 rounded-xl",
     secondaryBtnClass:
       "order-1 min-h-11 flex-1 font-semibold active:scale-[0.98] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md hover:border-[var(--glass-border)] text-xs px-3 py-2.5 rounded-xl",
     contentBlockClass:
@@ -119,7 +119,7 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
       hintClass: "mt-0.5 text-xs text-[var(--text-muted)]",
       actionsClass: "flex w-full shrink-0 flex-col gap-2.5",
       primaryBtnClass:
-        "w-full min-h-12 font-semibold active:scale-[0.98] border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md text-base px-6 py-3",
+        "btn-v-yellow btn-liquid-hover w-full min-h-12 active:scale-[0.98] backdrop-blur-md text-base px-6 py-3",
       secondaryBtnClass:
         "w-full min-h-12 font-semibold active:scale-[0.98] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md hover:border-[var(--glass-border)] text-base px-6 py-3",
       languageCompact: false,
@@ -158,7 +158,7 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
     bodyTextClass: "shrink-0 text-[10px] font-medium text-[var(--text-body)]",
     actionsClass: "welcome-mobile-actions flex shrink-0 flex-row gap-1.5",
     primaryBtnClass:
-      "order-2 h-8 min-h-0 flex-1 font-semibold active:scale-[0.98] border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md text-[11px] px-2 py-1",
+      "btn-v-yellow btn-liquid-hover order-2 h-8 min-h-0 flex-1 active:scale-[0.98] backdrop-blur-md text-[11px] px-2 py-1",
     secondaryBtnClass:
       "order-1 h-8 min-h-0 flex-1 font-semibold active:scale-[0.98] border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-md hover:border-[var(--glass-border)] text-[10px] px-2 py-1",
     contentBlockClass:

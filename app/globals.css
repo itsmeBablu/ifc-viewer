@@ -782,7 +782,7 @@ body.pdf-capturing .pdf-capture-hide {
   color: #f4f4f5;
 }
 .tool-chrome {
-  color: #e4e4e7;
+  color: var(--text-body);
 }
 .tool-chrome .thin-scroll {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
@@ -791,22 +791,282 @@ body.pdf-capturing .pdf-capture-hide {
   color: #d4d4d8;
 }
 
-/* Unified Liquid-Amber CTA style (Upload IFC treatment) */
-.btn-liquid-amber {
-  border: 1px solid rgba(253, 230, 138, 0.8) !important;
-  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(250, 204, 21, 0.9), rgba(245, 158, 11, 0.85)) !important;
+/* Werkzeug typography: yellow is an accent surface, never UI copy/icon ink. */
+:is(.tool-chrome, body.werkzeug-active) :is([class*="text-yellow-"], [class*="text-amber-"]) {
+  color: var(--text-body) !important;
+}
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-yellow, .btn-liquid-amber) {
   color: #451a03 !important;
-  font-weight: 700 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 3px 12px rgba(250, 204, 21, 0.3) !important;
+}
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-yellow, .btn-liquid-amber) :is(svg, span) {
+  color: inherit !important;
+}
+
+/* iPad / tablet: preserve the canvas and use compact overlay chrome. */
+@media (min-width: 700px) and (max-width: 1099px) {
+  .werkzeug-compact-ui {
+    --tool-tablet-edge: 0.75rem;
+  }
+  .werkzeug-compact-ui .tool-right-compact {
+    width: min(22rem, calc(100vw - 1.5rem)) !important;
+    right: var(--tool-tablet-edge) !important;
+    top: 4.5rem !important;
+    bottom: 2.5rem !important;
+    max-height: calc(100dvh - 7rem);
+    border-radius: 1rem !important;
+  }
+  .werkzeug-compact-ui :is(.context-menu-surface, .presentation-menu-surface) {
+    max-width: min(22rem, calc(100vw - 1.5rem));
+    max-height: min(70dvh, 34rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .werkzeug-compact-ui button {
+    touch-action: manipulation;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1099px) and (orientation: portrait) {
+  .werkzeug-compact-ui .tool-right-compact {
+    width: min(24rem, calc(100vw - 2rem)) !important;
+  }
+}
+
+.werkzeug-icon-action {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  padding-inline: 0.625rem;
+  background: var(--glass-inset-bg);
+  color: var(--text-body);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .werkzeug-unified-toolbar {
+    right: 0.5rem;
+    scrollbar-width: none;
+  }
+  .werkzeug-unified-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  .werkzeug-tool-label,
+  .werkzeug-icon-action > span:not(:only-child) {
+    display: none;
+  }
+  .werkzeug-tool-button,
+  .werkzeug-icon-action {
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 1099px), (max-height: 599px) {
+  .werkzeug-ipad-ribbons {
+    display: flex;
+    gap: 8px;
+    max-width: calc(100vw - 16px);
+    transition: inset .28s cubic-bezier(.16,1,.3,1), transform .28s cubic-bezier(.16,1,.3,1);
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] { inset: 8px auto auto 50%; transform: translateX(-50%); }
+  .werkzeug-ipad-ribbons[data-dock="bottom"] { inset: auto auto 8px 50%; transform: translateX(-50%); }
+  .werkzeug-ipad-ribbons[data-dock="left"] { inset: 50% auto auto 8px; transform: translateY(-50%); flex-direction: column; max-height: calc(100vh - 16px); }
+  .werkzeug-ipad-ribbons[data-dock="right"] { inset: 50% 8px auto auto; transform: translateY(-50%); flex-direction: column; max-height: calc(100vh - 16px); }
+  .werkzeug-ipad-tool-ribbon,
+  .werkzeug-ipad-action-ribbon {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: visible;
+    border: 1px solid color-mix(in srgb, var(--panel-divider) 72%, transparent);
+    border-radius: 16px;
+    padding: 5px;
+    background: color-mix(in srgb, var(--popover-bg) 38%, transparent);
+    box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.26);
+    backdrop-filter: blur(16px) saturate(150%);
+  }
+  .werkzeug-ipad-tool-ribbon {
+    gap: 6px;
+    border-color: transparent;
+    border-radius: 0;
+    padding: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  .werkzeug-ipad-action-ribbon { margin-left: auto; padding-block: 2px; }
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-action-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-action-ribbon { flex-direction: column; overflow-y: auto; }
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon { width: 48px; max-height: min(60vh, 480px); padding-inline: 1px; }
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-action-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-action-ribbon { width: 48px; max-height: min(34vh, 250px); }
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-tool-label,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-tool-label,
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-icon-action > span,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-icon-action > span { display: none; }
+  .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-tool-button,
+  .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-tool-button { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+  .werkzeug-tool-button {
+    display: inline-flex; min-width: 48px; min-height: 44px; height: 44px; align-items: center; justify-content: center;
+    gap: 4px; border: 1px solid color-mix(in srgb, var(--panel-divider) 70%, transparent); border-radius: 11px; padding: 2px 7px;
+    background: color-mix(in srgb, var(--popover-bg) 42%, transparent); color: var(--text-body); font-size: 10px; font-weight: 600;
+    box-shadow: 0 5px 16px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.38);
+    backdrop-filter: blur(14px) saturate(145%);
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button {
+    width: auto;
+    min-width: 0;
+    min-height: 29px;
+    height: 29px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--popover-bg) 46%, transparent);
+    box-shadow: 0 4px 14px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.42);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button > span:first-child,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button > span:first-child,
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-label,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-label {
+    display: inline-flex;
+    height: 14px;
+    align-items: center;
+    line-height: 14px;
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button > span:first-child,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button > span:first-child { font-size: 14px; }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button.is-active,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button.is-active {
+    border-color: rgba(253,224,71,.9);
+    background: linear-gradient(135deg, rgba(253,230,138,.96), rgba(253,224,71,.88), rgba(251,191,36,.78));
+    color: #451a03;
+    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 4px 14px rgba(251,191,36,.36);
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-ipad-action-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-action-ribbon {
+    min-height: 38px;
+    padding: 1px 3px;
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-ipad-action-ribbon button,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-action-ribbon button {
+    min-height: 34px;
+    height: 34px;
+    padding-block: 3px;
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-theme-knob,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-theme-knob {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0;
+  }
+  .werkzeug-tool-button > span:first-child { font-size: 16px; }
+  .werkzeug-tool-button.is-active {
+    border-color: rgba(253,224,71,.9);
+    background: linear-gradient(135deg, rgba(253,230,138,.95), rgba(253,224,71,.86), rgba(251,191,36,.76));
+    color: #451a03;
+    box-shadow: inset 0 1px rgba(255,255,255,.7), 0 4px 14px rgba(251,191,36,.34);
+  }
+  .werkzeug-ipad-popup {
+    position: absolute; top: calc(100% + 8px); z-index: 90; width: 170px; padding: 5px;
+    border: 1px solid var(--panel-divider); border-radius: 13px; background: var(--popover-bg);
+    box-shadow: 0 12px 32px rgba(0,0,0,.2); backdrop-filter: blur(22px);
+  }
+  .werkzeug-ipad-popup button { display: flex; min-height: 42px; width: 100%; align-items: center; gap: 8px; border-radius: 9px; padding: 0 9px; color: var(--text-body); font-size: 11px; text-align: left; }
+  .werkzeug-ipad-popup button:hover, .werkzeug-ipad-popup button.is-active { border-color: rgba(253,224,71,.9); background: linear-gradient(135deg, rgba(253,230,138,.95), rgba(253,224,71,.86), rgba(251,191,36,.76)); color: #451a03; box-shadow: inset 0 1px rgba(255,255,255,.68), 0 3px 10px rgba(251,191,36,.25); }
+  .werkzeug-ipad-context input, .werkzeug-ipad-context select { min-height: 32px !important; height: 32px !important; font-size: 11px !important; }
+  .werkzeug-ipad-context label, .werkzeug-ipad-context p, .werkzeug-ipad-context span { line-height: 1.25; }
+  .werkzeug-ipad-levels { font-size: 11px; }
+  .werkzeug-ipad-levels button { min-height: 36px; }
+  .werkzeug-ipad-panel-peek { position: fixed; z-index: 69; top: 48%; right: 0; width: 28px; height: 58px; border: 1px solid var(--panel-divider); border-right: 0; border-radius: 14px 0 0 14px; background: var(--popover-bg); color: var(--text-strong); box-shadow: 0 8px 24px rgba(0,0,0,.16); backdrop-filter: blur(18px); }
+  .werkzeug-theme-knob { display: inline-flex; width: 32px; height: 32px; flex: 0 0 32px; align-items: center; justify-content: center; border: 1px solid var(--glass-border); border-radius: 999px; background: var(--glass-inset-bg); color: var(--text-body); box-shadow: inset 0 1px rgba(255,255,255,.4), 0 2px 8px rgba(0,0,0,.1); }
+  .werkzeug-entry-panel { max-width: min(330px, calc(100vw - 28px)) !important; }
+  .werkzeug-entry-content { padding: 14px 16px !important; }
+  .werkzeug-entry-hint { margin-bottom: 10px !important; font-size: 10px !important; }
+  .werkzeug-entry-upload { margin-bottom: 10px !important; }
+  .werkzeug-entry-form { gap: 7px !important; }
+  .werkzeug-entry-panel input { height: 34px; padding-block: 4px !important; }
+  .werkzeug-entry-panel button { min-height: 38px !important; padding-block: 7px !important; font-size: 11px !important; }
+}
+
+@media (max-width: 900px) {
+  .werkzeug-ipad-ribbons[data-dock="top"], .werkzeug-ipad-ribbons[data-dock="bottom"] { width: calc(100vw - 16px); }
+  .werkzeug-ipad-tool-ribbon { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .werkzeug-ipad-tool-ribbon::-webkit-scrollbar { display: none; }
+  .werkzeug-ipad-action-ribbon { flex: 0 0 auto; }
+  .werkzeug-ipad-tool-ribbon .werkzeug-tool-label { display: inline; }
+  .werkzeug-ipad-tool-ribbon .werkzeug-tool-button { width: auto; min-width: 58px; padding-inline: 7px; scroll-snap-align: start; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action { width: 44px; min-width: 44px; padding-inline: 0; }
+}
+
+/* V-Yellow: exact original Load IFC button treatment. */
+.btn-v-yellow,
+.btn-liquid-amber {
+  border: 1px solid rgba(253, 230, 138, 0.7) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.85), rgba(251, 191, 36, 0.75)) !important;
+  color: #451a03 !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 4px 14px rgba(251, 191, 36, 0.35) !important;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
+.btn-v-yellow:hover,
 .btn-liquid-amber:hover {
-  filter: brightness(1.06) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 16px rgba(250, 204, 21, 0.45) !important;
-  border-color: #fde047 !important;
+  filter: brightness(1.04) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 12px rgba(250, 204, 21, 0.3) !important;
+  border-color: rgba(253, 224, 71, 0.9) !important;
 }
+.btn-v-yellow:active,
 .btn-liquid-amber:active {
   transform: scale(0.97) !important;
+}
+
+/* Simple liquid-glass hover without changing the resting style. */
+.btn-liquid-hover {
+  transition: filter 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.btn-liquid-hover:hover {
+  filter: brightness(1.04);
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 12px rgba(250, 204, 21, 0.3) !important;
+}
+.btn-liquid-hover:active {
+  filter: brightness(0.98);
+}
+
+/* Neutral glass actions become V-Yellow on hover in either theme. */
+.btn-white-to-v-yellow {
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+.btn-white-to-v-yellow:hover {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(250, 204, 21, 0.9), rgba(245, 158, 11, 0.85)) !important;
+  color: #451a03 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 12px rgba(250, 204, 21, 0.3) !important;
+}
+.btn-white-to-v-yellow:active {
+  filter: brightness(0.98);
+}
+
+/* Neutral glass button with a restrained V-Yellow border hover. */
+.btn-yellow-border-hover {
+  transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.btn-yellow-border-hover:hover {
+  border-color: rgba(250, 204, 21, 0.95) !important;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+  color: var(--text-strong) !important;
 }
 
 /* Werkzeug material editor: compact liquid-amber sliders. */

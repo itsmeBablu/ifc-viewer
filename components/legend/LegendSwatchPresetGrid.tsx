@@ -83,16 +83,16 @@ function SwatchPresetButton({
       type="button"
       title={`${name} (${shortcut})`}
       onClick={onSelect}
-      className={`w-full rounded-lg border text-left transition-all hover:brightness-105 active:scale-[0.98] ${
+      className={`group w-full rounded-xl border text-left backdrop-blur-xl transition-all duration-200 hover:-translate-y-px active:scale-[0.98] ${
         compact ? "p-1" : "p-1.5"
       } ${
         active
-          ? "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] ring-1 ring-zinc-400/35"
-          : "border-transparent bg-[var(--glass-inset-bg)]/60 hover:bg-[var(--glass-inset-bg)]"
+          ? "border-white/70 bg-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,.9),0_4px_14px_rgba(15,23,42,.16)] ring-1 ring-yellow-400/45"
+          : "border-white/45 bg-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,.7),0_2px_8px_rgba(15,23,42,.09)] hover:border-white/70 hover:bg-white/45 hover:shadow-[inset_0_1px_0_rgba(255,255,255,.9),0_5px_16px_rgba(15,23,42,.14)]"
       }`}
     >
       <div
-        className={`flex w-full overflow-hidden rounded-md border border-white/40 shadow-sm ${
+        className={`relative isolate flex w-full overflow-hidden rounded-lg border border-white/65 shadow-[inset_0_1px_0_rgba(255,255,255,.8),0_2px_8px_rgba(0,0,0,.18)] ${
           compact ? "h-3.5" : "h-4"
         }`}
       >
@@ -100,9 +100,11 @@ function SwatchPresetButton({
           <span
             key={`${presetId}-${color}`}
             className="min-w-0 flex-1"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: color, boxShadow: "inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(0,0,0,.1)" }}
           />
         ))}
+        <span className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[58%] bg-gradient-to-b from-white/65 via-white/20 to-transparent" aria-hidden />
+        <span className="pointer-events-none absolute inset-0 z-10 rounded-lg ring-1 ring-inset ring-white/25" aria-hidden />
       </div>
       <p
         className={`mt-0.5 truncate font-medium text-[var(--text-body)] ${

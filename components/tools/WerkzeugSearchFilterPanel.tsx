@@ -64,8 +64,8 @@ export default function WerkzeugSearchFilterPanel({
   const dataViewMode = useAppStore((s) => s.dataViewMode);
   const isDark = colorTheme === "dark";
   const yellowGlossBtn = isDark
-    ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.42)] backdrop-blur-md"
-    : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] backdrop-blur-md";
+    ? "btn-v-yellow btn-liquid-hover amber-gloss-surface backdrop-blur-md"
+    : "btn-v-yellow btn-liquid-hover amber-gloss-surface backdrop-blur-md";
 
   const [mode, setMode] = useState<Mode>("search");
   const [query, setQuery] = useState("");

@@ -730,6 +730,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
+
+  useEffect(() => {
+    const reposition = (event: Event) => {
+      const edge = (event as CustomEvent<"top" | "bottom">).detail;
+      viewCubeRef.current?.setMargins({
+        marginTop: edge === "top" ? 78 : 16,
+        marginRight: 16,
+      });
+    };
+    window.addEventListener("werkzeug-ipad-toolbar-dock", reposition);
+    return () => window.removeEventListener("werkzeug-ipad-toolbar-dock", reposition);
+  }, []);
   const clipRef = useRef<ClipSliceController | null>(null);
   const roomMeshById = useRef<Map<string, THREE.Mesh>>(new Map());
   const roomMeshTwinById = useRef<Map<string, THREE.Mesh>>(new Map());
@@ -1037,6 +1049,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     const viewCube = new ViewCube();
     viewCubeRef.current = viewCube;
+    const initialDock = document.documentElement.dataset.werkzeugDock;
+    if (initialDock) viewCube.setMargins({ marginTop: initialDock === "top" ? 78 : 16, marginRight: initialDock === "right" ? 78 : 16 });
 
     const clip = new ClipSliceController();
     clip.attach(scene);
@@ -2294,6 +2308,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const layout = layoutLayerRef.current;
     if (layout) layout.group.visible = toolMode;
   }, [toolMode]);
+
+  useEffect(() => {
+    const handleLevelHighlight = (event: Event) => {
+      layoutLayerRef.current?.setLevelHighlight(
+        Boolean((event as CustomEvent<boolean>).detail),
+      );
+    };
+    window.addEventListener("werkzeug-level-highlight", handleLevelHighlight);
+    return () => window.removeEventListener("werkzeug-level-highlight", handleLevelHighlight);
+  }, []);
 
   useEffect(() => {
     const layer = markupLayerRef.current;

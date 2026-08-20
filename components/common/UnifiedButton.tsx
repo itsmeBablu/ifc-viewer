@@ -39,9 +39,9 @@ export const UnifiedButton = forwardRef<HTMLButtonElement, UnifiedButtonProps>(
 
     const variantClasses = {
       primary:
-        "border border-amber-200/80 dark:border-yellow-400/40 bg-gradient-to-br from-amber-200/95 via-yellow-300/90 to-amber-400/85 text-amber-950 font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_3px_12px_rgba(250,204,21,0.3)] hover:brightness-105 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_16px_rgba(250,204,21,0.45)] hover:border-yellow-300 active:shadow-inner",
+        "btn-v-yellow btn-liquid-hover",
       secondary:
-        "border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-semibold shadow-sm hover:border-yellow-400/50 hover:bg-[var(--glass-inset-bg)]",
+        "btn-yellow-border-hover border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-semibold shadow-sm",
       danger:
         "border border-red-400/40 bg-gradient-to-br from-red-500/20 to-red-600/30 text-red-400 font-semibold hover:bg-red-500/30 hover:border-red-400",
       ghost:

@@ -45,16 +45,16 @@ const ctxMenuSurface =
   "context-menu-surface presentation-menu-surface isolate overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-100/78 via-yellow-50/62 to-amber-200/48 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_32px_rgba(251,191,36,0.28)] backdrop-blur-md";
 
 const ctxItemIdle =
-  "flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-[var(--text-body)] transition-all duration-300 ease-out hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] disabled:opacity-40";
+  "btn-yellow-border-hover flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-[var(--text-body)] disabled:opacity-40";
 
 const ctxItemActive =
-  "amber-gloss-surface overflow-hidden rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
+  "btn-v-yellow btn-liquid-hover amber-gloss-surface overflow-hidden rounded-xl";
 
 const ctxChipOn =
-  "amber-gloss-surface overflow-hidden rounded-lg border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]";
+  "btn-v-yellow btn-liquid-hover amber-gloss-surface overflow-hidden rounded-lg";
 
 const ctxChipOff =
-  "presentation-chip-off overflow-hidden rounded-lg border border-transparent text-[var(--text-muted)] hover:border-amber-200/40 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950";
+  "btn-yellow-border-hover presentation-chip-off overflow-hidden rounded-lg border border-transparent text-[var(--text-muted)]";
 
 const ctxToggleOn = "bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.55)]";
 const ctxToggleOff = "ctx-toggle-off bg-amber-200/70";
@@ -62,7 +62,7 @@ const ctxToggleOff = "ctx-toggle-off bg-amber-200/70";
 const ctxLabel = "text-[10px] font-semibold tracking-wide text-[var(--text-muted)]";
 
 const ctxPrimaryBtn =
-  "w-full rounded-xl border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 px-2 py-1.5 text-xs font-semibold text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.32)] disabled:opacity-40";
+  "btn-v-yellow btn-liquid-hover w-full rounded-xl px-2 py-1.5 text-xs disabled:opacity-40";
 
 /**
  * Right-click context menu for the 3D canvas.

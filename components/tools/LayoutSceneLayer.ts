@@ -90,8 +90,7 @@ export default class LayoutSceneLayer {
     widthMm: number,
     depthMm: number,
   ) {
-    this.disposeGroup(this.structuralPreview);
-    this.structuralPreview.clear();
+    this.clearGroupContents(this.structuralPreview);
     if (!kind || !cursor) return;
     const yellow = 0xfacc15;
     if (kind === "column") {
@@ -1255,8 +1254,9 @@ export default class LayoutSceneLayer {
     selectedLineId: string | null = null,
     fallbackElevMm: number = 0,
   ) {
-    this.disposeGroup(this.sketchGroup);
-    this.sketchGroup.clear();
+    // This is a persistent child of `group`. Removing it here orphaned every
+    // newly-created line from the scene graph, which made Lines invisible.
+    this.clearGroupContents(this.sketchGroup);
 
     const levelMap = new Map(levels.map((lvl) => [lvl.id, lvl.elevationMm]));
     const sketchYellow = 0xfacc15;
@@ -2654,5 +2654,23 @@ export default class LayoutSceneLayer {
   private disposeGroup(g: THREE.Group) {
     this.group.remove(g);
     this.disposeObject(g);
+  }
+
+  setLevelHighlight(enabled: boolean) {
+    for (const mesh of this.levelSlabs.values()) {
+      const material = mesh.material as THREE.MeshPhysicalMaterial;
+      material.color.setHex(enabled ? 0x64748b : 0x94a3b8);
+      material.opacity = enabled ? 0.2 : 0.12;
+      material.emissive.setHex(enabled ? 0x334155 : 0x000000);
+      material.emissiveIntensity = enabled ? 0.12 : 0;
+      material.needsUpdate = true;
+    }
+  }
+
+  private clearGroupContents(g: THREE.Group) {
+    for (const child of [...g.children]) {
+      this.disposeObject(child);
+      g.remove(child);
+    }
   }
 }
