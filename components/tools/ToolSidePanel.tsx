@@ -266,7 +266,7 @@ export default function ToolSidePanel({
                         setModelMenuOpen(false);
                         modelFileInputRef.current?.click();
                       }}
-                      className="w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-[var(--text-body)] transition duration-150 hover:bg-[var(--surface-muted)]"
+                      className="btn-yellow-border-hover w-full rounded-lg border border-transparent px-2.5 py-2 text-left text-[11px] font-semibold text-[var(--text-body)]"
                     >
                       {t(uiLanguage, "loadOtherIfc")}
                     </button>
@@ -320,7 +320,7 @@ export default function ToolSidePanel({
                       />
                       <button
                         type="submit"
-                        className="w-full rounded-lg bg-sky-100 px-2.5 py-2 text-left text-[11px] font-semibold text-sky-950 transition duration-150 hover:bg-sky-200/80"
+                        className="btn-yellow-border-hover w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2.5 py-2 text-left text-[11px] font-semibold text-[var(--text-body)]"
                       >
                         {t(uiLanguage, "layoutCreateEmpty")}
                       </button>

@@ -226,7 +226,7 @@ export default function WelcomeScreen({ onContinue }: Props) {
         setPasswordInput("");
         setPasswordError(false);
       }}
-      className={`${btnMotion} ${layout.secondaryBtnClass} inline-flex items-center justify-center gap-1.5`}
+      className={`${btnMotion} ${layout.secondaryBtnClass} btn-yellow-border-hover inline-flex items-center justify-center gap-1.5`}
     >
       <span>{t(uiLanguage, "welcomeGoWerkzeug")}</span>
       <LuLock className="h-3.5 w-3.5 shrink-0 opacity-75" aria-hidden />
@@ -354,7 +354,7 @@ export default function WelcomeScreen({ onContinue }: Props) {
                       setPasswordInput("");
                       setPasswordError(false);
                     }}
-                    className="rounded-lg p-1.5 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+                    className="btn-yellow-border-hover rounded-lg border border-transparent p-1.5 text-xs text-[var(--text-muted)]"
                     aria-label={t(uiLanguage, "cancel")}
                   >
                     ✕
@@ -399,13 +399,13 @@ export default function WelcomeScreen({ onContinue }: Props) {
                         setPasswordInput("");
                         setPasswordError(false);
                       }}
-                      className={`${btnMotion} rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3.5 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-[var(--glass-border)]`}
+                      className={`${btnMotion} btn-yellow-border-hover rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3.5 py-2 text-xs font-medium text-[var(--text-muted)]`}
                     >
                       {t(uiLanguage, "cancel")}
                     </button>
                     <button
                       type="submit"
-                      className={`${btnMotion} rounded-xl bg-gradient-to-br from-amber-300 via-yellow-200 to-amber-400 px-4 py-2 text-xs font-semibold text-amber-950 shadow-sm hover:brightness-105 active:scale-95`}
+                      className={`${btnMotion} btn-v-yellow btn-liquid-hover rounded-xl px-4 py-2 text-xs active:scale-95`}
                     >
                       {t(uiLanguage, "werkzeugPasswordSubmit")}
                     </button>

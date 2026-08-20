@@ -52,24 +52,24 @@ export default function WerkzeugEntryPanel({
   };
 
   const amberBtn =
-    `${motion.base} ${radius.control} inline-flex min-w-[168px] items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]`;
+    `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-w-[168px] items-center justify-center gap-2 px-6 py-2.5 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
     <GlassPanel
       variant="panel"
       zIndex={30}
       preferCss
-      wrapperClassName="pointer-events-auto w-full max-w-[min(26rem,calc(100vw-2rem))] tool-glass"
+      wrapperClassName="werkzeug-entry-panel pointer-events-auto w-full max-w-[min(26rem,calc(100vw-2rem))] tool-glass"
     >
-      <div className="p-6">
+      <div className="werkzeug-entry-content p-6">
         <p className="mb-1 text-sm font-semibold tracking-wide text-[var(--text-strong)]">
           {t(uiLanguage, "tool")}
         </p>
-        <p className="mb-5 text-xs font-medium leading-relaxed text-[var(--text-muted)]">
+        <p className="werkzeug-entry-hint mb-5 text-xs font-medium leading-relaxed text-[var(--text-muted)]">
           {t(uiLanguage, "werkzeugEntryHint")}
         </p>
 
-        <div className="mb-4 flex justify-center">
+        <div className="werkzeug-entry-upload mb-4 flex justify-center">
           <LoadIfcButton
             onFile={onFile}
             label={t(uiLanguage, "werkzeugUploadIfc")}
@@ -84,7 +84,7 @@ export default function WerkzeugEntryPanel({
         </div>
 
         <form
-          className="flex flex-col items-center gap-3"
+          className="werkzeug-entry-form flex flex-col items-center gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             void create();
