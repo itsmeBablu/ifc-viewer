@@ -20,14 +20,14 @@ import { useAppStore } from "@/store/useAppStore";
 type ProfileHoverId = "language" | "theme" | "seasonalBg" | "en" | "de" | "es";
 
 const menuRowIdle =
-  "box-border border border-transparent transition-[background-color,border-color,box-shadow,color] duration-200";
+  "btn-yellow-border-hover box-border border border-transparent";
 
 function menuRowStyles(isDark: boolean) {
   const surface = isDark
     ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/92 via-yellow-200/82 to-amber-400/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.4)] backdrop-blur-md"
     : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] backdrop-blur-md";
   return {
-    highlight: `${surface} font-semibold text-amber-950`,
+    highlight: `btn-v-yellow btn-liquid-hover ${surface}`,
     surfaceHighlight: `${surface} text-amber-950`,
   };
 }
@@ -81,7 +81,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   const yellowGloss = isDark
     ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/95 via-yellow-200/88 to-amber-400/78 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]"
     : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]";
-  const sideActive = `${sideBtn} ${yellowGloss}`;
+  const sideActive = `${sideBtn} btn-v-yellow btn-liquid-hover ${yellowGloss}`;
 
   useEffect(() => {
     const openPicker = () => {

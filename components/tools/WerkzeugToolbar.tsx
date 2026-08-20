@@ -398,8 +398,8 @@ export default function WerkzeugToolbar({ viewerRef, targetRef }: Props) {
   const btnIdle = isDark
     ? `${btnBase} toolbar-icon-btn border border-transparent text-[var(--toolbar-icon)] hover:border-amber-300/80 hover:bg-gradient-to-br hover:from-amber-300/95 hover:via-yellow-200/88 hover:to-amber-400/78 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.42)] hover:backdrop-blur-md`
     : `${btnBase} toolbar-icon-btn border border-transparent text-[var(--toolbar-icon)] hover:border-amber-200/70 hover:bg-gradient-to-br hover:from-amber-200/95 hover:via-yellow-300/85 hover:to-amber-400/75 hover:text-amber-950 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)] hover:backdrop-blur-md`;
-  const btnActive = `${btnBase} ${yellowGloss}`;
-  const btnPresentationIdle = `${btnBase} ${yellowGloss}`;
+  const btnActive = `${btnBase} btn-v-yellow btn-liquid-hover ${yellowGloss}`;
+  const btnPresentationIdle = `${btnBase} btn-v-yellow btn-liquid-hover ${yellowGloss}`;
   const btnPresentationOn = `${btnBase} ${blueGloss}`;
 
   const menuItemActive = "bg-[var(--chip-active-bg)] text-[var(--text-strong)]";

@@ -37,10 +37,10 @@ import VStudioErrorBoundary from "./VStudioErrorBoundary";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
+import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
-import DraggablePanel from "./DraggablePanel";
 import ToolStatusBar from "./ToolStatusBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import SheetViewDialog from "./SheetViewDialog";
@@ -56,7 +56,6 @@ import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { isTypingTarget } from "@/lib/viewerHotkeys";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { formatLength } from "@/lib/unitFormat";
-import { LuLayers } from "react-icons/lu";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import SceneBusyOverlay from "@/components/common/SceneBusyOverlay";
 import SceneBusyCursor from "@/components/common/SceneBusyCursor";
@@ -121,8 +120,9 @@ export default function WerkzeugApp() {
   const [shellGroup, setShellGroup] = useState<Group | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [pointerOverViewer, setPointerOverViewer] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(true);
-  const [isLandscape, setIsLandscape] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 1100 && window.innerHeight >= 600,
+  );
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const [roomScheduleOpen, setRoomScheduleOpen] = useState(false);
   const [sheetViewOpen, setSheetViewOpen] = useState(false);
@@ -134,10 +134,10 @@ export default function WerkzeugApp() {
   const loadError = useAppStore((s) => s.loadError);
   const loadProgress = useAppStore((s) => s.loadProgress);
   const loadMessage = useAppStore((s) => s.loadMessage);
-  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const pdfCaptureActive = useAppStore((s) => s.pdfCaptureActive);
+  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
 
   const setActiveModelId = useAppStore((s) => s.setActiveModelId);
   const setFloors = useAppStore((s) => s.setFloors);
@@ -146,8 +146,8 @@ export default function WerkzeugApp() {
   const setLoadError = useAppStore((s) => s.setLoadError);
   const setLoadProgress = useAppStore((s) => s.setLoadProgress);
   const clearModelData = useAppStore((s) => s.clearModelData);
-  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const setLeftPanelOpen = useAppStore((s) => s.setLeftPanelOpen);
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
 
   // Layout Tool Store
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
@@ -179,15 +179,30 @@ export default function WerkzeugApp() {
   }, [activeModelLabel]);
 
   useEffect(() => {
+    document.body.classList.add("werkzeug-active");
     hydratePanelState();
     useAppStore.getState().setToolMode(true);
     useAppStore.getState().setPresentationView(false);
     setRightPanelOpen(true);
     setLeftPanelOpen(false);
     return () => {
+      document.body.classList.remove("werkzeug-active");
       useAppStore.getState().setToolMode(false);
     };
   }, [setLeftPanelOpen, setRightPanelOpen]);
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      setIsDesktop(window.innerWidth >= 1100 && window.innerHeight >= 600);
+    };
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    window.addEventListener("orientationchange", updateViewportMode);
+    return () => {
+      window.removeEventListener("resize", updateViewportMode);
+      window.removeEventListener("orientationchange", updateViewportMode);
+    };
+  }, []);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -197,22 +212,6 @@ export default function WerkzeugApp() {
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
-
-  useEffect(() => {
-    const update = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      setIsDesktop(w >= 768 && h >= 560);
-      setIsLandscape(w > h);
-    };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("orientationchange", update);
-    };
   }, []);
 
   // Keyboard Shortcuts (W = Wall, D = Door, Esc = Cancel Selection, Ctrl+Z = Undo, Ctrl+Y = Redo)
@@ -238,6 +237,10 @@ export default function WerkzeugApp() {
 
       if (e.key === "Escape") {
         const layout = useLayoutDrawingStore.getState();
+        if (layout.slabBoundaryEdit) {
+          layout.cancelSlabBoundaryEdit();
+          return;
+        }
         layout.finishWallDraw();
         layout.cancelSlabDraw();
         layout.finishSketchLineDraw();
@@ -469,23 +472,29 @@ export default function WerkzeugApp() {
       <ThemeTransition />
       <div
         ref={rootRef}
-        className="werkzeug-compact-ui relative h-dvh w-dvw overflow-hidden text-[var(--text-strong)] bg-[var(--surface-base)] select-none"
+        className="werkzeug-compact-ui tool-chrome relative h-dvh w-dvw overflow-hidden bg-[var(--surface-base)] text-[var(--text-strong)] select-none"
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        {/* Top Revit-Style Ribbon Header */}
-        <ToolRibbon
-          viewerRef={viewerRef}
-          onFile={handleFile}
-          isLoadingModel={isLoadingModel}
-          onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
-          onOpenSheet={() => setSheetViewOpen(true)}
-        />
-
-        {/* Contextual Ribbon Options Bar */}
-        <ToolOptionsBar />
+        {isDesktop ? (
+          <>
+            <ToolRibbon
+              viewerRef={viewerRef}
+              onFile={handleFile}
+              isLoadingModel={isLoadingModel}
+              onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
+              onOpenSheet={() => setSheetViewOpen(true)}
+            />
+            <ToolOptionsBar />
+          </>
+        ) : (
+          <WerkzeugWorkspaceChrome
+            onFile={handleFile}
+            isLoadingModel={isLoadingModel}
+          />
+        )}
 
         {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
         <main
@@ -502,14 +511,6 @@ export default function WerkzeugApp() {
           </VStudioErrorBoundary>
         </main>
 
-        <SceneBusyOverlay />
-        <SceneBusyCursor
-          x={pointer.x}
-          y={pointer.y}
-          active={pointerOverViewer}
-        />
-
-        {/* Right Panel: Properties + Layout (full-height docked on desktop) */}
         {isDesktop && (
           <ToolRightPanel
             onFile={handleFile}
@@ -519,6 +520,13 @@ export default function WerkzeugApp() {
           />
         )}
 
+        <SceneBusyOverlay />
+        <SceneBusyCursor
+          x={pointer.x}
+          y={pointer.y}
+          active={pointerOverViewer}
+        />
+
         {/* Room & Area Take-off Schedule Modal */}
         <RoomScheduleDialog isOpen={roomScheduleOpen} onClose={() => setRoomScheduleOpen(false)} />
 
@@ -526,7 +534,7 @@ export default function WerkzeugApp() {
         <SheetViewDialog isOpen={sheetViewOpen} onClose={() => setSheetViewOpen(false)} />
 
         {/* Bottom CAD Status Bar */}
-        <ToolStatusBar
+        {isDesktop && <ToolStatusBar
           pointer={pointer}
           onAttachIfc={handleFile}
           onAttachDwgPdf={(file) => {
@@ -534,7 +542,7 @@ export default function WerkzeugApp() {
             // For now, pass to the existing handleFile flow for IFC, or handle DWG separately
             console.log("DWG/PDF attached:", file.name);
           }}
-        />
+        />}
 
         {/* Drag Snap & Hover Tooltip HUDs */}
         <DragSnapHud />
@@ -617,37 +625,6 @@ export default function WerkzeugApp() {
           </GlassPanel>
         </GsapOverlay>
 
-        {/* Mobile/Tablet Floating Draggable Panel */}
-        {!isDesktop && rightPanelOpen && (
-          <DraggablePanel
-            className="w-80 bg-[var(--surface-overlay)] border border-[var(--panel-divider)] rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl"
-            defaultPosition={{ x: 20, y: 130 }}
-          >
-            <ToolRightPanel
-              onFile={handleFile}
-              isLoadingModel={isLoadingModel}
-            />
-          </DraggablePanel>
-        )}
-
-        {/* Floating panel toggle button on mobile/tablet */}
-        {!isDesktop && (
-          <button
-            type="button"
-            onClick={() => {
-               // Swap logic
-               if (!rightPanelOpen) {
-                 setRightPanelOpen(true);
-               } else {
-                 setRightPanelOpen(false);
-               }
-            }}
-            className="fixed right-4 bottom-20 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-slate-950 shadow-lg hover:bg-amber-600 transition-colors"
-            title="Toggle Panel"
-          >
-            <LuLayers className="h-6 w-6" />
-          </button>
-        )}
       </div>
     </WerkzeugModelSceneContext.Provider>
   );
