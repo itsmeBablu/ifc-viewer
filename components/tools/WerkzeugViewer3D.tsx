@@ -82,7 +82,8 @@ import {
 import LayoutSceneLayer from "@/components/tools/LayoutSceneLayer";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
-import { useMaterialStore } from "@/store/materialStore";
+import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
+import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
@@ -128,10 +129,6 @@ import {
 } from "@/lib/ifcMaterials";
 import type { RenderMode, Room } from "@/lib/types";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
-import {
-  TOOL_RIGHT_PANEL_PEEK_PX,
-} from "./werkzeugLayout";
-import { useWerkzeugUiStore } from "./werkzeugUiStore";
 import { useModelScene } from "./WerkzeugModelSceneContext";
 
 export type WerkzeugViewer3DHandle = {
@@ -758,6 +755,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const lastNotePinTokenRef = useRef(0);
   const transformControlsRef = useRef<TransformControls | null>(null);
   const transformDraggingRef = useRef(false);
+  const suppressTransformReleaseClickRef = useRef(false);
   const walkthroughRef = useRef<FirstPersonWalkthroughController | null>(null);
   const persistGizmoRef = useRef<() => void>(() => {});
   /** Drag wall endpoint / wall move / unlocked underlay move. */
@@ -826,8 +824,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const roomsFromStore = useAppStore((s) => s.rooms);
   const toolMode = useAppStore((s) => s.toolMode);
-  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
-  const toolRightPanelWidthPx = useWerkzeugUiStore((s) => s.toolRightPanelWidthPx);
   const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const bauteilMode = false;
@@ -1098,6 +1094,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       transformDraggingRef.current = dragging;
       controls.enabled = !dragging;
       if (dragging) {
+        suppressTransformReleaseClickRef.current = true;
         pushWerkzeugHistory();
         suspendWerkzeugHistory(true);
       } else {
@@ -1338,20 +1335,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     };
     // Remount when view-cube layout changes (HMR keeps the old instance otherwise).
   }, [VIEW_CUBE_LAYOUT.revision]);
-
-  // Werkzeug: shift the cube left of the open properties dock so it sits exactly next to it.
-  useEffect(() => {
-    const cube = viewCubeRef.current;
-    if (!cube) return;
-    const dockCoverPx =
-      toolMode
-        ? (rightPanelOpen ? toolRightPanelWidthPx : TOOL_RIGHT_PANEL_PEEK_PX)
-        : 0;
-    cube.setMargins({
-      marginRight: VIEW_CUBE_LAYOUT.marginRight + dockCoverPx,
-      marginTop: VIEW_CUBE_LAYOUT.marginTop,
-    });
-  }, [toolMode, rightPanelOpen, toolRightPanelWidthPx]);
 
   // Build shell + room overlays
   useEffect(() => {
@@ -1933,6 +1916,123 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     return () => unsub();
   }, []);
 
+  // Desktop drag/drop and touch-friendly paint mode for layout materials.
+  useEffect(() => {
+    const canvas = rendererRef.current?.domElement;
+    if (!canvas) return;
+    const assignAt = (clientX: number, clientY: number, materialId: string) => {
+      const material = useMaterialStore.getState().getMaterial(materialId);
+      const camera = cameraRef.current;
+      const layer = layoutLayerRef.current;
+      if (!material || !camera || !layer) return false;
+      const rect = canvas.getBoundingClientRect();
+      pointerNdc.current.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+      const hit = layer.pickLayout(raycaster.current);
+      const store = useLayoutDrawingStore.getState();
+      const patch = { material: material.id, color: material.color };
+      let assigned = false;
+      if (hit && "id" in hit) {
+        if (hit.kind === "wall" || hit.kind === "wall-endpoint") void store.updateWall(hit.id, patch);
+        else if (hit.kind === "slab") void store.updateSlab(hit.id, patch);
+        else if (hit.kind === "door") void store.updateDoor(hit.id, patch);
+        else if (hit.kind === "window") void store.updateWindow(hit.id, patch);
+        else if (hit.kind === "column") void store.updateColumn(hit.id, patch);
+        else if (hit.kind === "beam") void store.updateBeam(hit.id, patch);
+        else return false;
+        assigned = true;
+      }
+      if (!assigned && shellCloneRef.current) {
+        const ifcHit = raycaster.current
+          .intersectObject(shellCloneRef.current, true)
+          .find((entry) => entry.object instanceof THREE.Mesh);
+        const mesh = ifcHit?.object;
+        if (mesh instanceof THREE.Mesh) {
+          const previous = mesh.material;
+          const next = new THREE.MeshPhysicalMaterial({
+            color: material.color,
+            roughness: material.roughness,
+            metalness: material.metalness,
+            opacity: material.opacity,
+            transparent:
+              material.opacity < 0.99 || (material.transmission ?? 0) > 0,
+            transmission: material.transmission ?? 0,
+            clearcoat: material.clearcoat ?? 0,
+            clearcoatRoughness: material.clearcoatRoughness ?? 0.1,
+            ior: material.ior ?? 1.5,
+            emissive: material.emissive ?? "#000000",
+            emissiveIntensity: material.emissiveIntensity ?? 0,
+          });
+          const hatch = getHatchCanvasTexture(
+            material.hatchStyle,
+            "#27272a",
+            material.color,
+            material.hatchScaleMm ?? 200,
+          );
+          if (hatch) {
+            next.map = hatch.clone();
+            const repeat = (material.tilingScale ?? 1) /
+              Math.max(0.025, (material.hatchScaleMm ?? 200) / 1000);
+            next.map.repeat.set(repeat, repeat);
+            next.map.needsUpdate = true;
+          }
+          mesh.material = next;
+          mesh.userData.vstudioMaterialId = material.id;
+          const oldMaterials = Array.isArray(previous) ? previous : [previous];
+          for (const old of oldMaterials) old?.dispose();
+          assigned = true;
+        }
+      }
+      if (!assigned) return false;
+      useToolMarkupStore.getState().setDragSnapHint({
+        text: `${material.name} assigned`,
+        clientX,
+        clientY,
+      });
+      window.setTimeout(() => useToolMarkupStore.getState().setDragSnapHint(null), 1200);
+      return true;
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes(MATERIAL_DRAG_MIME)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+    };
+    const onDragEnter = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes(MATERIAL_DRAG_MIME)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const onDrop = (event: DragEvent) => {
+      const raw = event.dataTransfer?.getData(MATERIAL_DRAG_MIME) || "";
+      if (!raw) return;
+      event.preventDefault();
+      event.stopPropagation();
+      assignAt(event.clientX, event.clientY, raw);
+    };
+    const onPaint = (event: PointerEvent) => {
+      const materialId = useMaterialStore.getState().paintMaterialId;
+      if (!materialId) return;
+      if (assignAt(event.clientX, event.clientY, materialId)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    canvas.addEventListener("dragenter", onDragEnter);
+    canvas.addEventListener("dragover", onDragOver);
+    canvas.addEventListener("drop", onDrop);
+    canvas.addEventListener("pointerdown", onPaint, true);
+    return () => {
+      canvas.removeEventListener("dragenter", onDragEnter);
+      canvas.removeEventListener("dragover", onDragOver);
+      canvas.removeEventListener("drop", onDrop);
+      canvas.removeEventListener("pointerdown", onPaint, true);
+    };
+  }, []);
+
   // 3D viewport background — solid or sky gradient
   useEffect(() => {
     const scene = sceneRef.current;
@@ -2201,6 +2301,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const unsub = useToolMarkupStore.subscribe((s) => {
       // Don't rebuild from store mid-drag — that resets the mesh to the old pose.
       if (transformDraggingRef.current) return;
+      if (suppressTransformReleaseClickRef.current) {
+        suppressTransformReleaseClickRef.current = false;
+        return;
+      }
+      if (transformControlsRef.current?.axis) return;
       layer.syncPlacements(s.placements, s.selectedPlacementId);
       layer.syncNotes(s.notes, s.selectedNoteId);
       for (const p of s.placements) {
@@ -2334,6 +2439,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         s.selectedSketchLineId,
         activeLevel?.elevationMm ?? 0,
       );
+      if (
+        s.armedLayoutTool !== "column" &&
+        s.armedLayoutTool !== "beam" &&
+        s.armedLayoutTool !== "grid"
+      ) {
+        layer.setStructuralPreview(null, null, null, 0, 3000, 300, 300);
+      }
       const tp = s.tracePreview;
       const cand = tp?.candidates[tp.index] ?? null;
       if (cand && !s.wallDraw) {
@@ -4217,6 +4329,55 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
 
+        if (
+          (layoutStore.armedLayoutTool === "column" ||
+            layoutStore.armedLayoutTool === "beam" ||
+            layoutStore.armedLayoutTool === "grid") &&
+          cam &&
+          layoutLayer
+        ) {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          raycaster.current.setFromCamera(pointerNdc.current, camRay);
+          const hit = layoutLayer.pickLayout(raycaster.current);
+          let pt: THREE.Vector3 | null =
+            hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+          if (!pt) {
+            const roots: THREE.Object3D[] = [layoutLayer.group];
+            if (shellCloneRef.current) roots.push(shellCloneRef.current);
+            pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+          }
+          const ms = useToolMarkupStore.getState();
+          const level = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+          if (!pt) {
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+            const targetPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+          }
+          if (pt) {
+            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+            const cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+            const kind = layoutStore.armedLayoutTool;
+            layoutLayer.setStructuralPreview(
+              kind,
+              cursor,
+              kind === "beam" ? draftBeamStart : kind === "grid" ? draftGridStart : null,
+              level?.elevationMm ?? 0,
+              level?.heightMm ?? 3000,
+              kind === "column" ? layoutStore.draftColumnWidthMm : layoutStore.draftBeamWidthMm,
+              kind === "column" ? layoutStore.draftColumnDepthMm : layoutStore.draftBeamDepthMm,
+            );
+            const start = kind === "beam" ? draftBeamStart : kind === "grid" ? draftGridStart : null;
+            ms.setDragSnapHint({
+              text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to place` : kind === "column" ? "Click to place column" : "Click first point",
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
+          }
+          ms.setSceneHoverTip(null);
+          canvas.style.cursor = "crosshair";
+          return;
+        }
+
         // Tier 2: hover auto-trace preview for wall / door / window
         if (
           (layoutStore.armedLayoutTool === "wall" ||
@@ -5185,7 +5346,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 }
                 layoutStore.selectElement(
                   { kind: "wall", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
@@ -5210,7 +5371,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 }
                 layoutStore.selectElement(
                   { kind: "door", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
@@ -5234,42 +5395,42 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 }
                 layoutStore.selectElement(
                   { kind: "window", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
               if (layoutHit.kind === "slab") {
                 layoutStore.selectElement(
                   { kind: "slab", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
               if (layoutHit.kind === "column") {
                 layoutStore.selectElement(
                   { kind: "column", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
               if (layoutHit.kind === "beam") {
                 layoutStore.selectElement(
                   { kind: "beam", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
               if (layoutHit.kind === "grid") {
                 layoutStore.selectElement(
                   { kind: "grid", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
               if (layoutHit.kind === "sketch-line") {
                 layoutStore.selectElement(
                   { kind: "line", id: layoutHit.id },
-                  e.shiftKey ? "toggle" : "replace",
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;
               }
@@ -5450,6 +5611,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
           if (!armed) {
             markupStore.clearSelection();
+            layoutStore.clearSelection();
+            useAppStore.getState().setSelectedElement(null);
             markupStore.setCubeDraw(null);
             // Select IFC element under cursor (surface pick, not cut-plane hit).
             if (surface) {

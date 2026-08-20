@@ -1,543 +1,105 @@
 "use client";
 
-import { useState } from "react";
-import {
-  LuX,
-  LuPlus,
-  LuTrash2,
-  LuCheck,
-  LuPalette,
-  LuSparkles,
-  LuLayers,
-  LuBox,
-  LuSlidersHorizontal,
-} from "react-icons/lu";
-import {
-  useMaterialStore,
-  type MaterialDefinition,
-  type HatchStyle,
-} from "@/store/materialStore";
-import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
-import { renderMaterialSphere } from "@/lib/materialSpherePreview";
+import { useMemo, useState } from "react";
+import { LuBox, LuCheck, LuChevronRight, LuCircle, LuCylinder, LuGrip, LuLayers, LuMousePointer2, LuPalette, LuPlus, LuSearch, LuSparkles, LuTrash2, LuX } from "react-icons/lu";
 import UnifiedButton from "@/components/common/UnifiedButton";
+import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
+import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
+import { renderMaterialPreview } from "@/lib/materialSpherePreview";
+import { MATERIAL_DRAG_MIME, useMaterialStore, type HatchStyle, type MaterialDefinition, type MaterialPreviewShape } from "@/store/materialStore";
+import { useAppStore } from "@/store/useAppStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 
-const HATCH_OPTIONS: { id: HatchStyle; label: string; icon: string }[] = [
-  { id: "solid", label: "None (Solid)", icon: "■" },
-  { id: "diagonal", label: "Diagonal", icon: "///" },
-  { id: "cross", label: "Cross-Hatch", icon: "✕✕" },
-  { id: "brick", label: "Brick", icon: "☲" },
-  { id: "concrete", label: "Concrete", icon: "∴" },
-  { id: "dots", label: "Dots", icon: "••" },
-  { id: "zigzag", label: "Insulation", icon: "⌇⌇" },
-  { id: "wood", label: "Wood Grain", icon: "≋" },
+const HATCHES: { id: HatchStyle; label: string; glyph: string }[] = [
+  ["solid", "Solid / none", "■"], ["horizontal", "Horizontal lines", "≡"], ["vertical", "Vertical lines", "|||"],
+  ["diagonal", "Diagonal 45°", "///"], ["cross", "Diagonal cross", "XXX"], ["grid", "Square grid", "▦"],
+  ["brick", "Running bond brick", "▤"], ["tile", "Ceramic tile", "▦"], ["checker", "Checker plate", "▩"],
+  ["concrete", "Concrete aggregate", "∴"], ["dots", "Regular dots", "⠿"], ["sand", "Sand", "⠂"],
+  ["earth", "Earth / fill", "≋"], ["steel", "Steel section", "╳"], ["zigzag", "Insulation", "〽"], ["wood", "Wood grain", "≋"],
+].map(([id, label, glyph]) => ({ id: id as HatchStyle, label, glyph }));
+const CATEGORIES = ["All", "Masonry", "Concrete", "Wood", "Glass", "Metal", "Finishes", "Custom"] as const;
+const SHAPES: { id: MaterialPreviewShape; label: string; icon: React.ReactNode }[] = [
+  { id: "sphere", label: "Sphere", icon: <LuCircle /> }, { id: "cube", label: "Box", icon: <LuBox /> },
+  { id: "cylinder", label: "Cylinder", icon: <LuCylinder /> }, { id: "fabric", label: "Fabric", icon: <LuLayers /> },
 ];
+const CLASS_DEFAULTS: Record<MaterialDefinition["category"], Partial<MaterialDefinition>> = {
+  Masonry: { color: "#a0522d", roughness: .88, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.52, bumpScale: .45, hatchStyle: "brick", hatchScaleMm: 250, tilingScale: 1 },
+  Concrete: { color: "#878683", roughness: .86, metalness: .02, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .4, ior: 1.5, bumpScale: .35, hatchStyle: "concrete", hatchScaleMm: 200, tilingScale: 1 },
+  Wood: { color: "#8b5a2b", roughness: .62, metalness: 0, opacity: 1, transmission: 0, clearcoat: .12, clearcoatRoughness: .35, ior: 1.5, bumpScale: .3, hatchStyle: "wood", hatchScaleMm: 180, tilingScale: 1 },
+  Glass: { color: "#bae6fd", roughness: .06, metalness: 0, opacity: .38, transmission: .92, clearcoat: .25, clearcoatRoughness: .05, ior: 1.52, bumpScale: 0, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+  Metal: { color: "#94a3b8", roughness: .24, metalness: .92, opacity: 1, transmission: 0, clearcoat: .18, clearcoatRoughness: .12, ior: 1.5, bumpScale: .12, hatchStyle: "steel", hatchScaleMm: 150, tilingScale: 1 },
+  Finishes: { color: "#f4f4f5", roughness: .78, metalness: 0, opacity: 1, transmission: 0, clearcoat: .08, clearcoatRoughness: .3, ior: 1.5, bumpScale: .12, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+  Custom: { roughness: .5, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .1, ior: 1.5, bumpScale: .2, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+};
+const field = "h-8 w-full rounded-xl border border-zinc-200 bg-white px-2 text-[11px] text-zinc-900 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_2px_8px_rgba(15,23,42,.05)] outline-none backdrop-blur-xl focus:border-zinc-400";
 
-const CATEGORIES = [
-  "All",
-  "Masonry",
-  "Concrete",
-  "Wood",
-  "Glass",
-  "Metal",
-  "Finishes",
-  "Custom",
-] as const;
-
-const PRESET_COLORS = [
-  "#878683", "#a0522d", "#8b5a2b", "#bae6fd", "#94a3b8", "#f8fafc",
-  "#d6d3d1", "#78716c", "#38bdf8", "#0284c7", "#facc15", "#10b981",
-  "#ef4444", "#8b5cf6", "#1e293b", "#334155", "#475569", "#cbd5e1",
-];
-
-export default function MaterialEditorPanel({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  const materials = useMaterialStore((s) => s.materials);
-  const selectedMaterialId = useMaterialStore((s) => s.selectedMaterialId);
-  const setSelectedMaterialId = useMaterialStore((s) => s.setSelectedMaterialId);
-  const addMaterial = useMaterialStore((s) => s.addMaterial);
-  const updateMaterial = useMaterialStore((s) => s.updateMaterial);
-  const deleteMaterial = useMaterialStore((s) => s.deleteMaterial);
-
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
-
-  // Selection stores for per-part assignment
-  const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
-  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
-  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
-  const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
-  const updateWall = useLayoutDrawingStore((s) => s.updateWall);
-  const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
-  const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
-  const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
-
-  const filteredMaterials =
-    selectedCategory === "All"
-      ? materials
-      : materials.filter(
-          (m) =>
-            m.category.toLowerCase() === selectedCategory.toLowerCase() ||
-            (selectedCategory === "Custom" && !m.isPreset),
-        );
-
-  const selectedMat =
-    materials.find((m) => m.id === selectedMaterialId) || filteredMaterials[0] || materials[0];
-
-  const [partTarget, setPartTarget] = useState<"primary" | "frame" | "panel">("primary");
-
-  if (!isOpen) return null;
-
-  const handleCreateNew = () => {
-    const newMat = addMaterial({
-      name: `Custom Material ${materials.length + 1}`,
-      category: "Custom",
-      color: selectedMat?.color || "#a1a1aa",
-      roughness: selectedMat?.roughness ?? 0.5,
-      metalness: selectedMat?.metalness ?? 0.1,
-      opacity: selectedMat?.opacity ?? 1.0,
-      transmission: selectedMat?.transmission ?? 0.0,
-      hatchStyle: selectedMat?.hatchStyle || "solid",
-      hatchScaleMm: 200,
-      tilingScale: 1.0,
-      bumpScale: 0.2,
-    });
-    setSelectedMaterialId(newMat.id);
+function Slider({ label, value, min = 0, max = 1, step = .01, display, onChange }: { label: string; value: number; min?: number; max?: number; step?: number; display?: string; onChange: (n: number) => void }) {
+  const progress = `${Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))}%`;
+  const isPercent = display === undefined;
+  const suffix = isPercent ? "%" : display?.trim().endsWith("mm") ? "mm" : display?.trim().endsWith("×") ? "×" : "";
+  const editableValue = isPercent ? Math.round(value * 100) : value;
+  const editableMin = isPercent ? min * 100 : min, editableMax = isPercent ? max * 100 : max, editableStep = isPercent ? Math.max(1, step * 100) : step;
+  const changeEditableValue = (raw: string) => {
+    const next = Number(raw);
+    if (!Number.isFinite(next)) return;
+    onChange(Math.max(min, Math.min(max, isPercent ? next / 100 : next)));
   };
+  return <label className="grid grid-cols-[92px_1fr_58px] items-center gap-2 text-[10px] text-zinc-700"><span>{label}</span><input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="material-slider w-full" style={{ "--slider-progress": progress } as React.CSSProperties}/><span className="flex items-baseline justify-end font-mono text-[9px] font-semibold text-zinc-700"><input type="number" min={editableMin} max={editableMax} step={editableStep} value={editableValue} onChange={(e) => changeEditableValue(e.target.value)} className="w-10 appearance-none border-0 bg-transparent p-0 text-right font-mono text-[9px] font-semibold text-zinc-700 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`${label} value`}/>{suffix && <span className="ml-0.5">{suffix}</span>}</span></label>;
+}
+function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return <section className="border-b border-zinc-200 bg-white last:border-b-0">
+    <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center gap-2 px-1 py-2 text-left text-[10px] font-bold uppercase tracking-[.12em] text-[var(--text-body)] hover:text-amber-600 dark:hover:text-amber-300">
+      <LuChevronRight className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform duration-300 ${open ? "rotate-90" : "rotate-0"}`} />
+      <span>{title}</span>
+    </button>
+    <GsapHeightAccordion open={open} contentKey={title} innerClassName="space-y-2 px-1 pb-3">
+      {children}
+    </GsapHeightAccordion>
+  </section>;
+}
 
-  const handleAssignToSelected = () => {
-    if (!selectedMat) return;
+export default function MaterialEditorPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const isDark = useAppStore((s) => s.colorTheme === "dark");
+  const materials = useMaterialStore((s) => s.materials), selectedId = useMaterialStore((s) => s.selectedMaterialId);
+  const select = useMaterialStore((s) => s.setSelectedMaterialId), add = useMaterialStore((s) => s.addMaterial);
+  const update = useMaterialStore((s) => s.updateMaterial), remove = useMaterialStore((s) => s.deleteMaterial);
+  const paintId = useMaterialStore((s) => s.paintMaterialId), setPaintId = useMaterialStore((s) => s.setPaintMaterialId);
+  const wallId = useLayoutDrawingStore((s) => s.selectedWallId), slabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const doorId = useLayoutDrawingStore((s) => s.selectedDoorId), windowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const updateWall = useLayoutDrawingStore((s) => s.updateWall), updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
+  const updateDoor = useLayoutDrawingStore((s) => s.updateDoor), updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All"), [search, setSearch] = useState("");
+  const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
+  const filtered = useMemo(() => materials.filter((m) => (category === "All" || m.category === category || (category === "Custom" && !m.isPreset)) && (!search || `${m.name} ${m.category}`.toLowerCase().includes(search.toLowerCase()))), [materials, category, search]);
+  const selected = materials.find((m) => m.id === selectedId) ?? filtered[0] ?? materials[0];
+  if (!isOpen || !selected) return null;
+  const patch = (p: Partial<MaterialDefinition>) => update(selected.id, p);
+  const clone = () => select(add({ ...selected, name: `${selected.name} Copy`, category: "Custom", isPreset: false }).id);
+  const assign = () => { const p = { material: selected.id, color: selected.color }; if (wallId) void updateWall(wallId, p); else if (slabId) void updateSlab(slabId, p); else if (doorId) void updateDoor(doorId, p); else if (windowId) void updateWindow(windowId, p); };
+  const drag = (e: React.DragEvent, m: MaterialDefinition) => { e.dataTransfer.effectAllowed = "copy"; e.dataTransfer.setData(MATERIAL_DRAG_MIME, m.id); e.dataTransfer.setData("text/plain", `vstudio-material:${m.id}`); select(m.id); };
+  const preview = renderMaterialPreview(selected, shape, 144), hasSelection = Boolean(wallId || slabId || doorId || windowId);
+  const hatchTexture = getHatchCanvasTexture(selected.hatchStyle, "#334155", selected.color, selected.hatchScaleMm ?? 200);
+  const hatchCanvas =
+    typeof HTMLCanvasElement !== "undefined" && hatchTexture?.image instanceof HTMLCanvasElement
+      ? hatchTexture.image
+      : null;
+  const hatchUrl = hatchCanvas?.toDataURL() ?? null;
+  const sampleSizePx = Math.max(12, Math.min(96, (selected.hatchScaleMm ?? 200) / Math.max(.1, selected.tilingScale ?? 1) / 4));
 
-    if (selectedWallId) {
-      updateWall(selectedWallId, {
-        material: selectedMat.id as any,
-        color: selectedMat.color,
-      });
-    } else if (selectedSlabId) {
-      updateSlab(selectedSlabId, {
-        material: selectedMat.id as any,
-        color: selectedMat.color,
-      });
-    } else if (selectedDoorId) {
-      if (partTarget === "panel") {
-        updateDoor(selectedDoorId, {
-          style: (selectedMat.id === "glass" ? "glass" : selectedMat.id === "metal" ? "metal" : "wood") as any,
-        });
-      } else {
-        updateDoor(selectedDoorId, {
-          color: selectedMat.color,
-        });
-      }
-    } else if (selectedWindowId) {
-      updateWindow(selectedWindowId, {
-        color: selectedMat.color,
-      });
-    }
-  };
-
-  const hasSelection = Boolean(
-    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId
-  );
-
-  return (
-    <div className="absolute inset-0 z-40 flex flex-col bg-[var(--popover-bg)] backdrop-blur-2xl border-l border-[var(--panel-divider)] shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200 select-none">
-      {/* Header */}
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/70">
-        <div className="flex items-center gap-2">
-          <LuPalette className="h-4 w-4 text-yellow-400" />
-          <span className="font-bold text-xs text-[var(--text-strong)]">
-            Material Library & Shader Editor
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Close Material Editor (Esc)"
-          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-        >
-          <LuX className="h-4 w-4" />
-        </button>
+  return <div className="absolute inset-0 z-40 flex select-none flex-col overflow-hidden border-l border-zinc-200 bg-white text-zinc-900 shadow-2xl max-[1100px]:fixed max-[1100px]:inset-3 max-[1100px]:rounded-2xl max-[1100px]:border" style={{ "--text-strong": "#18181b", "--text-body": "#3f3f46", "--text-muted": "#71717a", "--panel-divider": "rgba(161,161,170,.38)", "--glass-inset-bg": "rgba(255,255,255,.82)", "--popover-bg": "rgba(255,255,255,.94)" } as React.CSSProperties}>
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3"><div className="flex items-center gap-2"><LuPalette className="text-amber-500"/><div><p className="text-xs font-bold">Slate Material Editor</p><p className="text-[9px] text-zinc-500">Physical material · Werkzeug scene</p></div></div><div className="flex gap-1"><button onClick={clone} className="btn-liquid-amber rounded-xl p-2" title="Clone"><LuPlus/></button>{!selected.isPreset && <button onClick={() => remove(selected.id)} className="rounded-xl border border-red-200 bg-white p-2 text-red-500 shadow-sm hover:bg-red-50" title="Delete"><LuTrash2/></button>}<button onClick={onClose} className="rounded-xl border border-zinc-200 bg-white p-2 text-zinc-500 shadow-sm hover:text-zinc-900" title="Close"><LuX/></button></div></header>
+    <div className="min-h-0 flex-1 overflow-y-auto p-2.5 thin-scroll max-[1100px]:grid max-[1100px]:grid-cols-[minmax(260px,.85fr)_minmax(340px,1.15fr)] max-[1100px]:gap-3 max-[700px]:block">
+      <div className="space-y-2.5 max-[1100px]:overflow-y-auto max-[1100px]:pr-1 thin-scroll">
+        <Section title="Compact material slots"><div className="relative"><LuSearch className="absolute left-2 top-2 h-3.5 w-3.5 text-zinc-500"/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search materials" className={`${field} pl-7`}/></div><div className="flex gap-1 overflow-x-auto pb-1 thin-scroll">{CATEGORIES.map((c) => <button key={c} onClick={() => setCategory(c)} className={`shrink-0 rounded-xl px-2 py-1 text-[9px] font-semibold ${category === c ? "btn-liquid-amber" : "border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:text-zinc-900"}`}>{c}</button>)}</div>
+          <div className="grid max-h-56 grid-cols-3 gap-1.5 overflow-y-auto pr-1 thin-scroll max-[1100px]:grid-cols-4 max-[700px]:grid-cols-3">{filtered.map((m) => <button key={m.id} draggable onDragStart={(e) => drag(e, m)} onClick={() => select(m.id)} className={`group relative min-w-0 rounded-xl border bg-white p-1.5 text-left ${m.id === selected.id ? "border-amber-400 shadow-[0_3px_12px_rgba(250,204,21,.2)]" : "border-zinc-200 shadow-sm hover:border-zinc-400"}`} title="Drag onto a 3D object"><LuGrip className="absolute right-1 top-1 h-3 w-3 text-zinc-400"/>{/* eslint-disable-next-line @next/next/no-img-element */}<img draggable={false} src={renderMaterialPreview(m, "sphere", 72)} alt="" className="pointer-events-none mx-auto h-12 w-12"/><span className="pointer-events-none block truncate text-[9px] font-semibold">{m.name}</span><span className="pointer-events-none block truncate text-[8px] text-zinc-500">{m.category}</span></button>)}</div><p className="flex items-center gap-1 text-[9px] text-zinc-500"><LuMousePointer2/>Drag a slot onto an object in the 3D view.</p></Section>
+        <Section title="Material preview & general"><div className="grid grid-cols-[1fr_82px] gap-2"><div className={`flex min-h-32 items-center justify-center rounded-2xl border transition-colors duration-300 ${isDark ? "border-zinc-700 bg-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,.08),0_8px_24px_rgba(0,0,0,.28)]" : "border-zinc-200 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_24px_rgba(15,23,42,.08)]"}`}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={preview} alt="Material preview" className="h-28 w-28 object-contain drop-shadow-2xl"/></div><div className="grid grid-rows-4 gap-1">{SHAPES.map((s) => <button key={s.id} onClick={() => setShape(s.id)} className={`btn-liquid-amber flex min-h-7 items-center gap-1.5 rounded-xl px-2 text-[9px] ${shape === s.id ? "ring-2 ring-amber-400/60" : "opacity-70 grayscale-[.15]"}`}><span className="text-sm">{s.icon}</span>{s.label}</button>)}</div></div><div className="border-t border-zinc-200 pt-2"><div className="grid grid-cols-[1fr_110px] gap-2"><label className="text-[9px] text-zinc-500">Name<input value={selected.name} onChange={(e) => patch({ name: e.target.value })} className={field}/></label><label className="text-[9px] text-zinc-500">Class<select value={selected.category} onChange={(e) => { const next = e.target.value as MaterialDefinition["category"]; patch({ ...CLASS_DEFAULTS[next], category: next }); }} className={field}>{CATEGORIES.slice(1).map((c) => <option key={c}>{c}</option>)}</select></label></div><div className="mt-2 grid grid-cols-[44px_1fr] gap-2"><input type="color" value={selected.color} onChange={(e) => patch({ color: e.target.value })} className="h-9 w-11 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm"/><input value={selected.color.toUpperCase()} readOnly className={field}/></div></div></Section>
       </div>
-
-      {/* Main Body (Dense, Compact, Thin Dividers) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 thin-scroll text-xs">
-        {/* Swatch Library Grid with 3D Sphere Previews */}
-        <div className="pb-2 border-b border-[var(--panel-divider)]/40 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
-              <LuBox className="h-3 w-3" />
-              Presets & Custom Materials
-            </span>
-            <UnifiedButton
-              size="xs"
-              variant="primary"
-              onClick={handleCreateNew}
-              icon={<LuPlus className="h-3 w-3" />}
-            >
-              New
-            </UnifiedButton>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1 overflow-x-auto thin-scroll pb-0.5">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 transition-all border ${
-                  selectedCategory === cat
-                    ? "bg-yellow-400 border-yellow-300 text-slate-950 shadow-sm"
-                    : "bg-[var(--surface-overlay)] border-[var(--panel-divider)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5 max-h-[150px] overflow-y-auto thin-scroll p-0.5">
-            {filteredMaterials.map((mat) => {
-              const isSelected = mat.id === selectedMaterialId;
-              const sphereUrl = renderMaterialSphere(mat, 52);
-              return (
-                <button
-                  key={mat.id}
-                  type="button"
-                  onClick={() => setSelectedMaterialId(mat.id)}
-                  className={`flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all text-center group ${
-                    isSelected
-                      ? "border-yellow-400 bg-yellow-400/15 shadow-md ring-1 ring-yellow-400/50"
-                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 hover:border-yellow-400/50"
-                  }`}
-                >
-                  {/* 3D Rendered Sphere Preview */}
-                  <div className="h-8 w-8 flex items-center justify-center relative">
-                    {sphereUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={sphereUrl}
-                        alt={mat.name}
-                        className="h-8 w-8 object-contain drop-shadow-md"
-                      />
-                    ) : (
-                      <div
-                        className="h-7 w-7 rounded-full border border-white/30 shadow-inner"
-                        style={{ backgroundColor: mat.color }}
-                      />
-                    )}
-                    <span className="absolute bottom-0 right-0 text-[7px] font-mono font-bold bg-black/60 text-white rounded px-0.5 border border-white/20">
-                      {HATCH_OPTIONS.find((h) => h.id === mat.hatchStyle)?.icon || "■"}
-                    </span>
-                  </div>
-                  <span className="mt-1 truncate text-[9px] font-semibold text-[var(--text-strong)] w-full">
-                    {mat.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Selected Material Property Controls (Compact, Thin Dividers) */}
-        {selectedMat && (
-          <div className="space-y-2 pb-2 border-b border-[var(--panel-divider)]/40">
-            <div className="flex items-center justify-between pb-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5">
-                <LuSlidersHorizontal className="h-3 w-3" />
-                Parameters — {selectedMat.name}
-              </span>
-              {!selectedMat.isPreset && (
-                <button
-                  type="button"
-                  onClick={() => deleteMaterial(selectedMat.id)}
-                  className="text-red-500 hover:text-red-400 p-1 rounded transition-colors"
-                  title="Delete Custom Material"
-                >
-                  <LuTrash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Name & Category */}
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="space-y-0.5">
-                <label className="text-[10px] font-semibold text-[var(--text-muted)]">Name</label>
-                <input
-                  type="text"
-                  value={selectedMat.name}
-                  onChange={(e) => updateMaterial(selectedMat.id, { name: e.target.value })}
-                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)] font-medium"
-                />
-              </div>
-              <div className="space-y-0.5">
-                <label className="text-[10px] font-semibold text-[var(--text-muted)]">Category</label>
-                <select
-                  value={selectedMat.category}
-                  onChange={(e) => updateMaterial(selectedMat.id, { category: e.target.value as any })}
-                  className="w-full rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)]"
-                >
-                  <option value="Masonry">Masonry</option>
-                  <option value="Concrete">Concrete</option>
-                  <option value="Wood">Wood</option>
-                  <option value="Glass">Glass</option>
-                  <option value="Metal">Metal</option>
-                  <option value="Finishes">Finishes</option>
-                  <option value="Custom">Custom</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Color Palette + Custom Hex */}
-            <div className="space-y-1 pt-0.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-semibold text-[var(--text-muted)]">Base Color</label>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="color"
-                    value={selectedMat.color}
-                    onChange={(e) => updateMaterial(selectedMat.id, { color: e.target.value })}
-                    className="h-4 w-4 rounded cursor-pointer border-0 p-0 bg-transparent"
-                  />
-                  <span className="font-mono text-[9.5px] text-[var(--text-strong)]">
-                    {selectedMat.color.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-1 pt-0.5">
-                {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => updateMaterial(selectedMat.id, { color: c })}
-                    className={`h-3.5 w-3.5 rounded-full border transition-all ${
-                      selectedMat.color.toLowerCase() === c.toLowerCase()
-                        ? "border-yellow-400 scale-125 shadow-sm"
-                        : "border-white/20 hover:scale-110"
-                    }`}
-                    style={{ backgroundColor: c }}
-                    title={c}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* PBR Sliders — Thin & Sleek with Unified Yellow Accent */}
-            <div className="space-y-2 pt-1">
-              {/* Roughness */}
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-[var(--text-body)]">Roughness (Matte vs Gloss):</span>
-                  <span className="font-mono font-bold text-yellow-400">
-                    {Math.round(selectedMat.roughness * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={selectedMat.roughness}
-                  onChange={(e) => updateMaterial(selectedMat.id, { roughness: parseFloat(e.target.value) })}
-                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                />
-              </div>
-
-              {/* Metalness */}
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-[var(--text-body)]">Metalness (Dielectric vs Metal):</span>
-                  <span className="font-mono font-bold text-yellow-400">
-                    {Math.round(selectedMat.metalness * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={selectedMat.metalness}
-                  onChange={(e) => updateMaterial(selectedMat.id, { metalness: parseFloat(e.target.value) })}
-                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                />
-              </div>
-
-              {/* Opacity */}
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-[var(--text-body)]">Opacity (Solid vs Transparent):</span>
-                  <span className="font-mono font-bold text-yellow-400">
-                    {Math.round(selectedMat.opacity * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.05"
-                  max="1"
-                  step="0.01"
-                  value={selectedMat.opacity}
-                  onChange={(e) => updateMaterial(selectedMat.id, { opacity: parseFloat(e.target.value) })}
-                  className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                />
-              </div>
-
-              {/* 2D Plan Hatch Pattern */}
-              <div className="space-y-1 pt-1.5 border-t border-[var(--panel-divider)]/40">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  2D Plan Hatch Pattern
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {HATCH_OPTIONS.map((h) => (
-                    <button
-                      key={h.id}
-                      type="button"
-                      onClick={() => updateMaterial(selectedMat.id, { hatchStyle: h.id })}
-                      className={`flex flex-col items-center justify-center p-1 rounded-lg border text-center transition-all cursor-pointer ${
-                        selectedMat.hatchStyle === h.id
-                          ? "border-yellow-400 bg-yellow-400/20 text-yellow-400 font-bold shadow-sm"
-                          : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)] hover:border-yellow-400/50"
-                      }`}
-                    >
-                      <span className="text-xs font-mono font-bold">{h.icon}</span>
-                      <span className="text-[8.5px] mt-0.5 truncate">{h.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Hatch Size / Spacing Slider */}
-                {selectedMat.hatchStyle !== "solid" && (
-                  <div className="space-y-0.5 pt-1">
-                    <div className="flex items-center justify-between text-[10.5px]">
-                      <span className="text-[var(--text-body)]">Hatch Line Spacing:</span>
-                      <span className="font-mono font-bold text-yellow-400">
-                        {selectedMat.hatchScaleMm || 200} mm
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="50"
-                      max="1000"
-                      step="25"
-                      value={selectedMat.hatchScaleMm || 200}
-                      onChange={(e) =>
-                        updateMaterial(selectedMat.id, {
-                          hatchScaleMm: parseInt(e.target.value, 10),
-                        })
-                      }
-                      className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Advanced Surface Mapping Controls */}
-              <div className="space-y-1.5 pt-1.5 border-t border-[var(--panel-divider)]/40">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-                  Surface Texture & Relief
-                </label>
-
-                {/* Texture Tiling / Scale */}
-                <div className="space-y-0.5">
-                  <div className="flex items-center justify-between text-[10.5px]">
-                    <span className="text-[var(--text-body)]">Tiling / UV Scale:</span>
-                    <span className="font-mono font-bold text-yellow-400">
-                      {(selectedMat.tilingScale || 1.0).toFixed(1)}x
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.2"
-                    max="5.0"
-                    step="0.1"
-                    value={selectedMat.tilingScale || 1.0}
-                    onChange={(e) =>
-                      updateMaterial(selectedMat.id, {
-                        tilingScale: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                  />
-                </div>
-
-                {/* Bump / Normal Relief */}
-                <div className="space-y-0.5">
-                  <div className="flex items-center justify-between text-[10.5px]">
-                    <span className="text-[var(--text-body)]">Surface Bump / Depth:</span>
-                    <span className="font-mono font-bold text-yellow-400">
-                      {Math.round((selectedMat.bumpScale ?? 0.2) * 50)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="2.0"
-                    step="0.05"
-                    value={selectedMat.bumpScale ?? 0.2}
-                    onChange={(e) =>
-                      updateMaterial(selectedMat.id, {
-                        bumpScale: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full h-1 bg-[var(--surface-muted)] accent-yellow-400 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Per-Part Assignment Action (Compact, Thin Divider, No Heavy Box) */}
-        <div className="pt-2 border-t border-[var(--panel-divider)]/40 space-y-1.5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-500 dark:text-yellow-400 flex items-center gap-1.5">
-            <LuSparkles className="h-3 w-3" />
-            Assign to Selected Element
-          </div>
-
-          {(selectedDoorId || selectedWindowId) && (
-            <div className="flex items-center gap-1 bg-[var(--surface-overlay)] p-0.5 rounded-lg border border-[var(--panel-divider)]">
-              <button
-                type="button"
-                onClick={() => setPartTarget("frame")}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-colors ${
-                  partTarget === "frame"
-                    ? "bg-yellow-400 text-slate-950 shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                Frame
-              </button>
-              <button
-                type="button"
-                onClick={() => setPartTarget("panel")}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-md transition-colors ${
-                  partTarget === "panel"
-                    ? "bg-yellow-400 text-slate-950 shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                {selectedDoorId ? "Leaf Panel" : "Glass Pane"}
-              </button>
-            </div>
-          )}
-
-          <UnifiedButton
-            variant="primary"
-            size="md"
-            disabled={!hasSelection}
-            onClick={handleAssignToSelected}
-            icon={<LuCheck className="h-4 w-4" />}
-            className="w-full"
-          >
-            {hasSelection
-              ? `Apply "${selectedMat?.name}" to Selection`
-              : "Select an element to assign"}
-          </UnifiedButton>
-        </div>
+      <div className="mt-2.5 space-y-2.5 max-[1100px]:mt-0 max-[1100px]:overflow-y-auto max-[1100px]:pr-1 thin-scroll max-[700px]:mt-2.5">
+        <Section title="Physical material parameters"><Slider label="Roughness" value={selected.roughness} onChange={(v) => patch({ roughness: v })}/><Slider label="Metalness" value={selected.metalness} onChange={(v) => patch({ metalness: v })}/><Slider label="Opacity" value={selected.opacity} min={.02} onChange={(v) => patch({ opacity: v })}/><Slider label="Transmission" value={selected.transmission ?? 0} onChange={(v) => patch({ transmission: v })}/><Slider label="Clearcoat" value={selected.clearcoat ?? 0} onChange={(v) => patch({ clearcoat: v })}/><Slider label="Coat roughness" value={selected.clearcoatRoughness ?? .1} onChange={(v) => patch({ clearcoatRoughness: v })}/><Slider label="IOR" value={selected.ior ?? 1.5} min={1} max={2.5} display={(selected.ior ?? 1.5).toFixed(2)} onChange={(v) => patch({ ior: v })}/><Slider label="Bump" value={selected.bumpScale ?? .2} max={2} display={(selected.bumpScale ?? .2).toFixed(2)} onChange={(v) => patch({ bumpScale: v })}/><div className="grid grid-cols-[44px_1fr] gap-2"><input type="color" value={selected.emissive ?? "#000000"} onChange={(e) => patch({ emissive: e.target.value })} className="h-7 w-11 rounded-lg border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-1"/><Slider label="Emission" value={selected.emissiveIntensity ?? 0} max={5} display={(selected.emissiveIntensity ?? 0).toFixed(1)} onChange={(v) => patch({ emissiveIntensity: v })}/></div></Section>
+        <Section title="Surface pattern / hatch"><label className="grid grid-cols-[92px_1fr] items-center gap-2 text-[10px]"><span>Pattern</span><select value={selected.hatchStyle} onChange={(e) => patch({ hatchStyle: e.target.value as HatchStyle })} className={field}>{HATCHES.map((h) => <option key={h.id} value={h.id}>{h.glyph}  {h.label}</option>)}</select></label><div className="grid grid-cols-[92px_1fr] items-center gap-2 text-[10px]"><span>Sample</span><div className="h-12 rounded-lg border border-[var(--panel-divider)]" style={{ backgroundColor: selected.color, backgroundImage: hatchUrl ? `url(${hatchUrl})` : undefined, backgroundSize: hatchUrl ? `${sampleSizePx}px ${sampleSizePx}px` : undefined }}/></div><Slider label="Spacing" value={selected.hatchScaleMm ?? 200} min={25} max={2000} step={25} display={`${selected.hatchScaleMm ?? 200} mm`} onChange={(v) => patch({ hatchScaleMm: v })}/><Slider label="UV tiling" value={selected.tilingScale ?? 1} min={.1} max={10} step={.1} display={`${(selected.tilingScale ?? 1).toFixed(1)}×`} onChange={(v) => patch({ tilingScale: v })}/></Section>
+        <div className="sticky bottom-0 grid grid-cols-2 gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl"><UnifiedButton size="sm" variant="primary" disabled={!hasSelection} onClick={assign} icon={<LuCheck/>}>Assign selected</UnifiedButton><UnifiedButton size="sm" variant="primary" onClick={() => setPaintId(paintId === selected.id ? null : selected.id)} icon={<LuSparkles/>} className={paintId === selected.id ? "ring-2 ring-amber-400/70" : ""}>{paintId === selected.id ? "Painting active" : "Paint in view"}</UnifiedButton></div>
       </div>
     </div>
-  );
+  </div>;
 }

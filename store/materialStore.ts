@@ -3,15 +3,27 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export const MATERIAL_DRAG_MIME = "application/x-vstudio-material";
+
 export type HatchStyle =
   | "solid"
+  | "horizontal"
+  | "vertical"
   | "diagonal"
   | "cross"
+  | "grid"
   | "dots"
+  | "sand"
+  | "earth"
   | "brick"
+  | "tile"
+  | "checker"
+  | "steel"
   | "zigzag"
   | "wood"
   | "concrete";
+
+export type MaterialPreviewShape = "sphere" | "cube" | "cylinder" | "fabric";
 
 export type MaterialDefinition = {
   id: string;
@@ -26,6 +38,11 @@ export type MaterialDefinition = {
   hatchScaleMm?: number; // 50..1000, default 200
   tilingScale?: number; // 0.1..10, default 1.0
   bumpScale?: number; // 0..2, default 0.2
+  clearcoat?: number; // 0..1
+  clearcoatRoughness?: number; // 0..1
+  ior?: number; // 1..2.5
+  emissive?: string;
+  emissiveIntensity?: number; // 0..5
   isPreset?: boolean;
 };
 
@@ -286,11 +303,13 @@ type MaterialState = {
   selectedMaterialId: string | null;
   editorOpen: boolean;
   editingMaterial: MaterialDefinition | null;
+  paintMaterialId: string | null;
 
   // Actions
   setSelectedMaterialId: (id: string | null) => void;
   setEditorOpen: (open: boolean) => void;
   setEditingMaterial: (mat: MaterialDefinition | null) => void;
+  setPaintMaterialId: (id: string | null) => void;
   addMaterial: (mat: Omit<MaterialDefinition, "id">) => MaterialDefinition;
   updateMaterial: (id: string, updates: Partial<MaterialDefinition>) => void;
   deleteMaterial: (id: string) => void;
@@ -304,10 +323,12 @@ export const useMaterialStore = create<MaterialState>()(
       selectedMaterialId: "concrete",
       editorOpen: false,
       editingMaterial: null,
+      paintMaterialId: null,
 
       setSelectedMaterialId: (id) => set({ selectedMaterialId: id }),
       setEditorOpen: (open) => set({ editorOpen: open }),
       setEditingMaterial: (mat) => set({ editingMaterial: mat }),
+      setPaintMaterialId: (id) => set({ paintMaterialId: id }),
 
       addMaterial: (mat) => {
         const id = `mat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

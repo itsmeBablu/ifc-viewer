@@ -809,3 +809,50 @@ body.pdf-capturing .pdf-capture-hide {
   transform: scale(0.97) !important;
 }
 
+/* Werkzeug material editor: compact liquid-amber sliders. */
+.material-slider {
+  --slider-progress: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  accent-color: #f59e0b;
+}
+.material-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #facc15 0 var(--slider-progress), rgba(250, 204, 21, 0.28) var(--slider-progress) 100%);
+  box-shadow: 0 1px 5px rgba(250, 204, 21, 0.22);
+}
+.material-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5.5px;
+  border: 1px solid #facc15;
+  border-radius: 999px;
+  background: #facc15;
+  box-shadow: 0 1px 4px rgba(202, 138, 4, 0.3);
+}
+.material-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.28);
+}
+.material-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: #facc15;
+}
+.material-slider::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 1px solid #facc15;
+  border-radius: 999px;
+  background: #facc15;
+  box-shadow: 0 1px 4px rgba(202, 138, 4, 0.3);
+}
+

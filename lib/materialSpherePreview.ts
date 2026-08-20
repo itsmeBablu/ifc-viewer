@@ -4,7 +4,10 @@
  * Fresnel rim reflection, and transmission glass transparency).
  */
 
-import type { MaterialDefinition } from "@/store/materialStore";
+import type {
+  MaterialDefinition,
+  MaterialPreviewShape,
+} from "@/store/materialStore";
 
 const sphereCache = new Map<string, string>();
 
@@ -17,6 +20,15 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     g: (num >> 8) & 255,
     b: num & 255,
   };
+}
+
+function shadeHex(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const target = amount >= 0 ? 255 : 0;
+  const mix = Math.abs(amount);
+  const channel = (value: number) =>
+    Math.round(value + (target - value) * mix).toString(16).padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
 export function renderMaterialSphere(mat: MaterialDefinition, size = 48): string {
@@ -133,4 +145,66 @@ export function renderMaterialSphere(mat: MaterialDefinition, size = 48): string
   const dataUrl = canvas.toDataURL();
   sphereCache.set(key, dataUrl);
   return dataUrl;
+}
+
+export function renderMaterialPreview(
+  mat: MaterialDefinition,
+  shape: MaterialPreviewShape,
+  size = 160,
+): string {
+  if (shape === "sphere") return renderMaterialSphere(mat, size);
+  if (typeof document === "undefined") return "";
+  const key = `preview_${shape}_${mat.id}_${mat.color}_${mat.roughness}_${mat.metalness}_${mat.opacity}_${mat.hatchStyle}_${size}`;
+  const cached = sphereCache.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  const base = mat.color || "#888888";
+  const gloss = Math.round((1 - mat.roughness) * 75);
+  ctx.clearRect(0, 0, size, size);
+  ctx.shadowColor = "rgba(0,0,0,.5)";
+  ctx.shadowBlur = size * 0.08;
+  ctx.shadowOffsetY = size * 0.04;
+
+  if (shape === "cube") {
+    const x = size * 0.2, y = size * 0.2, w = size * 0.52, h = size * 0.56;
+    ctx.fillStyle = base;
+    ctx.fillRect(x, y + size * 0.12, w, h);
+    ctx.fillStyle = shadeHex(base, 0.28);
+    ctx.beginPath(); ctx.moveTo(x, y + size * 0.12); ctx.lineTo(x + size * 0.17, y); ctx.lineTo(x + w + size * 0.17, y); ctx.lineTo(x + w, y + size * 0.12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shadeHex(base, -0.28);
+    ctx.beginPath(); ctx.moveTo(x + w, y + size * 0.12); ctx.lineTo(x + w + size * 0.17, y); ctx.lineTo(x + w + size * 0.17, y + h); ctx.lineTo(x + w, y + h + size * 0.12); ctx.closePath(); ctx.fill();
+  } else if (shape === "cylinder") {
+    const x = size * 0.22, y = size * 0.16, w = size * 0.56, h = size * 0.66;
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, shadeHex(base, -0.42));
+    grad.addColorStop(0.45, shadeHex(base, 0.25 + gloss / 300));
+    grad.addColorStop(1, shadeHex(base, -0.38));
+    ctx.fillStyle = grad; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = shadeHex(base, 0.28);
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2, size * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shadeHex(base, -0.38);
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + h, w / 2, size * 0.1, 0, 0, Math.PI); ctx.fill();
+  } else {
+    const pad = size * 0.16;
+    ctx.fillStyle = base;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad * 1.2);
+    ctx.bezierCurveTo(size * 0.38, pad * 0.5, size * 0.55, pad * 1.8, size - pad, pad);
+    ctx.lineTo(size - pad, size - pad);
+    ctx.bezierCurveTo(size * 0.62, size - pad * 0.4, size * 0.42, size - pad * 1.5, pad, size - pad * 0.7);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = "#fff";
+    for (let y = pad; y < size - pad; y += 6) {
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(size - pad, y + Math.sin(y) * 3); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  const url = canvas.toDataURL();
+  sphereCache.set(key, url);
+  return url;
 }

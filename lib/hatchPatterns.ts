@@ -41,6 +41,18 @@ export function getHatchCanvasTexture(
     ctx.lineCap = "square";
 
     switch (hatchStyle) {
+      case "horizontal":
+        for (let y = 8; y < 64; y += 12) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+        }
+        break;
+
+      case "vertical":
+        for (let x = 8; x < 64; x += 12) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 64); ctx.stroke();
+        }
+        break;
+
       case "diagonal":
         // 45 degree diagonal hatching
         for (let i = -64; i < 128; i += 16) {
@@ -65,6 +77,27 @@ export function getHatchCanvasTexture(
           ctx.stroke();
         }
         break;
+
+      case "grid":
+      case "tile":
+      case "checker": {
+        const step = hatchStyle === "tile" ? 16 : 12;
+        for (let p = 0; p <= 64; p += step) {
+          ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(64, p); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 64); ctx.stroke();
+        }
+        if (hatchStyle === "checker") {
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = strokeColor;
+          for (let y = 0; y < 64; y += step) {
+            for (let x = 0; x < 64; x += step) {
+              if ((x / step + y / step) % 2 === 0) ctx.fillRect(x, y, step, step);
+            }
+          }
+          ctx.globalAlpha = 1;
+        }
+        break;
+      }
 
       case "brick":
         // Running bond brick pattern
@@ -136,6 +169,32 @@ export function getHatchCanvasTexture(
             ctx.arc(x, y, 2.5, 0, Math.PI * 2);
             ctx.fill();
           }
+        }
+        break;
+
+      case "sand":
+      case "earth": {
+        ctx.fillStyle = strokeColor;
+        for (let i = 0; i < 36; i++) {
+          const x = (i * 29 + 7) % 64;
+          const y = (i * 43 + 11) % 64;
+          ctx.beginPath();
+          ctx.arc(x, y, hatchStyle === "earth" ? 1.8 : 1.1, 0, Math.PI * 2);
+          ctx.fill();
+          if (hatchStyle === "earth" && i % 3 === 0) {
+            ctx.beginPath(); ctx.moveTo(x - 4, y + 3); ctx.lineTo(x + 5, y - 2); ctx.stroke();
+          }
+        }
+        break;
+      }
+
+      case "steel":
+        for (let i = -64; i < 128; i += 12) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 64, 64); ctx.stroke();
+        }
+        ctx.lineWidth = 1;
+        for (let i = -64; i < 128; i += 24) {
+          ctx.beginPath(); ctx.moveTo(i + 64, 0); ctx.lineTo(i, 64); ctx.stroke();
         }
         break;
 

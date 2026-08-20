@@ -65,6 +65,7 @@ export default class LayoutSceneLayer {
   private endpointStart: THREE.Mesh | null = null;
   private endpointEnd: THREE.Mesh | null = null;
   private sketchGroup = new THREE.Group();
+  private structuralPreview = new THREE.Group();
 
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
@@ -74,8 +75,49 @@ export default class LayoutSceneLayer {
     this.group.name = "layout-drawing-layer";
     this.endpointGroup.name = "layout-wall-endpoints";
     this.sketchGroup.name = "layout-sketch-lines";
+    this.structuralPreview.name = "layout-structural-preview";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
+    this.group.add(this.structuralPreview);
+  }
+
+  setStructuralPreview(
+    kind: "column" | "beam" | "grid" | null,
+    cursor: { xMm: number; yMm: number } | null,
+    start: { xMm: number; yMm: number } | null,
+    elevationMm: number,
+    levelHeightMm: number,
+    widthMm: number,
+    depthMm: number,
+  ) {
+    this.disposeGroup(this.structuralPreview);
+    this.structuralPreview.clear();
+    if (!kind || !cursor) return;
+    const yellow = 0xfacc15;
+    if (kind === "column") {
+      const height = fromMm(levelHeightMm);
+      const geometry = new THREE.BoxGeometry(fromMm(widthMm), height, fromMm(depthMm));
+      const material = new THREE.MeshBasicMaterial({ color: yellow, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(fromMm(cursor.xMm), fromMm(elevationMm) + height / 2, fromMm(cursor.yMm));
+      mesh.renderOrder = 140;
+      this.structuralPreview.add(mesh);
+      return;
+    }
+    if (!start) return;
+    const dx = fromMm(cursor.xMm - start.xMm), dz = fromMm(cursor.yMm - start.yMm);
+    const length = Math.hypot(dx, dz);
+    if (length < 0.001) return;
+    const y = kind === "beam"
+      ? fromMm(elevationMm + levelHeightMm) - fromMm(depthMm) / 2
+      : fromMm(elevationMm) + 0.1;
+    const geometry = new THREE.BoxGeometry(length, kind === "beam" ? fromMm(depthMm) : 0.035, kind === "beam" ? fromMm(widthMm) : 0.065);
+    const material = new THREE.MeshBasicMaterial({ color: yellow, transparent: true, opacity: kind === "beam" ? 0.58 : 0.95, depthTest: false, depthWrite: false });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(fromMm((start.xMm + cursor.xMm) / 2), y, fromMm((start.yMm + cursor.yMm) / 2));
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    mesh.renderOrder = 140;
+    this.structuralPreview.add(mesh);
   }
 
   ensureGround(elevationMm = 0) {
@@ -140,7 +182,7 @@ export default class LayoutSceneLayer {
       let mesh = this.levelSlabs.get(level.id);
       if (!mesh) {
         const geo = new THREE.BoxGeometry(1, fromMm(40), 1);
-        const mat = new THREE.MeshStandardMaterial({
+        const mat = new THREE.MeshPhysicalMaterial({
           color: 0x94a3b8,
           transparent: true,
           opacity: 0.12,
@@ -221,15 +263,10 @@ export default class LayoutSceneLayer {
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const isWallSelected = wall.id === opts.selectedWallId || Boolean(opts.selectedWallIds?.has(wall.id));
-      if (isWallSelected) {
-        mat.color.setHex(WALL_SEL);
-        mat.emissive.setHex(0x92400e);
-        mat.emissiveIntensity = 0.25;
-      } else {
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
-        this.applyMaterialAndColor(mat, wall.color, wall.material);
-      }
+      mat.emissive.setHex(0x000000);
+      mat.emissiveIntensity = 0;
+      this.applyMaterialAndColor(mat, wall.color, wall.material);
+      this.setMeshSelectionOutline(mesh, isWallSelected);
     }
 
     const doorKeep = new Set(doors.map((d) => d.id));
@@ -319,19 +356,14 @@ export default class LayoutSceneLayer {
       mesh.visible = visible;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const isSlabSelected = slab.id === opts.selectedSlabId || Boolean(opts.selectedSlabIds?.has(slab.id));
-      if (isSlabSelected) {
-        mat.color.setHex(slab.kind === "roof" ? ROOF_SEL : FLOOR_SEL);
-        mat.emissive.setHex(0x92400e);
-        mat.emissiveIntensity = 0.25;
-      } else {
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
-        const defaultColor = slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR;
-        this.applyMaterialAndColor(mat, slab.color, slab.material);
-        if (!slab.color && !slab.material) {
-          mat.color.setHex(defaultColor);
-        }
+      mat.emissive.setHex(0x000000);
+      mat.emissiveIntensity = 0;
+      const defaultColor = slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR;
+      this.applyMaterialAndColor(mat, slab.color, slab.material);
+      if (!slab.color && !slab.material) {
+        mat.color.setHex(defaultColor);
       }
+      this.setMeshSelectionOutline(mesh, isSlabSelected);
     }
 
     this.syncEndpointHandles(
@@ -376,7 +408,7 @@ export default class LayoutSceneLayer {
             ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
             : new THREE.BoxGeometry(w, height, d);
 
-        const mat = new THREE.MeshStandardMaterial({
+        const mat = new THREE.MeshPhysicalMaterial({
           color: 0x94a3b8,
           roughness: 0.5,
           metalness: 0.1,
@@ -396,14 +428,13 @@ export default class LayoutSceneLayer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       if (isSelected) {
-        mat.color.setHex(0xfacc15);
-        mat.emissive.setHex(0x92400e);
-        mat.emissiveIntensity = 0.3;
+        mat.color.setHex(col.color ? parseInt(col.color.replace("#", "0x"), 16) : 0x94a3b8);
       } else {
         mat.color.setHex(col.color ? parseInt(col.color.replace("#", "0x"), 16) : 0x94a3b8);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
       }
+      mat.emissive.setHex(0x000000);
+      mat.emissiveIntensity = 0;
+      this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
 
@@ -443,7 +474,7 @@ export default class LayoutSceneLayer {
       let mesh = this.beamMeshes.get(beam.id);
       if (!mesh) {
         const geo = new THREE.BoxGeometry(len, d, w);
-        const mat = new THREE.MeshStandardMaterial({
+        const mat = new THREE.MeshPhysicalMaterial({
           color: 0x64748b,
           roughness: 0.4,
           metalness: 0.2,
@@ -457,7 +488,7 @@ export default class LayoutSceneLayer {
 
       mesh.position.set(
         fromMm((beam.startXmm + beam.endXmm) / 2),
-        fromMm(elev + beam.elevationOffsetMm) + d / 2,
+        fromMm(elev + (level?.heightMm ?? 3000) + beam.elevationOffsetMm) - d / 2,
         fromMm((beam.startYmm + beam.endYmm) / 2),
       );
       mesh.rotation.y = -Math.atan2(dz, dx);
@@ -468,14 +499,13 @@ export default class LayoutSceneLayer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       if (isSelected) {
-        mat.color.setHex(0xfacc15);
-        mat.emissive.setHex(0x92400e);
-        mat.emissiveIntensity = 0.3;
+        mat.color.setHex(beam.color ? parseInt(beam.color.replace("#", "0x"), 16) : 0x64748b);
       } else {
         mat.color.setHex(beam.color ? parseInt(beam.color.replace("#", "0x"), 16) : 0x64748b);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
       }
+      mat.emissive.setHex(0x000000);
+      mat.emissiveIntensity = 0;
+      this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
 
@@ -525,6 +555,9 @@ export default class LayoutSceneLayer {
         color: col,
         dashSize: 0.4,
         gapSize: 0.2,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
       });
       const lineMesh = new THREE.Line(lineGeo, lineMat);
       lineMesh.computeLineDistances();
@@ -538,6 +571,8 @@ export default class LayoutSceneLayer {
         const bubbleMat = new THREE.MeshBasicMaterial({
           color: 0xffffff,
           side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
         });
         const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
         bubble.position.copy(pt);
@@ -550,6 +585,8 @@ export default class LayoutSceneLayer {
         const ringMat = new THREE.MeshBasicMaterial({
           color: col,
           side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
         });
         const ring = new THREE.Mesh(ringGeo, ringMat);
         ring.position.copy(pt);
@@ -737,7 +774,7 @@ export default class LayoutSceneLayer {
     if (this.endpointStart && this.endpointEnd) return;
     const make = (end: "start" | "end") => {
       const geo = new THREE.SphereGeometry(fromMm(36), 14, 12);
-      const mat = new THREE.MeshStandardMaterial({
+      const mat = new THREE.MeshPhysicalMaterial({
         color: end === "start" ? 0x38bdf8 : 0xf472b6,
         emissive: end === "start" ? 0x0ea5e9 : 0xdb2777,
         emissiveIntensity: 0.45,
@@ -1039,7 +1076,7 @@ export default class LayoutSceneLayer {
 
     // 1. Semi-transparent volume box
     const geo = new THREE.BoxGeometry(w, t, d);
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshPhysicalMaterial({
       color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
       transparent: true,
       opacity: 0.45,
@@ -1233,9 +1270,9 @@ export default class LayoutSceneLayer {
       new THREE.MeshBasicMaterial({
         color: col,
         transparent: true,
-        opacity: 0.95,
-        depthTest: true,
-        depthWrite: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
         side: THREE.DoubleSide,
       });
 
@@ -1266,7 +1303,14 @@ export default class LayoutSceneLayer {
 
       // Complementary THREE.Line on top for guaranteed 1px visibility at any zoom
       const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const lineMat = new THREE.LineBasicMaterial({ color: col, linewidth: 2 });
+      const lineMat = new THREE.LineBasicMaterial({
+        color: col,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+        linewidth: 2,
+      });
       const lineMesh = new THREE.Line(lineGeo, lineMat);
       lineMesh.renderOrder = renderOrd + 1;
       lineMesh.frustumCulled = false;
@@ -1295,8 +1339,8 @@ export default class LayoutSceneLayer {
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,
-          depthTest: true,
-          depthWrite: true,
+          depthTest: false,
+          depthWrite: false,
         });
         const disc = new THREE.Mesh(discGeo, discMat);
         disc.position.copy(pt);
@@ -1336,6 +1380,8 @@ export default class LayoutSceneLayer {
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,
+          depthTest: false,
+          depthWrite: false,
         });
         const disc = new THREE.Mesh(discGeo, discMat);
         disc.position.set(fromMm(dp.xMm), drawY + 0.005, fromMm(dp.yMm));
@@ -1354,6 +1400,8 @@ export default class LayoutSceneLayer {
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.95,
+        depthTest: false,
+        depthWrite: false,
       });
       const gapMesh = new THREE.Mesh(gapGeo, gapMat);
       gapMesh.position.set(fromMm(gp.xMm), fromMm(fallbackElevMm) + 0.1, fromMm(gp.yMm));
@@ -1703,7 +1751,7 @@ export default class LayoutSceneLayer {
 
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
     const geo = this.buildSlabGeometry(slab);
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshPhysicalMaterial({
       roughness: 0.9,
       metalness: 0.02,
       transparent: true,
@@ -1753,7 +1801,16 @@ export default class LayoutSceneLayer {
     mat.metalness = 0.05;
     mat.transparent = false;
     mat.opacity = 1.0;
+    if (mat.map?.userData.vstudioMaterialClone) mat.map.dispose();
     mat.map = null;
+    mat.emissive.setHex(0x000000);
+    mat.emissiveIntensity = 0;
+    if (mat instanceof THREE.MeshPhysicalMaterial) {
+      mat.transmission = 0;
+      mat.clearcoat = 0;
+      mat.clearcoatRoughness = 0.1;
+      mat.ior = 1.5;
+    }
     mat.wireframe = this.currentRenderMode === "wireframe";
 
     if (this.currentRenderMode === "light") {
@@ -1771,6 +1828,15 @@ export default class LayoutSceneLayer {
       mat.transparent =
         customMat.opacity < 0.99 ||
         Boolean(customMat.transmission && customMat.transmission > 0);
+      mat.emissive.setStyle(customMat.emissive ?? "#000000");
+      mat.emissiveIntensity = customMat.emissiveIntensity ?? 0;
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.transmission = customMat.transmission ?? 0;
+        mat.clearcoat = customMat.clearcoat ?? 0;
+        mat.clearcoatRoughness = customMat.clearcoatRoughness ?? 0.1;
+        mat.ior = customMat.ior ?? 1.5;
+        mat.thickness = (customMat.transmission ?? 0) > 0 ? 0.12 : 0;
+      }
 
       const effectiveColor = customMat.color || colorStr || "#d6d3d1";
       mat.color.setStyle(effectiveColor);
@@ -1783,11 +1849,15 @@ export default class LayoutSceneLayer {
           customMat.hatchScaleMm || 200,
         );
         if (tex) {
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
+          const materialTexture = tex.clone();
+          materialTexture.wrapS = THREE.RepeatWrapping;
+          materialTexture.wrapT = THREE.RepeatWrapping;
           const scaleM = (customMat.hatchScaleMm || 200) / 1000;
-          tex.repeat.set(1 / scaleM, 1 / scaleM);
-          mat.map = tex;
+          const tiling = customMat.tilingScale ?? 1;
+          materialTexture.repeat.set(tiling / scaleM, tiling / scaleM);
+          materialTexture.userData.vstudioMaterialClone = true;
+          materialTexture.needsUpdate = true;
+          mat.map = materialTexture;
         }
       }
       return;
@@ -2048,7 +2118,7 @@ export default class LayoutSceneLayer {
     miter?: WallMiterOffsets,
   ): THREE.Mesh {
     const geo = this.buildWallGeometry(wall, cl, doors, windows, miter);
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshPhysicalMaterial({
       roughness: 0.85,
       metalness: 0.05,
     });
@@ -2231,8 +2301,8 @@ export default class LayoutSceneLayer {
     frameMatId?: string,
     panelMatId?: string,
   ) {
-    const frameMat = new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.1 });
-    let panelMat: THREE.Material = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
+    const frameMat = new THREE.MeshPhysicalMaterial({ roughness: 0.6, metalness: 0.1 });
+    let panelMat: THREE.Material = new THREE.MeshPhysicalMaterial({ roughness: 0.8, metalness: 0.05 });
 
     const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
     if (customFrame) {
@@ -2264,7 +2334,7 @@ export default class LayoutSceneLayer {
           thickness: 0.02,
         });
       } else {
-        const std = new THREE.MeshStandardMaterial({
+        const std = new THREE.MeshPhysicalMaterial({
           roughness: customPanel.roughness,
           metalness: customPanel.metalness,
           opacity: customPanel.opacity,
@@ -2310,11 +2380,36 @@ export default class LayoutSceneLayer {
       if (c instanceof THREE.Mesh) {
         const mat = c.material as THREE.MeshStandardMaterial;
         if (mat && mat.emissive) {
-          mat.emissive.setHex(selected ? 0xf59e0b : 0x000000);
-          mat.emissiveIntensity = selected ? 0.35 : 0;
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
         }
+        this.setMeshSelectionOutline(c, selected);
       }
     });
+  }
+
+  private setMeshSelectionOutline(mesh: THREE.Mesh, selected: boolean) {
+    const existing = mesh.getObjectByName("layout-selection-outline") as THREE.LineSegments | undefined;
+    if (existing) {
+      mesh.remove(existing);
+      existing.geometry.dispose();
+      (existing.material as THREE.Material).dispose();
+    }
+    if (!selected) return;
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(mesh.geometry, 18),
+      new THREE.LineBasicMaterial({
+        color: 0xfacc15,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    );
+    outline.name = "layout-selection-outline";
+    outline.renderOrder = 1000;
+    outline.raycast = () => undefined;
+    mesh.add(outline);
   }
 
   private applyOpeningDisplay(g: THREE.Group, planMode: boolean) {

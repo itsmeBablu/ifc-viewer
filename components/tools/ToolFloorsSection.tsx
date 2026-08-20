@@ -147,7 +147,7 @@ export default function ToolFloorsSection({
 
   const popupUnderlay = popupLevelId ? underlayFor(popupLevelId) : null;
 
-  const floorRows: {
+  const rawFloorRows: {
     id: string;
     name: string;
     elevationMm: number;
@@ -168,10 +168,25 @@ export default function ToolFloorsSection({
         kind: "ifc" as const,
       })),
   ];
+  const floorRows = Array.from(
+    rawFloorRows
+      .sort((a, b) => a.elevationMm - b.elevationMm || (a.kind === "layout" ? -1 : 1))
+      .reduce((unique, row) => {
+        const normalizedName = row.name.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+        const elevationBand = Math.round(row.elevationMm / 25);
+        const sameStory = [...unique.entries()].find(([key, existing]) => {
+          const [name, elevation] = key.split("|");
+          return name === normalizedName || (Number(elevation) === elevationBand && existing.name.trim().toLocaleLowerCase() === normalizedName);
+        });
+        if (!sameStory) unique.set(`${normalizedName}|${elevationBand}`, row);
+        return unique;
+      }, new Map<string, (typeof rawFloorRows)[number]>())
+      .values(),
+  );
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
-      <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2 px-0.5">
+      <div className="mb-1 flex shrink-0 items-center justify-between gap-1 px-0.5">
         <p className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "floors")}
         </p>
@@ -210,7 +225,7 @@ export default function ToolFloorsSection({
             setPopupLevelId(null);
             setAllFloorsExpanded(!allFloorsExpanded);
           }}
-          className={`mb-0.5 w-full rounded-lg px-2 py-1.5 flex items-center justify-between text-[11px] font-semibold transition duration-150 ${
+          className={`mb-0.5 w-full rounded-md px-1.5 py-1 flex items-center justify-between text-[10px] font-medium transition duration-150 ${
             activeId == null
               ? "bg-amber-100 text-amber-950"
               : "text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
@@ -243,7 +258,7 @@ export default function ToolFloorsSection({
                 });
                 select(row.id, true);
               }}
-              className={`mb-0.5 rounded-lg px-1 py-0.5 transition duration-150 ${
+              className={`mb-px rounded-md px-0.5 py-0 transition duration-150 ${
                 active ? "bg-sky-100 text-sky-950" : "hover:bg-[var(--surface-muted)]/40"
               }`}
             >

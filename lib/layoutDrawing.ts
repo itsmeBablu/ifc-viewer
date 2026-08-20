@@ -43,7 +43,8 @@ export type LayoutWall = {
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
   color?: string;
-  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
+  /** Preset or custom material-library id. */
+  material?: string;
   // -- Layered Wall Assemblies -------------------------------------------
   wallTypeId?: string;
   layers?: WallLayer[];
@@ -116,7 +117,8 @@ export type LayoutSlab = {
   autoBoundaryFromWalls?: boolean;
   // -- Section 9: Material & color ---------------------------------------
   color?: string;
-  material?: "default" | "concrete" | "brick" | "wood" | "glass" | "metal" | "plaster";
+  /** Preset or custom material-library id. */
+  material?: string;
 };
 
 export const DEFAULT_SLAB_THICKNESS_MM = 200;

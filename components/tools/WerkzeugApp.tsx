@@ -63,6 +63,7 @@ import SceneBusyCursor from "@/components/common/SceneBusyCursor";
 import LiquidGlassSpinner from "@/components/common/LiquidGlassSpinner";
 import ThemeTransition from "@/components/common/ThemeTransition";
 import ThemeHydration from "@/components/common/ThemeHydration";
+import { MATERIAL_DRAG_MIME } from "@/store/materialStore";
 
 type LoadSource =
   | { kind: "registry"; modelId: string }
@@ -150,16 +151,10 @@ export default function WerkzeugApp() {
 
   // Layout Tool Store
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
-  const selectWall = useLayoutDrawingStore((s) => s.selectWall);
-  const selectDoor = useLayoutDrawingStore((s) => s.selectDoor);
-  const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
-  const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
   const projectId = useLayoutDrawingStore((s) => s.projectId);
 
   // Markup Tool Store
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
-  const selectPlacement = useToolMarkupStore((s) => s.selectPlacement);
-  const selectNote = useToolMarkupStore((s) => s.selectNote);
 
   useEffect(() => {
     document.title = activeModelLabel?.trim()
@@ -242,14 +237,20 @@ export default function WerkzeugApp() {
       }
 
       if (e.key === "Escape") {
-        setArmedLayoutTool(null);
-        setArmedTool(null);
-        selectWall(null);
-        selectDoor(null);
-        selectWindow(null);
-        selectSlab(null);
-        selectPlacement(null);
-        selectNote(null);
+        const layout = useLayoutDrawingStore.getState();
+        layout.finishWallDraw();
+        layout.cancelSlabDraw();
+        layout.finishSketchLineDraw();
+        layout.clearTracePreview();
+        layout.setArmedLayoutTool(null);
+        layout.clearSelection();
+        const markup = useToolMarkupStore.getState();
+        markup.setArmedTool(null);
+        markup.cancelPendingNote();
+        markup.clearSelection();
+        markup.setCubeDraw(null);
+        markup.setDragSnapHint(null);
+        useAppStore.getState().setSelectedElement(null);
         return;
       }
 
@@ -276,6 +277,24 @@ export default function WerkzeugApp() {
         setArmedTool(null);
         return;
       }
+
+      if (e.key.toLowerCase() === "c" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("column");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("beam");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "g" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("grid");
+        setArmedTool(null);
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -283,12 +302,6 @@ export default function WerkzeugApp() {
   }, [
     setArmedLayoutTool,
     setArmedTool,
-    selectWall,
-    selectDoor,
-    selectWindow,
-    selectSlab,
-    selectPlacement,
-    selectNote,
   ]);
 
   useLayoutEffect(() => {
@@ -399,6 +412,10 @@ export default function WerkzeugApp() {
   const onDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer.types.includes(MATERIAL_DRAG_MIME)) {
+      setIsDraggingIfc(false);
+      return;
+    }
     dragDepthRef.current++;
     if (e.dataTransfer.types.includes("Files")) {
       setIsDraggingIfc(true);
@@ -426,6 +443,12 @@ export default function WerkzeugApp() {
       e.stopPropagation();
       setIsDraggingIfc(false);
       dragDepthRef.current = 0;
+      if (
+        e.dataTransfer.types.includes(MATERIAL_DRAG_MIME) ||
+        e.dataTransfer.getData("text/plain").startsWith("vstudio-material:")
+      ) {
+        return;
+      }
       const file = e.dataTransfer.files?.[0];
       if (file && (file.name.endsWith(".ifc") || file.name.endsWith(".frag"))) {
         handleFile(file);
@@ -446,7 +469,7 @@ export default function WerkzeugApp() {
       <ThemeTransition />
       <div
         ref={rootRef}
-        className="relative h-dvh w-dvw overflow-hidden text-[var(--text-strong)] bg-[var(--surface-base)] select-none"
+        className="werkzeug-compact-ui relative h-dvh w-dvw overflow-hidden text-[var(--text-strong)] bg-[var(--surface-base)] select-none"
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={onDragOver}

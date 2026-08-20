@@ -229,9 +229,30 @@ export class MarkupSceneLayer {
 
   private applySelectionStyle(mesh: THREE.Mesh, selected: boolean) {
     const mat = mesh.material as THREE.MeshStandardMaterial;
-    mat.emissive.set(selected ? 0x443300 : 0x000000);
-    mat.emissiveIntensity = selected ? 0.35 : 0;
-    mesh.scale.setScalar(selected ? 1.04 : 1);
+    mat.emissive.set(0x000000);
+    mat.emissiveIntensity = 0;
+    mesh.scale.set(1, 1, 1);
+    const existing = mesh.getObjectByName("markup-selection-outline") as THREE.LineSegments | undefined;
+    if (existing) {
+      mesh.remove(existing);
+      existing.geometry.dispose();
+      (existing.material as THREE.Material).dispose();
+    }
+    if (!selected) return;
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(mesh.geometry, 18),
+      new THREE.LineBasicMaterial({
+        color: 0xfacc15,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 1,
+      }),
+    );
+    outline.name = "markup-selection-outline";
+    outline.renderOrder = 1000;
+    outline.raycast = () => undefined;
+    mesh.add(outline);
   }
 
   private createNoteObject(note: MarkupNote): CSS2DObject {

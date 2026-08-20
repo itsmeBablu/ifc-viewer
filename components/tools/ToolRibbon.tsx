@@ -38,6 +38,7 @@ import {
   LuCheck,
   LuPencil,
   LuScissors,
+  LuFilter,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -103,10 +104,10 @@ function Cluster({
 }) {
   return (
     <div
-      className={`flex flex-col items-center gap-0.5 ${border ? "border-r border-[var(--panel-divider)]/60 pr-2.5" : ""}`}
+      className={`flex flex-col items-center gap-0.5 ${border ? "border-r border-[var(--panel-divider)]/60 pr-1.5" : ""}`}
     >
-      <div className="flex items-center gap-1">{children}</div>
-      <span className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider select-none leading-none mt-0.5">
+      <div className="flex items-center gap-0.5">{children}</div>
+      <span className="text-[7px] font-bold text-[var(--text-muted)] uppercase tracking-[.08em] select-none leading-none">
         {label}
       </span>
     </div>
@@ -233,7 +234,7 @@ function RibbonBtn({
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className={`relative overflow-hidden flex items-center justify-center rounded-lg border border-transparent transition-all cursor-pointer min-w-[34px] min-h-[30px] px-2 py-1 ${
+      className={`relative overflow-hidden flex items-center justify-center rounded-md border border-transparent transition-all cursor-pointer min-w-[30px] min-h-[26px] px-1.5 py-0.5 ${
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
@@ -245,7 +246,7 @@ function RibbonBtn({
       {displayLabel && (
         <span
           ref={labelRef}
-          className="overflow-hidden whitespace-nowrap text-[10px] font-bold text-[var(--text-strong)] opacity-0 max-w-0 pointer-events-none"
+          className="overflow-hidden whitespace-nowrap text-[9px] font-semibold text-[var(--text-strong)] opacity-0 max-w-0 pointer-events-none"
         >
           {displayLabel}
         </span>
@@ -270,7 +271,7 @@ function ToggleBtn({
       type="button"
       onClick={onClick}
       title={title}
-      className={`flex flex-col items-center justify-center gap-1 rounded-xl p-1.5 min-w-[50px] border transition-all ${
+      className={`flex flex-col items-center justify-center gap-0.5 rounded-lg p-1 min-w-[38px] border transition-all ${
         active
           ? "border-yellow-400 bg-yellow-400/20 text-yellow-500 dark:text-yellow-400 font-bold"
           : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
@@ -367,6 +368,15 @@ export default function ToolRibbon({
   const duplicatePlacement = useToolMarkupStore((s) => s.duplicatePlacement);
 
   const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
+  const selectMultiple = useLayoutDrawingStore((s) => s.selectMultiple);
+  const walls = useLayoutDrawingStore((s) => s.walls);
+  const doors = useLayoutDrawingStore((s) => s.doors);
+  const windows = useLayoutDrawingStore((s) => s.windows);
+  const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const columns = useLayoutDrawingStore((s) => s.columns);
+  const beams = useLayoutDrawingStore((s) => s.beams);
+  const gridLines = useLayoutDrawingStore((s) => s.gridLines);
   const gapHighlightPoints = useLayoutDrawingStore((s) => s.gapHighlightPoints);
   const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
@@ -380,6 +390,7 @@ export default function ToolRibbon({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [isTouchMode, setIsTouchMode] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | "annotate" | "snaps" | null>(null);
+  const [selectionFilterOpen, setSelectionFilterOpen] = useState(false);
 
   // Draggable Ribbon State
   const [ribbonPos, setRibbonPos] = useState({ x: 0, y: 0 });
@@ -449,6 +460,17 @@ export default function ToolRibbon({
     : isSketching
     ? `Sketch (${sketchLines.length} ${sketchLines.length === 1 ? "Line" : "Lines"})`
     : null;
+
+  const selectionCategories = [
+    { kind: "wall" as const, label: "Walls", ids: walls.map((item) => item.id) },
+    { kind: "door" as const, label: "Doors", ids: doors.map((item) => item.id) },
+    { kind: "window" as const, label: "Windows", ids: windows.map((item) => item.id) },
+    { kind: "slab" as const, label: "Floors / Roofs", ids: slabs.map((item) => item.id) },
+    { kind: "column" as const, label: "Columns", ids: columns.map((item) => item.id) },
+    { kind: "beam" as const, label: "Beams", ids: beams.map((item) => item.id) },
+    { kind: "grid" as const, label: "Grids", ids: gridLines.map((item) => item.id) },
+    { kind: "line" as const, label: "Lines", ids: sketchLines.map((item) => item.id) },
+  ].filter((category) => category.ids.length > 0);
 
   // Auto switch to contextual Modify tab when selection occurs
   useEffect(() => {
@@ -801,6 +823,25 @@ export default function ToolRibbon({
     <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
       {/* Universal Modify Tools */}
       <Cluster label="Modify Tools">
+        <div className="relative">
+          <RibbonBtn active={selectionFilterOpen} onClick={() => setSelectionFilterOpen((open) => !open)} title="Selection Filter / Select Similar">
+            <LuFilter className="h-4 w-4" />
+          </RibbonBtn>
+          {selectionFilterOpen && (
+            <div className="absolute left-0 top-full z-[90] mt-1 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2 shadow-2xl backdrop-blur-2xl">
+              <div className="mb-1.5 flex items-center justify-between border-b border-[var(--panel-divider)] pb-1.5"><span className="text-[10px] font-bold text-[var(--text-strong)]">Selection Filter</span><span className="text-[9px] text-[var(--text-muted)]">{selectedElements.length} selected</span></div>
+              <p className="mb-1.5 text-[8px] text-[var(--text-muted)]">Ctrl-click objects or select all similar elements.</p>
+              <div className="space-y-0.5">{selectionCategories.map((category) => {
+                const selectedCount = selectedElements.filter((item) => item.kind === category.kind).length;
+                const allSelected = selectedCount === category.ids.length;
+                return <button key={category.kind} type="button" onClick={() => {
+                  const withoutCategory = selectedElements.filter((item) => item.kind !== category.kind);
+                  selectMultiple(allSelected ? withoutCategory : [...withoutCategory, ...category.ids.map((id) => ({ kind: category.kind, id }))], "replace");
+                }} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-[9px] hover:bg-yellow-400/15"><span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${allSelected ? "border-yellow-400 bg-yellow-400 text-zinc-900" : selectedCount ? "border-yellow-400 text-yellow-500" : "border-[var(--panel-divider)]"}`}>{allSelected ? <LuCheck className="h-2.5 w-2.5"/> : selectedCount ? "–" : ""}</span><span className="flex-1 text-[var(--text-body)]">{category.label}</span><span className="font-mono text-[8px] text-[var(--text-muted)]">{selectedCount}/{category.ids.length}</span></button>;
+              })}</div>
+            </div>
+          )}
+        </div>
         {(
           [
             { id: "translate" as const, label: "Move (MV)", icon: LuMove },
@@ -1343,9 +1384,9 @@ export default function ToolRibbon({
         /* Desktop Floating Main Tool Island */
         <header 
           id="ribbon-dropdown-container"
-          className="absolute z-40 flex w-auto flex-col liquid-glass-panel shadow-2xl select-none pointer-events-auto touch-none"
+          className="absolute z-40 flex w-auto max-w-[calc(100vw-1rem)] flex-col overflow-visible rounded-xl liquid-glass-panel shadow-xl select-none pointer-events-auto touch-none"
           style={{
-            top: `calc(1rem + ${ribbonPos.y}px)`,
+            top: `calc(.5rem + ${ribbonPos.y}px)`,
             left: `calc(50% + ${ribbonPos.x}px)`,
             transform: `translateX(-50%)`,
           }}
@@ -1355,7 +1396,7 @@ export default function ToolRibbon({
           onPointerCancel={handleRibbonPointerUp}
         >
           {/* -- Tab Bar ---------------------------------------------------------- */}
-          <div className="flex items-center gap-2 p-2 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
+          <div className="flex items-center gap-1 p-1 cursor-move bg-[var(--surface-overlay)]/50 border-b border-[var(--panel-divider)]/50">
             {/* V Studio (home tab) */}
             <UnifiedButton
               size="xs"
@@ -1398,10 +1439,10 @@ export default function ToolRibbon({
           {!ribbonCollapsed && (
             <div
               ref={ribbonContentRef}
-              className="flex h-[52px] items-center gap-2.5 px-3 py-1 animate-in fade-in slide-in-from-top-1 duration-150 relative min-w-[400px]"
+              className="flex h-[44px] max-w-[calc(100vw-1rem)] min-w-[320px] items-center gap-1.5 overflow-visible px-1.5 py-0.5 animate-in fade-in slide-in-from-top-1 duration-150 relative"
             >
               {activeTab === "vstudio" && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
                   {vstudioClusters.map((c) => (
                     <div key={c.key} className="flex-shrink-0">
                       {c.node}

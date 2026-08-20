@@ -617,11 +617,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbGetPresets(projectId),
     ]);
     levels.sort((a, b) => a.elevationMm - b.elevationMm);
+    const uniqueLevels = Array.from(
+      levels.reduce((unique, level) => {
+        const key = `${level.name.trim().toLocaleLowerCase().replace(/\s+/g, " ")}|${Math.round(level.elevationMm / 25)}`;
+        if (!unique.has(key)) unique.set(key, level);
+        return unique;
+      }, new Map<string, LayoutLevel>()).values(),
+    );
     set({
       projectId,
       isEmptyProject: isEmpty || projectId.startsWith("empty:"),
       lastMutatedAt: 0,
-      levels,
+      levels: uniqueLevels,
       walls,
       doors: doors.map((d) => normalizeDoor(d)),
       windows,

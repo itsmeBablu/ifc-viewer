@@ -10,6 +10,9 @@ import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, legendStopsForMode } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
 import { flyTo, frameBoundingBox } from "@/lib/flyTo";
@@ -256,7 +259,7 @@ function attachAlignedOutline(
     transparent: true,
     opacity,
     depthWrite: false,
-    depthTest: true,
+    depthTest: false,
     clippingPlanes: [],
     clipShadows: false,
   });
@@ -270,7 +273,35 @@ function attachAlignedOutline(
 
 /** Color-matched rim — shared by basic 3D and presentation selection. */
 function attachColorOutline(mesh: THREE.Mesh, hex: string) {
-  attachAlignedOutline(mesh, hex, 1.09, 0.92, true);
+  clearSelectionOutlines(mesh);
+  const geom = mesh.geometry;
+  if (!geom.boundingBox) geom.computeBoundingBox();
+  const box = geom.boundingBox;
+  if (!box || box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const inflate = 1.012;
+  const sourceEdges = new THREE.EdgesGeometry(geom, 12);
+  const wideGeometry = new LineSegmentsGeometry().fromEdgesGeometry(sourceEdges);
+  sourceEdges.dispose();
+  const wideMaterial = new LineMaterial({
+    color: new THREE.Color(hex).getHex(),
+    transparent: true,
+    opacity: 0.86,
+    linewidth: 5,
+    depthTest: false,
+    depthWrite: false,
+    alphaToCoverage: true,
+  });
+  wideMaterial.resolution.set(
+    typeof window === "undefined" ? 1920 : window.innerWidth,
+    typeof window === "undefined" ? 1080 : window.innerHeight,
+  );
+  const boundary = new LineSegments2(wideGeometry, wideMaterial);
+  boundary.scale.setScalar(inflate);
+  boundary.position.copy(center).multiplyScalar(1 - inflate);
+  boundary.userData.isSelectionOutline = true;
+  boundary.renderOrder = (mesh.renderOrder ?? 0) + 30;
+  mesh.add(boundary);
 }
 
 /**
@@ -2346,17 +2377,34 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         }
 
         if (isSel && passes) {
-          const colors = getHighlightColors(
-            room,
-            dataViewMode,
-            activeColorPalette,
-            heizlastRange,
-            kuhllastRange,
-            luftungRange,
-            activeTemperatureRange,
-            customLegendColors,
-          );
-          attachThermalSelectionOutline(mesh, colors);
+          const highlightHex = room
+            ? dataViewMode === "heizlast" && colorMode === "heizlast"
+              ? roomColorHex(
+                  room,
+                  "temperature",
+                  activeColorPalette,
+                  heizlastRange,
+                  activeTemperatureRange,
+                  "heizlast",
+                  kuhllastRange,
+                  customLegendColors ?? undefined,
+                  luftungRange,
+                )
+              : dataViewMode === "heizlast" && colorMode === "temperature"
+                ? roomColorHex(
+                    room,
+                    "heizlast",
+                    activeColorPalette,
+                    heizlastRange,
+                    activeTemperatureRange,
+                    "heizlast",
+                    kuhllastRange,
+                    customLegendColors ?? undefined,
+                    luftungRange,
+                  )
+                : baseHex
+            : baseHex;
+          attachColorOutline(mesh, highlightHex);
           mesh.renderOrder = 8;
         } else {
           mesh.renderOrder = 2;
@@ -2386,15 +2434,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0;
         if (isSel) {
-          const colors = [
-            new THREE.Color("#0050ff"),
-            new THREE.Color("#1f8a70"),
-            new THREE.Color("#4caf50"),
-            new THREE.Color("#ffdc00"),
-            new THREE.Color("#ff8c00"),
-            new THREE.Color("#dc0000"),
-          ];
-          attachThermalSelectionOutline(obj, colors);
+          attachColorOutline(obj, `#${mat.color.getHexString()}`);
         }
         mat.needsUpdate = true;
       });

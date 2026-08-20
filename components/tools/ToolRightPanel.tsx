@@ -50,9 +50,9 @@ import MaterialEditorPanel from "./MaterialEditorPanel";
 import { wallLengthMm } from "@/lib/layoutDrawing";
 import UnifiedButton from "@/components/common/UnifiedButton";
 
-const MIN_WIDTH = 280;
+const MIN_WIDTH = 260;
 const MAX_WIDTH = 600;
-const DEFAULT_WIDTH = 320;
+const DEFAULT_WIDTH = 300;
 
 type BrowserTab = "all" | "ifc";
 
@@ -79,7 +79,7 @@ export default function ToolRightPanel({
   const [floorsOpen, setFloorsOpen] = useState(true);
   const [isFloating, setIsFloating] = useState(false);
 
-  const [propHeight, setPropHeight] = useState(320); // default ~50% split
+  const [propHeight, setPropHeight] = useState(280); // compact default split
 
   useEffect(() => {
     const handleResize = () => {
@@ -217,22 +217,26 @@ export default function ToolRightPanel({
     const tDef = types[typeId];
     if (!tDef) return;
     if (selectedWall && tDef.category === "Wall") {
-      updateWall(selectedWall.id, {
+      const ids = selectedElements.filter((item) => item.kind === "wall").map((item) => item.id);
+      for (const id of ids.length ? ids : [selectedWall.id]) void updateWall(id, {
         thicknessMm: tDef.thicknessMm || selectedWall.thicknessMm,
         heightMm: tDef.heightMm || selectedWall.heightMm,
       });
     } else if (selectedDoor && tDef.category === "Door") {
-      updateDoor(selectedDoor.id, {
+      const ids = selectedElements.filter((item) => item.kind === "door").map((item) => item.id);
+      for (const id of ids.length ? ids : [selectedDoor.id]) void updateDoor(id, {
         widthMm: tDef.widthMm || selectedDoor.widthMm,
         heightMm: tDef.heightMm || selectedDoor.heightMm,
       });
     } else if (selectedWindow && tDef.category === "Window") {
-      updateWindow(selectedWindow.id, {
+      const ids = selectedElements.filter((item) => item.kind === "window").map((item) => item.id);
+      for (const id of ids.length ? ids : [selectedWindow.id]) void updateWindow(id, {
         widthMm: tDef.widthMm || selectedWindow.widthMm,
         heightMm: tDef.heightMm || selectedWindow.heightMm,
       });
     } else if (selectedSlab && (tDef.category === "Floor" || tDef.category === "Roof")) {
-      updateSlab(selectedSlab.id, {
+      const ids = selectedElements.filter((item) => item.kind === "slab").map((item) => item.id);
+      for (const id of ids.length ? ids : [selectedSlab.id]) void updateSlab(id, {
         thicknessMm: tDef.thicknessMm || selectedSlab.thicknessMm,
       });
     }
@@ -334,9 +338,9 @@ export default function ToolRightPanel({
       <aside
         className={`fixed z-30 flex flex-col transition-transform duration-300 select-none overflow-hidden ${
           isFloating
-            ? "right-4 top-[88px] bottom-16 liquid-glass-panel"
+            ? "right-2 top-[72px] bottom-10 liquid-glass-panel"
             : "top-0 bottom-0 right-0 h-full liquid-glass-dock border-l border-y-0 border-r-0 rounded-none shadow-2xl"
-        } ${rightPanelOpen ? "translate-x-0" : "translate-x-full"}`}
+        } ${rightPanelOpen ? "translate-x-0" : "translate-x-full"} tool-right-compact`}
         style={{ width: panelWidth }}
       >
         {!isFloating && rightPanelOpen && (
@@ -347,13 +351,13 @@ export default function ToolRightPanel({
           />
         )}
 
-        <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-3.5 bg-[var(--surface-overlay)]/60">
+        <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-2.5 bg-[var(--surface-overlay)]/60">
           <div className="flex items-center gap-2 min-w-0">
             <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
-            <span className="font-bold text-xs text-[var(--text-strong)] truncate">
+            <span className="font-semibold text-[11px] text-[var(--text-strong)] truncate">
               {activeModelLabel || "Architecture Project"}
             </span>
-            <span className="text-[10px] text-[var(--text-muted)] font-mono shrink-0">
+            <span className="text-[9px] text-[var(--text-muted)] font-mono shrink-0">
               • {getViewTitle()}
             </span>
           </div>
@@ -371,7 +375,7 @@ export default function ToolRightPanel({
           className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
           style={{ height: propHeight, minHeight: 120 }}
         >
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-3.5 bg-[var(--surface-overlay)]/40">
+          <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5 truncate">
               <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
               {propertiesTitle}
@@ -405,7 +409,7 @@ export default function ToolRightPanel({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 thin-scroll space-y-2 text-xs">
+          <div className="flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
             {hasSelection ? (
               <>
                 {selectedSketchLine ? (
@@ -858,7 +862,7 @@ export default function ToolRightPanel({
         {/* -- Horizontal splitter ----------------------------------------- */}
         <div
           onMouseDown={onSplitterMouseDown}
-          className="h-2 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
+          className="h-1 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
           title="Drag to resize split"
         >
           <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-yellow-400" />
@@ -867,7 +871,7 @@ export default function ToolRightPanel({
         {/* -- LAYOUT (formerly Project Browser) -------------------------- */}
         <div className="flex flex-col flex-1 min-h-0">
           {/* Layout header + tabs */}
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-3.5 bg-[var(--surface-overlay)]/40">
+          <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
               Layout
             </span>
@@ -898,15 +902,15 @@ export default function ToolRightPanel({
           </div>
 
           {/* Layout body (Compact, Thin Dividers) */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 thin-scroll text-xs space-y-2.5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1.5 thin-scroll text-[11px] space-y-1.5">
             {browserTab === "all" ? (
               <>
                 {/* Levels & Stories tree */}
-                <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
+                <div className="pb-1.5 border-b border-[var(--panel-divider)]/40">
                   <button 
                     type="button" 
                     onClick={() => setFloorsOpen(!floorsOpen)} 
-                    className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 hover:text-yellow-400 transition-colors cursor-pointer group"
+                    className="w-full flex items-center justify-between text-[9px] font-semibold uppercase tracking-[.08em] text-[var(--text-strong)] mb-1 hover:text-yellow-400 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-1.5">
                       <LuLayers className="h-3 w-3 text-yellow-400" />
