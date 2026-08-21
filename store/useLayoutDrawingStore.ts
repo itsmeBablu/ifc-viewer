@@ -10,6 +10,7 @@ import {
   DEFAULT_WINDOW_HEIGHT_MM,
   DEFAULT_WINDOW_SILL_MM,
   DEFAULT_WINDOW_WIDTH_MM,
+  DEFAULT_PLAN_SNAP_MODES,
   EMPTY_LAYOUT_PRESETS,
   emptyProjectKey,
   newLayoutId,
@@ -33,6 +34,8 @@ import {
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
+  type PlanSnapModes,
+  type PlanSnapType,
   type SelectedElementRef,
   type WallType,
 } from "@/lib/layoutDrawing";
@@ -106,7 +109,7 @@ export type WallDrawState = {
   angleSnapped: boolean;
   lengthMm: number | null;
   /** Active snap type indicator shown in HUD. */
-  snapType?: "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "extension" | null;
+  snapType?: PlanSnapType | null;
 } | null;
 
 export type SketchDrawState = {
@@ -124,6 +127,8 @@ export type SlabDrawState = {
   /** First corner; null until first click. */
   start: { xMm: number; yMm: number } | null;
   cursor: { xMm: number; yMm: number } | null;
+  /** Existing slab whose footprint is being redrawn. */
+  replaceSlabId?: string;
 } | null;
 
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
@@ -154,6 +159,8 @@ type LayoutDrawingState = {
   activeGroupId: string | null;
   layoutRooms: LayoutRoom[];
   sketchLines: LayoutSketchLine[];
+  sketchTargetKind: "floor" | "roof" | null;
+  draftSketchLineStyle: Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">;
   sketchDraw: SketchDrawState;
   gapHighlightPoints: { xMm: number; yMm: number }[];
   drawingScale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500";
@@ -162,6 +169,7 @@ type LayoutDrawingState = {
   presets: LayoutPresets;
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
+  planSnapModes: PlanSnapModes;
   slabDraw: SlabDrawState;
   tracePreview: TracePreviewState;
   selectedElements: SelectedElementRef[];
@@ -189,6 +197,9 @@ type LayoutDrawingState = {
   calibratePoints: { xMm: number; yMm: number }[];
   /** Active draw thickness (mm) — remembered after draw. */
   draftWallThicknessMm: number;
+  draftWallHeightMm: number;
+  draftWallBaseLevelId: string | null;
+  draftWallTopLevelId: string | null;
   draftDoorWidthMm: number;
   draftDoorHeightMm: number;
   draftWindowWidthMm: number;
@@ -223,7 +234,13 @@ type LayoutDrawingState = {
   deleteRoom: (id: string) => void;
 
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
+  setSketchTargetKind: (kind: "floor" | "roof" | null) => void;
+  setDraftSketchLineStyle: (patch: Partial<Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">>) => void;
   setDraftWallThicknessMm: (mm: number) => void;
+  setPlanSnapMode: (mode: PlanSnapType, on: boolean) => void;
+  setDraftWallHeightMm: (mm: number) => void;
+  setDraftWallBaseLevelId: (levelId: string | null) => void;
+  setDraftWallTopLevelId: (levelId: string | null) => void;
   setDraftDoorSize: (widthMm: number, heightMm: number) => void;
   setDraftWindowSize: (
     widthMm: number,
@@ -242,6 +259,8 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutWall,
+        | "levelId"
+        | "topLevelId"
         | "startXmm"
         | "startYmm"
         | "endXmm"
@@ -342,6 +361,7 @@ type LayoutDrawingState = {
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
   beginSlabDraw: (kind: "floor" | "roof", levelId: string) => void;
+  beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
   addSlabCorner: (
     point: { xMm: number; yMm: number },
@@ -409,6 +429,7 @@ type LayoutDrawingState = {
   selectedSketchLineId: string | null;
   selectSketchLine: (id: string | null) => void;
   deleteSketchLine: (id: string) => void;
+  updateSketchLine: (id: string, patch: Partial<Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">>) => void;
   clearSketchLines: () => void;
   convertSketchToSlab: (kind: "floor" | "roof") => Promise<{
     success: boolean;
@@ -526,6 +547,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   marqueeBox: null,
   layoutRooms: [],
   sketchLines: [],
+  sketchTargetKind: null,
+  draftSketchLineStyle: { color: "#374151", thicknessPx: 1, pattern: "solid", dashSizeMm: 250, gapSizeMm: 140 },
   sketchDraw: null,
   selectedSketchLineId: null,
   gapHighlightPoints: [],
@@ -535,6 +558,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
   wallDraw: null,
+  planSnapModes: { ...DEFAULT_PLAN_SNAP_MODES },
   slabDraw: null,
   tracePreview: null,
   trimFirstPick: null,
@@ -548,6 +572,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   calibrateUnderlayId: null,
   calibratePoints: [],
   draftWallThicknessMm: DEFAULT_WALL_THICKNESS_MM,
+  draftWallHeightMm: DEFAULT_LEVEL_HEIGHT_MM,
+  draftWallBaseLevelId: null,
+  draftWallTopLevelId: null,
   draftDoorWidthMm: DEFAULT_DOOR_WIDTH_MM,
   draftDoorHeightMm: DEFAULT_DOOR_HEIGHT_MM,
   draftWindowWidthMm: DEFAULT_WINDOW_WIDTH_MM,
@@ -824,8 +851,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setArmedLayoutTool: (tool) => {
+    const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
     set({
-      armedLayoutTool: tool,
+      armedLayoutTool: boundaryKind ? "lines" : tool,
+      sketchTargetKind: boundaryKind,
       wallDraw: null,
       slabDraw: null,
       tracePreview: null,
@@ -847,6 +876,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setDraftWallThicknessMm: (mm) =>
     set({ draftWallThicknessMm: Math.max(50, Math.round(mm)) }),
+  setPlanSnapMode: (mode, on) => set({ planSnapModes: { ...get().planSnapModes, [mode]: on } }),
+  setDraftWallHeightMm: (mm) =>
+    set({ draftWallHeightMm: Math.max(50, Math.round(mm)) }),
+  setDraftWallBaseLevelId: (levelId) => set({ draftWallBaseLevelId: levelId }),
+  setDraftWallTopLevelId: (levelId) => set({ draftWallTopLevelId: levelId }),
 
   setDraftDoorSize: (widthMm, heightMm) =>
     set({
@@ -1005,6 +1039,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   beginWallDraw: (levelId, start) => {
+    levelId = get().draftWallBaseLevelId ?? levelId;
     const underSnap = snapPlanToUnderlayLines(
       start,
       get().underlays,
@@ -1014,6 +1049,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       { xMm: underSnap.xMm, yMm: underSnap.yMm },
       get().walls,
       levelId,
+      140,
+      get().planSnapModes,
     );
     const pt = wallSnap.point;
     set({
@@ -1064,6 +1101,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
     const prevFrom =
       draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    // Object snaps use the raw pointer. Polar/orthogonal tracking is a fallback,
+    // never a preprocessing step that can move the aperture away from geometry.
+    const directWallSnap = snapPlanPointToWalls(cursor, get().walls, draw.levelId, 140, get().planSnapModes, last);
     const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(
       snapped.point,
@@ -1073,11 +1113,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
-    const wallSnap = snapPlanPointToWalls(
-      underPoint,
-      get().walls,
-      draw.levelId,
-    );
+    const wallSnap = directWallSnap.type
+      ? directWallSnap
+      : snapPlanPointToWalls(underPoint, get().walls, draw.levelId, 140, get().planSnapModes, last);
     const point = wallSnap.point;
     const lengthMm = Math.hypot(point.xMm - last.xMm, point.yMm - last.yMm);
     set({
@@ -1112,6 +1150,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
     const prevFrom =
       draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    const directWallSnap = snapPlanPointToWalls(point, get().walls, draw.levelId, 140, get().planSnapModes, last);
     const snapped = snapWallEndpointMm(last, point, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(
       snapped.point,
@@ -1121,11 +1160,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
-    const wallSnap = snapPlanPointToWalls(
-      underPoint,
-      get().walls,
-      draw.levelId,
-    );
+    const wallSnap = directWallSnap.type
+      ? directWallSnap
+      : snapPlanPointToWalls(underPoint, get().walls, draw.levelId, 140, get().planSnapModes, last);
     const end = wallSnap.point;
     const dx = end.xMm - last.xMm;
     const dy = end.yMm - last.yMm;
@@ -1151,11 +1188,21 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     } catch {
       // keep draft thickness
     }
-    const heightMm = level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM;
+    const requestedTop = get().levels.find((candidate) => candidate.id === get().draftWallTopLevelId);
+    const automaticTop = get().levels
+      .filter((candidate) => candidate.elevationMm > (level?.elevationMm ?? 0))
+      .sort((a, b) => a.elevationMm - b.elevationMm)[0];
+    const topLevel = requestedTop && requestedTop.elevationMm > (level?.elevationMm ?? 0)
+      ? requestedTop
+      : automaticTop;
+    const heightMm = topLevel
+      ? topLevel.elevationMm - (level?.elevationMm ?? 0)
+      : get().draftWallHeightMm;
     const wall: LayoutWall = {
       id: newLayoutId("wall"),
       projectId,
       levelId: draw.levelId,
+      topLevelId: topLevel?.id,
       startXmm: last.xMm,
       startYmm: last.yMm,
       endXmm: end.xMm,
@@ -1216,6 +1263,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedUnderlayId: null,
     }),
 
+  beginSlabRedraw: (id) => {
+    if (get().lockedElementKeys.includes(`slab:${id}`)) return;
+    const slab = get().slabs.find((item) => item.id === id);
+    if (!slab) return;
+    set({
+      slabDraw: {
+        kind: slab.kind,
+        levelId: slab.levelId,
+        start: null,
+        cursor: null,
+        replaceSlabId: id,
+      },
+      slabBoundaryEdit: null,
+      armedLayoutTool: slab.kind,
+      selectedSlabId: id,
+    });
+  },
+
+  setSketchTargetKind: (kind) => set({ sketchTargetKind: kind }),
+  setDraftSketchLineStyle: (patch) => set({ draftSketchLineStyle: { ...get().draftSketchLineStyle, ...patch } }),
+
   updateSlabCursor: (cursor) => {
     const draw = get().slabDraw;
     if (!draw) return;
@@ -1232,6 +1300,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       { xMm: underSnap.xMm, yMm: underSnap.yMm },
       get().walls,
       draw.levelId,
+      140,
+      get().planSnapModes,
     );
     set({
       slabDraw: {
@@ -1254,6 +1324,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       { xMm: underSnap.xMm, yMm: underSnap.yMm },
       get().walls,
       draw.levelId,
+      140,
+      get().planSnapModes,
     ).point;
     if (!draw.start) {
       const region =
@@ -1302,7 +1374,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const thicknessMm = get().draftSlabThicknessMm;
     const elevationOffsetMm =
       draw.kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+    const replaced = draw.replaceSlabId
+      ? get().slabs.find((item) => item.id === draw.replaceSlabId)
+      : null;
     const slab: LayoutSlab = {
+      ...(replaced ?? {} as LayoutSlab),
       id: newLayoutId(draw.kind === "roof" ? "roof" : "floor"),
       projectId,
       levelId: draw.levelId,
@@ -1315,11 +1391,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       elevationOffsetMm,
       createdAt: Date.now(),
     };
+    if (replaced) {
+      slab.id = replaced.id;
+      slab.projectId = replaced.projectId;
+      slab.thicknessMm = replaced.thicknessMm;
+      slab.elevationOffsetMm = replaced.elevationOffsetMm;
+      slab.createdAt = replaced.createdAt;
+      slab.boundary = undefined;
+      slab.autoBoundaryFromWalls = false;
+    }
     pushWerkzeugHistory();
     await idbPutSlab(slab);
     set({
-      slabs: [...get().slabs, slab],
-      slabDraw: { ...draw, start: null, cursor: pt },
+      slabs: replaced
+        ? get().slabs.map((item) => item.id === slab.id ? slab : item)
+        : [...get().slabs, slab],
+      slabDraw: replaced ? null : { ...draw, start: null, cursor: pt },
+      armedLayoutTool: replaced ? null : get().armedLayoutTool,
       selectedSlabId: slab.id,
       selectedWallId: null,
       selectedDoorId: null,
@@ -1603,9 +1691,17 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       });
       return;
     }
+    const selectedWall = get().walls.find((wall) => wall.id === id);
+    const inherited = selectedWall ? {
+      draftWallThicknessMm: selectedWall.thicknessMm,
+      draftWallHeightMm: selectedWall.heightMm,
+      draftWallBaseLevelId: selectedWall.levelId,
+      draftWallTopLevelId: selectedWall.topLevelId ?? null,
+    } : {};
     const group = get().groups.find((g) => g.elementRefs.some((r) => r.kind === "wall" && r.id === id));
     if (group && get().activeGroupId !== group.id) {
       set({
+        ...inherited,
         selectedElements: [...group.elementRefs],
         selectedWallId: id,
         selectedDoorId: null,
@@ -1619,6 +1715,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
     set({
+      ...inherited,
       selectedWallId: id,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -1686,19 +1783,29 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const res = trimWallPair(w1, pt1, w2, pt2);
     if (!res) return false;
 
-    pushWerkzeugHistory();
     const updated1 = { ...w1, ...res.wall1Patch };
     const updated2 = { ...w2, ...res.wall2Patch };
 
+    if (
+      Math.hypot(updated1.endXmm - updated1.startXmm, updated1.endYmm - updated1.startYmm) < 50 ||
+      Math.hypot(updated2.endXmm - updated2.startXmm, updated2.endYmm - updated2.startYmm) < 50
+    ) return false;
+
+    pushWerkzeugHistory();
+    const nextWalls = get().walls.map((w) =>
+      w.id === w1Id ? updated1 : w.id === w2Id ? updated2 : w,
+    );
+    const nextSlabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
+
     set({
-      walls: get().walls.map((w) =>
-        w.id === w1Id ? updated1 : w.id === w2Id ? updated2 : w,
-      ),
+      walls: nextWalls,
+      slabs: nextSlabs,
       trimFirstPick: null,
       lastMutatedAt: Date.now(),
     });
     await idbPutWall(updated1);
     await idbPutWall(updated2);
+    await Promise.all(nextSlabs.filter((slab) => slab.autoBoundaryFromWalls).map(idbPutSlab));
     return true;
   },
 
@@ -2185,7 +2292,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
     const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
-    const point = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    let point = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    const first = draw.points[0];
+    if (draw.points.length >= 3 && first && Math.hypot(point.xMm - first.xMm, point.yMm - first.yMm) <= 160) point = { ...first };
     const lengthMm = Math.hypot(point.xMm - last.xMm, point.yMm - last.yMm);
     set({
       sketchDraw: {
@@ -2219,7 +2328,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
     const snapped = snapWallEndpointMm(last, point, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
-    const end = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    let end = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
+    const first = draw.points[0];
+    const closesLoop = Boolean(draw.points.length >= 3 && first && Math.hypot(end.xMm - first.xMm, end.yMm - first.yMm) <= 160);
+    if (closesLoop && first) end = { ...first };
     const dx = end.xMm - last.xMm;
     const dy = end.yMm - last.yMm;
     if (Math.hypot(dx, dy) < 50) return null;
@@ -2232,6 +2344,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       startYmm: last.yMm,
       endXmm: end.xMm,
       endYmm: end.yMm,
+      ...get().draftSketchLineStyle,
       createdAt: Date.now(),
     };
 
@@ -2240,7 +2353,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       sketchLines: [...get().sketchLines, line],
       lastMutatedAt: Date.now(),
       gapHighlightPoints: [],
-      sketchDraw: {
+      sketchDraw: closesLoop ? null : {
         ...draw,
         points: [...draw.points, end],
         cursor: end,
@@ -2253,7 +2366,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   finishSketchLineDraw: () => set({ sketchDraw: null }),
-  cancelSketchLineDraw: () => set({ sketchDraw: null, armedLayoutTool: null }),
+  cancelSketchLineDraw: () => set({ sketchDraw: null, armedLayoutTool: null, sketchTargetKind: null }),
   clearSketchLines: () => set({ sketchLines: [], sketchDraw: null, gapHighlightPoints: [] }),
 
   convertSketchToSlab: async (kind) => {
@@ -2311,6 +2424,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         elevationOffsetMm,
         boundary: outer.points,
         holes: holes.map((h) => h.points),
+        edgeSlopes: kind === "roof"
+          ? outer.points.map((_, edgeIdx) => ({ edgeIdx, pitchDeg: 30, isSloped: true }))
+          : undefined,
         createdAt: Date.now(),
       };
 
@@ -2328,6 +2444,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSketchLineId: null,
       gapHighlightPoints: [],
       armedLayoutTool: null,
+      sketchTargetKind: null,
       lastMutatedAt: Date.now(),
     });
 
@@ -2360,6 +2477,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedElements: s.selectedElements.filter((e) => !(e.kind === "line" && e.id === id)),
       lastMutatedAt: Date.now(),
     })),
+  updateSketchLine: (id, patch) => set((s) => ({
+    sketchLines: s.sketchLines.map((line) => line.id === id ? { ...line, ...patch } : line),
+    lastMutatedAt: Date.now(),
+  })),
 
   // -- Section 1: Multi-Selection System ---------------------------------
   selectElement: (ref, mode = "replace") => {

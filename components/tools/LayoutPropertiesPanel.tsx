@@ -28,6 +28,7 @@ export default function LayoutPropertiesPanel({
 }) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const walls = useLayoutDrawingStore((s) => s.walls);
+  const levels = useLayoutDrawingStore((s) => s.levels);
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
@@ -76,6 +77,35 @@ export default function LayoutPropertiesPanel({
 
           {/* Dimensions */}
           <Section title={t(uiLanguage, "layoutEditDimensions")}>
+            <div className="mb-2 grid grid-cols-2 gap-1.5">
+              <LevelSelect
+                label="Base level"
+                value={wall.levelId}
+                levels={levels}
+                onChange={(levelId) => {
+                  const base = levels.find((level) => level.id === levelId);
+                  const top = levels.find((level) => level.id === wall.topLevelId);
+                  const heightMm = top && base && top.elevationMm > base.elevationMm
+                    ? top.elevationMm - base.elevationMm
+                    : wall.heightMm;
+                  void updateWall(wall.id, { levelId, heightMm });
+                }}
+              />
+              <LevelSelect
+                label="Top level"
+                value={wall.topLevelId ?? ""}
+                levels={levels.filter((level) => level.elevationMm > (levels.find((item) => item.id === wall.levelId)?.elevationMm ?? -Infinity))}
+                allowUnconnected
+                onChange={(topLevelId) => {
+                  const base = levels.find((level) => level.id === wall.levelId);
+                  const top = levels.find((level) => level.id === topLevelId);
+                  void updateWall(wall.id, {
+                    topLevelId: topLevelId || undefined,
+                    ...(base && top ? { heightMm: top.elevationMm - base.elevationMm } : {}),
+                  });
+                }}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               <MmInput
                 label={t(uiLanguage, "layoutWallLength")}
@@ -505,6 +535,30 @@ function Section({
       </p>
       {children}
     </div>
+  );
+}
+
+function LevelSelect({
+  label,
+  value,
+  levels,
+  allowUnconnected = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  levels: Array<{ id: string; name: string; elevationMm: number }>;
+  allowUnconnected?: boolean;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none focus:border-sky-300">
+        {allowUnconnected && <option value="">Unconnected</option>}
+        {levels.slice().sort((a, b) => a.elevationMm - b.elevationMm).map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+      </select>
+    </label>
   );
 }
 

@@ -26,7 +26,6 @@ import {
   LuTable,
   LuFileSpreadsheet,
   LuLayoutGrid,
-  LuMagnet,
   LuPrinter,
   LuEllipsis,
   LuX,
@@ -79,6 +78,7 @@ import type { MarkupShapeType, MarkupViewPreset } from "@/lib/toolMarkup";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { RenderMode } from "@/lib/types";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
+import ObjectSnapStrip from "./ObjectSnapStrip";
 
 // Two primary tabs plus contextual modify
 export type RibbonTab = "vstudio" | "manage" | "modify";
@@ -323,6 +323,7 @@ export default function ToolRibbon({
 
   // Layout Store
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const sketchTargetKind = useLayoutDrawingStore((s) => s.sketchTargetKind);
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
@@ -343,22 +344,6 @@ export default function ToolRibbon({
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
   const transformMode = useToolMarkupStore((s) => s.transformMode);
   const setTransformMode = useToolMarkupStore((s) => s.setTransformMode);
-  const snapToFaces = useToolMarkupStore((s) => s.snapToFaces);
-  const setSnapToFaces = useToolMarkupStore((s) => s.setSnapToFaces);
-  const gridSnap = useToolMarkupStore((s) => s.gridSnap);
-  const setGridSnap = useToolMarkupStore((s) => s.setGridSnap);
-  const snapEndpoint = useToolMarkupStore((s) => s.snapEndpoint);
-  const setSnapEndpoint = useToolMarkupStore((s) => s.setSnapEndpoint);
-  const snapMidpoint = useToolMarkupStore((s) => s.snapMidpoint);
-  const setSnapMidpoint = useToolMarkupStore((s) => s.setSnapMidpoint);
-  const snapCenter = useToolMarkupStore((s) => s.snapCenter);
-  const setSnapCenter = useToolMarkupStore((s) => s.setSnapCenter);
-  const snapIntersection = useToolMarkupStore((s) => s.snapIntersection);
-  const setSnapIntersection = useToolMarkupStore((s) => s.setSnapIntersection);
-  const snapPerpendicular = useToolMarkupStore((s) => s.snapPerpendicular);
-  const setSnapPerpendicular = useToolMarkupStore((s) => s.setSnapPerpendicular);
-  const snapExtension = useToolMarkupStore((s) => s.snapExtension);
-  const setSnapExtension = useToolMarkupStore((s) => s.setSnapExtension);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const measurements = useToolMarkupStore((s) => s.measurements);
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
@@ -489,7 +474,8 @@ export default function ToolRibbon({
 
   const handleSelectLayoutTool = (id: LayoutToolId) => {
     setArmedTool(null);
-    setArmedLayoutTool(armedLayoutTool === id ? null : id);
+    const active = armedLayoutTool === id || ((id === "floor" || id === "roof") && sketchTargetKind === id);
+    setArmedLayoutTool(active ? null : id);
   };
 
   const handleSelectShape = (shape: MarkupShapeType) => {
@@ -735,44 +721,7 @@ export default function ToolRibbon({
 
   const snapsCluster = (
     <Cluster label="Snaps" border={false}>
-      <div className="relative">
-        <RibbonBtn
-          onClick={() => setActiveDropdown(activeDropdown === "snaps" ? null : "snaps")}
-          title="Object Snaps"
-        >
-          <LuMagnet className="h-4.5 w-4.5 text-yellow-400" />
-          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
-        </RibbonBtn>
-        {activeDropdown === "snaps" && (
-          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-40 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
-            {[
-              { key: "endpoint", label: "Endpoint", active: snapEndpoint, set: setSnapEndpoint },
-              { key: "midpoint", label: "Midpoint", active: snapMidpoint, set: setSnapMidpoint },
-              { key: "center", label: "Center", active: snapCenter, set: setSnapCenter },
-              { key: "intersection", label: "Intersection", active: snapIntersection, set: setSnapIntersection },
-              { key: "perp", label: "Perpendicular", active: snapPerpendicular, set: setSnapPerpendicular },
-              { key: "ext", label: "Extension", active: snapExtension, set: setSnapExtension },
-              { key: "face", label: "Face (3D)", active: snapToFaces, set: setSnapToFaces },
-              { key: "grid", label: "Grid", active: gridSnap, set: setGridSnap },
-            ].map((s) => (
-              <button 
-                key={s.key} 
-                type="button" 
-                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  s.set(!s.active);
-                }}
-              >
-                <div className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${s.active ? 'bg-yellow-400 border-yellow-400 text-slate-950' : 'border-[var(--panel-divider)] text-transparent'}`}>
-                  <LuCheck className="h-3 w-3" />
-                </div>
-                <span className="text-xs font-semibold">{s.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <ObjectSnapStrip />
     </Cluster>
   );
 

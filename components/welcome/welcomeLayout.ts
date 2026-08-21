@@ -38,8 +38,7 @@ export type WelcomeLayoutConfig = {
 export function getWelcomeLayout(width: number, height: number): WelcomeLayoutConfig {
   const isLandscape = width > height;
   const isWide = isLandscape && width >= 568 && height >= 280;
-  const isShort = height < 520;
-  const isSpacious = isWide && height >= 560 && width >= 900;
+  const isSpacious = isWide && height >= 560 && width >= 1100;
 
   const cardBase =
     "rounded-2xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] backdrop-blur-sm";
@@ -79,10 +78,10 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
     return {
       tier: "stacked",
       isWide: false,
-      viewportClass: "relative order-2 h-[40dvh] w-full shrink-0 overflow-hidden border-t border-[var(--panel-divider)] shadow-inner",
-      formClass: "order-1 flex min-h-0 flex-1 flex-col overflow-hidden",
+      viewportClass: "relative order-1 min-h-[9rem] w-full flex-1 overflow-hidden border-b border-[var(--panel-divider)] shadow-inner",
+      formClass: "order-2 flex max-h-[70dvh] min-h-0 shrink-0 flex-col overflow-hidden",
       shellClass:
-        "flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 pt-3 pb-3",
+        "flex h-full min-h-0 flex-1 flex-col overflow-hidden px-[clamp(0.875rem,4vw,1.25rem)] pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
       headerClass: "flex shrink-0 flex-col items-center text-center pb-1",
       logoClass: "mb-2 h-7 w-auto object-contain",
       titleClass:
@@ -98,10 +97,10 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
       isMobileForm: false,
       isMobileLandscape: false,
       viewportClass:
-        "relative order-1 h-full min-h-0 min-w-0 flex-1 overflow-hidden border-r border-[var(--panel-divider)]",
-      formClass: "order-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+        "relative order-1 h-full min-h-0 min-w-0 flex-[1.1] overflow-hidden border-r border-[var(--panel-divider)]",
+      formClass: "order-2 flex h-full min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden",
       shellClass:
-        "flex h-full min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-[clamp(1.5rem,3vw,2.5rem)] py-[clamp(1rem,3vh,2rem)]",
+        "flex h-full min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain px-[clamp(1.25rem,3vw,2.5rem)] py-[clamp(1rem,3vh,2rem)] thin-scroll",
       headerClass: "flex shrink-0 flex-col items-start text-left",
       logoClass: "mb-4 h-10 w-auto object-contain sm:h-11 md:h-12",
       titleClass: "text-xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-2xl",
@@ -136,7 +135,7 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
     isMobileLandscape: true,
     viewportClass:
       "relative order-1 h-full min-h-0 min-w-0 flex-1 overflow-hidden border-r border-[var(--panel-divider)]",
-    formClass: "order-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+    formClass: "order-2 flex min-h-0 min-w-[300px] flex-1 flex-col overflow-hidden",
     shellClass:
       "flex h-full min-h-0 flex-1 flex-col overflow-hidden px-2 py-1 sm:px-2.5",
     headerClass: "flex shrink-0 flex-row items-center gap-1.5 w-full",
@@ -144,7 +143,7 @@ export function getWelcomeLayout(width: number, height: number): WelcomeLayoutCo
     titleClass: "text-xs font-semibold leading-tight tracking-tight text-[var(--text-strong)]",
     showSubtitle: false,
     fieldsClass:
-      "welcome-mobile-fields welcome-mobile-landscape flex min-h-0 flex-1 flex-col justify-center gap-1 overflow-hidden",
+      "welcome-mobile-fields welcome-mobile-landscape flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain thin-scroll",
     cardClass: `${cardBase} welcome-mobile-lang shrink-0 px-2 py-1`,
     themeCardClass: `${cardBase} welcome-mobile-theme shrink-0 px-2 py-1`,
     seasonalCardClass: `${cardBase} shrink-0 px-2 py-1`,

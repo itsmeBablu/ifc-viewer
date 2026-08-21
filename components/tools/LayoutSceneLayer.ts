@@ -830,6 +830,9 @@ export default class LayoutSceneLayer {
     points: { xMm: number; yMm: number }[],
     cursor: { xMm: number; yMm: number } | null,
     elevationMm: number,
+    snapType: string | null = null,
+    thicknessMm = 200,
+    heightMm = 3000,
   ) {
     if (this.previewLine) {
       this.disposeGroup(this.previewLine);
@@ -852,6 +855,78 @@ export default class LayoutSceneLayer {
     const positions: THREE.Vector3[] = [];
     for (const p of pts) {
       positions.push(new THREE.Vector3(fromMm(p.xMm), y, fromMm(p.yMm)));
+    }
+
+    // Full-size live wall volume for the currently drafted segment.
+    if (cursor && points.length) {
+      const start = points[points.length - 1];
+      const dxMm = cursor.xMm - start.xMm;
+      const dzMm = cursor.yMm - start.yMm;
+      const lengthMm = Math.hypot(dxMm, dzMm);
+      if (lengthMm >= 10) {
+        const length = fromMm(lengthMm);
+        const thickness = fromMm(Math.max(50, thicknessMm));
+        const height = fromMm(Math.max(50, heightMm));
+        const angle = Math.atan2(dzMm, dxMm);
+        const volumeGeo = new THREE.BoxGeometry(length, height, thickness);
+        const volumeMat = new THREE.MeshPhysicalMaterial({
+          color: 0x60a5fa,
+          transparent: true,
+          opacity: 0.34,
+          roughness: 0.65,
+          metalness: 0,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        const volume = new THREE.Mesh(volumeGeo, volumeMat);
+        volume.position.set(
+          fromMm((start.xMm + cursor.xMm) / 2),
+          fromMm(elevationMm) + height / 2,
+          fromMm((start.yMm + cursor.yMm) / 2),
+        );
+        volume.rotation.y = -angle;
+        volume.renderOrder = 145;
+        volume.userData.isLayoutPreview = true;
+        g.add(volume);
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(volumeGeo),
+          new THREE.LineBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.95 }),
+        );
+        edges.position.copy(volume.position);
+        edges.rotation.copy(volume.rotation);
+        edges.renderOrder = 146;
+        g.add(edges);
+
+        // Dashed footprint on the active level plane: two wall faces plus caps.
+        const nx = -Math.sin(angle) * thickness / 2;
+        const nz = Math.cos(angle) * thickness / 2;
+        const sx = fromMm(start.xMm), sz = fromMm(start.yMm);
+        const ex = fromMm(cursor.xMm), ez = fromMm(cursor.yMm);
+        const floorY = fromMm(elevationMm) + 0.018;
+        const footprint = [
+          new THREE.Vector3(sx + nx, floorY, sz + nz),
+          new THREE.Vector3(ex + nx, floorY, ez + nz),
+          new THREE.Vector3(ex - nx, floorY, ez - nz),
+          new THREE.Vector3(sx - nx, floorY, sz - nz),
+          new THREE.Vector3(sx + nx, floorY, sz + nz),
+        ];
+        const guideMat = new THREE.LineDashedMaterial({ color: 0x22d3ee, dashSize: 0.16, gapSize: 0.09, depthTest: false });
+        const outline = new THREE.Line(new THREE.BufferGeometry().setFromPoints(footprint), guideMat);
+        outline.computeLineDistances();
+        outline.renderOrder = 165;
+        g.add(outline);
+        const center = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(sx, floorY + 0.003, sz),
+            new THREE.Vector3(ex, floorY + 0.003, ez),
+          ]),
+          guideMat.clone(),
+        );
+        center.computeLineDistances();
+        center.renderOrder = 166;
+        g.add(center);
+      }
     }
 
     // 1. Centerline basic line
@@ -902,6 +977,29 @@ export default class LayoutSceneLayer {
       disc.renderOrder = 152;
       disc.frustumCulled = false;
       g.add(disc);
+    }
+
+    // Acquired OSNAP marker: high-contrast and always visible over geometry.
+    if (cursor && snapType) {
+      const snap = positions[positions.length - 1];
+      const marker = new THREE.Group();
+      marker.position.set(snap.x, y + 0.025, snap.z);
+      const color = snapType === "intersection" ? 0xff4fd8 : 0x22d3ee;
+      const ringGeo = new THREE.RingGeometry(0.095, 0.135, 24);
+      ringGeo.rotateX(-Math.PI / 2);
+      const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false });
+      const ring = new THREE.Mesh(ringGeo, material);
+      ring.renderOrder = 170;
+      marker.add(ring);
+      const crossGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-0.18, 0, 0), new THREE.Vector3(0.18, 0, 0),
+        new THREE.Vector3(0, 0, -0.18), new THREE.Vector3(0, 0, 0.18),
+      ]);
+      const cross = new THREE.LineSegments(crossGeo, new THREE.LineBasicMaterial({ color, depthTest: false }));
+      cross.renderOrder = 171;
+      marker.add(cross);
+      marker.userData.snapType = snapType;
+      g.add(marker);
     }
 
     this.previewLine = g;
@@ -1253,18 +1351,19 @@ export default class LayoutSceneLayer {
     levels: LayoutLevel[] = [],
     selectedLineId: string | null = null,
     fallbackElevMm: number = 0,
+    targetKind: "floor" | "roof" | null = null,
   ) {
     // This is a persistent child of `group`. Removing it here orphaned every
     // newly-created line from the scene graph, which made Lines invisible.
     this.clearGroupContents(this.sketchGroup);
 
     const levelMap = new Map(levels.map((lvl) => [lvl.id, lvl.elevationMm]));
-    const sketchYellow = 0xfacc15;
+    const boundaryBlue = 0x2563eb;
+    const draftingGray = 0x374151;
     const selectedCyan = 0x38bdf8;
     const gapRed = 0xef4444;
     // Ribbon dimensions: width visible from top, height visible from side
-    const RIBBON_W = 0.08; // half-width in local Z (visible from top-down)
-    const RIBBON_H = 0.04; // half-height in local Y (visible from side)
+    const RIBBON_H = 0.006;
 
     const makeSegMat = (col: number, emissiveI: number) =>
       new THREE.MeshBasicMaterial({
@@ -1284,34 +1383,34 @@ export default class LayoutSceneLayer {
       emI: number,
       lineId: string | null,
       renderOrd: number,
+      style?: Pick<LayoutSketchLine, "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">,
     ) => {
       const dx = p2.x - p1.x;
       const dz = p2.z - p1.z;
       const segLen = Math.hypot(dx, dz);
       if (segLen < 0.001) return;
 
-      // Flat ribbon box: length along X, thin Y, visible width Z
-      const segGeo = new THREE.BoxGeometry(segLen, RIBBON_H * 2, RIBBON_W * 2);
-      const segMat = makeSegMat(col, emI);
-      const segMesh = new THREE.Mesh(segGeo, segMat);
-      segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
-      segMesh.rotation.y = -Math.atan2(dz, dx);
-      if (lineId) segMesh.userData.layoutSketchLineId = lineId;
-      segMesh.renderOrder = renderOrd;
-      segMesh.frustumCulled = false;
-      this.sketchGroup.add(segMesh);
+      if ((style?.pattern ?? "solid") === "solid") {
+        const ribbonWidth = Math.max(0.008, (style?.thicknessPx ?? 1) * 0.006);
+        const segGeo = new THREE.BoxGeometry(segLen, RIBBON_H * 2, ribbonWidth);
+        const segMat = makeSegMat(col, emI);
+        const segMesh = new THREE.Mesh(segGeo, segMat);
+        segMesh.position.set((p1.x + p2.x) / 2, y, (p1.z + p2.z) / 2);
+        segMesh.rotation.y = -Math.atan2(dz, dx);
+        if (lineId) segMesh.userData.layoutSketchLineId = lineId;
+        segMesh.renderOrder = renderOrd;
+        segMesh.frustumCulled = false;
+        this.sketchGroup.add(segMesh);
+      }
 
       // Complementary THREE.Line on top for guaranteed 1px visibility at any zoom
       const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const lineMat = new THREE.LineBasicMaterial({
-        color: col,
-        depthTest: false,
-        depthWrite: false,
-        transparent: true,
-        opacity: 1,
-        linewidth: 2,
-      });
+      const pattern = style?.pattern ?? "solid";
+      const lineMat = pattern === "solid"
+        ? new THREE.LineBasicMaterial({ color: col, depthTest: false, depthWrite: false, transparent: true, opacity: 1 })
+        : new THREE.LineDashedMaterial({ color: col, depthTest: false, depthWrite: false, transparent: true, opacity: 1, dashSize: fromMm(pattern === "dotted" ? 45 : style?.dashSizeMm ?? 250), gapSize: fromMm(style?.gapSizeMm ?? 140) });
       const lineMesh = new THREE.Line(lineGeo, lineMat);
+      if (pattern !== "solid") lineMesh.computeLineDistances();
       lineMesh.renderOrder = renderOrd + 1;
       lineMesh.frustumCulled = false;
       if (lineId) lineMesh.userData.layoutSketchLineId = lineId;
@@ -1321,14 +1420,15 @@ export default class LayoutSceneLayer {
     // 1. Render placed sketch lines on ALL floors
     for (const l of lines) {
       const isSelected = l.id === selectedLineId;
-      const col = isSelected ? selectedCyan : sketchYellow;
+      const parsed = l.color ? Number.parseInt(l.color.replace("#", ""), 16) : draftingGray;
+      const col = isSelected ? selectedCyan : targetKind ? boundaryBlue : parsed;
       const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
       const y = fromMm(elevMm) + 0.08;
 
       const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
       const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
 
-      makeSegment(p1, p2, y, col, isSelected ? 0.95 : 0.75, l.id, 100);
+      makeSegment(p1, p2, y, col, isSelected ? 0.95 : 0.75, l.id, 100, targetKind ? { thicknessPx: 2, pattern: "solid" } : l);
 
       // Node dots — flat disc (CircleGeometry in XZ plane)
       for (const pt of [p1, p2]) {
@@ -1366,7 +1466,7 @@ export default class LayoutSceneLayer {
           const p1 = new THREE.Vector3(fromMm(a.xMm), drawY, fromMm(a.yMm));
           const p2 = new THREE.Vector3(fromMm(b.xMm), drawY, fromMm(b.yMm));
           const isRubberband = i === pts.length - 2 && draw.cursor != null;
-          const col = isRubberband ? 0xfde047 : 0xfacc15;
+          const col = targetKind ? 0x3b82f6 : isRubberband ? 0x6b7280 : draftingGray;
           makeSegment(p1, p2, drawY, col, isRubberband ? 0.9 : 0.7, null, 105);
         }
       }
@@ -1376,7 +1476,7 @@ export default class LayoutSceneLayer {
         const discGeo = new THREE.CircleGeometry(0.05, 14);
         discGeo.rotateX(-Math.PI / 2);
         const discMat = new THREE.MeshBasicMaterial({
-          color: 0xfacc15,
+          color: targetKind ? 0x2563eb : draftingGray,
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,

@@ -47,7 +47,13 @@ import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 import MaterialEditorPanel from "./MaterialEditorPanel";
-import { wallLengthMm } from "@/lib/layoutDrawing";
+import {
+  wallLengthMm,
+  type LayoutLevel,
+  type LayoutSlab,
+  type LayoutToolId,
+  type LayoutWall,
+} from "@/lib/layoutDrawing";
 import UnifiedButton from "@/components/common/UnifiedButton";
 
 const MIN_WIDTH = 260;
@@ -126,6 +132,8 @@ export default function ToolRightPanel({
   const groups = useLayoutDrawingStore((s) => s.groups);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
+  const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const levels = useLayoutDrawingStore((s) => s.levels);
 
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
@@ -198,6 +206,8 @@ export default function ToolRightPanel({
     ? "Sketch Lines"
     : selectedPlacement
     ? "Markup Properties"
+    : armedLayoutTool
+    ? `${armedLayoutTool === "lines" ? "Line" : armedLayoutTool[0].toUpperCase() + armedLayoutTool.slice(1)} Creation Properties`
     : "Properties";
 
   // Type definitions
@@ -469,9 +479,11 @@ export default function ToolRightPanel({
                           {selectedSketchLine.endYmm})
                         </span>
                       </PropRow>
-                    </PropSection>
+                      </PropSection>
 
-                    <PropSection
+                      <SketchLineStyleEditor lineId={selectedSketchLine.id} />
+
+                      <PropSection
                       open={openSections.identity}
                       onToggle={() => toggleSection("identity")}
                       icon={<LuLayers className="h-3.5 w-3.5 text-yellow-400" />}
@@ -772,6 +784,25 @@ export default function ToolRightPanel({
                         )}
                       </PropSection>
 
+                      {selectedSlab?.kind === "roof" && <RoofEdgeSlopeEditor slab={selectedSlab} />}
+
+                      {selectedWall && (
+                        <>
+                          <PropSection
+                            open={openSections.constraints}
+                            onToggle={() => toggleSection("constraints")}
+                            icon={<LuShieldCheck className="h-3.5 w-3.5 text-yellow-400" />}
+                            label="Wall Constraints"
+                          >
+                            <WallConstraintFields
+                              wall={selectedWall}
+                              levels={levels}
+                              onUpdate={(patch) => void updateWall(selectedWall.id, patch)}
+                            />
+                          </PropSection>
+                        </>
+                      )}
+
                       {/* Materials & Finishes */}
                       <PropSection
                         open={openSections.materials}
@@ -844,6 +875,8 @@ export default function ToolRightPanel({
                   </>
                 )}
               </>
+            ) : armedLayoutTool ? (
+              <DraftToolProperties tool={armedLayoutTool} />
             ) : (
               /* Persistent Empty State when nothing is selected */
               <div className="flex flex-col items-center justify-center p-6 text-center h-full min-h-[160px] text-[var(--text-muted)] space-y-2 select-none">
@@ -1061,4 +1094,144 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+function WallConstraintFields({
+  wall,
+  levels,
+  onUpdate,
+}: {
+  wall: LayoutWall;
+  levels: LayoutLevel[];
+  onUpdate: (patch: Partial<LayoutWall>) => void;
+}) {
+  const sortedLevels = [...levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const base = levels.find((level) => level.id === wall.levelId);
+  const fieldClass = "h-7 w-[8.5rem] rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 text-right text-[10px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
+  const updateBase = (levelId: string) => {
+    const nextBase = levels.find((level) => level.id === levelId);
+    const top = levels.find((level) => level.id === wall.topLevelId);
+    onUpdate({
+      levelId,
+      ...(nextBase && top && top.elevationMm > nextBase.elevationMm
+        ? { heightMm: top.elevationMm - nextBase.elevationMm }
+        : {}),
+    });
+  };
+  const updateTop = (levelId: string) => {
+    const top = levels.find((level) => level.id === levelId);
+    onUpdate({
+      topLevelId: levelId || undefined,
+      ...(base && top ? { heightMm: top.elevationMm - base.elevationMm } : {}),
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <PropRow label="Base level">
+        <select className={fieldClass} value={wall.levelId} onChange={(event) => updateBase(event.target.value)}>
+          {sortedLevels.map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+        </select>
+      </PropRow>
+      <PropRow label="Top level">
+        <select className={fieldClass} value={wall.topLevelId ?? ""} onChange={(event) => updateTop(event.target.value)}>
+          <option value="">Unconnected</option>
+          {sortedLevels.filter((level) => level.elevationMm > (base?.elevationMm ?? -Infinity)).map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+        </select>
+      </PropRow>
+      <PropRow label="Height">
+        <input className={fieldClass} type="number" min={50} value={wall.heightMm} onChange={(event) => onUpdate({ heightMm: Math.max(50, Number(event.target.value)), topLevelId: undefined })} />
+      </PropRow>
+      <PropRow label="Thickness">
+        <input className={fieldClass} type="number" min={50} value={wall.thicknessMm} onChange={(event) => onUpdate({ thicknessMm: Math.max(50, Number(event.target.value)) })} />
+      </PropRow>
+    </div>
+  );
+}
+
+function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
+  const store = useLayoutDrawingStore();
+  const markup = useToolMarkupStore();
+  const fieldClass = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
+  const labelClass = "space-y-1 text-[10px] font-semibold text-[var(--text-muted)]";
+  const baseLevelId = store.draftWallBaseLevelId ?? markup.markupFloorId ?? store.levels[0]?.id ?? "";
+  const base = store.levels.find((level) => level.id === baseLevelId);
+  const top = store.levels.find((level) => level.id === store.draftWallTopLevelId);
+  const wallHeight = base && top ? top.elevationMm - base.elevationMm : store.draftWallHeightMm;
+
+  const heading = tool === "lines" ? "New drawing line" : `New ${tool}`;
+  return (
+    <div className="space-y-2">
+      <div className="rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-2.5 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">{heading} properties</p>
+        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Set these values before drawing. New elements will use them.</p>
+      </div>
+
+      {tool === "wall" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Base level
+            <select className={fieldClass} value={baseLevelId} onChange={(event) => { const id = event.target.value; markup.setMarkupFloorId(id); store.setDraftWallBaseLevelId(id); }}>
+              {[...store.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+            </select>
+          </label>
+          <label className={labelClass}>Top level
+            <select className={fieldClass} value={store.draftWallTopLevelId ?? ""} onChange={(event) => store.setDraftWallTopLevelId(event.target.value || null)}>
+              <option value="">Unconnected</option>
+              {store.levels.filter((level) => level.elevationMm > (base?.elevationMm ?? -Infinity)).sort((a, b) => a.elevationMm - b.elevationMm).map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+            </select>
+          </label>
+          <label className={labelClass}>Height (mm)
+            <input className={fieldClass} type="number" min={50} value={wallHeight} onChange={(event) => { store.setDraftWallHeightMm(Number(event.target.value)); store.setDraftWallTopLevelId(null); }} />
+          </label>
+          <label className={labelClass}>Thickness (mm)
+            <input className={fieldClass} type="number" min={50} value={store.draftWallThicknessMm} onChange={(event) => store.setDraftWallThicknessMm(Number(event.target.value))} />
+          </label>
+        </div>
+      )}
+
+      {tool === "door" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" value={store.draftDoorWidthMm} onChange={(event) => store.setDraftDoorSize(Number(event.target.value), store.draftDoorHeightMm)} /></label>
+          <label className={labelClass}>Height (mm)<input className={fieldClass} type="number" value={store.draftDoorHeightMm} onChange={(event) => store.setDraftDoorSize(store.draftDoorWidthMm, Number(event.target.value))} /></label>
+        </div>
+      )}
+
+      {tool === "window" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" value={store.draftWindowWidthMm} onChange={(event) => store.setDraftWindowSize(Number(event.target.value), store.draftWindowHeightMm, store.draftWindowSillMm)} /></label>
+          <label className={labelClass}>Height (mm)<input className={fieldClass} type="number" value={store.draftWindowHeightMm} onChange={(event) => store.setDraftWindowSize(store.draftWindowWidthMm, Number(event.target.value), store.draftWindowSillMm)} /></label>
+          <label className={`${labelClass} col-span-2`}>Sill height (mm)<input className={fieldClass} type="number" value={store.draftWindowSillMm} onChange={(event) => store.setDraftWindowSize(store.draftWindowWidthMm, store.draftWindowHeightMm, Number(event.target.value))} /></label>
+        </div>
+      )}
+
+      {(tool === "floor" || tool === "roof") && (
+        <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={20} value={store.draftSlabThicknessMm} onChange={(event) => store.setDraftSlabThicknessMm(Number(event.target.value))} /></label>
+      )}
+
+      {tool === "lines" && <DraftSketchLineProperties />}
+
+    </div>
+  );
+}
+
+function DraftSketchLineProperties() {
+  const store = useLayoutDrawingStore();
+  const totalLength = store.sketchLines.reduce((sum, line) => sum + Math.hypot(line.endXmm - line.startXmm, line.endYmm - line.startYmm), 0);
+  return <div className="space-y-2"><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Current length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.lengthMm ?? 0)} mm</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Angle</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.angleDeg ?? 0)}°</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Segments</span><strong className="font-mono text-xs text-[var(--text-strong)]">{store.sketchLines.length}</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Total length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(totalLength)} mm</strong></div></div>{!store.sketchTargetKind && <SketchLineStyleEditor />}{store.sketchTargetKind && <p className="rounded-lg bg-blue-500/10 p-2 text-[10px] font-semibold text-blue-500">Blue boundary mode · draw one closed outer loop and optional closed inner loops for openings.</p>}<div className="grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab(store.sketchTargetKind ?? "floor")}>Create {store.sketchTargetKind ?? "floor"}</button>{!store.sketchTargetKind && <button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab("roof")}>Create roof</button>}{store.sketchDraw && <button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.finishSketchLineDraw}>Finish</button>}<button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.clearSketchLines}>Clear</button></div></div>;
+}
+
+function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
+  const store = useLayoutDrawingStore();
+  const line = lineId ? store.sketchLines.find((item) => item.id === lineId) : null;
+  const style = line ?? store.draftSketchLineStyle;
+  const update = (patch: Parameters<typeof store.setDraftSketchLineStyle>[0]) => lineId ? store.updateSketchLine(lineId, patch) : store.setDraftSketchLineStyle(patch);
+  return <div className="space-y-2 rounded-lg border border-[var(--panel-divider)] p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Line style</p><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></div>;
+}
+
+function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
+  const store = useLayoutDrawingStore();
+  const count = slab.boundary?.length ?? 4;
+  const slopes = Array.from({ length: count }, (_, edgeIdx) => slab.edgeSlopes?.find((edge) => edge.edgeIdx === edgeIdx) ?? { edgeIdx, isSloped: true, pitchDeg: 30 });
+  const update = (edgeIdx: number, patch: Partial<(typeof slopes)[number]>) => void store.updateSlab(slab.id, { edgeSlopes: slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge) });
+  return <PropSection open onToggle={() => {}} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
 }

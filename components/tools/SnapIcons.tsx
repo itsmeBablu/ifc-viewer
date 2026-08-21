@@ -1,0 +1,15 @@
+type Props = { className?: string };
+const S = ({ className = "", children }: Props & { children: React.ReactNode }) => <svg viewBox="0 0 24 24" className={`h-4 w-4 ${className}`} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>;
+export const SnapEndpointIcon = (p: Props) => <S {...p}><path d="M4 18 18 4"/><rect x="2.5" y="16.5" width="3" height="3" fill="currentColor"/></S>;
+export const SnapMidpointIcon = (p: Props) => <S {...p}><path d="M3 18 21 6"/><path d="m12 10 3 4-5 1 2-5Z" fill="currentColor"/></S>;
+export const SnapCenterIcon = (p: Props) => <S {...p}><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2" fill="currentColor"/></S>;
+export const SnapNodeIcon = (p: Props) => <S {...p}><circle cx="12" cy="12" r="4"/><path d="M12 3v5m0 8v5M3 12h5m8 0h5"/></S>;
+export const SnapQuadrantIcon = (p: Props) => <S {...p}><circle cx="12" cy="12" r="7"/><rect x="10.5" y="3.5" width="3" height="3" fill="currentColor"/></S>;
+export const SnapIntersectionIcon = (p: Props) => <S {...p}><path d="M4 4 20 20M20 4 4 20"/><circle cx="12" cy="12" r="2" fill="currentColor"/></S>;
+export const SnapExtensionIcon = (p: Props) => <S {...p}><path d="M3 18 12 9"/><path strokeDasharray="2 2" d="m12 9 8-8"/><rect x="10.5" y="7.5" width="3" height="3"/></S>;
+export const SnapInsertionIcon = (p: Props) => <S {...p}><path d="M5 4h10l4 4v12H5zM15 4v4h4"/><path d="M9 13h6m-3-3v6"/></S>;
+export const SnapPerpendicularIcon = (p: Props) => <S {...p}><path d="M4 19 20 19M12 19V6"/><path d="M12 15h4v4"/></S>;
+export const SnapTangentIcon = (p: Props) => <S {...p}><circle cx="9" cy="14" r="5"/><path d="m12.5 10.5 7-7"/><circle cx="12.5" cy="10.5" r="1.5" fill="currentColor"/></S>;
+export const SnapNearestIcon = (p: Props) => <S {...p}><path d="M3 18 21 6"/><path d="m10 13 2-4 2 4-2 4-2-4Z" fill="currentColor"/></S>;
+export const SnapApparentIcon = (p: Props) => <S {...p}><path d="M3 6h7l4 12h7"/><path strokeDasharray="2 2" d="M3 18h7L14 6h7"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></S>;
+export const SnapParallelIcon = (p: Props) => <S {...p}><path d="M4 16 16 4M8 20 20 8"/><path d="m13 5 3-1-1 3m-4 12-3 1 1-3"/></S>;

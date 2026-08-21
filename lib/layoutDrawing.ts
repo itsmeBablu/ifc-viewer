@@ -26,6 +26,8 @@ export type LayoutWall = {
   id: string;
   projectId: string;
   levelId: string;
+  /** Optional upper level constraint; height is its elevation minus base level. */
+  topLevelId?: string;
   /** Plan X/Z in mm (Y-up scene: X → X, Y → Z). */
   startXmm: number;
   startYmm: number;
@@ -141,6 +143,12 @@ export type LayoutSketchLine = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
+  /** Drafting appearance. Boundary sketches override the display color to blue. */
+  color?: string;
+  thicknessPx?: number;
+  pattern?: "solid" | "dashed" | "dotted" | "dash-dot";
+  dashSizeMm?: number;
+  gapSizeMm?: number;
   createdAt: number;
 };
 
@@ -234,6 +242,7 @@ export function trimWallPair(
   wall1Patch: Partial<LayoutWall>;
   wall2Patch: Partial<LayoutWall>;
 } | null {
+  if (w1.curved || w2.curved) return null;
   const hit = lineLineIntersection(
     w1.startXmm,
     w1.startYmm,
@@ -246,19 +255,27 @@ export function trimWallPair(
   );
   if (!hit) return null;
 
-  // For w1: keep endpoint closer to clickPt1, move other endpoint to hit
-  const dStart1 = Math.hypot(clickPt1.xMm - w1.startXmm, clickPt1.yMm - w1.startYmm);
-  const dEnd1 = Math.hypot(clickPt1.xMm - w1.endXmm, clickPt1.yMm - w1.endYmm);
+  // Retain the side that was actually picked. Comparing distances to the two
+  // endpoints gives the wrong result when the intersection lies beyond a wall.
+  const pickedSide = (wall: LayoutWall, point: { xMm: number; yMm: number }) => {
+    const dx = wall.endXmm - wall.startXmm;
+    const dy = wall.endYmm - wall.startYmm;
+    const hitT = ((hit.x - wall.startXmm) * dx + (hit.y - wall.startYmm) * dy) /
+      Math.max(dx * dx + dy * dy, 1e-9);
+    const clickT = ((point.xMm - wall.startXmm) * dx + (point.yMm - wall.startYmm) * dy) /
+      Math.max(dx * dx + dy * dy, 1e-9);
+    return clickT <= hitT ? "start" : "end";
+  };
+  const side1 = pickedSide(w1, clickPt1);
   const wall1Patch: Partial<LayoutWall> =
-    dStart1 <= dEnd1
+    side1 === "start"
       ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
       : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
 
   // For w2: keep endpoint closer to clickPt2, move other endpoint to hit
-  const dStart2 = Math.hypot(clickPt2.xMm - w2.startXmm, clickPt2.yMm - w2.startYmm);
-  const dEnd2 = Math.hypot(clickPt2.xMm - w2.endXmm, clickPt2.yMm - w2.endYmm);
+  const side2 = pickedSide(w2, clickPt2);
   const wall2Patch: Partial<LayoutWall> =
-    dStart2 <= dEnd2
+    side2 === "start"
       ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
       : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
 
@@ -492,13 +509,29 @@ export type WallCenterlineMm = {
   endYmm: number;
 };
 
-const JOIN_EPS_MM = 80;
+const JOIN_EPS_MM = 160;
 
 export type PlanSnapType =
   | "endpoint"
   | "midpoint"
+  | "center"
+  | "node"
+  | "quadrant"
   | "intersection"
-  | "perpendicular";
+  | "apparent"
+  | "insertion"
+  | "perpendicular"
+  | "extension"
+  | "tangent"
+  | "nearest"
+  | "parallel";
+
+export type PlanSnapModes = Record<PlanSnapType, boolean>;
+export const DEFAULT_PLAN_SNAP_MODES: PlanSnapModes = {
+  endpoint: true, midpoint: true, center: true, node: false, quadrant: true,
+  intersection: true, apparent: true, insertion: true, perpendicular: true,
+  extension: true, tangent: true, nearest: true, parallel: true,
+};
 
 export type PlanSnapResult = {
   point: { xMm: number; yMm: number };
@@ -555,8 +588,11 @@ export function snapPlanPointToWalls(
   walls: LayoutWall[],
   levelId: string,
   toleranceMm = 140,
+  modes: PlanSnapModes = DEFAULT_PLAN_SNAP_MODES,
+  from?: { xMm: number; yMm: number } | null,
 ): PlanSnapResult {
-  const straight = walls.filter((w) => w.levelId === levelId && !w.curved);
+  const levelWalls = walls.filter((w) => w.levelId === levelId);
+  const straight = levelWalls.filter((w) => !w.curved);
   const candidates: Array<{
     point: { xMm: number; yMm: number };
     type: PlanSnapType;
@@ -583,9 +619,29 @@ export function snapPlanPointToWalls(
     }
   };
 
-  for (const wall of straight) {
-    add(wall.startXmm, wall.startYmm, "endpoint", 0, wall.id);
-    add(wall.endXmm, wall.endYmm, "endpoint", 0, wall.id);
+  for (const wall of levelWalls) {
+    if (modes.endpoint) {
+      add(wall.startXmm, wall.startYmm, "endpoint", 0, wall.id);
+      add(wall.endXmm, wall.endYmm, "endpoint", 0, wall.id);
+    }
+    if (modes.node) {
+      add(wall.startXmm, wall.startYmm, "node", 1, wall.id);
+      add(wall.endXmm, wall.endYmm, "node", 1, wall.id);
+    }
+    if (wall.curved && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcRadiusMm != null) {
+      const cx = wall.arcCenterXmm, cy = wall.arcCenterYmm, r = wall.arcRadiusMm;
+      if (modes.center) add(cx, cy, "center", 1, wall.id);
+      if (modes.quadrant) for (const [qx, qy] of [[cx+r,cy],[cx-r,cy],[cx,cy+r],[cx,cy-r]]) add(qx, qy, "quadrant", 2, wall.id);
+      const vx = point.xMm-cx, vy = point.yMm-cy, vl = Math.hypot(vx,vy) || 1;
+      if (modes.nearest) add(cx+vx/vl*r, cy+vy/vl*r, "nearest", 6, wall.id);
+      if (modes.tangent && from) {
+        const fx=from.xMm-cx, fy=from.yMm-cy, d=Math.hypot(fx,fy);
+        if (d>r) { const a=Math.atan2(fy,fx), off=Math.acos(r/d); for (const ta of [a+off,a-off]) add(cx+Math.cos(ta)*r,cy+Math.sin(ta)*r,"tangent",3,wall.id); }
+      }
+      continue;
+    }
+    const projected = distPointSeg(point.xMm, point.yMm, wall.startXmm, wall.startYmm, wall.endXmm, wall.endYmm);
+    if (modes.midpoint)
     add(
       (wall.startXmm + wall.endXmm) / 2,
       (wall.startYmm + wall.endYmm) / 2,
@@ -593,16 +649,34 @@ export function snapPlanPointToWalls(
       2,
       wall.id,
     );
-    const projected = distPointSeg(
-      point.xMm,
-      point.yMm,
-      wall.startXmm,
-      wall.startYmm,
-      wall.endXmm,
-      wall.endYmm,
+    // Layout walls are parametric objects; their centerline origin is their
+    // insertion/base point (openings and placed objects use the same concept).
+    if (modes.insertion) add(
+      (wall.startXmm + wall.endXmm) / 2,
+      (wall.startYmm + wall.endYmm) / 2,
+      "insertion",
+      3,
+      wall.id,
     );
-    if (projected.t > 0.01 && projected.t < 0.99) {
-      add(projected.x, projected.y, "perpendicular", 3, wall.id);
+    if (modes.nearest && projected.t > 0.01 && projected.t < 0.99) add(projected.x, projected.y, "nearest", 6, wall.id);
+    if (modes.perpendicular && from) {
+      const perp = distPointSeg(from.xMm, from.yMm, wall.startXmm, wall.startYmm, wall.endXmm, wall.endYmm);
+      if (perp.t > 0.01 && perp.t < 0.99) add(perp.x, perp.y, "perpendicular", 3, wall.id);
+    }
+    // AutoCAD-style extension snap: use the unbounded wall line outside its
+    // endpoints, while keeping the same finite aperture tolerance.
+    const dx = wall.endXmm - wall.startXmm;
+    const dy = wall.endYmm - wall.startYmm;
+    const len2 = dx * dx + dy * dy;
+    if (len2 > 1e-9) {
+      const t = ((point.xMm - wall.startXmm) * dx + (point.yMm - wall.startYmm) * dy) / len2;
+      if (modes.extension && (t < -0.01 || t > 1.01)) {
+        add(wall.startXmm + t * dx, wall.startYmm + t * dy, "extension", 4, wall.id);
+      }
+    }
+    if (modes.parallel && from) {
+      const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm-from.xMm, point.yMm-from.yMm);
+      for (const pa of [a,a+Math.PI]) add(from.xMm+Math.cos(pa)*len, from.yMm+Math.sin(pa)*len, "parallel", 5, wall.id);
     }
   }
 
@@ -637,13 +711,17 @@ export function snapPlanPointToWalls(
         b.endXmm,
         b.endYmm,
       );
-      if (onA.dist <= 1 && onB.dist <= 1) {
+      if (modes.intersection && onA.dist <= 1 && onB.dist <= 1) {
         add(hit.x, hit.y, "intersection", 1);
+      } else if (modes.apparent) {
+        add(hit.x, hit.y, "apparent", 4);
       }
     }
   }
 
-  candidates.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
+  // The aperture is proximity-led. Priority only breaks near-equal candidates;
+  // otherwise a distant endpoint makes the cursor feel sticky and imprecise.
+  candidates.sort((a, b) => a.distance - b.distance || a.priority - b.priority);
   const best = candidates[0];
   return best
     ? { point: best.point, type: best.type, wallId: best.wallId }
