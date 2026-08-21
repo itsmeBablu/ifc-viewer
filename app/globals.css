@@ -1003,6 +1003,11 @@ body.pdf-capturing .pdf-capture-hide {
     flex: 1 1 auto;
     gap: 6px;
     overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x !important;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     border-color: transparent;
     border-radius: 0;
@@ -1011,6 +1016,7 @@ body.pdf-capturing .pdf-capture-hide {
     box-shadow: none !important;
     backdrop-filter: none !important;
   }
+  .werkzeug-ipad-tool-ribbon::-webkit-scrollbar { display: none; }
   .werkzeug-ipad-action-ribbon {
     position: absolute;
     right: 4px;
