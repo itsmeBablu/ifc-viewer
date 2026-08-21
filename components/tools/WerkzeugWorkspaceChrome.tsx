@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
-  LuChevronDown, LuChevronLeft, LuChevronRight, LuChevronUp, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
-  LuLock, LuLockOpen, LuMaximize2, LuMoon, LuPalette, LuRedo2, LuSave, LuSun, LuUndo2, LuX,
+  LuChevronDown, LuChevronLeft, LuChevronRight, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuLock, LuLockOpen, LuMoon, LuPalette, LuRedo2, LuSave, LuSun, LuUndo2, LuX,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -36,12 +36,24 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
 ];
 
 const defaultFrame = (): Frame => {
-  if (typeof window === "undefined") return { x: 20, y: 88, width: 340, height: 360 };
+  if (typeof window === "undefined") return { x: 20, y: 88, width: 320, height: 280 };
   const tablet = window.innerWidth < 1100;
-  const width = Math.min(390, window.innerWidth - 24);
+  const width = Math.min(330, window.innerWidth - 16);
   return tablet
-    ? { x: Math.max(12, (window.innerWidth - width) / 2), y: Math.max(90, window.innerHeight - 350), width, height: 300 }
-    : { x: 20, y: 88, width: 340, height: 380 };
+    ? { x: Math.max(8, window.innerWidth - width - 8), y: 100, width, height: 248 }
+    : { x: 20, y: 88, width: 320, height: 300 };
+};
+
+const compactWallFrame = (current: Frame): Frame => {
+  if (typeof window === "undefined") return current;
+  const width = Math.min(320, window.innerWidth - 16);
+  return {
+    ...current,
+    x: Math.max(8, window.innerWidth - width - 8),
+    y: Math.max(76, Math.min(current.y, window.innerHeight - 228)),
+    width,
+    height: Math.min(248, window.innerHeight - 84),
+  };
 };
 
 export default function WerkzeugWorkspaceChrome({
@@ -54,7 +66,7 @@ export default function WerkzeugWorkspaceChrome({
   const fileRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [panelKey, setPanelKey] = useState<PanelKey | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed] = useState(false);
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
   const [renderOpen, setRenderOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -94,7 +106,10 @@ export default function WerkzeugWorkspaceChrome({
   const locked = Boolean(selectedRef && lockedKeys.includes(`${selectedRef.kind}:${selectedRef.id}`));
 
   useEffect(() => useLayoutDrawingStore.subscribe((state, previous) => {
-    if (state.selectedWallId !== previous.selectedWallId && state.selectedWallId) setPanelKey("wall");
+    if (state.selectedWallId !== previous.selectedWallId && state.selectedWallId) {
+      setPanelFrame(compactWallFrame);
+      setPanelKey("wall");
+    }
     else if (state.selectedDoorId !== previous.selectedDoorId && state.selectedDoorId) setPanelKey("door");
     else if (state.selectedWindowId !== previous.selectedWindowId && state.selectedWindowId) setPanelKey("window");
     else if (state.selectedSlabId !== previous.selectedSlabId && state.selectedSlabId) {
@@ -157,9 +172,9 @@ export default function WerkzeugWorkspaceChrome({
   const activate = (id: PanelKey) => {
     const store = useLayoutDrawingStore.getState();
     const opening = panelKey !== id || panelHidden;
+    if (opening && id === "wall") setPanelFrame(compactWallFrame);
     setPanelKey(opening ? id : null);
     window.dispatchEvent(new CustomEvent("werkzeug-level-highlight", { detail: opening && id === "levels" }));
-    setCollapsed(false);
     setPanelHidden(false);
     setPanelTab("properties");
     store.setArmedLayoutTool(id === "levels" || id === "materials" ? null : id);
@@ -187,8 +202,6 @@ export default function WerkzeugWorkspaceChrome({
     { label: "North", value: "north" }, { label: "South", value: "south" },
     { label: "East", value: "east" }, { label: "West", value: "west" },
   ];
-  const fitContent = () => updateFrame({ height: Math.min(window.innerHeight - frame.y - 12, Math.max(180, (contentRef.current?.scrollHeight ?? 260) + 54)) });
-
   return (
     <>
       <div data-dock={dockEdge} onPointerDown={dockToolbar} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70] touch-none">
@@ -218,20 +231,18 @@ export default function WerkzeugWorkspaceChrome({
 
       {panelKey && panelHidden && <button type="button" onClick={() => setPanelHidden(false)} className="werkzeug-ipad-panel-peek" style={{ left: frame.x + frame.width / 2 < window.innerWidth / 2 ? 6 : "auto", right: frame.x + frame.width / 2 >= window.innerWidth / 2 ? 6 : "auto", top: frame.y + frame.height / 2 < window.innerHeight / 2 ? 72 : "auto", bottom: frame.y + frame.height / 2 >= window.innerHeight / 2 ? 12 : "auto" }} aria-label={`Show ${panelKey} options`}>{frame.x < window.innerWidth / 2 ? <LuChevronRight /> : <LuChevronLeft />}</button>}
       {panelKey && !panelHidden && <div className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={{ left: frame.x, top: frame.y, width: frame.width, height: collapsed ? 48 : frame.height }}>
-        <GlassPanel variant="panel" zIndex={68} fill wrapperClassName="h-full overflow-hidden rounded-2xl">
+        <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
           <div className="flex h-full min-h-0 flex-col">
-            <div onPointerDown={beginDrag} className="flex h-12 shrink-0 touch-none cursor-move items-center justify-between border-b border-[var(--panel-divider)] px-3">
-              <span className="text-xs font-semibold capitalize text-[var(--text-strong)]">{panelKey} options</span>
+            <div onPointerDown={beginDrag} className="flex h-10 shrink-0 touch-none cursor-move items-center justify-between border-b border-[var(--panel-divider)] px-2.5">
+              <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{panelKey} options</span>
               <div className="flex items-center gap-1">
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
-                <button type="button" onClick={fitContent} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title="Fit to content"><LuMaximize2 /></button>
-                <button type="button" onClick={() => setCollapsed((value) => !value)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={collapsed ? "Expand" : "Collapse here"}>{collapsed ? <LuChevronDown /> : <LuChevronUp />}</button>
                 <button type="button" onClick={() => setPanelHidden(true)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title="Hide"><LuChevronRight /></button>
                 <button type="button" onClick={() => setPanelKey(null)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title="Close"><LuX /></button>
               </div>
             </div>
-            {!collapsed && panelKey !== "levels" && panelKey !== "materials" && <div className="flex shrink-0 border-b border-[var(--panel-divider)] px-1">{(["properties", "type", "materials"] as const).map((tab) => <button key={tab} onClick={() => setPanelTab(tab)} className={`min-h-8 flex-1 border-b-2 text-[10px] font-semibold capitalize ${panelTab === tab ? "border-yellow-400 text-[var(--text-strong)]" : "border-transparent text-[var(--text-muted)]"}`}>{tab === "type" && panelKey === "lines" ? "Drawing" : tab}</button>)}</div>}
-            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-1.5 thin-scroll">{panelKey === "levels" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelKey(null) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
+            {!collapsed && panelKey !== "levels" && panelKey !== "materials" && <div className="flex shrink-0 border-b border-[var(--panel-divider)] px-1">{(["properties", "type", "materials"] as const).map((tab) => <button key={tab} onClick={() => setPanelTab(tab)} className={`min-h-7 flex-1 border-b-2 text-[9px] font-semibold capitalize ${panelTab === tab ? "border-yellow-400 text-[var(--text-strong)]" : "border-transparent text-[var(--text-muted)]"}`}>{tab === "type" && panelKey === "lines" ? "Drawing" : tab}</button>)}</div>}
+            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{panelKey === "levels" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelKey(null) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
             {!collapsed && <>
               <button type="button" onPointerDown={(e) => beginResize(e, "n")} className="absolute inset-x-5 top-0 h-2 touch-none cursor-ns-resize" aria-label="Resize panel from top" />
               <button type="button" onPointerDown={(e) => beginResize(e, "s")} className="absolute inset-x-5 bottom-0 h-2 touch-none cursor-ns-resize" aria-label="Resize panel from bottom" />

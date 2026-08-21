@@ -1184,6 +1184,13 @@ body.pdf-capturing .pdf-capture-hide {
   .werkzeug-ipad-popup button:hover, .werkzeug-ipad-popup button.is-active { border-color: rgba(253,224,71,.9); background: linear-gradient(135deg, rgba(253,230,138,.95), rgba(253,224,71,.86), rgba(251,191,36,.76)); color: #451a03; box-shadow: inset 0 1px rgba(255,255,255,.68), 0 3px 10px rgba(251,191,36,.25); }
   .werkzeug-ipad-context input, .werkzeug-ipad-context select { min-height: 32px !important; height: 32px !important; font-size: 11px !important; }
   .werkzeug-ipad-context label, .werkzeug-ipad-context p, .werkzeug-ipad-context span { line-height: 1.25; }
+  .werkzeug-ipad-context-surface,
+  .werkzeug-ipad-context-surface .ios-glass {
+    background: color-mix(in srgb, var(--popover-bg) 94%, transparent) !important;
+    background-image: none !important;
+    box-shadow: 0 10px 28px rgba(0,0,0,.14), inset 0 1px rgba(255,255,255,.18) !important;
+    backdrop-filter: blur(18px) saturate(115%) !important;
+  }
   .werkzeug-ipad-levels { font-size: 11px; }
   .werkzeug-ipad-levels button { min-height: 36px; }
   .werkzeug-ipad-panel-peek { position: fixed; z-index: 69; top: 48%; right: 0; width: 28px; height: 58px; border: 1px solid var(--panel-divider); border-right: 0; border-radius: 14px 0 0 14px; background: var(--popover-bg); color: var(--text-strong); box-shadow: 0 8px 24px rgba(0,0,0,.16); backdrop-filter: blur(18px); }
