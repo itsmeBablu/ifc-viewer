@@ -87,6 +87,8 @@ import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
+  snapPlanPointToWalls,
+  snapWallEndpointMm,
   wallTranslated,
   wallWithFaceGapTo,
   type SelectedElementRef,
@@ -4202,10 +4204,20 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const wall = layout.walls.find((w) => w.id === wallDrag.wallId);
             if (wall) {
               if (wallDrag.mode === "endpoint" && wallDrag.end) {
+                const fixed = wallDrag.end === "start"
+                  ? { xMm: wall.endXmm, yMm: wall.endYmm }
+                  : { xMm: wall.startXmm, yMm: wall.startYmm };
+                const objectSnap = snapPlanPointToWalls(
+                  plan,
+                  layout.walls.filter((candidate) => candidate.id !== wall.id),
+                  wall.levelId,
+                );
+                const polarSnap = snapWallEndpointMm(fixed, plan);
+                const endpoint = objectSnap.type ? objectSnap.point : polarSnap.point;
                 const patch =
                   wallDrag.end === "start"
-                    ? { startXmm: plan.xMm, startYmm: plan.yMm }
-                    : { endXmm: plan.xMm, endYmm: plan.yMm };
+                    ? { startXmm: endpoint.xMm, startYmm: endpoint.yMm }
+                    : { endXmm: endpoint.xMm, endYmm: endpoint.yMm };
                 void layout.updateWall(wall.id, patch);
                 const sx = patch.startXmm ?? wall.startXmm;
                 const sy = patch.startYmm ?? wall.startYmm;
@@ -4213,7 +4225,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 const ey = patch.endYmm ?? wall.endYmm;
                 const len = Math.round(Math.hypot(ex - sx, ey - sy));
                 useToolMarkupStore.getState().setDragSnapHint({
-                  text: `${len} mm`,
+                  text: `${len} mm${objectSnap.type ? ` · ${objectSnap.type}` : polarSnap.snapped ? " · polar" : ""}`,
                   clientX: e.clientX,
                   clientY: e.clientY,
                 });

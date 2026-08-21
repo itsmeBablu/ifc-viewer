@@ -234,6 +234,7 @@ export function trimWallPair(
   wall1Patch: Partial<LayoutWall>;
   wall2Patch: Partial<LayoutWall>;
 } | null {
+  if (w1.curved || w2.curved) return null;
   const hit = lineLineIntersection(
     w1.startXmm,
     w1.startYmm,
@@ -246,19 +247,27 @@ export function trimWallPair(
   );
   if (!hit) return null;
 
-  // For w1: keep endpoint closer to clickPt1, move other endpoint to hit
-  const dStart1 = Math.hypot(clickPt1.xMm - w1.startXmm, clickPt1.yMm - w1.startYmm);
-  const dEnd1 = Math.hypot(clickPt1.xMm - w1.endXmm, clickPt1.yMm - w1.endYmm);
+  // Retain the side that was actually picked. Comparing distances to the two
+  // endpoints gives the wrong result when the intersection lies beyond a wall.
+  const pickedSide = (wall: LayoutWall, point: { xMm: number; yMm: number }) => {
+    const dx = wall.endXmm - wall.startXmm;
+    const dy = wall.endYmm - wall.startYmm;
+    const hitT = ((hit.x - wall.startXmm) * dx + (hit.y - wall.startYmm) * dy) /
+      Math.max(dx * dx + dy * dy, 1e-9);
+    const clickT = ((point.xMm - wall.startXmm) * dx + (point.yMm - wall.startYmm) * dy) /
+      Math.max(dx * dx + dy * dy, 1e-9);
+    return clickT <= hitT ? "start" : "end";
+  };
+  const side1 = pickedSide(w1, clickPt1);
   const wall1Patch: Partial<LayoutWall> =
-    dStart1 <= dEnd1
+    side1 === "start"
       ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
       : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
 
   // For w2: keep endpoint closer to clickPt2, move other endpoint to hit
-  const dStart2 = Math.hypot(clickPt2.xMm - w2.startXmm, clickPt2.yMm - w2.startYmm);
-  const dEnd2 = Math.hypot(clickPt2.xMm - w2.endXmm, clickPt2.yMm - w2.endYmm);
+  const side2 = pickedSide(w2, clickPt2);
   const wall2Patch: Partial<LayoutWall> =
-    dStart2 <= dEnd2
+    side2 === "start"
       ? { endXmm: Math.round(hit.x), endYmm: Math.round(hit.y) }
       : { startXmm: Math.round(hit.x), startYmm: Math.round(hit.y) };
 
@@ -498,7 +507,8 @@ export type PlanSnapType =
   | "endpoint"
   | "midpoint"
   | "intersection"
-  | "perpendicular";
+  | "perpendicular"
+  | "extension";
 
 export type PlanSnapResult = {
   point: { xMm: number; yMm: number };
@@ -604,6 +614,17 @@ export function snapPlanPointToWalls(
     if (projected.t > 0.01 && projected.t < 0.99) {
       add(projected.x, projected.y, "perpendicular", 3, wall.id);
     }
+    // AutoCAD-style extension snap: use the unbounded wall line outside its
+    // endpoints, while keeping the same finite aperture tolerance.
+    const dx = wall.endXmm - wall.startXmm;
+    const dy = wall.endYmm - wall.startYmm;
+    const len2 = dx * dx + dy * dy;
+    if (len2 > 1e-9) {
+      const t = ((point.xMm - wall.startXmm) * dx + (point.yMm - wall.startYmm) * dy) / len2;
+      if (t < -0.01 || t > 1.01) {
+        add(wall.startXmm + t * dx, wall.startYmm + t * dy, "extension", 4, wall.id);
+      }
+    }
   }
 
   for (let i = 0; i < straight.length; i++) {
@@ -643,7 +664,9 @@ export function snapPlanPointToWalls(
     }
   }
 
-  candidates.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
+  // The aperture is proximity-led. Priority only breaks near-equal candidates;
+  // otherwise a distant endpoint makes the cursor feel sticky and imprecise.
+  candidates.sort((a, b) => a.distance - b.distance || a.priority - b.priority);
   const best = candidates[0];
   return best
     ? { point: best.point, type: best.type, wallId: best.wallId }

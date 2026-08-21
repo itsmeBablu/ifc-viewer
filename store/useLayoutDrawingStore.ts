@@ -124,6 +124,8 @@ export type SlabDrawState = {
   /** First corner; null until first click. */
   start: { xMm: number; yMm: number } | null;
   cursor: { xMm: number; yMm: number } | null;
+  /** Existing slab whose footprint is being redrawn. */
+  replaceSlabId?: string;
 } | null;
 
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
@@ -342,6 +344,7 @@ type LayoutDrawingState = {
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
   beginSlabDraw: (kind: "floor" | "roof", levelId: string) => void;
+  beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
   addSlabCorner: (
     point: { xMm: number; yMm: number },
@@ -1064,6 +1067,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
     const prevFrom =
       draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    // Object snaps use the raw pointer. Polar/orthogonal tracking is a fallback,
+    // never a preprocessing step that can move the aperture away from geometry.
+    const directWallSnap = snapPlanPointToWalls(cursor, get().walls, draw.levelId);
     const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(
       snapped.point,
@@ -1073,11 +1079,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
-    const wallSnap = snapPlanPointToWalls(
-      underPoint,
-      get().walls,
-      draw.levelId,
-    );
+    const wallSnap = directWallSnap.type
+      ? directWallSnap
+      : snapPlanPointToWalls(underPoint, get().walls, draw.levelId);
     const point = wallSnap.point;
     const lengthMm = Math.hypot(point.xMm - last.xMm, point.yMm - last.yMm);
     set({
@@ -1112,6 +1116,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
     const prevFrom =
       draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
+    const directWallSnap = snapPlanPointToWalls(point, get().walls, draw.levelId);
     const snapped = snapWallEndpointMm(last, point, { prevFrom });
     const underSnap = snapPlanToUnderlayLines(
       snapped.point,
@@ -1121,11 +1126,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const underPoint = underSnap.snapped
       ? { xMm: underSnap.xMm, yMm: underSnap.yMm }
       : snapped.point;
-    const wallSnap = snapPlanPointToWalls(
-      underPoint,
-      get().walls,
-      draw.levelId,
-    );
+    const wallSnap = directWallSnap.type
+      ? directWallSnap
+      : snapPlanPointToWalls(underPoint, get().walls, draw.levelId);
     const end = wallSnap.point;
     const dx = end.xMm - last.xMm;
     const dy = end.yMm - last.yMm;
@@ -1216,6 +1219,24 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedUnderlayId: null,
     }),
 
+  beginSlabRedraw: (id) => {
+    if (get().lockedElementKeys.includes(`slab:${id}`)) return;
+    const slab = get().slabs.find((item) => item.id === id);
+    if (!slab) return;
+    set({
+      slabDraw: {
+        kind: slab.kind,
+        levelId: slab.levelId,
+        start: null,
+        cursor: null,
+        replaceSlabId: id,
+      },
+      slabBoundaryEdit: null,
+      armedLayoutTool: slab.kind,
+      selectedSlabId: id,
+    });
+  },
+
   updateSlabCursor: (cursor) => {
     const draw = get().slabDraw;
     if (!draw) return;
@@ -1302,7 +1323,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const thicknessMm = get().draftSlabThicknessMm;
     const elevationOffsetMm =
       draw.kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+    const replaced = draw.replaceSlabId
+      ? get().slabs.find((item) => item.id === draw.replaceSlabId)
+      : null;
     const slab: LayoutSlab = {
+      ...(replaced ?? {} as LayoutSlab),
       id: newLayoutId(draw.kind === "roof" ? "roof" : "floor"),
       projectId,
       levelId: draw.levelId,
@@ -1315,11 +1340,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       elevationOffsetMm,
       createdAt: Date.now(),
     };
+    if (replaced) {
+      slab.id = replaced.id;
+      slab.projectId = replaced.projectId;
+      slab.thicknessMm = replaced.thicknessMm;
+      slab.elevationOffsetMm = replaced.elevationOffsetMm;
+      slab.createdAt = replaced.createdAt;
+      slab.boundary = undefined;
+      slab.autoBoundaryFromWalls = false;
+    }
     pushWerkzeugHistory();
     await idbPutSlab(slab);
     set({
-      slabs: [...get().slabs, slab],
-      slabDraw: { ...draw, start: null, cursor: pt },
+      slabs: replaced
+        ? get().slabs.map((item) => item.id === slab.id ? slab : item)
+        : [...get().slabs, slab],
+      slabDraw: replaced ? null : { ...draw, start: null, cursor: pt },
+      armedLayoutTool: replaced ? null : get().armedLayoutTool,
       selectedSlabId: slab.id,
       selectedWallId: null,
       selectedDoorId: null,
@@ -1686,19 +1723,29 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const res = trimWallPair(w1, pt1, w2, pt2);
     if (!res) return false;
 
-    pushWerkzeugHistory();
     const updated1 = { ...w1, ...res.wall1Patch };
     const updated2 = { ...w2, ...res.wall2Patch };
 
+    if (
+      Math.hypot(updated1.endXmm - updated1.startXmm, updated1.endYmm - updated1.startYmm) < 50 ||
+      Math.hypot(updated2.endXmm - updated2.startXmm, updated2.endYmm - updated2.startYmm) < 50
+    ) return false;
+
+    pushWerkzeugHistory();
+    const nextWalls = get().walls.map((w) =>
+      w.id === w1Id ? updated1 : w.id === w2Id ? updated2 : w,
+    );
+    const nextSlabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
+
     set({
-      walls: get().walls.map((w) =>
-        w.id === w1Id ? updated1 : w.id === w2Id ? updated2 : w,
-      ),
+      walls: nextWalls,
+      slabs: nextSlabs,
       trimFirstPick: null,
       lastMutatedAt: Date.now(),
     });
     await idbPutWall(updated1);
     await idbPutWall(updated2);
+    await Promise.all(nextSlabs.filter((slab) => slab.autoBoundaryFromWalls).map(idbPutSlab));
     return true;
   },
 
