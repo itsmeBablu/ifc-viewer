@@ -70,7 +70,7 @@ export default function WerkzeugWorkspaceChrome({
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
   const [renderOpen, setRenderOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
-  const [dockEdge, setDockEdge] = useState<DockEdge>("top");
+  const [dockEdge] = useState<DockEdge>("top");
   const [panelHidden, setPanelHidden] = useState(false);
   const [panelTab, setPanelTab] = useState<"properties" | "type" | "materials">("properties");
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -186,17 +186,6 @@ export default function WerkzeugWorkspaceChrome({
     const blob = await buildFragBlob({ modelKey: key, modelLabel: activeModelLabel, placements: markup.placements, notes: markup.notes, ifcBytes: getCachedIfcBytes(key) });
     downloadBlob(blob, `${activeModelLabel || "vstudio-model"}.frag`);
   };
-  const dockToolbar = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest("button,input")) return;
-    const start = { x: event.clientX, y: event.clientY };
-    const up = (next: PointerEvent) => {
-      window.removeEventListener("pointerup", up);
-      const y = next.clientY;
-      const distances: Array<[DockEdge, number]> = [["top", y], ["bottom", window.innerHeight - y]];
-      if (Math.hypot(next.clientX - start.x, next.clientY - start.y) > 16) setDockEdge(distances.sort((a, b) => a[1] - b[1])[0][0]);
-    };
-    window.addEventListener("pointerup", up);
-  };
   const viewItems: Array<{ label: string; value: MarkupViewPreset }> = [
     { label: "3D", value: "free" }, { label: "2D / Top", value: "top" },
     { label: "North", value: "north" }, { label: "South", value: "south" },
@@ -204,7 +193,7 @@ export default function WerkzeugWorkspaceChrome({
   ];
   return (
     <>
-      <div data-dock={dockEdge} onPointerDown={dockToolbar} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70] touch-none">
+      <div data-dock={dockEdge} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
         <div className="werkzeug-ipad-tool-ribbon">
           {TOOL_ITEMS.map((item) => {
