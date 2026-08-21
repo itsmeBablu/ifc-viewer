@@ -995,7 +995,6 @@ body.pdf-capturing .pdf-capture-hide {
     border-radius: 16px;
     padding: 5px;
     background: color-mix(in srgb, var(--popover-bg) 38%, transparent);
-    box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.26);
     backdrop-filter: blur(16px) saturate(150%);
   }
   .werkzeug-ipad-tool-ribbon {
