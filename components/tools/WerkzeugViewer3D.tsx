@@ -2430,10 +2430,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (s.wallDraw) {
         const lvl =
           s.levels.find((l) => l.id === s.wallDraw!.levelId) ?? activeLevel;
+        const top = s.levels.find((l) => l.id === s.draftWallTopLevelId);
+        const previewHeightMm = top && lvl && top.elevationMm > lvl.elevationMm
+          ? top.elevationMm - lvl.elevationMm
+          : s.draftWallHeightMm;
         layer.setWallPreview(
           s.wallDraw.points,
           s.wallDraw.cursor,
           lvl?.elevationMm ?? 0,
+          s.wallDraw.snapType ?? null,
+          s.draftWallThicknessMm,
+          previewHeightMm,
         );
       } else {
         layer.setWallPreview([], null, 0);
@@ -2464,6 +2471,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         s.levels || [],
         s.selectedSketchLineId,
         activeLevel?.elevationMm ?? 0,
+        s.sketchTargetKind,
       );
       if (
         s.armedLayoutTool !== "column" &&
@@ -4211,6 +4219,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   plan,
                   layout.walls.filter((candidate) => candidate.id !== wall.id),
                   wall.levelId,
+                  140,
+                  layout.planSnapModes,
+                  fixed,
                 );
                 const polarSnap = snapWallEndpointMm(fixed, plan);
                 const endpoint = objectSnap.type ? objectSnap.point : polarSnap.point;

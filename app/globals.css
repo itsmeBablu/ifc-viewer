@@ -784,6 +784,39 @@ body.pdf-capturing .pdf-capture-hide {
 .tool-chrome {
   color: var(--text-body);
 }
+
+/* V-Studio (/werkzeug) icon language. Custom icons use separate solid colours
+   per component, matching the existing Heating/Cooling SVG construction. */
+.tool-chrome svg {
+  filter: drop-shadow(0 1px 1px rgb(15 23 42 / 0.18));
+  transition: filter 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+.tool-chrome button:hover svg {
+  filter: drop-shadow(0 2px 3px rgb(59 130 246 / 0.3));
+  transform: translateY(-0.5px) scale(1.06);
+}
+.tool-chrome .vstudio-multicolor-icon {
+  color: #263548;
+  stroke-width: 1.45;
+}
+.tool-chrome .vstudio-multicolor-icon .v3-top {
+  fill: #dce5ef;
+  stroke: #263548;
+}
+.tool-chrome .vstudio-multicolor-icon .v3-face {
+  fill: #9aabba;
+  stroke: #263548;
+}
+.tool-chrome .vstudio-multicolor-icon .v3-accent {
+  fill: #71a7d8;
+  stroke: #263548;
+}
+[data-theme="dark"] .tool-chrome .vstudio-multicolor-icon {
+  color: #d6e0ea;
+}
+[data-theme="dark"] .tool-chrome .vstudio-multicolor-icon .v3-top { fill: #526579; stroke: #d6e0ea; }
+[data-theme="dark"] .tool-chrome .vstudio-multicolor-icon .v3-face { fill: #34475b; stroke: #d6e0ea; }
+[data-theme="dark"] .tool-chrome .vstudio-multicolor-icon .v3-accent { fill: #4f8fc7; stroke: #d6e0ea; }
 .tool-chrome .thin-scroll {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
@@ -848,6 +881,77 @@ body.pdf-capturing .pdf-capture-hide {
   font-weight: 600;
 }
 
+.werkzeug-snap-dropdown { position: relative; }
+.werkzeug-snap-trigger {
+  display: inline-flex;
+  height: 30px;
+  min-width: 112px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--panel-divider) 78%, transparent);
+  border-radius: 999px;
+  padding: 0 9px;
+  background: color-mix(in srgb, var(--popover-bg) 76%, transparent);
+  color: var(--text-strong);
+  font-size: 10px;
+  font-weight: 700;
+}
+.werkzeug-snap-trigger.is-open { border-color: rgba(253,224,71,.88); }
+.werkzeug-snap-count {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(253,224,71,.22);
+  color: #eab308;
+  font-size: 9px;
+}
+.werkzeug-snap-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 120;
+  width: min(390px, calc(100vw - 20px));
+  transform: translateX(-50%);
+  border: 1px solid var(--panel-divider);
+  border-radius: 15px;
+  padding: 7px;
+  background: color-mix(in srgb, var(--popover-bg) 94%, transparent);
+  box-shadow: 0 18px 44px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.25);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+.werkzeug-snap-menu-heading { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 7px; color: var(--text-muted); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.werkzeug-snap-menu-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.werkzeug-snap-pill {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--panel-divider) 78%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  background: color-mix(in srgb, var(--popover-bg) 72%, transparent);
+  color: var(--text-body);
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: inset 0 1px rgba(255,255,255,.28);
+}
+.werkzeug-snap-pill.is-active {
+  border-color: rgba(253,224,71,.88);
+  background: color-mix(in srgb, rgb(253 224 71) 20%, var(--popover-bg));
+  color: var(--text-strong);
+}
+.werkzeug-snap-icon { width: 14px; height: 14px; flex: 0 0 14px; }
+.werkzeug-snap-check { width: 11px; height: 11px; margin-left: auto; opacity: 0; }
+.werkzeug-snap-pill.is-active .werkzeug-snap-check { opacity: 1; color: #eab308; }
+.werkzeug-ipad-snap-ribbon { display: none; }
+
 @media (max-width: 900px) {
   .werkzeug-unified-toolbar {
     right: 0.5rem;
@@ -875,8 +979,10 @@ body.pdf-capturing .pdf-capture-hide {
     max-width: calc(100vw - 16px);
     transition: inset .28s cubic-bezier(.16,1,.3,1), transform .28s cubic-bezier(.16,1,.3,1);
   }
-  .werkzeug-ipad-ribbons[data-dock="top"] { inset: 8px auto auto 50%; transform: translateX(-50%); }
+  .werkzeug-ipad-ribbons[data-dock="top"] { inset: 54px auto auto 50%; transform: translateX(-50%); }
   .werkzeug-ipad-ribbons[data-dock="bottom"] { inset: auto auto 8px 50%; transform: translateX(-50%); }
+  .werkzeug-ipad-ribbons[data-dock="top"],
+  .werkzeug-ipad-ribbons[data-dock="bottom"] { width: calc(100vw - 16px); }
   .werkzeug-ipad-ribbons[data-dock="left"] { inset: 50% auto auto 8px; transform: translateY(-50%); flex-direction: column; max-height: calc(100vh - 16px); }
   .werkzeug-ipad-ribbons[data-dock="right"] { inset: 50% 8px auto auto; transform: translateY(-50%); flex-direction: column; max-height: calc(100vh - 16px); }
   .werkzeug-ipad-tool-ribbon,
@@ -893,7 +999,11 @@ body.pdf-capturing .pdf-capture-hide {
     backdrop-filter: blur(16px) saturate(150%);
   }
   .werkzeug-ipad-tool-ribbon {
+    min-width: 0;
+    flex: 1 1 auto;
     gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
     border-color: transparent;
     border-radius: 0;
     padding: 0;
@@ -901,7 +1011,57 @@ body.pdf-capturing .pdf-capture-hide {
     box-shadow: none !important;
     backdrop-filter: none !important;
   }
-  .werkzeug-ipad-action-ribbon { margin-left: auto; padding-block: 2px; }
+  .werkzeug-ipad-action-ribbon {
+    position: absolute;
+    right: 4px;
+    bottom: calc(100% + 6px);
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-action-ribbon { top: calc(100% + 6px); bottom: auto; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action,
+  .werkzeug-ipad-action-ribbon .werkzeug-theme-knob,
+  .werkzeug-ipad-action-ribbon > .relative > button {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none;
+  }
+  .werkzeug-ipad-snap-ribbon {
+    display: flex;
+    min-width: 0;
+    max-width: min(42vw, 34rem);
+    align-items: center;
+    border: 1px solid color-mix(in srgb, var(--panel-divider) 72%, transparent);
+    border-radius: 16px;
+    padding: 5px;
+    background: color-mix(in srgb, var(--popover-bg) 42%, transparent);
+    box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.26);
+    backdrop-filter: blur(16px) saturate(150%);
+  }
+  .werkzeug-ipad-snap-ribbon .werkzeug-snap-trigger { height: 32px; min-width: 104px; }
+  .werkzeug-ipad-snap-ribbon .werkzeug-snap-menu {
+    max-height: min(62dvh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-snap-menu { top: auto; bottom: calc(100% + 8px); }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action > span { display: inline; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action,
+  .werkzeug-ipad-action-ribbon > .relative > button {
+    width: auto;
+    min-width: 68px;
+    padding-inline: 10px;
+  }
+  .werkzeug-ipad-action-ribbon > .relative:first-child > button span { display: none; }
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-action-ribbon,
@@ -926,7 +1086,8 @@ body.pdf-capturing .pdf-capture-hide {
   .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button,
   .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button {
     width: auto;
-    min-width: 0;
+    min-width: max-content;
+    flex: 0 0 auto;
     min-height: 29px;
     height: 29px;
     padding: 2px 7px;
@@ -957,6 +1118,36 @@ body.pdf-capturing .pdf-capture-hide {
   .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-action-ribbon {
     min-height: 38px;
     padding: 1px 3px;
+    top: auto;
+    right: 0;
+    bottom: calc(100% + 6px);
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-ipad-tool-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-tool-ribbon {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+  .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-ipad-snap-ribbon,
+  .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-snap-ribbon {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    max-width: none;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
   }
   .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-ipad-action-ribbon button,
   .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-action-ribbon button {
@@ -1007,8 +1198,15 @@ body.pdf-capturing .pdf-capture-hide {
   .werkzeug-ipad-tool-ribbon::-webkit-scrollbar { display: none; }
   .werkzeug-ipad-action-ribbon { flex: 0 0 auto; }
   .werkzeug-ipad-tool-ribbon .werkzeug-tool-label { display: inline; }
-  .werkzeug-ipad-tool-ribbon .werkzeug-tool-button { width: auto; min-width: 58px; padding-inline: 7px; scroll-snap-align: start; }
-  .werkzeug-ipad-action-ribbon .werkzeug-icon-action { width: 44px; min-width: 44px; padding-inline: 0; }
+  .werkzeug-ipad-tool-ribbon .werkzeug-tool-button { width: auto; min-width: max-content; flex: 0 0 auto; padding-inline: 10px; scroll-snap-align: start; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action { width: auto; min-width: 68px; padding-inline: 10px; }
+  .werkzeug-ipad-tool-ribbon { max-width: none; }
+  .werkzeug-ipad-snap-ribbon { flex: 1 1 auto; max-width: none; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action { width: auto; min-width: 68px; }
+  .werkzeug-snap-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .werkzeug-ipad-snap-ribbon { flex: 0 0 auto; }
+  .werkzeug-ipad-snap-ribbon .werkzeug-snap-trigger { min-width: 98px; }
+  .werkzeug-ipad-snap-ribbon .werkzeug-snap-menu { max-height: min(58dvh, 320px); }
 }
 
 /* V-Yellow: exact original Load IFC button treatment. */

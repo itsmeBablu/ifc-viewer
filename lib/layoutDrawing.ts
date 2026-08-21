@@ -26,6 +26,8 @@ export type LayoutWall = {
   id: string;
   projectId: string;
   levelId: string;
+  /** Optional upper level constraint; height is its elevation minus base level. */
+  topLevelId?: string;
   /** Plan X/Z in mm (Y-up scene: X → X, Y → Z). */
   startXmm: number;
   startYmm: number;
@@ -141,6 +143,12 @@ export type LayoutSketchLine = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
+  /** Drafting appearance. Boundary sketches override the display color to blue. */
+  color?: string;
+  thicknessPx?: number;
+  pattern?: "solid" | "dashed" | "dotted" | "dash-dot";
+  dashSizeMm?: number;
+  gapSizeMm?: number;
   createdAt: number;
 };
 
@@ -501,14 +509,29 @@ export type WallCenterlineMm = {
   endYmm: number;
 };
 
-const JOIN_EPS_MM = 80;
+const JOIN_EPS_MM = 160;
 
 export type PlanSnapType =
   | "endpoint"
   | "midpoint"
+  | "center"
+  | "node"
+  | "quadrant"
   | "intersection"
+  | "apparent"
+  | "insertion"
   | "perpendicular"
-  | "extension";
+  | "extension"
+  | "tangent"
+  | "nearest"
+  | "parallel";
+
+export type PlanSnapModes = Record<PlanSnapType, boolean>;
+export const DEFAULT_PLAN_SNAP_MODES: PlanSnapModes = {
+  endpoint: true, midpoint: true, center: true, node: false, quadrant: true,
+  intersection: true, apparent: true, insertion: true, perpendicular: true,
+  extension: true, tangent: true, nearest: true, parallel: true,
+};
 
 export type PlanSnapResult = {
   point: { xMm: number; yMm: number };
@@ -565,8 +588,11 @@ export function snapPlanPointToWalls(
   walls: LayoutWall[],
   levelId: string,
   toleranceMm = 140,
+  modes: PlanSnapModes = DEFAULT_PLAN_SNAP_MODES,
+  from?: { xMm: number; yMm: number } | null,
 ): PlanSnapResult {
-  const straight = walls.filter((w) => w.levelId === levelId && !w.curved);
+  const levelWalls = walls.filter((w) => w.levelId === levelId);
+  const straight = levelWalls.filter((w) => !w.curved);
   const candidates: Array<{
     point: { xMm: number; yMm: number };
     type: PlanSnapType;
@@ -593,9 +619,29 @@ export function snapPlanPointToWalls(
     }
   };
 
-  for (const wall of straight) {
-    add(wall.startXmm, wall.startYmm, "endpoint", 0, wall.id);
-    add(wall.endXmm, wall.endYmm, "endpoint", 0, wall.id);
+  for (const wall of levelWalls) {
+    if (modes.endpoint) {
+      add(wall.startXmm, wall.startYmm, "endpoint", 0, wall.id);
+      add(wall.endXmm, wall.endYmm, "endpoint", 0, wall.id);
+    }
+    if (modes.node) {
+      add(wall.startXmm, wall.startYmm, "node", 1, wall.id);
+      add(wall.endXmm, wall.endYmm, "node", 1, wall.id);
+    }
+    if (wall.curved && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcRadiusMm != null) {
+      const cx = wall.arcCenterXmm, cy = wall.arcCenterYmm, r = wall.arcRadiusMm;
+      if (modes.center) add(cx, cy, "center", 1, wall.id);
+      if (modes.quadrant) for (const [qx, qy] of [[cx+r,cy],[cx-r,cy],[cx,cy+r],[cx,cy-r]]) add(qx, qy, "quadrant", 2, wall.id);
+      const vx = point.xMm-cx, vy = point.yMm-cy, vl = Math.hypot(vx,vy) || 1;
+      if (modes.nearest) add(cx+vx/vl*r, cy+vy/vl*r, "nearest", 6, wall.id);
+      if (modes.tangent && from) {
+        const fx=from.xMm-cx, fy=from.yMm-cy, d=Math.hypot(fx,fy);
+        if (d>r) { const a=Math.atan2(fy,fx), off=Math.acos(r/d); for (const ta of [a+off,a-off]) add(cx+Math.cos(ta)*r,cy+Math.sin(ta)*r,"tangent",3,wall.id); }
+      }
+      continue;
+    }
+    const projected = distPointSeg(point.xMm, point.yMm, wall.startXmm, wall.startYmm, wall.endXmm, wall.endYmm);
+    if (modes.midpoint)
     add(
       (wall.startXmm + wall.endXmm) / 2,
       (wall.startYmm + wall.endYmm) / 2,
@@ -603,16 +649,19 @@ export function snapPlanPointToWalls(
       2,
       wall.id,
     );
-    const projected = distPointSeg(
-      point.xMm,
-      point.yMm,
-      wall.startXmm,
-      wall.startYmm,
-      wall.endXmm,
-      wall.endYmm,
+    // Layout walls are parametric objects; their centerline origin is their
+    // insertion/base point (openings and placed objects use the same concept).
+    if (modes.insertion) add(
+      (wall.startXmm + wall.endXmm) / 2,
+      (wall.startYmm + wall.endYmm) / 2,
+      "insertion",
+      3,
+      wall.id,
     );
-    if (projected.t > 0.01 && projected.t < 0.99) {
-      add(projected.x, projected.y, "perpendicular", 3, wall.id);
+    if (modes.nearest && projected.t > 0.01 && projected.t < 0.99) add(projected.x, projected.y, "nearest", 6, wall.id);
+    if (modes.perpendicular && from) {
+      const perp = distPointSeg(from.xMm, from.yMm, wall.startXmm, wall.startYmm, wall.endXmm, wall.endYmm);
+      if (perp.t > 0.01 && perp.t < 0.99) add(perp.x, perp.y, "perpendicular", 3, wall.id);
     }
     // AutoCAD-style extension snap: use the unbounded wall line outside its
     // endpoints, while keeping the same finite aperture tolerance.
@@ -621,9 +670,13 @@ export function snapPlanPointToWalls(
     const len2 = dx * dx + dy * dy;
     if (len2 > 1e-9) {
       const t = ((point.xMm - wall.startXmm) * dx + (point.yMm - wall.startYmm) * dy) / len2;
-      if (t < -0.01 || t > 1.01) {
+      if (modes.extension && (t < -0.01 || t > 1.01)) {
         add(wall.startXmm + t * dx, wall.startYmm + t * dy, "extension", 4, wall.id);
       }
+    }
+    if (modes.parallel && from) {
+      const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm-from.xMm, point.yMm-from.yMm);
+      for (const pa of [a,a+Math.PI]) add(from.xMm+Math.cos(pa)*len, from.yMm+Math.sin(pa)*len, "parallel", 5, wall.id);
     }
   }
 
@@ -658,8 +711,10 @@ export function snapPlanPointToWalls(
         b.endXmm,
         b.endYmm,
       );
-      if (onA.dist <= 1 && onB.dist <= 1) {
+      if (modes.intersection && onA.dist <= 1 && onB.dist <= 1) {
         add(hit.x, hit.y, "intersection", 1);
+      } else if (modes.apparent) {
+        add(hit.x, hit.y, "apparent", 4);
       }
     }
   }

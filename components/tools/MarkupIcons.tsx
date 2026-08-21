@@ -22,7 +22,7 @@ function Svg({
   return (
     <svg
       viewBox="0 0 24 24"
-      className={`h-4 w-4 ${className}`}
+      className={`vstudio-multicolor-icon h-4 w-4 ${className}`}
       aria-hidden
       {...stroke}
     >
@@ -98,8 +98,8 @@ export function IconMarkupPyramid({ className }: IconProps) {
 export function IconMarkupNote({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M7 4h8l4 4v12H7V4Z" />
-      <path d="M15 4v4h4M9 12h6M9 16h4" />
+      <path className="v3-face" d="m6 6 9-2 3 3v12l-9 2-3-3V6Z" />
+      <path className="v3-accent" d="m15 4v4l3-1M9 11l6-1M9 15l5-1" />
     </Svg>
   );
 }
@@ -107,8 +107,10 @@ export function IconMarkupNote({ className }: IconProps) {
 export function IconMarkupWall({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M4 8h16v10H4z" />
-      <path d="M4 12h16M10 8v10M16 8v10" />
+      <path className="v3-top" d="m3.5 8 13-4 4 2.5-13 4L3.5 8Z" />
+      <path className="v3-face" d="m3.5 8 4 2.5v9l-4-2.5V8Z" />
+      <path className="v3-accent" d="m7.5 10.5 13-4v9l-13 4v-9Z" />
+      <path d="m11.8 9.2v9m4.3-10.3v9M7.5 14.8l13-4" />
     </Svg>
   );
 }
@@ -116,8 +118,10 @@ export function IconMarkupWall({ className }: IconProps) {
 export function IconMarkupDoor({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M7 4h10v16H7z" />
-      <path d="M14 12h1.5" />
+      <path className="v3-top" d="m6 6 9-3 3 2-9 3-3-2Z" />
+      <path className="v3-face" d="m6 6 3 2v13l-3-2V6Z" />
+      <path className="v3-accent" d="m9 8 9-3v13l-9 3V8Z" />
+      <circle cx="15.2" cy="12.8" r=".7" fill="currentColor" />
     </Svg>
   );
 }
@@ -125,8 +129,10 @@ export function IconMarkupDoor({ className }: IconProps) {
 export function IconMarkupWindow({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M5 6h14v12H5z" />
-      <path d="M12 6v12M5 12h14" />
+      <path className="v3-top" d="m4 8 13-4 3 2-13 4-3-2Z" />
+      <path className="v3-face" d="m4 8 3 2v10l-3-2V8Z" />
+      <path className="v3-accent" d="m7 10 13-4v10L7 20V10Z" />
+      <path d="m13.5 8v10M7 15l13-4" />
     </Svg>
   );
 }
@@ -134,9 +140,10 @@ export function IconMarkupWindow({ className }: IconProps) {
 export function IconMarkupFloor({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M4 16h16v3H4z" />
-      <path d="M6 10h12v6H6z" />
-      <path d="M8 7h8v3H8z" />
+      <path className="v3-top" d="m3 11 13-5 5 3-13 5-5-3Z" />
+      <path className="v3-face" d="m3 11 5 3v5l-5-3v-5Z" />
+      <path className="v3-accent" d="m8 14 13-5v5L8 19v-5Z" />
+      <path d="m8 16.5 13-5" />
     </Svg>
   );
 }
@@ -144,8 +151,9 @@ export function IconMarkupFloor({ className }: IconProps) {
 export function IconMarkupRoof({ className }: IconProps) {
   return (
     <Svg className={className}>
-      <path d="M4 14 12 6l8 8" />
-      <path d="M6 14h12v5H6z" />
+      <path className="v3-top" d="m3 13 9-8 9 5-9 8-9-5Z" />
+      <path className="v3-accent" d="m12 5 9 5-4 4-9-5 4-4Z" />
+      <path className="v3-face" d="m3 13 9 5 9-8v4l-9 8-9-5v-4Z" />
     </Svg>
   );
 }

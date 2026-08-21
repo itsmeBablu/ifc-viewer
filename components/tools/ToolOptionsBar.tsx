@@ -17,6 +17,13 @@ export default function ToolOptionsBar() {
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
   const draftWallThicknessMm = useLayoutDrawingStore((s) => s.draftWallThicknessMm);
   const setDraftWallThicknessMm = useLayoutDrawingStore((s) => s.setDraftWallThicknessMm);
+  const levels = useLayoutDrawingStore((s) => s.levels);
+  const draftWallTopLevelId = useLayoutDrawingStore((s) => s.draftWallTopLevelId);
+  const draftWallBaseLevelId = useLayoutDrawingStore((s) => s.draftWallBaseLevelId);
+  const setDraftWallBaseLevelId = useLayoutDrawingStore((s) => s.setDraftWallBaseLevelId);
+  const setDraftWallTopLevelId = useLayoutDrawingStore((s) => s.setDraftWallTopLevelId);
+  const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
+  const setMarkupFloorId = useToolMarkupStore((s) => s.setMarkupFloorId);
   const draftDoorWidthMm = useLayoutDrawingStore((s) => s.draftDoorWidthMm);
   const draftDoorHeightMm = useLayoutDrawingStore((s) => s.draftDoorHeightMm);
   const setDraftDoorSize = useLayoutDrawingStore((s) => s.setDraftDoorSize);
@@ -54,7 +61,7 @@ export default function ToolOptionsBar() {
   );
 
   return (
-    <div className="flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
+    <div className="relative flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
       {/* Active Tool Options */}
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
         {/* WALL TOOL OPTIONS */}
@@ -90,6 +97,38 @@ export default function ToolOptionsBar() {
             </div>
 
             <div className="h-4 w-px bg-[var(--panel-divider)]" />
+
+            <label className="flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
+              Base:
+              <select
+                value={draftWallBaseLevelId ?? markupFloorId ?? levels[0]?.id ?? ""}
+                onChange={(e) => {
+                  const baseId = e.target.value;
+                  setMarkupFloorId(baseId);
+                  setDraftWallBaseLevelId(baseId);
+                  const base = levels.find((level) => level.id === baseId);
+                  const next = levels.filter((level) => level.elevationMm > (base?.elevationMm ?? 0)).sort((a, b) => a.elevationMm - b.elevationMm)[0];
+                  setDraftWallTopLevelId(next?.id ?? null);
+                }}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] text-[var(--text-strong)]"
+              >
+                {levels.slice().sort((a, b) => a.elevationMm - b.elevationMm).map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-[11px] text-[var(--text-muted)]">
+              Top:
+              <select
+                value={draftWallTopLevelId ?? ""}
+                onChange={(e) => setDraftWallTopLevelId(e.target.value || null)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] text-[var(--text-strong)]"
+              >
+                <option value="">Unconnected</option>
+                {levels
+                  .filter((level) => level.elevationMm > (levels.find((item) => item.id === (draftWallBaseLevelId ?? markupFloorId))?.elevationMm ?? -Infinity))
+                  .sort((a, b) => a.elevationMm - b.elevationMm)
+                  .map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+              </select>
+            </label>
 
             <button
               type="button"

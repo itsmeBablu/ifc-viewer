@@ -128,53 +128,51 @@ export default function WelcomeScreen({ onContinue }: Props) {
 
   const mobileFields = (
     <div className={layout.fieldsClass}>
-      <label className="shrink-0">
-        <span className={layout.labelClass}>{t(uiLanguage, "welcomeNameLabel")}</span>
-        <input
-          type="text"
-          value={userName}
-          onChange={(e) => setUserName(e.target.value)}
-          placeholder={t(uiLanguage, "welcomeNamePlaceholder")}
-          autoComplete="name"
-          className={layout.inputClass}
-        />
-      </label>
+      <section className="welcome-preference-sheet">
+        <label className="welcome-modern-name">
+          <span className="welcome-modern-kicker">{t(uiLanguage, "welcomeNameLabel")}</span>
+          <input
+            type="text"
+            value={userName}
+            onChange={(e) => setUserName(e.target.value)}
+            placeholder={t(uiLanguage, "welcomeNamePlaceholder")}
+            autoComplete="name"
+            className="welcome-modern-input"
+          />
+        </label>
 
-      <div className={layout.cardClass}>
-        <p className={layout.bodyTextClass}>{t(uiLanguage, "language")}</p>
-        <div className={layout.isMobileLandscape ? "welcome-mobile-lang-inner mt-1" : "mt-2"}>
-          <LanguageSelect wide compact={layout.languageCompact} />
+        <div className="welcome-modern-divider" />
+
+        <div className="welcome-modern-language">
+          <p className="welcome-modern-kicker">{t(uiLanguage, "language")}</p>
+          <LanguageSelect className="welcome-language-select" wide compact />
         </div>
-      </div>
 
-      <div className={`welcome-mobile-theme ${layout.themeCardClass}`}>
-        <p className={layout.bodyTextClass}>{t(uiLanguage, "theme")}</p>
-        <div className="welcome-mobile-theme-toggle">
+        <div className="welcome-modern-divider" />
+
+        <div className="welcome-modern-setting">
+          <div><p>{t(uiLanguage, "theme")}</p><span>{t(uiLanguage, "themeHint")}</span></div>
           <ThemeToggle />
         </div>
-      </div>
-
-      <div className={layout.seasonalCardClass}>
-        <div className="welcome-mobile-seasonal-row">
-          <p className={layout.bodyTextClass}>{t(uiLanguage, "seasonalBg")}</p>
+        <div className="welcome-modern-setting">
+          <div><p>{t(uiLanguage, "seasonalBg")}</p><span>{t(uiLanguage, "welcomeSeasonalHint")}</span></div>
           <SeasonalBgToggle />
         </div>
-        <p className={layout.seasonalHintClass}>{t(uiLanguage, "welcomeSeasonalHint")}</p>
-      </div>
+      </section>
     </div>
   );
 
   const desktopFields = (
     <div className={layout.fieldsClass}>
-      <label className="block shrink-0">
-        <span className={layout.labelClass}>{t(uiLanguage, "welcomeNameLabel")}</span>
+      <label className="welcome-name-field block shrink-0">
+        <span className={`welcome-name-label ${layout.labelClass}`}>{t(uiLanguage, "welcomeNameLabel")}</span>
         <input
           type="text"
           value={userName}
           onChange={(e) => setUserName(e.target.value)}
           placeholder={t(uiLanguage, "welcomeNamePlaceholder")}
           autoComplete="name"
-          className={layout.inputClass}
+          className={`welcome-name-input ${layout.inputClass}`}
         />
       </label>
 
@@ -184,7 +182,7 @@ export default function WelcomeScreen({ onContinue }: Props) {
           <p className={layout.hintClass}>{t(uiLanguage, "welcomeLanguageHint")}</p>
         )}
         <div className="mt-2 sm:mt-3">
-          <LanguageSelect wide compact={layout.languageCompact} />
+          <LanguageSelect className="welcome-language-select" wide compact={layout.languageCompact} />
         </div>
       </div>
 
@@ -261,14 +259,14 @@ export default function WelcomeScreen({ onContinue }: Props) {
 
   return (
     <div
-      className={`flex h-dvh max-h-dvh w-full overflow-hidden bg-[var(--background)] text-[var(--text-body)] ${
+      className={`welcome-root flex h-dvh max-h-dvh w-full overflow-hidden bg-[var(--background)] text-[var(--text-body)] ${
         layout.isWide ? "flex-row" : "flex-col"
       }`}
     >
       <ThemeHydration />
       <ThemeTransition />
 
-      <div className={layout.viewportClass}>
+      <div className={`welcome-viewport-region ${layout.viewportClass}`}>
         <AmbientViewport
           colorTheme={colorTheme}
           seasonalOn={autoSceneBackground}
@@ -276,12 +274,12 @@ export default function WelcomeScreen({ onContinue }: Props) {
         />
       </div>
 
-      <div className={layout.formClass}>
+      <div className={`welcome-form-region ${layout.formClass}`}>
         <GlassPanel
           variant="panel"
           zIndex={10}
-          fill
-          wrapperClassName="flex h-full min-h-0 flex-col overflow-hidden rounded-none"
+          fill={layout.isWide}
+          wrapperClassName={`flex min-h-0 flex-col overflow-hidden rounded-none ${layout.isWide ? "h-full" : ""}`}
         >
           <div className={layout.shellClass}>
             <div className={`${layout.contentBlockClass} ${layout.formMaxWidth}`}>
