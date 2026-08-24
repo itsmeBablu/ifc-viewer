@@ -1485,23 +1485,16 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     color: var(--text-strong);
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-toggle {
-    top: 50%;
-    bottom: auto;
+    top: 0;
+    bottom: 0;
     left: 0;
     width: 20px;
-    height: 64px;
-    transform: translateY(-50%);
+    height: auto;
+    transform: none;
     border-radius: 14px 0 0 14px;
     background: rgba(161,161,170,.3);
     color: rgb(82,82,91);
     box-shadow: none;
-  }
-  .werkzeug-ipad-context[data-orientation="landscape"][data-hidden="false"] .werkzeug-ipad-drawer-toggle {
-    top: 0;
-    bottom: 0;
-    height: auto;
-    transform: none;
-    border-radius: 14px 0 0 14px;
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-body {
     max-height: calc(100dvh - 92px);
