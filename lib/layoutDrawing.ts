@@ -426,6 +426,100 @@ export function wallFlipped(
   };
 }
 
+// -- Beam geometry helpers -------------------------------------------------
+
+export function beamLengthMm(b: LayoutBeam): number {
+  return Math.hypot(b.endXmm - b.startXmm, b.endYmm - b.startYmm);
+}
+
+export function beamAngleDeg(b: LayoutBeam): number {
+  return (
+    (Math.atan2(b.endYmm - b.startYmm, b.endXmm - b.startXmm) * 180) / Math.PI
+  );
+}
+
+/** Keep start fixed; set length along current direction (min 50 mm). */
+export function beamWithLengthFromStart(
+  b: LayoutBeam,
+  lengthMm: number,
+): Pick<LayoutBeam, "endXmm" | "endYmm"> {
+  const len = Math.max(50, lengthMm);
+  const dx = b.endXmm - b.startXmm;
+  const dy = b.endYmm - b.startYmm;
+  const len0 = Math.hypot(dx, dy);
+  const ux = len0 > 1e-9 ? dx / len0 : 1;
+  const uy = len0 > 1e-9 ? dy / len0 : 0;
+  return {
+    endXmm: Math.round(b.startXmm + ux * len),
+    endYmm: Math.round(b.startYmm + uy * len),
+  };
+}
+
+/** Keep end fixed; set length by moving start. */
+export function beamWithLengthFromEnd(
+  b: LayoutBeam,
+  lengthMm: number,
+): Pick<LayoutBeam, "startXmm" | "startYmm"> {
+  const len = Math.max(50, lengthMm);
+  const dx = b.endXmm - b.startXmm;
+  const dy = b.endYmm - b.startYmm;
+  const len0 = Math.hypot(dx, dy);
+  const ux = len0 > 1e-9 ? dx / len0 : 1;
+  const uy = len0 > 1e-9 ? dy / len0 : 0;
+  return {
+    startXmm: Math.round(b.endXmm - ux * len),
+    startYmm: Math.round(b.endYmm - uy * len),
+  };
+}
+
+/** Translate whole beam in plan mm (X → scene X, Y → scene Z). */
+export function beamTranslated(
+  b: LayoutBeam,
+  dxMm: number,
+  dyMm: number,
+): Pick<LayoutBeam, "startXmm" | "startYmm" | "endXmm" | "endYmm"> {
+  return {
+    startXmm: Math.round(b.startXmm + dxMm),
+    startYmm: Math.round(b.startYmm + dyMm),
+    endXmm: Math.round(b.endXmm + dxMm),
+    endYmm: Math.round(b.endYmm + dyMm),
+  };
+}
+
+/** Rotate both endpoints about the beam midpoint by delta degrees. */
+export function beamRotatedAboutCenter(
+  b: LayoutBeam,
+  deltaDeg: number,
+): Pick<LayoutBeam, "startXmm" | "startYmm" | "endXmm" | "endYmm"> {
+  const cx = (b.startXmm + b.endXmm) / 2;
+  const cy = (b.startYmm + b.endYmm) / 2;
+  const rad = (deltaDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rot = (x: number, y: number) => {
+    const dx = x - cx;
+    const dy = y - cy;
+    return {
+      x: Math.round(cx + dx * cos - dy * sin),
+      y: Math.round(cy + dx * sin + dy * cos),
+    };
+  };
+  const s = rot(b.startXmm, b.startYmm);
+  const e = rot(b.endXmm, b.endYmm);
+  return { startXmm: s.x, startYmm: s.y, endXmm: e.x, endYmm: e.y };
+}
+
+// -- Column geometry helpers -----------------------------------------------
+
+/** Translate a column in plan mm (X → scene X, Y → scene Z). */
+export function columnTranslated(
+  c: LayoutColumn,
+  dxMm: number,
+  dyMm: number,
+): Pick<LayoutColumn, "xMm" | "yMm"> {
+  return { xMm: Math.round(c.xMm + dxMm), yMm: Math.round(c.yMm + dyMm) };
+}
+
 /** Unit normal in plan (+ = left of start→end). */
 export function wallUnitPerp(w: LayoutWall): { nx: number; ny: number } {
   const ang = wallAngleRad(w);
@@ -631,24 +725,24 @@ export function snapPlanPointToWalls(
     if (wall.curved && wall.arcCenterXmm != null && wall.arcCenterYmm != null && wall.arcRadiusMm != null) {
       const cx = wall.arcCenterXmm, cy = wall.arcCenterYmm, r = wall.arcRadiusMm;
       if (modes.center) add(cx, cy, "center", 1, wall.id);
-      if (modes.quadrant) for (const [qx, qy] of [[cx+r,cy],[cx-r,cy],[cx,cy+r],[cx,cy-r]]) add(qx, qy, "quadrant", 2, wall.id);
-      const vx = point.xMm-cx, vy = point.yMm-cy, vl = Math.hypot(vx,vy) || 1;
-      if (modes.nearest) add(cx+vx/vl*r, cy+vy/vl*r, "nearest", 6, wall.id);
+      if (modes.quadrant) for (const [qx, qy] of [[cx + r, cy], [cx - r, cy], [cx, cy + r], [cx, cy - r]]) add(qx, qy, "quadrant", 2, wall.id);
+      const vx = point.xMm - cx, vy = point.yMm - cy, vl = Math.hypot(vx, vy) || 1;
+      if (modes.nearest) add(cx + vx / vl * r, cy + vy / vl * r, "nearest", 6, wall.id);
       if (modes.tangent && from) {
-        const fx=from.xMm-cx, fy=from.yMm-cy, d=Math.hypot(fx,fy);
-        if (d>r) { const a=Math.atan2(fy,fx), off=Math.acos(r/d); for (const ta of [a+off,a-off]) add(cx+Math.cos(ta)*r,cy+Math.sin(ta)*r,"tangent",3,wall.id); }
+        const fx = from.xMm - cx, fy = from.yMm - cy, d = Math.hypot(fx, fy);
+        if (d > r) { const a = Math.atan2(fy, fx), off = Math.acos(r / d); for (const ta of [a + off, a - off]) add(cx + Math.cos(ta) * r, cy + Math.sin(ta) * r, "tangent", 3, wall.id); }
       }
       continue;
     }
     const projected = distPointSeg(point.xMm, point.yMm, wall.startXmm, wall.startYmm, wall.endXmm, wall.endYmm);
     if (modes.midpoint)
-    add(
-      (wall.startXmm + wall.endXmm) / 2,
-      (wall.startYmm + wall.endYmm) / 2,
-      "midpoint",
-      2,
-      wall.id,
-    );
+      add(
+        (wall.startXmm + wall.endXmm) / 2,
+        (wall.startYmm + wall.endYmm) / 2,
+        "midpoint",
+        2,
+        wall.id,
+      );
     // Layout walls are parametric objects; their centerline origin is their
     // insertion/base point (openings and placed objects use the same concept).
     if (modes.insertion) add(
@@ -675,8 +769,8 @@ export function snapPlanPointToWalls(
       }
     }
     if (modes.parallel && from) {
-      const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm-from.xMm, point.yMm-from.yMm);
-      for (const pa of [a,a+Math.PI]) add(from.xMm+Math.cos(pa)*len, from.yMm+Math.sin(pa)*len, "parallel", 5, wall.id);
+      const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm - from.xMm, point.yMm - from.yMm);
+      for (const pa of [a, a + Math.PI]) add(from.xMm + Math.cos(pa) * len, from.yMm + Math.sin(pa) * len, "parallel", 5, wall.id);
     }
   }
 
@@ -823,8 +917,8 @@ export function joinedWallCenterlines(
           );
           const target =
             onThrough.t > 0.02 &&
-            onThrough.t < 0.98 &&
-            onThrough.dist < joinTol
+              onThrough.t < 0.98 &&
+              onThrough.dist < joinTol
               ? hit
               : { x: near.x, y: near.y };
           const rs = result.get(stem.id)!;

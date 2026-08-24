@@ -466,12 +466,14 @@ type LayoutDrawingState = {
   addColumn: (col: Omit<LayoutColumn, "id" | "projectId" | "createdAt">) => Promise<LayoutColumn | null>;
   updateColumn: (id: string, patch: Partial<LayoutColumn>) => Promise<void>;
   deleteColumn: (id: string) => Promise<void>;
+  duplicateColumn: (id: string) => Promise<LayoutColumn | null>;
   selectColumn: (id: string | null) => void;
   setDraftColumnSize: (widthMm: number, depthMm: number) => void;
 
   addBeam: (beam: Omit<LayoutBeam, "id" | "projectId" | "createdAt">) => Promise<LayoutBeam | null>;
   updateBeam: (id: string, patch: Partial<LayoutBeam>) => Promise<void>;
   deleteBeam: (id: string) => Promise<void>;
+  duplicateBeam: (id: string) => Promise<LayoutBeam | null>;
   selectBeam: (id: string | null) => void;
   setDraftBeamSize: (widthMm: number, depthMm: number) => void;
 
@@ -804,7 +806,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: get().slabs.filter((s) => s.levelId !== id),
       selectedUnderlayId:
         get().selectedUnderlayId &&
-        underlays.some((u) => u.id === get().selectedUnderlayId)
+          underlays.some((u) => u.id === get().selectedUnderlayId)
           ? null
           : get().selectedUnderlayId,
       selectedSlabId:
@@ -870,7 +872,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     ) {
       void import("@/lib/opencvLoader")
         .then((m) => m.loadOpenCv())
-        .catch(() => {});
+        .catch(() => { });
     }
   },
 
@@ -1525,11 +1527,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const boundary = slab.boundary?.length
       ? slab.boundary
       : [
-          { xMm: slab.minXmm, yMm: slab.minYmm },
-          { xMm: slab.maxXmm, yMm: slab.minYmm },
-          { xMm: slab.maxXmm, yMm: slab.maxYmm },
-          { xMm: slab.minXmm, yMm: slab.maxYmm },
-        ];
+        { xMm: slab.minXmm, yMm: slab.minYmm },
+        { xMm: slab.maxXmm, yMm: slab.minYmm },
+        { xMm: slab.maxXmm, yMm: slab.maxYmm },
+        { xMm: slab.minXmm, yMm: slab.maxYmm },
+      ];
     set({
       slabBoundaryEdit: {
         slabId: id,
@@ -1809,7 +1811,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return true;
   },
 
- placeDoorOnWall: async (wallId, positionMm, opts) => {
+  placeDoorOnWall: async (wallId, positionMm, opts) => {
     pushWerkzeugHistory();
 
     const projectId = get().projectId;
@@ -3216,6 +3218,26 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setDraftColumnSize: (widthMm, depthMm) =>
     set({ draftColumnWidthMm: widthMm, draftColumnDepthMm: depthMm }),
 
+  duplicateColumn: async (id) => {
+    const col = get().columns.find((c) => c.id === id);
+    if (!col) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutColumn = {
+      ...col,
+      id: newLayoutId("col"),
+      xMm: col.xMm + 500,
+      yMm: col.yMm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutColumn(clone);
+    set({
+      columns: [...get().columns, clone],
+      selectedElements: [{ kind: "column", id: clone.id }],
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
   addBeam: async (beam) => {
     const projectId = get().projectId;
     if (!projectId) return null;
@@ -3270,6 +3292,28 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setDraftBeamSize: (widthMm, depthMm) =>
     set({ draftBeamWidthMm: widthMm, draftBeamDepthMm: depthMm }),
+
+  duplicateBeam: async (id) => {
+    const beam = get().beams.find((b) => b.id === id);
+    if (!beam) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutBeam = {
+      ...beam,
+      id: newLayoutId("beam"),
+      startXmm: beam.startXmm + 500,
+      startYmm: beam.startYmm + 500,
+      endXmm: beam.endXmm + 500,
+      endYmm: beam.endYmm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutBeam(clone);
+    set({
+      beams: [...get().beams, clone],
+      selectedElements: [{ kind: "beam", id: clone.id }],
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
 
   // -- Section 5: Reference / Grid Planes ---------------------------------
   addGridLine: async (grid) => {

@@ -3,6 +3,13 @@
 import type { ReactNode } from "react";
 import { t } from "@/lib/i18n";
 import {
+  beamAngleDeg,
+  beamLengthMm,
+  beamRotatedAboutCenter,
+  beamTranslated,
+  beamWithLengthFromEnd,
+  beamWithLengthFromStart,
+  columnTranslated,
   nearestParallelFaceGapMm,
   wallAngleDeg,
   wallFlipped,
@@ -18,8 +25,12 @@ import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 
 /**
- * Revit-style properties for selected layout wall / door / window.
+ * Revit-style properties for the selected layout element.
  * Wall: length, endpoints, move, rotate, offset, flip, duplicate, delete.
+ * Door / window: size + position along host wall.
+ * Slab: plan size, thickness, Z offset.
+ * Column: profile, width/depth/height, base/top level, position.
+ * Beam: length, width/depth, angle, endpoints, Z offset.
  */
 export default function LayoutPropertiesPanel({
   className = "",
@@ -32,35 +43,53 @@ export default function LayoutPropertiesPanel({
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const columns = useLayoutDrawingStore((s) => s.columns);
+  const beams = useLayoutDrawingStore((s) => s.beams);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
+  const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
+  const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
   const deleteSlab = useLayoutDrawingStore((s) => s.deleteSlab);
+  const deleteColumn = useLayoutDrawingStore((s) => s.deleteColumn);
+  const deleteBeam = useLayoutDrawingStore((s) => s.deleteBeam);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
   const duplicateDoor = useLayoutDrawingStore((s) => s.duplicateDoor);
   const duplicateWindow = useLayoutDrawingStore((s) => s.duplicateWindow);
   const duplicateSlab = useLayoutDrawingStore((s) => s.duplicateSlab);
+  const duplicateColumn = useLayoutDrawingStore((s) => s.duplicateColumn);
+  const duplicateBeam = useLayoutDrawingStore((s) => s.duplicateBeam);
 
   const wall = walls.find((w) => w.id === selectedWallId) ?? null;
   const door = doors.find((d) => d.id === selectedDoorId) ?? null;
   const win = windows.find((w) => w.id === selectedWindowId) ?? null;
   const slab = slabs.find((s) => s.id === selectedSlabId) ?? null;
+  // Columns/beams have no dedicated single-id field — read from multi-selection.
+  const selectedColumnId =
+    selectedElements.find((e) => e.kind === "column")?.id ?? null;
+  const selectedBeamId =
+    selectedElements.find((e) => e.kind === "beam")?.id ?? null;
+  const column = columns.find((c) => c.id === selectedColumnId) ?? null;
+  const beam = beams.find((b) => b.id === selectedBeamId) ?? null;
 
-  if (!wall && !door && !win && !slab) return null;
+  if (!wall && !door && !win && !slab && !column && !beam) return null;
 
   const len = wall ? Math.round(wallLengthMm(wall)) : 0;
   const ang = wall ? Math.round(wallAngleDeg(wall) * 10) / 10 : 0;
   const nearestGap = wall
     ? nearestParallelFaceGapMm(wall, walls)
     : null;
+  const beamLen = beam ? Math.round(beamLengthMm(beam)) : 0;
+  const beamAng = beam ? Math.round(beamAngleDeg(beam) * 10) / 10 : 0;
 
   return (
     <div className={`flex flex-col gap-2.5 ${className}`}>
@@ -510,6 +539,383 @@ export default function LayoutPropertiesPanel({
             <button
               type="button"
               onClick={() => void deleteSlab(slab.id)}
+              className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+            >
+              {t(uiLanguage, "markupDelete")}
+            </button>
+          </div>
+        </>
+      )}
+
+      {column && (() => {
+        const base = levels.find((level) => level.id === column.levelId);
+        const top = levels.find((level) => level.id === column.topLevelId);
+        const heightMm =
+          column.heightMm ??
+          (base && top && top.elevationMm > base.elevationMm
+            ? top.elevationMm - base.elevationMm
+            : base?.heightMm ?? 3000);
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
+                {t(uiLanguage, "layoutColumn")}
+              </p>
+              <span className="rounded-md bg-[var(--surface-muted)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)]">
+                {t(
+                  uiLanguage,
+                  column.profile === "circle"
+                    ? "layoutProfileCircle"
+                    : "layoutProfileRect",
+                )}
+              </span>
+            </div>
+
+            {/* Dimensions */}
+            <Section title={t(uiLanguage, "layoutEditDimensions")}>
+              <div className="mb-2 grid grid-cols-2 gap-1.5">
+                <LevelSelect
+                  label="Base level"
+                  value={column.levelId}
+                  levels={levels}
+                  onChange={(levelId) => {
+                    const nextBase = levels.find((level) => level.id === levelId);
+                    const nextTop = levels.find((level) => level.id === column.topLevelId);
+                    const nextHeight =
+                      nextBase && nextTop && nextTop.elevationMm > nextBase.elevationMm
+                        ? nextTop.elevationMm - nextBase.elevationMm
+                        : column.heightMm;
+                    void updateColumn(column.id, {
+                      levelId,
+                      ...(nextHeight != null ? { heightMm: nextHeight } : {}),
+                    });
+                  }}
+                />
+                <LevelSelect
+                  label="Top level"
+                  value={column.topLevelId ?? ""}
+                  levels={levels.filter((level) => level.elevationMm > (levels.find((item) => item.id === column.levelId)?.elevationMm ?? -Infinity))}
+                  allowUnconnected
+                  onChange={(topLevelId) => {
+                    const nextBase = levels.find((level) => level.id === column.levelId);
+                    const nextTop = levels.find((level) => level.id === topLevelId);
+                    void updateColumn(column.id, {
+                      topLevelId: topLevelId || undefined,
+                      ...(nextBase && nextTop && nextTop.elevationMm > nextBase.elevationMm
+                        ? { heightMm: nextTop.elevationMm - nextBase.elevationMm }
+                        : {}),
+                    });
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <MmInput
+                  label={t(uiLanguage, "layoutWidth")}
+                  value={column.widthMm}
+                  onCommit={(v) =>
+                    void updateColumn(column.id, { widthMm: Math.max(50, v) })
+                  }
+                />
+                <MmInput
+                  label={t(uiLanguage, "layoutDepth")}
+                  value={column.depthMm}
+                  onCommit={(v) =>
+                    void updateColumn(column.id, { depthMm: Math.max(50, v) })
+                  }
+                />
+                <MmInput
+                  label={t(uiLanguage, "layoutHeight")}
+                  value={Math.round(heightMm)}
+                  onCommit={(v) =>
+                    void updateColumn(column.id, {
+                      heightMm: Math.max(100, v),
+                      topLevelId: undefined,
+                    })
+                  }
+                />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                <span className="mr-0.5 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                  {t(uiLanguage, "layoutProfile")}
+                </span>
+                {(["rect", "circle"] as const).map((profile) => (
+                  <button
+                    key={profile}
+                    type="button"
+                    aria-pressed={column.profile === profile}
+                    onClick={() => void updateColumn(column.id, { profile })}
+                    className={`rounded-lg px-2 py-1 text-[10px] font-bold ${column.profile === profile
+                        ? "bg-zinc-800 text-white"
+                        : "bg-[var(--surface-muted)] text-[var(--text-body)] hover:bg-amber-100"
+                      }`}
+                  >
+                    {t(
+                      uiLanguage,
+                      profile === "circle"
+                        ? "layoutProfileCircle"
+                        : "layoutProfileRect",
+                    )}
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            {/* Position */}
+            <Section title={t(uiLanguage, "layoutEditMove")}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <MmInput
+                  label="X mm"
+                  value={Math.round(column.xMm)}
+                  onCommit={(v) => void updateColumn(column.id, { xMm: v })}
+                />
+                <MmInput
+                  label="Y mm"
+                  value={Math.round(column.yMm)}
+                  onCommit={(v) => void updateColumn(column.id, { yMm: v })}
+                />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {(
+                  [
+                    ["←", -100, 0],
+                    ["→", 100, 0],
+                    ["↑", 0, -100],
+                    ["↓", 0, 100],
+                  ] as const
+                ).map(([label, dx, dy]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    title={`${dx || dy} mm`}
+                    onClick={() =>
+                      void updateColumn(
+                        column.id,
+                        columnTranslated(column, dx, dy),
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-sm font-bold hover:bg-amber-100"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                <MmInput
+                  label="ΔX mm"
+                  value={0}
+                  key={`dx-${column.id}-${column.xMm}`}
+                  onCommit={(v) => {
+                    if (v)
+                      void updateColumn(
+                        column.id,
+                        columnTranslated(column, v, 0),
+                      );
+                  }}
+                />
+                <MmInput
+                  label="ΔY mm"
+                  value={0}
+                  key={`dy-${column.id}-${column.yMm}`}
+                  onCommit={(v) => {
+                    if (v)
+                      void updateColumn(
+                        column.id,
+                        columnTranslated(column, 0, v),
+                      );
+                  }}
+                />
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateColumn(column.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteColumn(column.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {beam && (
+        <>
+          <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
+            {t(uiLanguage, "layoutBeam")}
+          </p>
+
+          {/* Dimensions */}
+          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+            <div className="grid grid-cols-2 gap-1.5">
+              <MmInput
+                label={t(uiLanguage, "layoutLength")}
+                value={beamLen}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, beamWithLengthFromStart(beam, v))
+                }
+              />
+              <MmInput
+                label={t(uiLanguage, "layoutWallAngle")}
+                value={beamAng}
+                step={0.1}
+                onCommit={(v) => {
+                  const delta = v - beamAngleDeg(beam);
+                  void updateBeam(
+                    beam.id,
+                    beamRotatedAboutCenter(beam, delta),
+                  );
+                }}
+              />
+              <MmInput
+                label={t(uiLanguage, "layoutWidth")}
+                value={beam.widthMm}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, { widthMm: Math.max(50, v) })
+                }
+              />
+              <MmInput
+                label={t(uiLanguage, "layoutDepth")}
+                value={beam.depthMm}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, { depthMm: Math.max(50, v) })
+                }
+              />
+              <MmInput
+                label={t(uiLanguage, "layoutZOffset")}
+                value={beam.elevationOffsetMm}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, { elevationOffsetMm: v })
+                }
+              />
+            </div>
+          </Section>
+
+          {/* Endpoints — extend */}
+          <Section title={t(uiLanguage, "layoutWallEndpoints")}>
+            <div className="grid grid-cols-2 gap-1.5">
+              <MmInput
+                label="A · X"
+                value={Math.round(beam.startXmm)}
+                onCommit={(v) => void updateBeam(beam.id, { startXmm: v })}
+              />
+              <MmInput
+                label="A · Y"
+                value={Math.round(beam.startYmm)}
+                onCommit={(v) => void updateBeam(beam.id, { startYmm: v })}
+              />
+              <MmInput
+                label="B · X"
+                value={Math.round(beam.endXmm)}
+                onCommit={(v) => void updateBeam(beam.id, { endXmm: v })}
+              />
+              <MmInput
+                label="B · Y"
+                value={Math.round(beam.endYmm)}
+                onCommit={(v) => void updateBeam(beam.id, { endYmm: v })}
+              />
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <MmInput
+                label={t(uiLanguage, "layoutExtendFromA")}
+                value={beamLen}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, beamWithLengthFromStart(beam, v))
+                }
+              />
+              <MmInput
+                label={t(uiLanguage, "layoutExtendFromB")}
+                value={beamLen}
+                onCommit={(v) =>
+                  void updateBeam(beam.id, beamWithLengthFromEnd(beam, v))
+                }
+              />
+            </div>
+          </Section>
+
+          {/* Move */}
+          <Section title={t(uiLanguage, "layoutEditMove")}>
+            <div className="flex flex-wrap items-center gap-1">
+              {(
+                [
+                  ["←", -100, 0],
+                  ["→", 100, 0],
+                  ["↑", 0, -100],
+                  ["↓", 0, 100],
+                ] as const
+              ).map(([label, dx, dy]) => (
+                <button
+                  key={label}
+                  type="button"
+                  title={`${dx || dy} mm`}
+                  onClick={() =>
+                    void updateBeam(beam.id, beamTranslated(beam, dx, dy))
+                  }
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-sm font-bold hover:bg-amber-100"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <MmInput
+                label="ΔX mm"
+                value={0}
+                key={`dx-${beam.id}-${beam.startXmm}`}
+                onCommit={(v) => {
+                  if (v)
+                    void updateBeam(beam.id, beamTranslated(beam, v, 0));
+                }}
+              />
+              <MmInput
+                label="ΔY mm"
+                value={0}
+                key={`dy-${beam.id}-${beam.startYmm}`}
+                onCommit={(v) => {
+                  if (v)
+                    void updateBeam(beam.id, beamTranslated(beam, 0, v));
+                }}
+              />
+            </div>
+          </Section>
+
+          {/* Rotate */}
+          <Section title={t(uiLanguage, "layoutEditRotate")}>
+            <div className="flex flex-wrap gap-1">
+              {([-90, -15, -1, 1, 15, 90] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() =>
+                    void updateBeam(beam.id, beamRotatedAboutCenter(beam, d))
+                  }
+                  className="rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px] font-bold hover:bg-amber-100"
+                >
+                  {d > 0 ? `+${d}°` : `${d}°`}
+                </button>
+              ))}
+            </div>
+          </Section>
+
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => void duplicateBeam(beam.id)}
+              className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+            >
+              {t(uiLanguage, "layoutDuplicate")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteBeam(beam.id)}
               className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
             >
               {t(uiLanguage, "markupDelete")}
