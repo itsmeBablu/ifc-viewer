@@ -139,7 +139,7 @@ export default class LayoutSceneLayer {
     this.ground.visible = true;
   }
 
-  syncLevelSlabs(levels: LayoutLevel[], walls: LayoutWall[]) {
+  syncLevelSlabs(levels: LayoutLevel[], walls: LayoutWall[], visible: boolean) {
     const keep = new Set(levels.map((l) => l.id));
     for (const [id, mesh] of this.levelSlabs) {
       if (!keep.has(id)) {
@@ -198,7 +198,8 @@ export default class LayoutSceneLayer {
       }
       mesh.scale.set(sizeX, 1, sizeZ);
       mesh.position.set(cx, fromMm(level.elevationMm) + fromMm(20), cz);
-      mesh.visible = true;
+      // Level datum pads are plan-editing helpers, not model geometry.
+      mesh.visible = visible;
     }
   }
 

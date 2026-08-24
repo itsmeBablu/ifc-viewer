@@ -355,6 +355,8 @@ export default function ToolRibbon({
   const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectMultiple = useLayoutDrawingStore((s) => s.selectMultiple);
+  const copySelected = useLayoutDrawingStore((s) => s.copySelected);
+  const levels = useLayoutDrawingStore((s) => s.levels);
   const walls = useLayoutDrawingStore((s) => s.walls);
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
@@ -376,6 +378,7 @@ export default function ToolRibbon({
   const [isTouchMode, setIsTouchMode] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | "annotate" | "snaps" | null>(null);
   const [selectionFilterOpen, setSelectionFilterOpen] = useState(false);
+  const [copyToLevelOpen, setCopyToLevelOpen] = useState(false);
 
   // Draggable Ribbon State
   const [ribbonPos, setRibbonPos] = useState({ x: 0, y: 0 });
@@ -429,7 +432,7 @@ export default function ToolRibbon({
   // Determine what is currently selected for contextual Modify tab
   const isSketching = Boolean(armedLayoutTool === "lines" || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId || isSketching
+    selectedElements.length || selectedPlacementId || isSketching
   );
 
   const contextualModifyTitle = selectedWallId
@@ -440,6 +443,8 @@ export default function ToolRibbon({
     ? "Modify | Windows"
     : selectedSlabId
     ? "Modify | Floors"
+    : selectedElements.length > 1
+    ? `Modify | ${selectedElements.length} Elements`
     : selectedPlacementId
     ? "Modify | 3D Shapes"
     : isSketching
@@ -779,13 +784,17 @@ export default function ToolRibbon({
           {selectionFilterOpen && (
             <div className="absolute left-0 top-full z-[90] mt-1 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2 shadow-2xl backdrop-blur-2xl">
               <div className="mb-1.5 flex items-center justify-between border-b border-[var(--panel-divider)] pb-1.5"><span className="text-[10px] font-bold text-[var(--text-strong)]">Selection Filter</span><span className="text-[9px] text-[var(--text-muted)]">{selectedElements.length} selected</span></div>
-              <p className="mb-1.5 text-[8px] text-[var(--text-muted)]">Ctrl-click objects or select all similar elements.</p>
+              <p className="mb-1.5 text-[8px] text-[var(--text-muted)]">Click a category to keep only that type. Click again to select all similar.</p>
               <div className="space-y-0.5">{selectionCategories.map((category) => {
                 const selectedCount = selectedElements.filter((item) => item.kind === category.kind).length;
                 const allSelected = selectedCount === category.ids.length;
                 return <button key={category.kind} type="button" onClick={() => {
-                  const withoutCategory = selectedElements.filter((item) => item.kind !== category.kind);
-                  selectMultiple(allSelected ? withoutCategory : [...withoutCategory, ...category.ids.map((id) => ({ kind: category.kind, id }))], "replace");
+                  const selectedInCategory = selectedElements.filter((item) => item.kind === category.kind);
+                  if (selectedElements.length > selectedInCategory.length && selectedInCategory.length) {
+                    selectMultiple(selectedInCategory, "replace");
+                  } else {
+                    selectMultiple(allSelected ? [] : category.ids.map((id) => ({ kind: category.kind, id })), "replace");
+                  }
                 }} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-[9px] hover:bg-yellow-400/15"><span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${allSelected ? "border-yellow-400 bg-yellow-400 text-zinc-900" : selectedCount ? "border-yellow-400 text-yellow-500" : "border-[var(--panel-divider)]"}`}>{allSelected ? <LuCheck className="h-2.5 w-2.5"/> : selectedCount ? "–" : ""}</span><span className="flex-1 text-[var(--text-body)]">{category.label}</span><span className="font-mono text-[8px] text-[var(--text-muted)]">{selectedCount}/{category.ids.length}</span></button>;
               })}</div>
             </div>
@@ -825,15 +834,32 @@ export default function ToolRibbon({
           <LuScissors className="h-4 w-4" />
         </RibbonBtn>
 
-        <RibbonBtn
-          onClick={() => {
-            if (selectedWallId) duplicateWall(selectedWallId);
-            if (selectedPlacementId) duplicatePlacement(selectedPlacementId);
-          }}
-          title="Copy / Duplicate (CO)"
-        >
-          <LuCopy className="h-4 w-4" />
-        </RibbonBtn>
+        <div className="relative">
+          <RibbonBtn
+            active={copyToLevelOpen}
+            onClick={() => {
+              if (selectedPlacementId) duplicatePlacement(selectedPlacementId);
+              else if (selectedElements.length) setCopyToLevelOpen((open) => !open);
+              else if (selectedWallId) duplicateWall(selectedWallId);
+            }}
+            title="Copy / Paste Aligned to Level"
+          >
+            <LuCopy className="h-4 w-4" />
+          </RibbonBtn>
+          {copyToLevelOpen && (
+            <div className="absolute left-0 top-full z-[90] mt-1 w-48 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2 shadow-2xl backdrop-blur-2xl">
+              <div className="mb-1.5 border-b border-[var(--panel-divider)] pb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Paste aligned to level</div>
+              <div className="max-h-48 space-y-1 overflow-y-auto thin-scroll">
+                {levels.map((level) => (
+                  <button key={level.id} type="button" className="dock-menu-row" onClick={() => { void copySelected(0, 0, level.id); setCopyToLevelOpen(false); }}>
+                    <LuLayers className="h-3.5 w-3.5" />
+                    <span><strong>{level.name}</strong><small>{level.elevationMm} mm · keep XY position</small></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <RibbonBtn
           danger

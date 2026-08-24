@@ -446,7 +446,7 @@ type LayoutDrawingState = {
   setMarqueeBox: (box: { startX: number; startY: number; currentX: number; currentY: number; isCrossing: boolean } | null) => void;
   deleteSelected: () => Promise<void>;
   moveSelected: (deltaXmm: number, deltaYmm: number) => Promise<void>;
-  copySelected: (deltaXmm: number, deltaYmm: number) => Promise<SelectedElementRef[]>;
+  copySelected: (deltaXmm: number, deltaYmm: number, targetLevelId?: string) => Promise<SelectedElementRef[]>;
   mirrorSelected: (axisP1: { xMm: number; yMm: number }, axisP2: { xMm: number; yMm: number }) => Promise<void>;
   rotateSelected: (center: { xMm: number; yMm: number }, angleDeg: number) => Promise<void>;
   scaleSelected: (origin: { xMm: number; yMm: number }, scaleFactor: number) => Promise<void>;
@@ -2714,13 +2714,21 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  copySelected: async (deltaXmm, deltaYmm) => {
+  copySelected: async (deltaXmm, deltaYmm, targetLevelId) => {
     const sel = get().selectedElements;
     const projectId = get().projectId;
     if (sel.length === 0 || !projectId) return [];
     pushWerkzeugHistory();
 
-    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const explicitlySelectedWallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
+    const selectedDoorIds = new Set(sel.filter((e) => e.kind === "door").map((e) => e.id));
+    const selectedWindowIds = new Set(sel.filter((e) => e.kind === "window").map((e) => e.id));
+    const wallIds = new Set(explicitlySelectedWallIds);
+    // Hosted openings need a host on the target floor. Include their wall,
+    // but copy only the explicitly selected opening unless the wall itself
+    // was selected.
+    for (const door of get().doors) if (selectedDoorIds.has(door.id)) wallIds.add(door.wallId);
+    for (const win of get().windows) if (selectedWindowIds.has(win.id)) wallIds.add(win.wallId);
     const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
     const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
@@ -2746,6 +2754,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const copy: LayoutWall = {
         ...w,
         id: copyId,
+        levelId: targetLevelId ?? w.levelId,
+        topLevelId: targetLevelId ? undefined : w.topLevelId,
         startXmm: w.startXmm + deltaXmm,
         startYmm: w.startYmm + deltaYmm,
         endXmm: w.endXmm + deltaXmm,
@@ -2760,7 +2770,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     // Duplicate openings on copied walls
     for (const d of get().doors) {
       const newWallId = wallIdMap.get(d.wallId);
-      if (!newWallId) continue;
+      if (!newWallId || (!explicitlySelectedWallIds.has(d.wallId) && !selectedDoorIds.has(d.id))) continue;
       const copyDoor: LayoutDoor = {
         ...d,
         id: newLayoutId("door"),
@@ -2768,11 +2778,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         createdAt: Date.now(),
       };
       newDoors.push(copyDoor);
+      newRefs.push({ kind: "door", id: copyDoor.id });
       await idbPutDoor(copyDoor);
     }
     for (const win of get().windows) {
       const newWallId = wallIdMap.get(win.wallId);
-      if (!newWallId) continue;
+      if (!newWallId || (!explicitlySelectedWallIds.has(win.wallId) && !selectedWindowIds.has(win.id))) continue;
       const copyWin: LayoutWindow = {
         ...win,
         id: newLayoutId("win"),
@@ -2780,6 +2791,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         createdAt: Date.now(),
       };
       newWindows.push(copyWin);
+      newRefs.push({ kind: "window", id: copyWin.id });
       await idbPutWindow(copyWin);
     }
 
@@ -2789,6 +2801,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const copy: LayoutSlab = {
         ...sl,
         id: copyId,
+        levelId: targetLevelId ?? sl.levelId,
         minXmm: sl.minXmm + deltaXmm,
         maxXmm: sl.maxXmm + deltaXmm,
         minYmm: sl.minYmm + deltaYmm,
@@ -2808,6 +2821,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const copy: LayoutColumn = {
         ...c,
         id: copyId,
+        levelId: targetLevelId ?? c.levelId,
         xMm: c.xMm + deltaXmm,
         yMm: c.yMm + deltaYmm,
         createdAt: Date.now(),
@@ -2823,6 +2837,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const copy: LayoutBeam = {
         ...b,
         id: copyId,
+        levelId: targetLevelId ?? b.levelId,
         startXmm: b.startXmm + deltaXmm,
         startYmm: b.startYmm + deltaYmm,
         endXmm: b.endXmm + deltaXmm,
@@ -2858,6 +2873,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const copy: LayoutSketchLine = {
         ...l,
         id: copyId,
+        levelId: targetLevelId ?? l.levelId,
         startXmm: l.startXmm + deltaXmm,
         startYmm: l.startYmm + deltaYmm,
         endXmm: l.endXmm + deltaXmm,
@@ -2868,6 +2884,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       newRefs.push({ kind: "line", id: copyId });
     }
 
+    const primary = newRefs[newRefs.length - 1] ?? null;
     set((s) => ({
       walls: [...s.walls, ...newWalls],
       doors: [...s.doors, ...newDoors],
@@ -2878,6 +2895,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       gridLines: [...s.gridLines, ...newGrids],
       sketchLines: [...s.sketchLines, ...newLines],
       selectedElements: newRefs,
+      selectedWallId: primary?.kind === "wall" ? primary.id : null,
+      selectedDoorId: primary?.kind === "door" ? primary.id : null,
+      selectedWindowId: primary?.kind === "window" ? primary.id : null,
+      selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       lastMutatedAt: Date.now(),
     }));
 

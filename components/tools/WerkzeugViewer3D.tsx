@@ -2426,7 +2426,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             .floors.map((f) => [f.id, Math.round(f.elevation * 1000)]),
         ),
       });
-      layer.syncLevelSlabs(s.levels, s.walls);
+      layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
       if (s.wallDraw) {
         const lvl =
           s.levels.find((l) => l.id === s.wallDraw!.levelId) ?? activeLevel;
@@ -4139,7 +4139,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     };
 
     const onMove = (e: PointerEvent) => {
-      if ((e.buttons & 1) === 1 && !suppressNextClick) {
+      if ((e.buttons & 1) === 1 && (!suppressNextClick || marqueeActive)) {
         if (marqueeActive) {
           const dx = e.clientX - marqueeStartX;
           const dy = e.clientY - marqueeStartY;
@@ -5894,6 +5894,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const cam = preparePointerRayRef.current(e.clientX, e.clientY);
             const layoutLayer = layoutLayerRef.current;
             if (cam && layoutLayer) {
+              if (e.ctrlKey || e.metaKey) {
+                // Revit-style Ctrl-drag always starts a selection window,
+                // even when the gesture begins over model geometry.
+                marqueeActive = true;
+                marqueeStartX = e.clientX;
+                marqueeStartY = e.clientY;
+                return;
+              }
               raycaster.current.setFromCamera(pointerNdc.current, cam);
               const hit = layoutLayer.pickLayout(raycaster.current);
               if (hit?.kind === "wall-endpoint") {
@@ -5976,6 +5984,26 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               const p2 = new THREE.Vector3(fromMm(w.endXmm), elev, fromMm(w.endYmm));
               if (testPoints([p1, p2])) matched.push({ kind: "wall", id: w.id });
             }
+            const openingPoint = (wallId: string, positionMm: number) => {
+              const wall = layout.walls.find((item) => item.id === wallId);
+              if (!wall) return null;
+              const length = Math.hypot(wall.endXmm - wall.startXmm, wall.endYmm - wall.startYmm) || 1;
+              const t = Math.max(0, Math.min(1, positionMm / length));
+              const lvl = layout.levels.find((item) => item.id === wall.levelId);
+              return new THREE.Vector3(
+                fromMm(wall.startXmm + (wall.endXmm - wall.startXmm) * t),
+                fromMm(lvl?.elevationMm ?? 0),
+                fromMm(wall.startYmm + (wall.endYmm - wall.startYmm) * t),
+              );
+            };
+            for (const door of layout.doors) {
+              const point = openingPoint(door.wallId, door.positionMm);
+              if (point && testPoints([point])) matched.push({ kind: "door", id: door.id });
+            }
+            for (const win of layout.windows) {
+              const point = openingPoint(win.wallId, win.positionMm);
+              if (point && testPoints([point])) matched.push({ kind: "window", id: win.id });
+            }
             for (const sl of layout.slabs) {
               const lvl = layout.levels.find((l) => l.id === sl.levelId);
               const elev = fromMm(lvl?.elevationMm ?? 0);
@@ -6011,7 +6039,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (testPoints([p1, p2])) matched.push({ kind: "line", id: l.id });
             }
 
-            layout.selectMultiple(matched, e.shiftKey ? "add" : "replace");
+            layout.selectMultiple(matched, e.shiftKey || e.ctrlKey || e.metaKey ? "add" : "replace");
           }
         }
       }

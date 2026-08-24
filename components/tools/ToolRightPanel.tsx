@@ -429,7 +429,9 @@ export default function ToolRightPanel({
           <div className="flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
             {hasSelection ? (
               <>
-                {selectedColumn || selectedBeam ? (
+                {selectedElements.length > 1 ? (
+                  <BulkSelectionProperties />
+                ) : selectedColumn || selectedBeam ? (
                   <LayoutPropertiesPanel />
                 ) : selectedSketchLine ? (
                   <div className="space-y-2">
@@ -1056,6 +1058,54 @@ export default function ToolRightPanel({
 }
 
 // -- Small helper components ---------------------------------------------------
+
+function BulkSelectionProperties() {
+  const selected = useLayoutDrawingStore((s) => s.selectedElements);
+  const walls = useLayoutDrawingStore((s) => s.walls);
+  const doors = useLayoutDrawingStore((s) => s.doors);
+  const windows = useLayoutDrawingStore((s) => s.windows);
+  const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const columns = useLayoutDrawingStore((s) => s.columns);
+  const beams = useLayoutDrawingStore((s) => s.beams);
+  const updateWall = useLayoutDrawingStore((s) => s.updateWall);
+  const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
+  const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
+  const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
+  const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
+  const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
+  const kinds = [...new Set(selected.map((item) => item.kind))];
+  const kind = kinds.length === 1 ? kinds[0] : null;
+  const ids = new Set(selected.filter((item) => item.kind === kind).map((item) => item.id));
+  const records = (kind === "wall" ? walls : kind === "door" ? doors : kind === "window" ? windows : kind === "slab" ? slabs : kind === "column" ? columns : kind === "beam" ? beams : [])
+    .filter((item) => ids.has(item.id)) as unknown as Array<Record<string, unknown> & { id: string }>;
+
+  const fields: Record<string, Array<{ key: string; label: string; suffix?: string }>> = {
+    wall: [{ key: "thicknessMm", label: "Thickness", suffix: "mm" }, { key: "heightMm", label: "Height", suffix: "mm" }],
+    door: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "heightMm", label: "Height", suffix: "mm" }],
+    window: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "heightMm", label: "Height", suffix: "mm" }, { key: "sillHeightMm", label: "Sill height", suffix: "mm" }],
+    slab: [{ key: "thicknessMm", label: "Thickness", suffix: "mm" }, { key: "elevationOffsetMm", label: "Elevation offset", suffix: "mm" }],
+    column: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "depthMm", label: "Depth", suffix: "mm" }, { key: "heightMm", label: "Height", suffix: "mm" }],
+    beam: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "depthMm", label: "Depth", suffix: "mm" }, { key: "elevationOffsetMm", label: "Elevation offset", suffix: "mm" }],
+  };
+
+  const apply = (key: string, value: number | string) => {
+    for (const id of ids) {
+      const patch = { [key]: value } as never;
+      if (kind === "wall") void updateWall(id, patch);
+      else if (kind === "door") void updateDoor(id, patch);
+      else if (kind === "window") void updateWindow(id, patch);
+      else if (kind === "slab") void updateSlab(id, patch);
+      else if (kind === "column") void updateColumn(id, patch);
+      else if (kind === "beam") void updateBeam(id, patch);
+    }
+  };
+
+  if (!kind || !fields[kind]) {
+    return <div className="space-y-2 rounded-xl border border-yellow-400/35 bg-yellow-400/10 p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)]">{selected.length} elements · mixed categories</div><p className="text-[10px] leading-relaxed text-[var(--text-muted)]">Use Selection Filter in the Modify ribbon to keep Walls, Doors, Windows, Floors, Columns, or Beams. Compatible properties can then be edited together.</p><div className="flex flex-wrap gap-1">{kinds.map((item) => <span key={item} className="rounded-full border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-0.5 text-[9px] font-semibold capitalize">{item}s · {selected.filter((ref) => ref.kind === item).length}</span>)}</div></div>;
+  }
+
+  return <div className="space-y-2"><div className="rounded-xl border border-yellow-400/35 bg-yellow-400/10 p-2.5"><strong className="block text-[11px] capitalize text-[var(--text-strong)]">{records.length} {kind}s selected</strong><span className="text-[9px] text-[var(--text-muted)]">Changes below apply to every selected element.</span></div><div className="space-y-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-2">{fields[kind].map((field) => { const values = records.map((item) => Number(item[field.key])).filter(Number.isFinite); const common = values.length && values.every((value) => value === values[0]) ? values[0] : undefined; return <label key={`${field.key}-${common ?? "mixed"}`} className="grid grid-cols-[1fr_7rem] items-center gap-2 py-1 text-[10px]"><span className="font-semibold text-[var(--text-body)]">{field.label}</span><span className="flex items-center rounded-lg border border-[var(--panel-divider)] bg-[var(--popover-bg)] px-2"><input type="number" defaultValue={common} placeholder="Mixed" className="h-7 min-w-0 flex-1 bg-transparent text-right font-mono text-[10px] outline-none" onBlur={(event) => { if (event.target.value !== "") apply(field.key, Number(event.target.value)); }} /><small className="ml-1 text-[8px] text-[var(--text-muted)]">{field.suffix}</small></span></label>; })}<label className="grid grid-cols-[1fr_7rem] items-center gap-2 py-1 text-[10px]"><span className="font-semibold text-[var(--text-body)]">Material</span><input type="text" defaultValue={records.length && records.every((item) => item.material === records[0].material) ? String(records[0].material ?? "") : ""} placeholder="Mixed" className="h-8 rounded-lg border border-[var(--panel-divider)] bg-[var(--popover-bg)] px-2 text-right text-[10px] outline-none" onBlur={(event) => { if (event.target.value.trim()) apply("material", event.target.value.trim()); }} /></label></div></div>;
+}
 
 function PropSection({
   open,
