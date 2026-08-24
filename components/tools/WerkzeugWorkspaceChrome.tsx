@@ -100,6 +100,15 @@ export default function WerkzeugWorkspaceChrome({
     return () => { delete document.documentElement.dataset.werkzeugDock; };
   }, [dockEdge]);
 
+  useEffect(() => {
+    const dismiss = () => {
+      setRenderOpen(false);
+      setViewOpen(false);
+    };
+    window.addEventListener("werkzeug-dismiss-popovers", dismiss);
+    return () => window.removeEventListener("werkzeug-dismiss-popovers", dismiss);
+  }, []);
+
   const selectedWall = walls.find((item) => item.id === selectedWallId) ?? null;
   const selectedDoor = doors.find((item) => item.id === selectedDoorId) ?? null;
   const selectedWindow = windows.find((item) => item.id === selectedWindowId) ?? null;

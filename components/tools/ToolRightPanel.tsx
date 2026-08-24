@@ -136,6 +136,12 @@ export default function ToolRightPanel({
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const levels = useLayoutDrawingStore((s) => s.levels);
 
+  useEffect(() => {
+    if (!selectedElements.length) return;
+    const tabletLandscape = window.innerWidth >= 700 && window.innerWidth < 1100 && window.innerWidth > window.innerHeight;
+    if (tabletLandscape) setRightPanelOpen(true);
+  }, [selectedElements.length, setRightPanelOpen]);
+
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
@@ -344,15 +350,16 @@ export default function ToolRightPanel({
     <>
       {!rightPanelOpen && (
         <button
-          className="fixed right-3 top-[80px] z-30 flex h-10 w-10 items-center justify-center rounded-xl liquid-glass-panel hover:bg-yellow-400/10 text-[var(--text-strong)] transition-all shadow-xl border border-[var(--panel-divider)]"
+          className="tool-right-launcher fixed right-3 top-[80px] z-30 flex h-10 w-10 items-center justify-center rounded-full liquid-glass-panel hover:bg-yellow-400/10 text-[var(--text-strong)] transition-all shadow-xl border border-[var(--panel-divider)]"
           onClick={() => setRightPanelOpen(true)}
           title="Expand Layout & Properties Panel"
         >
-          <LuChevronLeft className="h-5 w-5" />
+          <LuSlidersHorizontal className="h-4 w-4" />
         </button>
       )}
 
       <aside
+        data-open={rightPanelOpen ? "true" : "false"}
         className={`fixed z-30 flex flex-col transition-transform duration-300 select-none overflow-hidden ${
           isFloating
             ? "right-2 top-[72px] bottom-10 liquid-glass-panel"
@@ -389,7 +396,7 @@ export default function ToolRightPanel({
         </div>
 
         <div
-          className="flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
+          className="tool-properties-region flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
           style={{ height: propHeight, minHeight: 120 }}
         >
           <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
@@ -426,7 +433,7 @@ export default function ToolRightPanel({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+          <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
             {hasSelection ? (
               <>
                 {selectedElements.length > 1 ? (
@@ -906,14 +913,14 @@ export default function ToolRightPanel({
         {/* -- Horizontal splitter ----------------------------------------- */}
         <div
           onMouseDown={onSplitterMouseDown}
-          className="h-1 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
+          className="tool-properties-splitter h-1 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
           title="Drag to resize split"
         >
           <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-yellow-400" />
         </div>
 
         {/* -- LAYOUT (formerly Project Browser) -------------------------- */}
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="tool-layout-browser flex flex-col flex-1 min-h-0">
           {/* Layout header + tabs */}
           <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
             <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">

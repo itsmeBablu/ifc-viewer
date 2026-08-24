@@ -380,6 +380,18 @@ export default function ToolRibbon({
   const [selectionFilterOpen, setSelectionFilterOpen] = useState(false);
   const [copyToLevelOpen, setCopyToLevelOpen] = useState(false);
 
+  useEffect(() => {
+    const dismiss = () => {
+      setSaveMenuOpen(false);
+      setOverflowOpen(false);
+      setActiveDropdown(null);
+      setSelectionFilterOpen(false);
+      setCopyToLevelOpen(false);
+    };
+    window.addEventListener("werkzeug-dismiss-popovers", dismiss);
+    return () => window.removeEventListener("werkzeug-dismiss-popovers", dismiss);
+  }, []);
+
   // Draggable Ribbon State
   const [ribbonPos, setRibbonPos] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);

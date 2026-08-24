@@ -37,6 +37,12 @@ export default function QuadViewOverlays() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [openIndex]);
 
+  useEffect(() => {
+    const dismiss = () => setOpenIndex(null);
+    window.addEventListener("werkzeug-dismiss-popovers", dismiss);
+    return () => window.removeEventListener("werkzeug-dismiss-popovers", dismiss);
+  }, []);
+
   if (!quadView) return null;
 
   return (

@@ -192,6 +192,56 @@ export default function WerkzeugApp() {
   }, [setLeftPanelOpen, setRightPanelOpen]);
 
   useEffect(() => {
+    const dismissTransientUi = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-viewer-root]")) return;
+      if (target.closest("button, input, select, textarea, [role='menu'], [data-popup-surface]")) return;
+      window.dispatchEvent(new CustomEvent("werkzeug-dismiss-popovers"));
+    };
+    window.addEventListener("pointerdown", dismissTransientUi, true);
+    return () => window.removeEventListener("pointerdown", dismissTransientUi, true);
+  }, []);
+
+  useEffect(() => {
+    let candidate: { startedAt: number; points: Array<{ x: number; y: number }> } | null = null;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2) {
+        candidate = null;
+        return;
+      }
+      candidate = {
+        startedAt: performance.now(),
+        points: Array.from(event.touches).map((touch) => ({ x: touch.clientX, y: touch.clientY })),
+      };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!candidate || event.touches.length !== 2) return;
+      const moved = Array.from(event.touches).some((touch, index) => {
+        const start = candidate?.points[index];
+        return !start || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 12;
+      });
+      if (moved) candidate = null;
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      if (!candidate || event.touches.length !== 0) return;
+      const isTap = performance.now() - candidate.startedAt <= 420;
+      candidate = null;
+      if (!isTap) return;
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("werkzeug-dismiss-popovers"));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: false });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
+  useEffect(() => {
     const updateViewportMode = () => {
       setIsDesktop(window.innerWidth >= 1100 && window.innerHeight >= 600);
     };
