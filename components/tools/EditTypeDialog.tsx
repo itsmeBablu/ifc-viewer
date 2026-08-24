@@ -304,7 +304,7 @@ export default function EditTypeDialog({
                       );
                       setFormData({ ...formData, layers: updated });
                     }}
-                    className="w-24 rounded border border-[var(--panel-divider)] bg-slate-900 px-1 py-0.5 text-[10px] text-[var(--text-strong)]"
+                    className="vstudio-select vstudio-select-compact w-24 text-[10px]"
                   >
                     <option value="finish1">Finish 1 [Int]</option>
                     <option value="substrate">Substrate</option>
@@ -451,7 +451,7 @@ export default function EditTypeDialog({
             <select
               value={formData.functionType}
               onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
-              className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-[11px] text-[var(--text-strong)]"
+              className="vstudio-select min-w-36 text-[11px]"
             >
               <option value="Interior">Interior</option>
               <option value="Exterior">Exterior</option>

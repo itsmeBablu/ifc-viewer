@@ -869,6 +869,41 @@ body.pdf-capturing .pdf-capture-hide {
   background: var(--popover-bg);
   color: var(--text-strong);
 }
+.vstudio-select {
+  appearance: none !important;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--panel-divider) 76%, white 24%) !important;
+  border-radius: 11px !important;
+  padding: 0 2rem 0 .65rem !important;
+  background-color: color-mix(in srgb, var(--glass-inset-bg) 76%, white 24%) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ca8a04' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right .55rem center !important;
+  background-size: 14px 14px !important;
+  color: var(--text-strong) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.78), 0 4px 12px rgba(15,23,42,.07) !important;
+  cursor: pointer;
+}
+.vstudio-select-compact {
+  min-height: 28px;
+  border-radius: 9px !important;
+  padding-left: .5rem !important;
+}
+.vstudio-select:hover {
+  border-color: rgba(234,179,8,.7) !important;
+  background-color: color-mix(in srgb, var(--glass-inset-bg) 64%, #fef9c3 36%) !important;
+}
+.vstudio-select:focus-visible {
+  border-color: #eab308 !important;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(250,204,21,.2), inset 0 1px 0 rgba(255,255,255,.84) !important;
+}
+.vstudio-select option {
+  padding: .55rem .7rem;
+  background: var(--popover-bg);
+  color: var(--text-strong);
+  font-weight: 600;
+}
 
 /* Reusable Werkzeug controls: one modern glass interaction language. */
 body.werkzeug-active :is(button, [role="button"]):not(:disabled) {
