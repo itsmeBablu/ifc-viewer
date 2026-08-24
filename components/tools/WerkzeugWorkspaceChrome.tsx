@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
-  LuChevronDown, LuChevronLeft, LuChevronRight, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
-  LuLock, LuLockOpen, LuMoon, LuPalette, LuRedo2, LuSave, LuSlidersHorizontal, LuSun, LuUndo2, LuX,
+  LuBox, LuChevronDown, LuChevronLeft, LuChevronRight, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuLock, LuLockOpen, LuMoon, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSun, LuUndo2,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -32,8 +32,6 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "window", label: "Window", icon: <IconMarkupWindow /> },
   { id: "roof", label: "Roof", icon: <IconMarkupRoof /> },
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
-  { id: "column", label: "Column", icon: <span className="font-bold">▮</span> },
-  { id: "beam", label: "Beam", icon: <span className="font-bold">▬</span> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
 ];
@@ -61,18 +59,21 @@ const compactWallFrame = (current: Frame): Frame => {
 
 export default function WerkzeugWorkspaceChrome({
   onFile,
+  onAttachDwgPdf,
   isLoadingModel,
 }: {
   onFile: (file: File) => void;
+  onAttachDwgPdf?: (file: File) => void;
   isLoadingModel: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const attachRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [panelKey, setPanelKey] = useState<PanelKey | null>(null);
   const [collapsed] = useState(false);
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
   const [renderOpen, setRenderOpen] = useState(false);
-  const [viewOpen, setViewOpen] = useState(false);
+  const [auxOpen, setAuxOpen] = useState<"views" | "scale" | "elements" | null>(null);
   const [dockEdge] = useState<DockEdge>("top");
   const [panelHidden, setPanelHidden] = useState(false);
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
@@ -94,6 +95,8 @@ export default function WerkzeugWorkspaceChrome({
   const colorTheme = useAppStore((s) => s.colorTheme);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
+  const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
+  const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
 
   useEffect(() => {
     document.documentElement.dataset.werkzeugDock = dockEdge;
@@ -114,7 +117,7 @@ export default function WerkzeugWorkspaceChrome({
   useEffect(() => {
     const dismiss = () => {
       setRenderOpen(false);
-      setViewOpen(false);
+      setAuxOpen(null);
     };
     window.addEventListener("werkzeug-dismiss-popovers", dismiss);
     return () => window.removeEventListener("werkzeug-dismiss-popovers", dismiss);
@@ -233,20 +236,34 @@ export default function WerkzeugWorkspaceChrome({
     { label: "North", value: "north" }, { label: "South", value: "south" },
     { label: "East", value: "east" }, { label: "West", value: "west" },
   ];
+  const toggleAux = (next: "views" | "scale" | "elements") => {
+    setRenderOpen(false);
+    setAuxOpen((open) => open === next ? null : next);
+  };
+  const contentHeavy = panelKey === "levels" || panelKey === "materials" || panelTab === "layout" || panelTab === "materials";
+  const drawerHeight = portrait
+    ? Math.min(contentHeavy ? 300 : 250, window.innerHeight * .38)
+    : Math.min(contentHeavy ? 420 : 320, window.innerHeight - 92);
   return (
     <>
       <div data-dock={dockEdge} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
+        <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-tool-ribbon">
           {TOOL_ITEMS.map((item) => {
             const active = panelKey === item.id || armed === item.id;
-            return <button key={item.id} type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button>;
+            return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button>{item.id === "levels" && <>
+              <div className="relative shrink-0"><button type="button" onClick={() => toggleAux("views")} className={`werkzeug-tool-button ${auxOpen === "views" ? "is-active btn-v-yellow" : ""}`}><LuEye /><span className="werkzeug-tool-label">Views</span><LuChevronDown /></button>{auxOpen === "views" && <div className="werkzeug-ipad-popup left-0">{viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>)}</div>}</div>
+              <div className="relative shrink-0"><button type="button" onClick={() => toggleAux("scale")} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button>{auxOpen === "scale" && <div className="werkzeug-ipad-popup left-0">{(["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>)}</div>}</div>
+              <button type="button" onClick={() => attachRef.current?.click()} className="werkzeug-tool-button"><LuPaperclip /><span className="werkzeug-tool-label">Attach</span></button>
+              <div className="relative shrink-0"><button type="button" onClick={() => toggleAux("elements")} className={`werkzeug-tool-button ${armed === "column" || armed === "beam" ? "is-active btn-v-yellow" : ""}`}><LuBox /><span className="werkzeug-tool-label">Elements</span><LuChevronDown /></button>{auxOpen === "elements" && <div className="werkzeug-ipad-popup left-0">{(["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div>}</div>
+            </>}</div>;
           })}
           <div className="werkzeug-ipad-snap-ribbon"><ObjectSnapStrip compact showCount={false} /></div>
         </div>
         <div className="werkzeug-ipad-action-ribbon">
         <div className="relative shrink-0">
-          <button type="button" onClick={() => setRenderOpen((value) => !value)} className="btn-yellow-border-hover flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 text-[11px] font-semibold text-[var(--text-body)]"><span>{renderMode === "realistic" ? "Real" : renderMode === "light" ? "Light" : "Wireframe"}</span><LuChevronDown /></button>
+          <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((value) => !value); }} className="btn-yellow-border-hover flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 text-[11px] font-semibold text-[var(--text-body)]"><span>{renderMode === "realistic" ? "Real" : renderMode === "light" ? "Light" : "Wireframe"}</span><LuChevronDown /></button>
           {renderOpen && <div className="absolute right-0 top-[calc(100%+.4rem)] w-36 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 shadow-xl backdrop-blur-xl">{(["realistic", "light", "wireframe"] as const).map((mode) => <button key={mode} type="button" className="btn-yellow-border-hover block min-h-11 w-full rounded-lg border border-transparent px-2 text-left text-xs capitalize text-[var(--text-body)]" onClick={() => { useAppStore.getState().setRenderMode(mode); setRenderOpen(false); }}>{mode === "realistic" ? "Real" : mode}</button>)}</div>}
         </div>
         <div className="relative flex shrink-0 items-center gap-1">
@@ -255,21 +272,19 @@ export default function WerkzeugWorkspaceChrome({
           <button type="button" onClick={() => void undoWerkzeug()} className="btn-yellow-border-hover werkzeug-icon-action" title="Undo"><LuUndo2 /><span>Undo</span></button>
           <button type="button" onClick={() => void redoWerkzeug()} className="btn-yellow-border-hover werkzeug-icon-action" title="Redo"><LuRedo2 /><span>Redo</span></button>
           <button type="button" onClick={() => useAppStore.getState().setColorTheme(colorTheme === "dark" ? "light" : "dark")} className="werkzeug-theme-knob" title="Change theme">{colorTheme === "dark" ? <LuMoon /> : <LuSun />}</button>
-          <div className="relative"><button type="button" onClick={() => setViewOpen((value) => !value)} className="btn-yellow-border-hover werkzeug-icon-action" title="Views"><LuEye /><span className="font-bold">{viewPreset === "free" ? "3D" : viewPreset === "top" ? "2D" : viewPreset}</span><LuChevronDown /></button>{viewOpen && <div className="werkzeug-ipad-popup right-0">{viewItems.map((item) => <button key={item.value} className={viewPreset === item.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(item.value); setViewOpen(false); }}>{item.label}</button>)}</div>}</div>
         </div>
         </div>
       </div>
 
       {(panelHidden || !panelKey) && <button type="button" onClick={() => { if (!panelKey) setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label={`Show ${panelKey ?? "properties and layout"} options`}><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></button>}
-      {panelKey && !panelHidden && <div data-orientation={portrait ? "portrait" : "landscape"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 8, right: 8, bottom: 56, height: collapsed ? 48 : Math.min(300, window.innerHeight * .38) } : { right: 8, top: 76, width: Math.min(330, window.innerWidth * .36), height: collapsed ? 48 : Math.min(420, window.innerHeight - 92) }}>
+      {panelKey && !panelHidden && <div data-orientation={portrait ? "portrait" : "landscape"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 8, right: 8, bottom: 56, height: collapsed ? 48 : drawerHeight } : { right: 8, top: 76, width: Math.min(330, window.innerWidth * .36), height: collapsed ? 48 : drawerHeight }}>
+        <button type="button" onClick={() => setPanelHidden(true)} className="werkzeug-ipad-drawer-toggle" title="Hide Properties / Layout" aria-label="Hide Properties and Layout drawer">{portrait ? <LuChevronDown /> : <LuChevronRight />}</button>
         <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
-          <div className="flex h-full min-h-0 flex-col">
+          <div className="werkzeug-ipad-drawer-body flex h-full min-h-0 flex-col">
             <div onPointerDown={beginDrag} className="flex h-10 shrink-0 touch-none cursor-move items-center justify-between border-b border-[var(--panel-divider)] px-2.5">
               <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{panelKey} options</span>
               <div className="flex items-center gap-1">
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
-                <button type="button" onClick={() => setPanelHidden(true)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title="Hide"><LuChevronRight /></button>
-                <button type="button" onClick={() => setPanelHidden(true)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title="Collapse to Properties / Layout bar"><LuX /></button>
               </div>
             </div>
             {!collapsed && <div className="flex shrink-0 border-b border-[var(--panel-divider)] px-1">{(panelKey === "levels" ? ["properties", "layout"] as const : ["properties", "layout", "type", "materials"] as const).map((tab) => <button key={tab} onClick={() => setPanelTab(tab)} className={`min-h-8 flex-1 border-b-2 text-[9px] font-semibold capitalize ${panelTab === tab ? "border-yellow-400 text-[var(--text-strong)]" : "border-transparent text-[var(--text-muted)]"}`}>{tab === "type" && panelKey === "lines" ? "Drawing" : tab}</button>)}</div>}

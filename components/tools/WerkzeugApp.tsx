@@ -542,6 +542,17 @@ export default function WerkzeugApp() {
         ) : (
           <WerkzeugWorkspaceChrome
             onFile={handleFile}
+            onAttachDwgPdf={(file) => {
+              const layout = useLayoutDrawingStore.getState();
+              const levelId = useToolMarkupStore.getState().markupFloorId ?? layout.levels[0]?.id;
+              if (!levelId) return;
+              void layout.addUnderlayFromFile(levelId, file).then((underlay) => {
+                if (!underlay) return;
+                layout.selectUnderlay(underlay.id);
+                useToolMarkupStore.getState().setMarkupFloorId(levelId);
+                useToolMarkupStore.getState().setViewPreset("top");
+              });
+            }}
             isLoadingModel={isLoadingModel}
           />
         )}
