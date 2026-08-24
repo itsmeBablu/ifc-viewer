@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
-  LuBox, LuChevronDown, LuChevronLeft, LuChevronRight, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuBox, LuChevronDown, LuChevronLeft, LuChevronRight, LuChevronUp, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
   LuLock, LuLockOpen, LuMoon, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSun, LuUndo2,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
@@ -284,9 +284,9 @@ export default function WerkzeugWorkspaceChrome({
 
       {auxOpen && <div data-popup-surface className="werkzeug-ipad-popup werkzeug-ipad-popup-fixed" style={auxPosition}>{auxOpen === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : auxOpen === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div>}
 
-      {(panelHidden || !panelKey) && <button type="button" onClick={() => { if (!panelKey) setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label={`Show ${panelKey ?? "properties and layout"} options`}><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></button>}
-      {panelKey && !panelHidden && <div data-orientation={portrait ? "portrait" : "landscape"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 8, right: 8, bottom: 56, height: collapsed ? 48 : drawerHeight } : { right: 8, top: 76, width: Math.min(330, window.innerWidth * .36), height: collapsed ? 48 : drawerHeight }}>
-        <button type="button" onClick={() => setPanelHidden(true)} className="werkzeug-ipad-drawer-toggle" title="Hide Properties / Layout" aria-label="Hide Properties and Layout drawer">{portrait ? <LuChevronDown /> : <LuChevronRight />}</button>
+      {!panelKey && <button type="button" onClick={() => { setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label="Show properties and layout options"><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></button>}
+      {panelKey && <div data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 8, right: 8, bottom: 56, height: collapsed ? 48 : drawerHeight } : { right: 0, top: 76, width: Math.min(330, window.innerWidth * .36), height: collapsed ? 48 : drawerHeight }}>
+        <button type="button" onClick={() => setPanelHidden((hidden) => !hidden)} className="werkzeug-ipad-drawer-toggle" title={`${panelHidden ? "Show" : "Hide"} Properties / Layout`} aria-label={`${panelHidden ? "Show" : "Hide"} Properties and Layout drawer`}>{portrait ? (panelHidden ? <LuChevronUp /> : <LuChevronDown />) : (panelHidden ? <LuChevronLeft /> : <LuChevronRight />)}</button>
         <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
           <div className="werkzeug-ipad-drawer-body flex h-full min-h-0 flex-col">
             <div onPointerDown={beginDrag} className="flex h-10 shrink-0 touch-none cursor-move items-center justify-between border-b border-[var(--panel-divider)] px-2.5">

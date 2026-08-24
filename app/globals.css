@@ -1443,7 +1443,10 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   .werkzeug-ipad-levels button { min-height: 36px; }
   .werkzeug-ipad-panel-peek { position: fixed; z-index: 69; top: 48%; right: 0; width: 28px; height: 58px; border: 1px solid var(--panel-divider); border-right: 0; border-radius: 14px 0 0 14px; background: var(--popover-bg); color: var(--text-strong); box-shadow: 0 8px 24px rgba(0,0,0,.16); backdrop-filter: blur(18px); }
   .werkzeug-ipad-context[data-orientation="landscape"] {
-    animation: werkzeug-panel-from-right .28s cubic-bezier(.16,1,.3,1);
+    transition: transform .28s cubic-bezier(.16,1,.3,1);
+  }
+  .werkzeug-ipad-context[data-orientation="landscape"][data-hidden="true"] {
+    transform: translateX(calc(100% - 20px));
   }
   .werkzeug-ipad-drawer-toggle {
     position: absolute;
@@ -1451,22 +1454,29 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--panel-divider) 74%, white 26%);
-    background: color-mix(in srgb, var(--popover-bg) 86%, transparent);
+    border: 0;
+    background: rgba(161,161,170,.3);
+    color: rgb(82,82,91);
+    transition: background-color .2s ease, color .2s ease;
+  }
+  .werkzeug-ipad-drawer-toggle:hover,
+  .werkzeug-ipad-drawer-toggle:active {
+    background: rgba(161,161,170,.45);
     color: var(--text-strong);
-    box-shadow: inset 0 1px rgba(255,255,255,.62), 0 5px 16px rgba(15,23,42,.12);
-    backdrop-filter: blur(18px) saturate(140%);
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-toggle {
     inset: 0 auto 0 0;
-    width: 28px;
-    border-radius: 16px 0 0 16px;
+    width: 20px;
+    border-radius: 20px 0 0 20px;
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-body {
-    padding-left: 28px;
+    padding-left: 20px;
   }
   .werkzeug-ipad-context[data-orientation="portrait"] {
-    animation: werkzeug-panel-from-bottom .3s cubic-bezier(.16,1,.3,1);
+    transition: transform .3s cubic-bezier(.16,1,.3,1);
+  }
+  .werkzeug-ipad-context[data-orientation="portrait"][data-hidden="true"] {
+    transform: translateY(calc(100% - 24px));
   }
   .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-drawer-toggle {
     top: 4px;
@@ -1474,10 +1484,16 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     width: 54px;
     height: 22px;
     transform: translateX(-50%);
-    border-radius: 999px;
+    border-radius: 0 0 999px 999px;
   }
   .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-drawer-body {
     padding-top: 24px;
+  }
+  .werkzeug-ipad-context[data-hidden="true"] .werkzeug-ipad-context-surface {
+    pointer-events: none;
+  }
+  .werkzeug-ipad-context[data-hidden="true"] .werkzeug-ipad-drawer-toggle {
+    pointer-events: auto;
   }
   .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-panel-content > div {
     display: grid;
