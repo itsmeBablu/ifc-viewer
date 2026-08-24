@@ -1411,8 +1411,8 @@ body.werkzeug-active input[type="range"]:not(.ui-slider) {
 body.werkzeug-active input[type="range"]:not(.ui-slider)::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(250,204,21,.3);
-  box-shadow: inset 0 1px 2px rgba(161,98,7,.1), 0 1px 5px rgba(250,204,21,.16);
+  background: rgba(113,113,122,.26);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58), inset 0 -1px 1px rgba(15,23,42,.08), 0 2px 7px rgba(15,23,42,.08);
 }
 body.werkzeug-active input[type="range"]:not(.ui-slider)::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -1428,7 +1428,8 @@ body.werkzeug-active input[type="range"]:not(.ui-slider)::-webkit-slider-thumb {
 body.werkzeug-active input[type="range"]:not(.ui-slider)::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(250,204,21,.28);
+  background: rgba(113,113,122,.26);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58), 0 2px 7px rgba(15,23,42,.08);
 }
 body.werkzeug-active input[type="range"]:not(.ui-slider)::-moz-range-progress {
   height: 4px;
@@ -1462,8 +1463,8 @@ body.werkzeug-active input[type="range"]:disabled {
 .material-slider::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #facc15 0 var(--slider-progress), rgba(250, 204, 21, 0.28) var(--slider-progress) 100%);
-  box-shadow: 0 1px 5px rgba(250, 204, 21, 0.22);
+  background: linear-gradient(90deg, #fde047 0, #eab308 var(--slider-progress), rgba(113,113,122,.26) var(--slider-progress), rgba(113,113,122,.26) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62), inset 0 -1px 1px rgba(15,23,42,.08), 0 2px 7px rgba(15,23,42,.08);
 }
 .material-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -1479,12 +1480,13 @@ body.werkzeug-active input[type="range"]:disabled {
 .material-slider::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(250, 204, 21, 0.28);
+  background: rgba(113,113,122,.26);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 2px 7px rgba(15,23,42,.08);
 }
 .material-slider::-moz-range-progress {
   height: 4px;
   border-radius: 999px;
-  background: #facc15;
+  background: linear-gradient(90deg, #fde047, #eab308);
 }
 .material-slider::-moz-range-thumb {
   width: 15px;
