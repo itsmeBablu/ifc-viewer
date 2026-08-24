@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LuBox, LuBuilding2, LuFootprints, LuLayers3, LuMousePointer2, LuPaperclip, LuScale, LuSunMedium } from "react-icons/lu";
+import { LuBox, LuBuilding2, LuFootprints, LuGrid2X2, LuLayers3, LuMousePointer2, LuPaperclip, LuScale, LuSunMedium } from "react-icons/lu";
 import type { RenderMode } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -29,6 +29,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
   const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
   const setMarkupFloorId = useToolMarkupStore((s) => s.setMarkupFloorId);
+  const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
+  const quadView = useToolMarkupStore((s) => s.quadView);
+  const setQuadView = useToolMarkupStore((s) => s.setQuadView);
   const walkthroughMode = useToolMarkupStore((s) => s.walkthroughMode);
   const setWalkthroughMode = useToolMarkupStore((s) => s.setWalkthroughMode);
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
@@ -60,7 +63,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const activeLevel = levels.find((level) => level.id === markupFloorId) ?? levels[0];
 
   return (
-    <div ref={rootRef} className="fixed bottom-3 left-1/2 z-40 flex h-10 w-[520px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] border border-white/80 bg-white/78 px-1.5 text-zinc-700 shadow-[inset_0_1px_0_white,0_12px_34px_rgba(15,23,42,0.22)] backdrop-blur-2xl select-none" aria-label="Viewer controls">
+    <div ref={rootRef} className="fixed bottom-3 left-1/2 z-40 flex h-10 w-[570px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] border border-white/80 bg-white/78 px-1.5 text-zinc-700 shadow-[inset_0_1px_0_white,0_12px_34px_rgba(15,23,42,0.22)] backdrop-blur-2xl select-none" aria-label="Viewer controls">
       <DockButton icon={<LuMousePointer2 />} label="Select" hint="Exit the active tool and click a model element to select it." onClick={enterSelectMode} />
       <DockDivider />
       <div className="relative">
@@ -87,8 +90,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
       </div>
       <div className="relative">
         <DockButton icon={<LuBuilding2 />} label={activeLevel?.name ?? "Level 1"} hint="Switch the active drawing and attachment level." active={popup === "level"} onClick={() => toggle("level")} />
-        {popup === "level" && <Popover title="Active level"><div className="max-h-60 space-y-1 overflow-y-auto thin-scroll">{levels.map((level) => <button key={level.id} type="button" className={`dock-menu-row ${level.id === activeLevel?.id ? "!bg-zinc-900 !text-white" : ""}`} onClick={() => { setMarkupFloorId(level.id); setSelectedFloor(level.id); setPopup(null); }}><LuLayers3 /><span><strong>{level.name}</strong><small>{level.elevationMm} mm</small></span></button>)}</div></Popover>}
+        {popup === "level" && <Popover title="Open floor plan"><div className="max-h-60 space-y-1 overflow-y-auto thin-scroll">{levels.map((level) => <button key={level.id} type="button" className={`dock-menu-row ${level.id === activeLevel?.id ? "!bg-zinc-900 !text-white" : ""}`} onClick={() => { setMarkupFloorId(level.id); setSelectedFloor(level.id); setViewPreset("top"); setPopup(null); }}><LuLayers3 /><span><strong>{level.name}</strong><small>2D floor plan · {level.elevationMm} mm</small></span></button>)}</div></Popover>}
       </div>
+      <DockButton icon={<LuGrid2X2 />} label="Views" hint="Show Top, 3D, and elevation views together in one window." active={quadView} onClick={() => setQuadView(!quadView)} />
       <DockDivider />
       <HoverTip label="Object snaps" hint="Choose endpoint, midpoint, center, intersection, and other precision snaps." disabled={popup !== null}><ObjectSnapStrip compact iconOnly /></HoverTip>
     </div>
