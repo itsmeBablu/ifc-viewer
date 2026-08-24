@@ -476,6 +476,23 @@ export default function WerkzeugContextMenu({
                       </div>
                     </div>
                   )}
+                  {!primaryLayoutSelection && selectedPlacementId && (
+                    <div className="rounded-2xl border border-white/90 bg-white/55 p-1">
+                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">3D shape</p>
+                      {(["translate", "rotate", "scale"] as const).map((mode) => <button key={mode} type="button" className={itemCls()} onClick={() => { setTransformMode(mode); close(); }}><span className="capitalize">{mode === "translate" ? "Move" : mode}</span></button>)}
+                      <button type="button" className={itemCls()} onClick={() => { const p = placements.find((item) => item.id === selectedPlacementId); if (p) void placeShape(p.type, { x: p.posX + .4, y: p.posY, z: p.posZ + .4 }, { floorId: p.floorId, rot: { x: p.rotX, y: p.rotY, z: p.rotZ }, sizeX: p.sizeX, sizeY: p.sizeY, sizeZ: p.sizeZ }); close(); }}><span>{t(uiLanguage, "layoutDuplicate")}</span></button>
+                      <button type="button" className={`${itemCls()} text-red-600`} onClick={() => { void deletePlacement(selectedPlacementId); clearSelection(); close(); }}><span>{t(uiLanguage, "markupDelete")}</span></button>
+                    </div>
+                  )}
+                  {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId != null && (
+                    <div className="rounded-2xl border border-white/90 bg-white/55 p-1">
+                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">IFC component</p>
+                      <button type="button" className={itemCls()} onClick={() => { setRightPanelOpen(true); requestToolReveal(toolSelectedExpressId); close(); }}><span>Properties</span></button>
+                      <button type="button" className={itemCls()} onClick={() => { isolateElements([toolSelectedExpressId]); requestToolReveal(toolSelectedExpressId); close(); }}><span>{t(uiLanguage, "layoutIsolate")}</span></button>
+                      <button type="button" className={itemCls()} onClick={() => { setArmedTool("note"); close(); }}><span>{t(uiLanguage, "layoutAddNote")}</span></button>
+                    </div>
+                  )}
+                  {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId == null && <>
                   <p className={`mb-1 px-2 ${ctxLabel}`}>
                     {t(uiLanguage, "markupViews")}
                   </p>
@@ -724,6 +741,7 @@ export default function WerkzeugContextMenu({
                   >
                     <span>{t(uiLanguage, "markupFocusSelected")}</span>
                   </button>
+                  </>}
                 </>
               ) : (
                 <>

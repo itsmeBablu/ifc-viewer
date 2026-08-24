@@ -1,347 +1,106 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LuBox, LuBuilding2, LuFootprints, LuLayers3, LuMousePointer2, LuPaperclip, LuScale, LuSunMedium } from "react-icons/lu";
+import type { RenderMode } from "@/lib/types";
+import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { useAppStore } from "@/store/useAppStore";
-import {
-  LuCompass,
-  LuLayers,
-  LuScale,
-  LuKeyboard,
-  LuPaperclip,
-  LuFileImage,
-  LuFootprints,
-} from "react-icons/lu";
-import type { RenderMode } from "@/lib/types";
+import ObjectSnapStrip from "./ObjectSnapStrip";
 
 const RENDER_MODES: { id: RenderMode; label: string }[] = [
-  { id: "realistic", label: "Realistic" },
-  { id: "fullColor", label: "Shaded" },
-  { id: "light", label: "Light" },
-  { id: "wireframe", label: "Wire" },
+  { id: "realistic", label: "Realistic" }, { id: "fullColor", label: "Shaded" },
+  { id: "light", label: "Light" }, { id: "wireframe", label: "Wireframe" },
 ];
+type Popup = "attach" | "render" | "scale" | "level" | null;
 
-export default function ToolStatusBar({
-  pointer,
-  onAttachDwgPdf,
-  onAttachIfc,
-}: {
+export default function ToolStatusBar({ onAttachDwgPdf }: {
   pointer: { x: number; y: number };
   onAttachDwgPdf?: (file: File) => void;
   onAttachIfc?: (file: File) => void;
 }) {
-  const dwgInputRef = useRef<HTMLInputElement>(null);
-  const ifcInputRef = useRef<HTMLInputElement>(null);
-
-  const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
-  const wallDraw = useLayoutDrawingStore((s) => s.wallDraw);
-  const trimFirstPick = useLayoutDrawingStore((s) => s.trimFirstPick);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [popup, setPopup] = useState<Popup>(null);
   const drawingScale = useLayoutDrawingStore((s) => s.drawingScale || "1:100");
   const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
-
-  const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
-  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
-  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
-  const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
-  const unitSystem = useLayoutDrawingStore((s) => s.unitSystem);
-  const setUnitSystem = useLayoutDrawingStore((s) => s.setUnitSystem);
-
-  const armedTool = useToolMarkupStore((s) => s.armedTool);
-  const snapToFaces = useToolMarkupStore((s) => s.snapToFaces);
-  const gridSnap = useToolMarkupStore((s) => s.gridSnap);
-  const snapEndpoint = useToolMarkupStore((s) => s.snapEndpoint);
-  const snapMidpoint = useToolMarkupStore((s) => s.snapMidpoint);
-  const snapCenter = useToolMarkupStore((s) => s.snapCenter);
-  const snapIntersection = useToolMarkupStore((s) => s.snapIntersection);
-  const snapPerpendicular = useToolMarkupStore((s) => s.snapPerpendicular);
-  const snapExtension = useToolMarkupStore((s) => s.snapExtension);
-  const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
-
-  // Build compact snap active summary
-  const activeSnaps = [
-    snapEndpoint && "Endpt",
-    snapMidpoint && "Mid",
-    snapCenter && "Ctr",
-    snapIntersection && "Int",
-    snapPerpendicular && "Perp",
-    snapExtension && "Ext",
-    snapToFaces && "Face",
-    gridSnap && "Grid",
-  ].filter(Boolean).join("+") || "Off";
-  const wallSnapType = useLayoutDrawingStore((s) => s.wallDraw?.snapType);
-
-  const uiLanguage = useAppStore((s) => s.uiLanguage);
-  const floors = useAppStore((s) => s.floors);
-  const selectedFloor = useAppStore((s) => s.selectedFloor);
-  const selectedElement = useAppStore((s) => s.selectedElement);
+  const levels = useLayoutDrawingStore((s) => s.levels);
+  const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
+  const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
+  const setMarkupFloorId = useToolMarkupStore((s) => s.setMarkupFloorId);
+  const walkthroughMode = useToolMarkupStore((s) => s.walkthroughMode);
+  const setWalkthroughMode = useToolMarkupStore((s) => s.setWalkthroughMode);
+  const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
   const renderMode = useAppStore((s) => s.renderMode);
   const setRenderMode = useAppStore((s) => s.setRenderMode);
-
-  const currentFloorObj = floors.find((f) => f.id === selectedFloor);
-
-  const getToolStatusAndHints = () => {
-    if (armedLayoutTool === "trim") {
-      if (trimFirstPick) {
-        return {
-          mode: "Trim / Join — Step 2",
-          hint: "Select second wall to attach and join to the first wall (base wall stays highlighted)",
-        };
-      }
-      return {
-        mode: "Trim / Join Tool Active",
-        hint: "Select first wall near the end you want to keep as base reference",
-      };
-    }
-    if (armedLayoutTool === "wall") {
-      if (wallDraw) {
-        return {
-          mode: "Wall Drawing Active",
-          hint: "Click next point • Shift: 45° angle snap • Tab: switch direction • Enter: complete chain • Esc: cancel",
-        };
-      }
-      return {
-        mode: "Wall Tool Active",
-        hint: "Click in 2D Top View or 3D floor plane to start wall • Space: flip wall alignment",
-      };
-    }
-    if (armedLayoutTool === "door") {
-      return {
-        mode: "Door Tool Active",
-        hint: "Hover over any wall and click to place door • Space: flip swing • Tab: flip hand",
-      };
-    }
-    if (armedLayoutTool === "window") {
-      return {
-        mode: "Window Tool Active",
-        hint: "Hover over any wall and click to insert window • Tab: cycle snap point",
-      };
-    }
-    if (armedLayoutTool === "floor") {
-      return {
-        mode: "Floor Sketch Active",
-        hint: "Click corners to define floor boundary • Close loop or Enter to finish • Inner loop = hole • Esc: cancel",
-      };
-    }
-    if (armedLayoutTool === "roof") {
-      return {
-        mode: "Roof Sketch Active",
-        hint: "Click corners to define roof boundary polygon • Enter: finish • Esc: cancel",
-      };
-    }
-    if (armedTool && armedTool !== "note") {
-      return {
-        mode: `${armedTool.toUpperCase()} Shape Tool`,
-        hint: "Click & drag on ground or IFC face to size shape • Shift: constrain proportions",
-      };
-    }
-    if (armedTool === "note") {
-      return {
-        mode: "Sticky Tag Active",
-        hint: "Click on any 3D geometry element or wall to attach a pin annotation tag",
-      };
-    }
-
-    // Selection Modes
-    if (selectedWallId) {
-      return {
-        mode: "Modify | Wall Selected",
-        hint: "Drag endpoints to stretch • Space: flip direction • Ctrl+C: copy • Del: delete • Esc: deselect",
-      };
-    }
-    if (selectedDoorId || selectedWindowId) {
-      return {
-        mode: "Modify | Opening Selected",
-        hint: "Drag along wall to reposition • Space: flip swing • Tab: flip hand • Del: delete",
-      };
-    }
-    if (selectedSlabId) {
-      return {
-        mode: "Modify | Slab Selected",
-        hint: "Edit boundary in Properties panel • Del: delete • Esc: deselect",
-      };
-    }
-    if (selectedPlacementId) {
-      return {
-        mode: "Modify | 3D Shape Selected",
-        hint: "Use Transform Gizmo to Move / Rotate / Scale • Del: delete • Esc: deselect",
-      };
-    }
-
-    return {
-      mode: "Select Mode",
-      hint: "Click element to inspect • Right Drag: Orbit 3D • Shift + Right Drag: Pan • Scroll: Zoom",
-    };
-  };
-
-  const { mode, hint } = getToolStatusAndHints();
-
-  const [attachOpen, setAttachOpen] = useState(false);
-  const [shadingOpen, setShadingOpen] = useState(false);
-  const statusBarRef = useRef<HTMLDivElement>(null);
+  const lighting = useAppStore((s) => s.lighting);
+  const setLighting = useAppStore((s) => s.setLighting);
+  const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
 
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (statusBarRef.current && !statusBarRef.current.contains(e.target as Node)) {
-        setAttachOpen(false);
-        setShadingOpen(false);
-      }
+    if (!popup) return;
+    const close = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setPopup(null);
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [popup]);
+
+  const toggle = (next: Exclude<Popup, null>) => setPopup((current) => current === next ? null : next);
+  const enterSelectMode = () => { setArmedLayoutTool(null); setArmedTool(null); };
+  const toggleWalk = () => {
+    const next = !walkthroughMode;
+    setWalkthroughMode(next);
+    if (next) {
+      setRenderMode("realistic");
+      setLighting({ elementTransparency: 1, color: 1, shadow: 0.88, indirectLight: 0.68 });
+    }
+  };
+  const activeLevel = levels.find((level) => level.id === markupFloorId) ?? levels[0];
 
   return (
-    <div ref={statusBarRef} className="fixed bottom-3.5 left-1/2 -translate-x-1/2 z-40 flex h-7.5 items-center justify-between liquid-glass-pill px-3 py-1 text-[10px] text-[var(--text-muted)] select-none shadow-2xl gap-4">
-      {/* Left: Mode Badge + Keyboard Guidance + Attach Actions */}
-      <div className="flex items-center gap-1.5 font-medium min-w-0">
-        {/* Mode badge */}
-        <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 animate-pulse" />
-        <span className="font-bold text-amber-600 dark:text-amber-400 shrink-0 uppercase tracking-wider text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 leading-none">
-          {mode}
-        </span>
-        <span className="text-[var(--text-strong)] font-semibold truncate hidden lg:flex items-center gap-1 max-w-[380px]">
-          <LuKeyboard className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
-          <span className="truncate">{hint}</span>
-        </span>
-
-        {/* Divider */}
-        <div className="h-3 w-px bg-[var(--panel-divider)] shrink-0 mx-0.5" />
-
-        {/* -- File Attach Actions ------------------------------ */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setAttachOpen(!attachOpen)}
-            title="Attach Files"
-            className={`flex items-center justify-center rounded-full w-6 h-6 transition-all ${
-              attachOpen 
-                ? "bg-amber-500/20 text-amber-500 border border-amber-400"
-                : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] border border-transparent"
-            }`}
-          >
-            <LuPaperclip className="h-3.5 w-3.5" />
-          </button>
-          
-          {attachOpen && (
-            <div className="absolute bottom-full mb-2 left-0 w-36 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
-              <input ref={dwgInputRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachDwgPdf?.(file); e.target.value = ""; }} />
-              <input ref={ifcInputRef} type="file" accept=".ifc,.frag" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onAttachIfc?.(file); e.target.value = ""; }} />
-              
-              <button onClick={() => { setAttachOpen(false); dwgInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-sky-400">
-                 <LuFileImage className="h-3.5 w-3.5" /> DWG/PDF
-              </button>
-              <button onClick={() => { setAttachOpen(false); ifcInputRef.current?.click(); }} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-emerald-400">
-                 <LuPaperclip className="h-3.5 w-3.5" /> IFC Model
-              </button>
-            </div>
-          )}
-        </div>
+    <div ref={rootRef} className="fixed bottom-3.5 left-1/2 z-40 flex h-12 w-[560px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-1 rounded-[22px] border border-white/80 bg-white/78 px-2 text-zinc-700 shadow-[inset_0_1px_0_white,0_14px_42px_rgba(15,23,42,0.24)] backdrop-blur-2xl select-none" aria-label="Viewer controls">
+      <DockButton icon={<LuMousePointer2 />} label="Select" onClick={enterSelectMode} />
+      <DockDivider />
+      <div className="relative">
+        <DockButton icon={<LuPaperclip />} label="Attach" active={popup === "attach"} onClick={() => toggle("attach")} />
+        {popup === "attach" && <Popover title="Attach reference">
+          <input ref={fileRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) onAttachDwgPdf?.(file); setPopup(null); }} />
+          <button type="button" className="dock-menu-row" onClick={() => fileRef.current?.click()}><LuPaperclip /><span><strong>DWG / PDF</strong><small>Attach to active level</small></span></button>
+        </Popover>}
       </div>
-
-      {/* Right: Shading Toggle + Scale + Level + Snap + Units + Walkthrough */}
-      <div className="flex items-center gap-2 font-mono text-[10px] shrink-0">
-        {/* -- Walkthrough Toggle (Section 8) ---------------------------- */}
-        <button
-          type="button"
-          onClick={() => useToolMarkupStore.getState().setWalkthroughMode(!useToolMarkupStore.getState().walkthroughMode)}
-          title="Toggle First-Person Walkthrough (WASD)"
-          className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-            useToolMarkupStore((s) => s.walkthroughMode)
-              ? "border-yellow-400 bg-yellow-400/20 text-yellow-400"
-              : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:text-yellow-400"
-          }`}
-        >
-          <LuFootprints className="h-3 w-3" />
-          <span>Walk</span>
-        </button>
-
-        {/* -- Shading Style Toggle (Section 3) ---------------------------- */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShadingOpen(!shadingOpen)}
-            title="Shading Options"
-            className="flex items-center gap-1 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
-          >
-            <LuLayers className="h-3 w-3" />
-            <span>{RENDER_MODES.find(m => m.id === renderMode)?.label || "Shaded"}</span>
-          </button>
-          
-          {shadingOpen && (
-            <div className="absolute bottom-full mb-2 right-0 w-32 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 flex flex-col gap-1">
-              {RENDER_MODES.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setRenderMode(m.id);
-                    setShadingOpen(false);
-                  }}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left transition-colors ${
-                    renderMode === m.id
-                      ? "bg-amber-500/20 text-amber-500"
-                      : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-                  }`}
-                >
-                  <LuLayers className="h-3 w-3 opacity-70" /> {m.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="h-3 w-px bg-[var(--panel-divider)]" />
-
-        {/* Scale Selector */}
-        <div className="flex items-center gap-1 bg-[var(--glass-inset-bg)] px-1.5 py-0.5 rounded border border-[var(--panel-divider)]">
-          <LuScale className="h-3 w-3 text-amber-500" />
-          <span className="text-[var(--text-muted)]">Scale:</span>
-          <select
-            value={drawingScale}
-            onChange={(e) => setDrawingScale(e.target.value as any)}
-            className="bg-transparent font-bold text-[var(--text-strong)] focus:outline-none cursor-pointer"
-          >
-            <option value="1:20">1:20</option>
-            <option value="1:50">1:50</option>
-            <option value="1:100">1:100</option>
-            <option value="1:200">1:200</option>
-            <option value="1:500">1:500</option>
-          </select>
-        </div>
-
-        <div className="h-3 w-px bg-[var(--panel-divider)]" />
-
-        {/* Active Level */}
-        <div className="flex items-center gap-1 text-[var(--text-body)]">
-          <LuLayers className="h-3 w-3 text-amber-500" />
-          <span>{currentFloorObj ? currentFloorObj.name : "Level 1"}</span>
-        </div>
-
-        <div className="h-3 w-px bg-[var(--panel-divider)]" />
-
-        {/* Snap Indicator */}
-        <div className="flex items-center gap-1 text-[var(--text-body)]">
-          <LuCompass className="h-3 w-3 text-sky-400" />
-          <span>
-            {wallSnapType ? (
-              <span className="text-amber-400 font-bold">{wallSnapType}</span>
-            ) : (
-              <span>Snap: {activeSnaps}</span>
-            )}
-          </span>
-        </div>
-
-        {/* Unit */}
-        <button
-          type="button"
-          onClick={() => setUnitSystem(unitSystem === "metric" ? "imperial" : "metric")}
-          title="Toggle Unit System (Metric / Imperial)"
-          className="text-emerald-500 font-sans font-bold hover:text-emerald-600 transition-colors bg-[var(--glass-inset-bg)] px-2 py-0.5 rounded border border-[var(--panel-divider)]"
-        >
-          {unitSystem === "metric" ? "m ↔ ft" : "ft ↔ m"}
-        </button>
+      <DockButton icon={<LuFootprints />} label="Walk" active={walkthroughMode} strong onClick={toggleWalk} />
+      <div className="relative">
+        <DockButton icon={<LuBox />} label="Realistic" active={popup === "render"} onClick={() => toggle("render")} />
+        {popup === "render" && <Popover title="Visual style" wide>
+          <div className="grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" className={`rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white/70 text-zinc-600 hover:bg-white"}`} onClick={() => setRenderMode(mode.id)}>{mode.label}</button>)}</div>
+          <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
+          <DockSlider label="Space opacity" value={lighting.spaceTransparency} onChange={(value) => setLighting({ spaceTransparency: value })} />
+          <DockSlider label="Color" value={lighting.color} onChange={(value) => setLighting({ color: value })} />
+          <div className="mt-1 border-t border-zinc-200/80 pt-2"><div className="mb-1 flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-zinc-400"><LuSunMedium /> Lighting</div><DockSlider label="Direct / shadow" value={lighting.shadow} onChange={(value) => setLighting({ shadow: value })} /><DockSlider label="Indirect light" value={lighting.indirectLight} onChange={(value) => setLighting({ indirectLight: value })} /></div>
+        </Popover>}
       </div>
+      <div className="relative">
+        <DockButton icon={<LuScale />} label="" title={`Scale ${drawingScale}`} active={popup === "scale"} onClick={() => toggle("scale")} />
+        {popup === "scale" && <Popover title="Drawing scale"><div className="grid grid-cols-2 gap-1">{["1:20", "1:50", "1:100", "1:200", "1:500"].map((scale) => <button key={scale} type="button" onClick={() => { setDrawingScale(scale as "1:20" | "1:50" | "1:100" | "1:200" | "1:500"); setPopup(null); }} className={`rounded-xl px-2 py-2 text-xs font-semibold ${drawingScale === scale ? "bg-zinc-900 text-white" : "bg-white/70 text-zinc-600 hover:bg-white"}`}>{scale}</button>)}</div></Popover>}
+      </div>
+      <div className="relative">
+        <DockButton icon={<LuBuilding2 />} label={activeLevel?.name ?? "Level 1"} active={popup === "level"} onClick={() => toggle("level")} />
+        {popup === "level" && <Popover title="Active level"><div className="max-h-60 space-y-1 overflow-y-auto thin-scroll">{levels.map((level) => <button key={level.id} type="button" className={`dock-menu-row ${level.id === activeLevel?.id ? "!bg-zinc-900 !text-white" : ""}`} onClick={() => { setMarkupFloorId(level.id); setSelectedFloor(level.id); setPopup(null); }}><LuLayers3 /><span><strong>{level.name}</strong><small>{level.elevationMm} mm</small></span></button>)}</div></Popover>}
+      </div>
+      <DockDivider />
+      <ObjectSnapStrip compact iconOnly />
     </div>
   );
+}
+
+function DockButton({ icon, label, title, active = false, strong = false, onClick }: { icon: ReactNode; label: string; title?: string; active?: boolean; strong?: boolean; onClick: () => void }) {
+  return <button type="button" title={title ?? label} onClick={onClick} className={`flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-2xl border px-2.5 text-[10px] font-semibold transition ${active ? "border-zinc-900 bg-zinc-900 text-white shadow-lg" : strong ? "border-amber-300 bg-gradient-to-br from-amber-300 to-orange-500 text-zinc-950 shadow-[0_6px_18px_rgba(245,158,11,0.34)] hover:brightness-105" : "border-transparent bg-white/35 text-zinc-700 hover:border-white hover:bg-white/85 hover:shadow-md"}`}><span className="text-[15px]">{icon}</span>{label && <span className="whitespace-nowrap">{label}</span>}</button>;
+}
+function DockDivider() { return <span className="mx-0.5 h-5 w-px shrink-0 bg-zinc-300/70" />; }
+function Popover({ title, wide = false, children }: { title: string; wide?: boolean; children: ReactNode }) {
+  return <div className={`absolute bottom-[calc(100%+10px)] left-1/2 z-50 -translate-x-1/2 rounded-[20px] border border-white/90 bg-white/88 p-2 text-zinc-700 shadow-[inset_0_1px_0_white,0_18px_48px_rgba(15,23,42,0.22)] backdrop-blur-2xl ${wide ? "w-72" : "w-48"}`}><p className="mb-2 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">{title}</p>{children}</div>;
+}
+function DockSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return <label className="grid grid-cols-[92px_1fr_34px] items-center gap-2 py-1 text-[10px]"><span>{label}</span><input type="range" min={0} max={1} step={0.05} value={value} onChange={(event) => onChange(Number(event.target.value))} className="accent-zinc-900" /><span className="text-right font-mono text-[9px] text-zinc-400">{Math.round(value * 100)}%</span></label>;
 }

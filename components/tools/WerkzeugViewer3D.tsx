@@ -541,8 +541,8 @@ function applyRenderMode(
   const spaceOpacity = inTool
     ? 0
     : (lighting?.spaceTransparency ?? 0.8);
-  const elementOpacity = inTool ? 1 : (lighting?.elementTransparency ?? 0.8);
-  const colorAmt = inTool ? 1 : (lighting?.color ?? 1);
+  const elementOpacity = lighting?.elementTransparency ?? (inTool ? 1 : 0.8);
+  const colorAmt = lighting?.color ?? 1;
 
   if (overlays) {
     // Texture normally hides overlays; if shell was culled (room-only IFC), show gray volumes
@@ -1861,31 +1861,31 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (toolMode) {
       if (renderMode === "light") {
         if (sun) {
-          sun.intensity = 0.6;
-          sun.castShadow = false;
+          sun.intensity = 0.25 + lighting.shadow * 0.75;
+          sun.castShadow = lighting.shadow > 0.35;
         }
-        if (ambient) ambient.intensity = 1.4;
+        if (ambient) ambient.intensity = 0.85 + lighting.indirectLight * 0.75;
         if (renderer) {
           renderer.toneMappingExposure = 1.35;
           renderer.shadowMap.enabled = false;
         }
       } else if (renderMode === "realistic") {
         if (sun) {
-          sun.intensity = 1.6;
-          sun.castShadow = true;
+          sun.intensity = 0.65 + lighting.shadow * 1.65;
+          sun.castShadow = lighting.shadow > 0.05;
         }
-        if (ambient) ambient.intensity = 0.85;
+        if (ambient) ambient.intensity = 0.3 + lighting.indirectLight * 1.05;
         if (renderer) {
-          renderer.toneMappingExposure = 1.25;
-          renderer.shadowMap.enabled = true;
+          renderer.toneMappingExposure = 0.9 + lighting.indirectLight * 0.65;
+          renderer.shadowMap.enabled = lighting.shadow > 0.05;
         }
       } else {
         // fullColor / wireframe
         if (sun) {
-          sun.intensity = 1.3;
-          sun.castShadow = renderMode !== "wireframe";
+          sun.intensity = 0.45 + lighting.shadow * 1.25;
+          sun.castShadow = renderMode !== "wireframe" && lighting.shadow > 0.05;
         }
-        if (ambient) ambient.intensity = 0.95;
+        if (ambient) ambient.intensity = 0.45 + lighting.indirectLight * 0.85;
         if (renderer) {
           renderer.toneMappingExposure = 1.15;
           renderer.shadowMap.enabled = renderMode !== "wireframe";
@@ -2618,6 +2618,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           void layout.deleteSlab(layout.selectedSlabId);
           return;
         }
+        if (layout.selectedElements.length) {
+          e.preventDefault();
+          void layout.deleteSelected();
+          return;
+        }
         const s = useToolMarkupStore.getState();
         if (s.selectedPlacementId) {
           e.preventDefault();
@@ -2649,6 +2654,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const dy =
             e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
           void layout.updateWall(wall.id, wallTranslated(wall, dx, dy));
+          return;
+        }
+        if (layout.selectedElements.length) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : e.altKey ? 1000 : 100;
+          const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          void layout.moveSelected(dx, dy);
           return;
         }
       }

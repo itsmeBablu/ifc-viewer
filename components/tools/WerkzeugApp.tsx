@@ -536,11 +536,18 @@ export default function WerkzeugApp() {
         {/* Bottom CAD Status Bar */}
         {isDesktop && <ToolStatusBar
           pointer={pointer}
-          onAttachIfc={handleFile}
           onAttachDwgPdf={(file) => {
             // DWG/PDF underlay attachment — full per-floor alignment wired in Section 11
             // For now, pass to the existing handleFile flow for IFC, or handle DWG separately
-            console.log("DWG/PDF attached:", file.name);
+            const layout = useLayoutDrawingStore.getState();
+            const levelId = useToolMarkupStore.getState().markupFloorId ?? layout.levels[0]?.id;
+            if (!levelId) return;
+            void layout.addUnderlayFromFile(levelId, file).then((underlay) => {
+              if (!underlay) return;
+              layout.selectUnderlay(underlay.id);
+              useToolMarkupStore.getState().setMarkupFloorId(levelId);
+              useToolMarkupStore.getState().setViewPreset("top");
+            });
           }}
         />}
 
