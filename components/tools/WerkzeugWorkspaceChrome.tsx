@@ -19,6 +19,7 @@ import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import ToolFloorsSection from "./ToolFloorsSection";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import ObjectSnapStrip from "./ObjectSnapStrip";
+import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 
 type PanelKey = "levels" | "materials" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
@@ -31,6 +32,8 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "window", label: "Window", icon: <IconMarkupWindow /> },
   { id: "roof", label: "Roof", icon: <IconMarkupRoof /> },
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
+  { id: "column", label: "Column", icon: <span className="font-bold">▮</span> },
+  { id: "beam", label: "Beam", icon: <span className="font-bold">▬</span> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
 ];
@@ -78,6 +81,9 @@ export default function WerkzeugWorkspaceChrome({
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const columns = useLayoutDrawingStore((s) => s.columns);
+  const beams = useLayoutDrawingStore((s) => s.beams);
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
@@ -98,11 +104,15 @@ export default function WerkzeugWorkspaceChrome({
   const selectedDoor = doors.find((item) => item.id === selectedDoorId) ?? null;
   const selectedWindow = windows.find((item) => item.id === selectedWindowId) ?? null;
   const selectedSlab = slabs.find((item) => item.id === selectedSlabId) ?? null;
+  const selectedColumn = columns.find((item) => selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id)) ?? null;
+  const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id)) ?? null;
   const selectedRef: SelectedElementRef | null = selectedWall
     ? { kind: "wall", id: selectedWall.id }
     : selectedDoor ? { kind: "door", id: selectedDoor.id }
       : selectedWindow ? { kind: "window", id: selectedWindow.id }
-        : selectedSlab ? { kind: "slab", id: selectedSlab.id } : null;
+        : selectedSlab ? { kind: "slab", id: selectedSlab.id }
+          : selectedColumn ? { kind: "column", id: selectedColumn.id }
+            : selectedBeam ? { kind: "beam", id: selectedBeam.id } : null;
   const locked = Boolean(selectedRef && lockedKeys.includes(`${selectedRef.kind}:${selectedRef.id}`));
 
   useEffect(() => useLayoutDrawingStore.subscribe((state, previous) => {
@@ -115,6 +125,13 @@ export default function WerkzeugWorkspaceChrome({
     else if (state.selectedSlabId !== previous.selectedSlabId && state.selectedSlabId) {
       const slab = state.slabs.find((item) => item.id === state.selectedSlabId);
       if (slab) setPanelKey(slab.kind);
+    }
+    else if (state.selectedElements !== previous.selectedElements) {
+      const structural = state.selectedElements.find((item) => item.kind === "column" || item.kind === "beam");
+      if (structural) {
+        setPanelKey(structural.kind === "column" ? "column" : "beam");
+        setPanelTab("properties");
+      }
     }
   }), []);
 
@@ -259,6 +276,7 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   const slab = store.slabs.find((item) => item.id === store.selectedSlabId && item.kind === panelKey);
   const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-transparent px-2 text-[11px] text-[var(--text-strong)] disabled:opacity-50";
   if (tab === "type") return <TypeOptions panelKey={panelKey} locked={locked} />;
+  if (panelKey === "column" || panelKey === "beam") return <LayoutPropertiesPanel />;
   if ((panelKey === "floor" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
     const loops = detectLoopsFromSegments(store.sketchLines);
     const openingCount = [...loops.nestedHoles.values()].reduce((sum, holes) => sum + holes.length, 0);

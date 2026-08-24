@@ -67,8 +67,12 @@ export default function MaterialEditorPanel({ isOpen, onClose, embedded = false 
   const paintId = useMaterialStore((s) => s.paintMaterialId), setPaintId = useMaterialStore((s) => s.setPaintMaterialId);
   const wallId = useLayoutDrawingStore((s) => s.selectedWallId), slabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const doorId = useLayoutDrawingStore((s) => s.selectedDoorId), windowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
+  const columnId = selectedElements.find((item) => item.kind === "column")?.id;
+  const beamId = selectedElements.find((item) => item.kind === "beam")?.id;
   const updateWall = useLayoutDrawingStore((s) => s.updateWall), updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor), updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
+  const updateColumn = useLayoutDrawingStore((s) => s.updateColumn), updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All"), [search, setSearch] = useState("");
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
   const filtered = useMemo(() => materials.filter((m) => (category === "All" || m.category === category || (category === "Custom" && !m.isPreset)) && (!search || `${m.name} ${m.category}`.toLowerCase().includes(search.toLowerCase()))), [materials, category, search]);
@@ -76,9 +80,9 @@ export default function MaterialEditorPanel({ isOpen, onClose, embedded = false 
   if (!isOpen || !selected) return null;
   const patch = (p: Partial<MaterialDefinition>) => update(selected.id, p);
   const clone = () => select(add({ ...selected, name: `${selected.name} Copy`, category: "Custom", isPreset: false }).id);
-  const assign = () => { const p = { material: selected.id, color: selected.color }; if (wallId) void updateWall(wallId, p); else if (slabId) void updateSlab(slabId, p); else if (doorId) void updateDoor(doorId, p); else if (windowId) void updateWindow(windowId, p); };
+  const assign = () => { const p = { material: selected.id, color: selected.color }; if (wallId) void updateWall(wallId, p); else if (slabId) void updateSlab(slabId, p); else if (doorId) void updateDoor(doorId, p); else if (windowId) void updateWindow(windowId, p); else if (columnId) void updateColumn(columnId, p); else if (beamId) void updateBeam(beamId, p); };
   const drag = (e: React.DragEvent, m: MaterialDefinition) => { e.dataTransfer.effectAllowed = "copy"; e.dataTransfer.setData(MATERIAL_DRAG_MIME, m.id); e.dataTransfer.setData("text/plain", `vstudio-material:${m.id}`); select(m.id); };
-  const preview = renderMaterialPreview(selected, shape, 144), hasSelection = Boolean(wallId || slabId || doorId || windowId);
+  const preview = renderMaterialPreview(selected, shape, 144), hasSelection = Boolean(wallId || slabId || doorId || windowId || columnId || beamId);
   const hatchTexture = getHatchCanvasTexture(selected.hatchStyle, "#334155", selected.color, selected.hatchScaleMm ?? 200);
   const hatchCanvas =
     typeof HTMLCanvasElement !== "undefined" && hatchTexture?.image instanceof HTMLCanvasElement

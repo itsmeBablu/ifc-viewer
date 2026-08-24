@@ -47,6 +47,7 @@ import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 import MaterialEditorPanel from "./MaterialEditorPanel";
+import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import {
   wallLengthMm,
   type LayoutLevel,
@@ -182,12 +183,14 @@ export default function ToolRightPanel({
   const selectedDoor = doors.find((d) => d.id === selectedDoorId);
   const selectedWindow = windows.find((w) => w.id === selectedWindowId);
   const selectedSlab = slabs.find((s) => s.id === selectedSlabId);
+  const selectedColumn = columns.find((item) => selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id));
+  const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id));
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId);
 
   const hasLineSelection = Boolean(selectedSketchLine || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || hasLineSelection || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedColumn || selectedBeam || hasLineSelection || selectedPlacement
   );
 
   const propertiesTitle = selectedWall
@@ -200,6 +203,10 @@ export default function ToolRightPanel({
     ? selectedSlab.kind === "roof"
       ? "Roof Properties"
       : "Floor Properties"
+    : selectedColumn
+    ? "Column Properties"
+    : selectedBeam
+    ? "Beam Properties"
     : selectedSketchLine
     ? "Line Properties"
     : sketchLines.length > 0
@@ -422,7 +429,9 @@ export default function ToolRightPanel({
           <div className="flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
             {hasSelection ? (
               <>
-                {selectedSketchLine ? (
+                {selectedColumn || selectedBeam ? (
+                  <LayoutPropertiesPanel />
+                ) : selectedSketchLine ? (
                   <div className="space-y-2">
                     <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">

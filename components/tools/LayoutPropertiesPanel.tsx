@@ -755,6 +755,14 @@ export default function LayoutPropertiesPanel({
 
           {/* Dimensions */}
           <Section title={t(uiLanguage, "layoutEditDimensions")}>
+            <div className="mb-2">
+              <LevelSelect
+                label="Reference level"
+                value={beam.levelId}
+                levels={levels}
+                onChange={(levelId) => void updateBeam(beam.id, { levelId })}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               <MmInput
                 label={t(uiLanguage, "layoutLength")}
@@ -783,7 +791,7 @@ export default function LayoutPropertiesPanel({
                 }
               />
               <MmInput
-                label={t(uiLanguage, "layoutDepth")}
+                label={t(uiLanguage, "layoutHeight")}
                 value={beam.depthMm}
                 onCommit={(v) =>
                   void updateBeam(beam.id, { depthMm: Math.max(50, v) })

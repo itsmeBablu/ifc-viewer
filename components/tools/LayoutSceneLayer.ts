@@ -397,11 +397,11 @@ export default class LayoutSceneLayer {
       const elev = level?.elevationMm ?? 0;
       const height = fromMm(col.heightMm ?? level?.heightMm ?? 3000);
       const isSelected = opts.selectedColumnIds.has(col.id);
+      const w = fromMm(col.widthMm);
+      const d = fromMm(col.depthMm);
 
       let mesh = this.columnMeshes.get(col.id);
       if (!mesh) {
-        const w = fromMm(col.widthMm);
-        const d = fromMm(col.depthMm);
         const geo =
           col.profile === "circle"
             ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
@@ -419,6 +419,15 @@ export default class LayoutSceneLayer {
         this.group.add(mesh);
       }
 
+      const geometryKey = `${col.profile}:${col.widthMm}:${col.depthMm}:${height}`;
+      if (mesh.userData.geometryKey !== geometryKey) {
+        mesh.geometry.dispose();
+        mesh.geometry = col.profile === "circle"
+          ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
+          : new THREE.BoxGeometry(w, height, d);
+        mesh.userData.geometryKey = geometryKey;
+      }
+
       mesh.position.set(fromMm(col.xMm), fromMm(elev) + height / 2, fromMm(col.yMm));
       mesh.visible =
         opts.showAllLevels ||
@@ -426,11 +435,8 @@ export default class LayoutSceneLayer {
         col.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (isSelected) {
-        mat.color.setHex(col.color ? parseInt(col.color.replace("#", "0x"), 16) : 0x94a3b8);
-      } else {
-        mat.color.setHex(col.color ? parseInt(col.color.replace("#", "0x"), 16) : 0x94a3b8);
-      }
+      this.applyMaterialAndColor(mat, col.color, col.material);
+      if (!col.color && !col.material) mat.color.setHex(0x94a3b8);
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
       this.setMeshSelectionOutline(mesh, isSelected);
@@ -485,6 +491,13 @@ export default class LayoutSceneLayer {
         this.group.add(mesh);
       }
 
+      const geometryKey = `${len}:${beam.widthMm}:${beam.depthMm}`;
+      if (mesh.userData.geometryKey !== geometryKey) {
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BoxGeometry(len, d, w);
+        mesh.userData.geometryKey = geometryKey;
+      }
+
       mesh.position.set(
         fromMm((beam.startXmm + beam.endXmm) / 2),
         fromMm(elev + (level?.heightMm ?? 3000) + beam.elevationOffsetMm) - d / 2,
@@ -497,11 +510,8 @@ export default class LayoutSceneLayer {
         beam.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (isSelected) {
-        mat.color.setHex(beam.color ? parseInt(beam.color.replace("#", "0x"), 16) : 0x64748b);
-      } else {
-        mat.color.setHex(beam.color ? parseInt(beam.color.replace("#", "0x"), 16) : 0x64748b);
-      }
+      this.applyMaterialAndColor(mat, beam.color, beam.material);
+      if (!beam.color && !beam.material) mat.color.setHex(0x64748b);
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
       this.setMeshSelectionOutline(mesh, isSelected);
@@ -1844,6 +1854,22 @@ export default class LayoutSceneLayer {
           mesh.material.emissiveIntensity = 0;
           this.applyMaterialAndColor(mesh.material, slab.color, slab.material);
         }
+        mesh.material.needsUpdate = true;
+      }
+    }
+    for (const [id, mesh] of this.columnMeshes) {
+      const column = state.columns.find((item) => item.id === id);
+      if (column && mesh.material instanceof THREE.MeshStandardMaterial) {
+        this.applyMaterialAndColor(mesh.material, column.color, column.material);
+        if (!column.color && !column.material) mesh.material.color.setHex(0x94a3b8);
+        mesh.material.needsUpdate = true;
+      }
+    }
+    for (const [id, mesh] of this.beamMeshes) {
+      const beam = state.beams.find((item) => item.id === id);
+      if (beam && mesh.material instanceof THREE.MeshStandardMaterial) {
+        this.applyMaterialAndColor(mesh.material, beam.color, beam.material);
+        if (!beam.color && !beam.material) mesh.material.color.setHex(0x64748b);
         mesh.material.needsUpdate = true;
       }
     }
