@@ -42,19 +42,19 @@ type MenuState = {
 type SidePanel = "save" | "floor" | "shapes" | null;
 
 const ctxMenuSurface =
-  "context-menu-surface presentation-menu-surface isolate overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-100/78 via-yellow-50/62 to-amber-200/48 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_32px_rgba(251,191,36,0.28)] backdrop-blur-md";
+  "context-menu-surface isolate overflow-hidden rounded-[22px] border border-white/80 bg-gradient-to-br from-white/95 via-white/82 to-slate-100/72 text-zinc-800 shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.12),0_18px_50px_rgba(15,23,42,0.22)] backdrop-blur-2xl";
 
 const ctxItemIdle =
-  "btn-yellow-border-hover flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-[var(--text-body)] disabled:opacity-40";
+  "flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-zinc-700 transition hover:border-white hover:bg-white/80 hover:text-zinc-950 hover:shadow-[0_5px_16px_rgba(15,23,42,0.08)] disabled:opacity-40";
 
 const ctxItemActive =
-  "btn-v-yellow btn-liquid-hover amber-gloss-surface overflow-hidden rounded-xl";
+  "overflow-hidden rounded-xl border-white bg-white/90 text-zinc-950 shadow-[inset_0_1px_0_white,0_5px_16px_rgba(15,23,42,0.10)]";
 
 const ctxChipOn =
-  "btn-v-yellow btn-liquid-hover amber-gloss-surface overflow-hidden rounded-lg";
+  "overflow-hidden rounded-lg border border-white bg-white text-zinc-900 shadow-[inset_0_1px_0_white,0_3px_10px_rgba(15,23,42,0.10)]";
 
 const ctxChipOff =
-  "btn-yellow-border-hover presentation-chip-off overflow-hidden rounded-lg border border-transparent text-[var(--text-muted)]";
+  "overflow-hidden rounded-lg border border-transparent bg-white/35 text-zinc-500 transition hover:border-white hover:bg-white/80 hover:text-zinc-900";
 
 const ctxToggleOn = "bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.55)]";
 const ctxToggleOff = "ctx-toggle-off bg-amber-200/70";
@@ -62,7 +62,7 @@ const ctxToggleOff = "ctx-toggle-off bg-amber-200/70";
 const ctxLabel = "text-[10px] font-semibold tracking-wide text-[var(--text-muted)]";
 
 const ctxPrimaryBtn =
-  "btn-v-yellow btn-liquid-hover w-full rounded-xl px-2 py-1.5 text-xs disabled:opacity-40";
+  "w-full rounded-xl border border-white bg-white/85 px-2 py-1.5 text-xs font-semibold text-zinc-800 shadow-[inset_0_1px_0_white,0_4px_14px_rgba(15,23,42,0.10)] transition hover:bg-white disabled:opacity-40";
 
 /**
  * Right-click context menu for the 3D canvas.
@@ -124,6 +124,12 @@ export default function WerkzeugContextMenu({
   const clearLayoutSelection = useLayoutDrawingStore(
     (s) => s.clearLayoutSelection,
   );
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
+  const moveSelected = useLayoutDrawingStore((s) => s.moveSelected);
+  const copySelected = useLayoutDrawingStore((s) => s.copySelected);
+  const deleteSelected = useLayoutDrawingStore((s) => s.deleteSelected);
+  const lockedElementKeys = useLayoutDrawingStore((s) => s.lockedElementKeys);
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
 
   const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
@@ -225,6 +231,9 @@ export default function WerkzeugContextMenu({
         return;
       }
       drag.moved = false;
+      target.dispatchEvent(new CustomEvent("werkzeug-context-pick", {
+        detail: { clientX: e.clientX, clientY: e.clientY },
+      }));
       setViewerContextMenuOpen(true);
       setSidePanel(null);
       setViewName(defaultSaveViewName());
@@ -366,6 +375,15 @@ export default function WerkzeugContextMenu({
     { id: "west", label: "W" },
     { id: "free", label: "3D" },
   ];
+  const primaryLayoutSelection = selectedElements[selectedElements.length - 1] ?? null;
+  const layoutSelectionLocked = selectedElements.some((item) =>
+    lockedElementKeys.includes(`${item.kind}:${item.id}`),
+  );
+  const layoutSelectionLabel = primaryLayoutSelection
+    ? primaryLayoutSelection.kind === "slab"
+      ? "Floor / roof"
+      : primaryLayoutSelection.kind[0].toUpperCase() + primaryLayoutSelection.kind.slice(1)
+    : null;
 
   const menuNode =
     menu &&
@@ -389,6 +407,75 @@ export default function WerkzeugContextMenu({
             <div className="min-w-[210px] p-1.5">
               {toolMode ? (
                 <>
+                  {primaryLayoutSelection && (
+                    <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1 shadow-[inset_0_1px_0_white]">
+                      <div className="flex items-center justify-between px-2 py-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">
+                          {layoutSelectionLabel}
+                        </span>
+                        <span className="rounded-full bg-zinc-900 px-1.5 py-0.5 text-[8px] font-bold text-white">
+                          Selected
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={itemCls()}
+                        onClick={() => {
+                          setRightPanelOpen(true);
+                          close();
+                        }}
+                      >
+                        <span>Properties</span>
+                        <span className="text-[9px] text-zinc-400">Edit all</span>
+                      </button>
+                      <div className="px-2 pb-1 pt-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+                        Move · 100 mm
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 px-1 pb-1">
+                        {([
+                          ["←", -100, 0],
+                          ["↑", 0, -100],
+                          ["↓", 0, 100],
+                          ["→", 100, 0],
+                        ] as const).map(([label, dx, dy]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            disabled={layoutSelectionLocked}
+                            onClick={() => void moveSelected(dx, dy)}
+                            className="h-8 rounded-xl border border-white/90 bg-white/70 text-sm font-bold text-zinc-700 shadow-[inset_0_1px_0_white,0_3px_10px_rgba(15,23,42,0.06)] transition hover:bg-white disabled:opacity-35"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 px-1 pb-1">
+                        <button
+                          type="button"
+                          disabled={layoutSelectionLocked}
+                          onClick={() => {
+                            void copySelected(500, 500);
+                            close();
+                          }}
+                          className={itemCls()}
+                        >
+                          <span>{t(uiLanguage, "layoutDuplicate")}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={layoutSelectionLocked}
+                          onClick={() => {
+                            void deleteSelected();
+                            close();
+                          }}
+                          className={`${itemCls()} text-red-600 hover:text-red-700`}
+                        >
+                          <span>{t(uiLanguage, "markupDelete")}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <p className={`mb-1 px-2 ${ctxLabel}`}>
                     {t(uiLanguage, "markupViews")}
                   </p>

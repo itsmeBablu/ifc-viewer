@@ -6009,12 +6009,58 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       }
     };
 
+    const onContextPick = (event: Event) => {
+      const detail = (event as CustomEvent<{ clientX: number; clientY: number }>).detail;
+      if (!detail) return;
+      const camera = preparePointerRayRef.current(detail.clientX, detail.clientY);
+      if (!camera) return;
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+
+      const layoutStore = useLayoutDrawingStore.getState();
+      const markupStore = useToolMarkupStore.getState();
+      const layoutHit = layoutLayerRef.current?.pickLayout(raycaster.current);
+      const layoutKind = layoutHit?.kind === "wall-endpoint"
+        ? "wall"
+        : layoutHit?.kind === "sketch-line"
+          ? "line"
+          : layoutHit?.kind;
+      if (
+        layoutHit &&
+        "id" in layoutHit &&
+        layoutKind &&
+        ["wall", "door", "window", "slab", "column", "beam", "grid", "line"].includes(layoutKind)
+      ) {
+        markupStore.clearSelection();
+        useAppStore.getState().setSelectedElement(null);
+        layoutStore.selectElement({
+          kind: layoutKind as "wall" | "door" | "window" | "slab" | "column" | "beam" | "grid" | "line",
+          id: layoutHit.id,
+        });
+        return;
+      }
+
+      const pickedMarkup = markupLayerRef.current?.pickMarkup(raycaster.current);
+      if (pickedMarkup?.kind === "placement") {
+        layoutStore.clearSelection();
+        useAppStore.getState().setSelectedElement(null);
+        markupStore.selectPlacement(pickedMarkup.id);
+        return;
+      }
+
+      layoutStore.clearSelection();
+      markupStore.clearSelection();
+      useAppStore.getState().setSelectedElement(null);
+      const hit = pickHit(detail.clientX, detail.clientY);
+      if (hit) applyPickSelection(hit);
+    };
+
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerleave", onLeave);
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("click", onClick);
     canvas.addEventListener("dblclick", onDblClick);
+    canvas.addEventListener("werkzeug-context-pick", onContextPick);
     return () => {
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
@@ -6022,6 +6068,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("dblclick", onDblClick);
+      canvas.removeEventListener("werkzeug-context-pick", onContextPick);
     };
   }, [
     onPointerMove,
