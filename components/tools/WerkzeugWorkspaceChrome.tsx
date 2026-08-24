@@ -69,14 +69,14 @@ export default function WerkzeugWorkspaceChrome({
   const fileRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [panelKey, setPanelKey] = useState<PanelKey | null>(null);
+  const [panelKey, setPanelKey] = useState<PanelKey | null>("levels");
   const [collapsed] = useState(false);
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
   const [renderOpen, setRenderOpen] = useState(false);
   const [auxOpen, setAuxOpen] = useState<"views" | "scale" | "elements" | null>(null);
   const [auxPosition, setAuxPosition] = useState({ left: 8, top: 96 });
   const [dockEdge] = useState<DockEdge>("top");
-  const [panelHidden, setPanelHidden] = useState(false);
+  const [panelHidden, setPanelHidden] = useState(true);
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -257,7 +257,7 @@ export default function WerkzeugWorkspaceChrome({
         <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-tool-ribbon">
           {TOOL_ITEMS.map((item) => {
-            const active = panelKey === item.id || armed === item.id;
+            const active = (!panelHidden && panelKey === item.id) || armed === item.id;
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button>{item.id === "levels" && <>
               <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("views", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "views" ? "is-active btn-v-yellow" : ""}`}><LuEye /><span className="werkzeug-tool-label">Views</span><LuChevronDown /></button></div>
               <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button></div>
