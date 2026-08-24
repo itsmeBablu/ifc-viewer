@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LuBox, LuBuilding2, LuFootprints, LuGrid2X2, LuLayers3, LuMousePointer2, LuPaperclip, LuScale, LuSunMedium } from "react-icons/lu";
+import { LuBox, LuBuilding2, LuChevronDown, LuFootprints, LuGrid2X2, LuLayers3, LuMousePointer2, LuPaperclip, LuScale, LuSparkles, LuSunMedium } from "react-icons/lu";
 import type { RenderMode } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -13,6 +13,7 @@ const RENDER_MODES: { id: RenderMode; label: string }[] = [
   { id: "realistic", label: "Realistic" }, { id: "fullColor", label: "Shaded" },
   { id: "light", label: "Light" }, { id: "wireframe", label: "Wireframe" },
 ];
+const renderModeIcon = (mode: RenderMode) => mode === "realistic" ? <LuSparkles /> : mode === "light" ? <LuSunMedium /> : mode === "wireframe" ? <LuGrid2X2 /> : <LuBox />;
 type Popup = "attach" | "render" | "scale" | "level" | null;
 
 export default function ToolStatusBar({ onAttachDwgPdf }: {
@@ -61,9 +62,11 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
     }
   };
   const activeLevel = levels.find((level) => level.id === markupFloorId) ?? levels[0];
+  const activeRenderMode = RENDER_MODES.find((mode) => mode.id === renderMode) ?? RENDER_MODES[0];
+  const renderIcon = renderModeIcon(renderMode);
 
   return (
-    <div ref={rootRef} className="fixed bottom-3 left-1/2 z-40 flex h-10 w-[570px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] border border-white/80 bg-white/78 px-1.5 text-zinc-700 shadow-[inset_0_1px_0_white,0_12px_34px_rgba(15,23,42,0.22)] backdrop-blur-2xl select-none" aria-label="Viewer controls">
+    <div ref={rootRef} className="werkzeug-status-dock fixed bottom-3 left-1/2 z-40 flex h-10 w-[570px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] border border-white/80 bg-white/78 px-1.5 text-zinc-700 shadow-[inset_0_1px_0_white,0_12px_34px_rgba(15,23,42,0.22)] backdrop-blur-2xl select-none" aria-label="Viewer controls">
       <DockButton icon={<LuMousePointer2 />} label="Select" hint="Exit the active tool and click a model element to select it." onClick={enterSelectMode} />
       <DockDivider />
       <div className="relative">
@@ -75,9 +78,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
       </div>
       <DockButton icon={<LuFootprints />} label="Walk" hint="Enter a strongly rendered first-person WASD walkthrough." active={walkthroughMode} onClick={toggleWalk} />
       <div className="relative">
-        <DockButton icon={<LuBox />} label="Realistic" hint="Choose visual style, mesh opacity, color, and lighting." active={popup === "render"} onClick={() => toggle("render")} />
+        <DockButton icon={renderIcon} label={activeRenderMode.label} dropdown hint="Choose Realistic, Shaded, Light, or Wireframe rendering." active={popup === "render"} onClick={() => toggle("render")} />
         {popup === "render" && <Popover title="Visual style" wide>
-          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)]"}`} onClick={() => setRenderMode(mode.id)}>{mode.label}</button>)}</div>
+          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)]"}`} onClick={() => setRenderMode(mode.id)}><span className="text-sm">{renderModeIcon(mode.id)}</span><span>{mode.label}</span></button>)}</div>
           <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
           <DockSlider label="Space opacity" value={lighting.spaceTransparency} onChange={(value) => setLighting({ spaceTransparency: value })} />
           <DockSlider label="Color" value={lighting.color} onChange={(value) => setLighting({ color: value })} />
@@ -99,9 +102,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   );
 }
 
-function DockButton({ icon, label, title, hint, active = false, strong = false, onClick }: { icon: ReactNode; label: string; title?: string; hint: string; active?: boolean; strong?: boolean; onClick: () => void }) {
+function DockButton({ icon, label, title, hint, active = false, strong = false, dropdown = false, onClick }: { icon: ReactNode; label: string; title?: string; hint: string; active?: boolean; strong?: boolean; dropdown?: boolean; onClick: () => void }) {
   const tipLabel = label || title || "Viewer control";
-  return <HoverTip label={tipLabel} hint={hint} disabled={active}><button type="button" aria-label={title ?? label} onClick={onClick} className={`flex h-8 shrink-0 items-center justify-center gap-1 rounded-xl border px-2 text-[9px] font-semibold transition ${active || strong ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-transparent bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-[var(--panel-divider)]"}`}><span className="text-[14px]">{icon}</span>{label && <span className="whitespace-nowrap">{label}</span>}</button></HoverTip>;
+  return <HoverTip label={tipLabel} hint={hint} disabled={active}><button type="button" aria-label={title ?? label} onClick={onClick} className={`werkzeug-dock-button flex h-8 shrink-0 items-center justify-center gap-1 rounded-xl border px-2 text-[9px] font-semibold transition ${active || strong ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-transparent bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-[var(--panel-divider)]"}`}><span className="text-[14px]">{icon}</span>{label && <span className="whitespace-nowrap">{label}</span>}{dropdown && <LuChevronDown className={`h-3 w-3 transition-transform ${active ? "rotate-180" : ""}`} />}</button></HoverTip>;
 }
 function DockDivider() { return <span className="mx-0.5 h-5 w-px shrink-0 bg-zinc-300/70" />; }
 function Popover({ title, wide = false, children }: { title: string; wide?: boolean; children: ReactNode }) {

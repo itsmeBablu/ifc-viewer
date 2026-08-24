@@ -49,6 +49,18 @@ export default function QuadViewOverlays() {
         const active = quadActiveIndex === index;
         const open = openIndex === index;
         const current = OPTIONS.find((o) => o.id === preset) ?? OPTIONS[0];
+        const triggerPosition = [
+          "right-1.5 bottom-1.5",
+          "left-1.5 bottom-1.5",
+          "right-1.5 top-1.5",
+          "left-1.5 top-1.5",
+        ][index];
+        const menuPosition = [
+          "right-0 bottom-[calc(100%+0.25rem)]",
+          "left-0 bottom-[calc(100%+0.25rem)]",
+          "right-0 top-[calc(100%+0.25rem)]",
+          "left-0 top-[calc(100%+0.25rem)]",
+        ][index];
         return (
           <div
             key={index}
@@ -56,7 +68,7 @@ export default function QuadViewOverlays() {
               active ? "ring-1 ring-inset ring-amber-400/50" : ""
             }`}
           >
-            <div className="pointer-events-auto absolute left-1.5 top-1.5 z-10">
+            <div className={`pointer-events-auto absolute z-10 ${triggerPosition}`}>
               <button
                 type="button"
                 aria-expanded={open}
@@ -68,7 +80,7 @@ export default function QuadViewOverlays() {
                 {current.label}
               </button>
               {open && (
-                <div className="tool-glass absolute left-0 top-[calc(100%+0.25rem)] z-20 flex min-w-[3.5rem] flex-col overflow-hidden rounded-xl py-1 shadow-lg">
+                <div className={`tool-glass absolute z-20 flex min-w-[3.5rem] flex-col overflow-hidden rounded-xl py-1 shadow-lg ${menuPosition}`}>
                   {OPTIONS.map((opt) => (
                     <button
                       key={opt.id}
