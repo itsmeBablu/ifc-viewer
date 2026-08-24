@@ -1428,6 +1428,17 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     box-shadow: 0 10px 28px rgba(0,0,0,.14), inset 0 1px rgba(255,255,255,.18) !important;
     backdrop-filter: blur(18px) saturate(115%) !important;
   }
+  .werkzeug-ipad-popup.werkzeug-ipad-popup-fixed {
+    position: fixed;
+    z-index: 120;
+    width: 150px;
+    max-height: min(48dvh, 228px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .werkzeug-ipad-popup.werkzeug-ipad-popup-fixed button {
+    min-height: 36px;
+  }
   .werkzeug-ipad-levels { font-size: 11px; }
   .werkzeug-ipad-levels button { min-height: 36px; }
   .werkzeug-ipad-panel-peek { position: fixed; z-index: 69; top: 48%; right: 0; width: 28px; height: 58px; border: 1px solid var(--panel-divider); border-right: 0; border-radius: 14px 0 0 14px; background: var(--popover-bg); color: var(--text-strong); box-shadow: 0 8px 24px rgba(0,0,0,.16); backdrop-filter: blur(18px); }
