@@ -1214,6 +1214,8 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     display: flex;
     gap: 8px;
     max-width: calc(100vw - 16px);
+    background: transparent !important;
+    box-shadow: none !important;
     transition: inset .28s cubic-bezier(.16,1,.3,1), transform .28s cubic-bezier(.16,1,.3,1);
   }
   .werkzeug-ipad-ribbons[data-dock="top"] { inset: 54px auto auto 50%; transform: translateX(-50%); }
@@ -1287,6 +1289,9 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   }
   .werkzeug-ipad-snap-ribbon .werkzeug-snap-trigger { height: 32px; min-width: 104px; }
   .werkzeug-ipad-snap-ribbon .werkzeug-snap-menu {
+    right: 0;
+    left: auto;
+    transform: none;
     max-height: min(62dvh, 360px);
     overflow-x: hidden;
     overflow-y: auto;
@@ -1419,7 +1424,21 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   }
   .werkzeug-ipad-popup button { display: flex; min-height: 42px; width: 100%; align-items: center; gap: 8px; border-radius: 9px; padding: 0 9px; color: var(--text-body); font-size: 11px; text-align: left; }
   .werkzeug-ipad-popup button:hover, .werkzeug-ipad-popup button.is-active { border-color: rgba(253,224,71,.9); background: linear-gradient(135deg, rgba(253,230,138,.95), rgba(253,224,71,.86), rgba(251,191,36,.76)); color: #451a03; box-shadow: inset 0 1px rgba(255,255,255,.68), 0 3px 10px rgba(251,191,36,.25); }
-  .werkzeug-ipad-context input, .werkzeug-ipad-context select { min-height: 32px !important; height: 32px !important; font-size: 11px !important; }
+  .werkzeug-ipad-context input, .werkzeug-ipad-context select { min-height: 28px !important; height: 28px !important; font-size: 11px !important; }
+  .werkzeug-ipad-context input:not([type="range"]):not([type="color"]),
+  .werkzeug-ipad-context select {
+    border: 0 !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 48%, transparent) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-inline: 2px !important;
+  }
+  .werkzeug-ipad-context input:not([type="range"]):not([type="color"]):focus,
+  .werkzeug-ipad-context select:focus {
+    border-bottom-color: #eab308 !important;
+    outline: none !important;
+  }
   .werkzeug-ipad-context label, .werkzeug-ipad-context p, .werkzeug-ipad-context span { line-height: 1.25; }
   .werkzeug-ipad-context-surface,
   .werkzeug-ipad-context-surface .ios-glass {
@@ -1443,10 +1462,11 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   .werkzeug-ipad-levels button { min-height: 36px; }
   .werkzeug-ipad-panel-peek { position: fixed; z-index: 69; top: 48%; right: 0; width: 28px; height: 58px; border: 1px solid var(--panel-divider); border-right: 0; border-radius: 14px 0 0 14px; background: var(--popover-bg); color: var(--text-strong); box-shadow: 0 8px 24px rgba(0,0,0,.16); backdrop-filter: blur(18px); }
   .werkzeug-ipad-context[data-orientation="landscape"] {
+    transform: translateY(-50%);
     transition: transform .28s cubic-bezier(.16,1,.3,1);
   }
   .werkzeug-ipad-context[data-orientation="landscape"][data-hidden="true"] {
-    transform: translateX(calc(100% - 22px));
+    transform: translate(calc(100% - 22px), -50%);
   }
   .werkzeug-ipad-drawer-toggle {
     position: absolute;
@@ -1472,6 +1492,9 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     height: 64px;
     transform: translateY(-50%);
     border-radius: 14px 0 0 14px;
+    background: linear-gradient(135deg, #fde68a, #fde047 58%, #fbbf24);
+    color: #451a03;
+    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 5px 16px rgba(234,179,8,.32);
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-body {
     max-height: calc(100dvh - 92px);
@@ -1483,6 +1506,20 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-panel-content {
     max-height: calc(100dvh - 180px);
+    padding: 6px !important;
+  }
+  .werkzeug-ipad-context .material-editor-embedded > div:nth-child(2) {
+    padding: 4px !important;
+  }
+  .werkzeug-ipad-context .material-editor-embedded :is(.gap-2, .gap-1\.5) {
+    gap: 4px !important;
+  }
+  .werkzeug-ipad-context .material-editor-embedded :is(.py-2, .p-2) {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+  .werkzeug-ipad-context .werkzeug-ipad-panel-content :is(.space-y-3, .space-y-2) > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 5px !important;
   }
   .werkzeug-ipad-context[data-orientation="portrait"] {
     transition: transform .3s cubic-bezier(.16,1,.3,1);
