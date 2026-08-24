@@ -70,9 +70,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
           <button type="button" className="dock-menu-row" onClick={() => fileRef.current?.click()}><LuPaperclip /><span><strong>DWG / PDF</strong><small>Attach to active level</small></span></button>
         </Popover>}
       </div>
-      <DockButton icon={<LuFootprints />} label="Walk" hint="Enter a strongly rendered first-person WASD walkthrough." active={walkthroughMode} strong onClick={toggleWalk} />
+      <DockButton icon={<LuFootprints />} label="Walk" hint="Enter a strongly rendered first-person WASD walkthrough." active={walkthroughMode} onClick={toggleWalk} />
       <div className="relative">
-        <DockButton icon={<LuBox />} label="Realistic" hint="Choose visual style, mesh opacity, color, and lighting." active={popup === "render" || renderMode === "realistic"} onClick={() => toggle("render")} />
+        <DockButton icon={<LuBox />} label="Realistic" hint="Choose visual style, mesh opacity, color, and lighting." active={popup === "render"} onClick={() => toggle("render")} />
         {popup === "render" && <Popover title="Visual style" wide>
           <div className="grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" className={`rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] bg-white/55 text-zinc-600"}`} onClick={() => setRenderMode(mode.id)}>{mode.label}</button>)}</div>
           <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
@@ -83,7 +83,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
       </div>
       <div className="relative">
         <DockButton icon={<LuScale />} label="" title={`Scale ${drawingScale}`} hint="Set the drawing and annotation scale." active={popup === "scale"} onClick={() => toggle("scale")} />
-        {popup === "scale" && <Popover title="Drawing scale" wide><div className="flex gap-1 overflow-x-auto pb-1 thin-scroll">{["1:20", "1:50", "1:100", "1:200", "1:500"].map((scale) => <button key={scale} type="button" onClick={() => { setDrawingScale(scale as "1:20" | "1:50" | "1:100" | "1:200" | "1:500"); setPopup(null); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-semibold ${drawingScale === scale ? "btn-v-yellow btn-liquid-hover" : "btn-yellow-border-hover border border-[var(--panel-divider)] bg-white/55 text-zinc-600"}`}>{scale}</button>)}</div></Popover>}
+        {popup === "scale" && <Popover title="Drawing scale"><div className="flex max-h-56 flex-col gap-1 overflow-y-auto thin-scroll">{["1:20", "1:50", "1:100", "1:200", "1:500"].map((scale) => <button key={scale} type="button" onClick={() => { setDrawingScale(scale as "1:20" | "1:50" | "1:100" | "1:200" | "1:500"); setPopup(null); }} className={`w-full rounded-xl px-3 py-2 text-left text-xs font-semibold ${drawingScale === scale ? "btn-v-yellow btn-liquid-hover" : "btn-yellow-border-hover border border-[var(--panel-divider)] bg-white/55 text-zinc-600"}`}>{scale}</button>)}</div></Popover>}
       </div>
       <div className="relative">
         <DockButton icon={<LuBuilding2 />} label={activeLevel?.name ?? "Level 1"} hint="Switch the active drawing and attachment level." active={popup === "level"} onClick={() => toggle("level")} />
