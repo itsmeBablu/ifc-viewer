@@ -870,6 +870,73 @@ body.pdf-capturing .pdf-capture-hide {
   color: var(--text-strong);
 }
 
+/* Reusable Werkzeug controls: one modern glass interaction language. */
+body.werkzeug-active :is(button, [role="button"]):not(:disabled) {
+  transition: color .16s ease, border-color .16s ease, background-color .16s ease, box-shadow .16s ease, filter .16s ease, transform .12s ease;
+}
+body.werkzeug-active :is(button, [role="button"]):not(:disabled):hover {
+  border-color: color-mix(in srgb, #eab308 52%, var(--panel-divider));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 5px 16px rgba(15,23,42,.08);
+}
+body.werkzeug-active :is(button, [role="button"], select, input):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(250,204,21,.2), inset 0 1px 0 rgba(255,255,255,.72);
+}
+body.werkzeug-active :is(button, [role="button"]):not(:disabled):active {
+  transform: translateY(1px) scale(.985);
+}
+body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: #eab308;
+  cursor: pointer;
+}
+body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+.werkzeug-segmented-control {
+  border: 1px solid color-mix(in srgb, var(--panel-divider) 72%, white 28%);
+  border-radius: 15px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--glass-inset-bg) 74%, white 26%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
+}
+.werkzeug-control-button {
+  background: color-mix(in srgb, var(--popover-bg) 66%, transparent);
+  color: var(--text-body);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+}
+.werkzeug-control-button:not(.is-active):hover {
+  background: color-mix(in srgb, var(--popover-bg) 88%, #fef9c3 12%);
+  color: var(--text-strong);
+}
+.werkzeug-toggle {
+  display: inline-flex;
+  min-width: 34px;
+  height: 20px;
+  align-items: center;
+  border: 1px solid var(--panel-divider);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--glass-inset-bg);
+  box-shadow: inset 0 1px 3px rgba(15,23,42,.12);
+}
+.werkzeug-toggle::after {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 4px rgba(15,23,42,.25);
+  content: "";
+  transition: transform .18s ease, background-color .18s ease;
+}
+.werkzeug-toggle:is(.is-active, [aria-checked="true"], [aria-pressed="true"]) {
+  border-color: #facc15;
+  background: linear-gradient(135deg, #fde68a, #facc15);
+}
+.werkzeug-toggle:is(.is-active, [aria-checked="true"], [aria-pressed="true"])::after {
+  transform: translateX(14px);
+}
+
 /* iPad / tablet: preserve the canvas and use compact overlay chrome. */
 @media (min-width: 700px) and (max-width: 1099px) {
   .werkzeug-compact-ui {
@@ -1329,6 +1396,56 @@ body.pdf-capturing .pdf-capture-hide {
   border-color: rgba(250, 204, 21, 0.95) !important;
   box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
   color: var(--text-strong) !important;
+}
+
+/* Werkzeug default range: material-style liquid amber, even without a class. */
+body.werkzeug-active input[type="range"]:not(.ui-slider) {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  accent-color: #eab308;
+}
+body.werkzeug-active input[type="range"]:not(.ui-slider)::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(250,204,21,.3);
+  box-shadow: inset 0 1px 2px rgba(161,98,7,.1), 0 1px 5px rgba(250,204,21,.16);
+}
+body.werkzeug-active input[type="range"]:not(.ui-slider)::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5.5px;
+  border: 1px solid #facc15;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fde047, #eab308);
+  box-shadow: 0 1px 4px rgba(202,138,4,.32), inset 0 1px rgba(255,255,255,.5);
+}
+body.werkzeug-active input[type="range"]:not(.ui-slider)::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(250,204,21,.28);
+}
+body.werkzeug-active input[type="range"]:not(.ui-slider)::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: #facc15;
+}
+body.werkzeug-active input[type="range"]:not(.ui-slider)::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 1px solid #facc15;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fde047, #eab308);
+  box-shadow: 0 1px 4px rgba(202,138,4,.32);
+}
+body.werkzeug-active input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 /* Werkzeug material editor: compact liquid-amber sliders. */

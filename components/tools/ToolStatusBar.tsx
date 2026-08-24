@@ -74,7 +74,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
       <div className="relative">
         <DockButton icon={<LuBox />} label="Realistic" hint="Choose visual style, mesh opacity, color, and lighting." active={popup === "render"} onClick={() => toggle("render")} />
         {popup === "render" && <Popover title="Visual style" wide>
-          <div className="grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" className={`rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] bg-white/55 text-zinc-600"}`} onClick={() => setRenderMode(mode.id)}>{mode.label}</button>)}</div>
+          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)]"}`} onClick={() => setRenderMode(mode.id)}>{mode.label}</button>)}</div>
           <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
           <DockSlider label="Space opacity" value={lighting.spaceTransparency} onChange={(value) => setLighting({ spaceTransparency: value })} />
           <DockSlider label="Color" value={lighting.color} onChange={(value) => setLighting({ color: value })} />
@@ -104,5 +104,6 @@ function Popover({ title, wide = false, children }: { title: string; wide?: bool
   return <div className={`absolute bottom-[calc(100%+10px)] left-1/2 z-50 -translate-x-1/2 rounded-[20px] border border-white/90 bg-white/88 p-2 text-zinc-700 shadow-[inset_0_1px_0_white,0_18px_48px_rgba(15,23,42,0.22)] backdrop-blur-2xl ${wide ? "w-72" : "w-48"}`}><p className="mb-2 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-400">{title}</p>{children}</div>;
 }
 function DockSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label className="grid grid-cols-[92px_1fr_34px] items-center gap-2 py-1 text-[10px]"><span>{label}</span><input type="range" min={0} max={1} step={0.05} value={value} onChange={(event) => onChange(Number(event.target.value))} className="v-yellow-slider" /><span className="text-right font-mono text-[9px] text-amber-600">{Math.round(value * 100)}%</span></label>;
+  const progress = `${Math.round(value * 100)}%`;
+  return <label className="grid grid-cols-[92px_1fr_34px] items-center gap-2 py-1 text-[10px]"><span>{label}</span><input type="range" min={0} max={1} step={0.05} value={value} onChange={(event) => onChange(Number(event.target.value))} className="material-slider w-full" style={{ "--slider-progress": progress } as React.CSSProperties} /><span className="text-right font-mono text-[9px] font-semibold text-zinc-700">{Math.round(value * 100)}%</span></label>;
 }
