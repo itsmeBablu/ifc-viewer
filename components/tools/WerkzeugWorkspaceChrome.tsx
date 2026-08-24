@@ -293,7 +293,6 @@ export default function WerkzeugWorkspaceChrome({
               <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{panelKey} options</span>
               <div className="flex items-center gap-1">
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
-                <button type="button" onClick={() => setPanelHidden(true)} className="btn-v-yellow flex h-8 w-8 items-center justify-center rounded-lg" title="Collapse options" aria-label="Collapse options drawer">{portrait ? <LuChevronDown /> : <LuChevronRight />}</button>
               </div>
             </div>
             {!collapsed && <div className="flex shrink-0 border-b border-[var(--panel-divider)] px-1">{(panelKey === "levels" ? ["properties", "layout"] as const : ["properties", "layout", "type", "materials"] as const).map((tab) => <button key={tab} onClick={() => setPanelTab(tab)} className={`min-h-8 flex-1 border-b-2 text-[9px] font-semibold capitalize ${panelTab === tab ? "border-yellow-400 text-[var(--text-strong)]" : "border-transparent text-[var(--text-muted)]"}`}>{tab === "type" && panelKey === "lines" ? "Drawing" : tab}</button>)}</div>}

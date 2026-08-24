@@ -1496,8 +1496,16 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     color: #451a03;
     box-shadow: inset 0 1px rgba(255,255,255,.72), 0 5px 16px rgba(234,179,8,.32);
   }
+  .werkzeug-ipad-context[data-orientation="landscape"][data-hidden="false"] .werkzeug-ipad-drawer-toggle {
+    top: 0;
+    bottom: 0;
+    height: auto;
+    transform: none;
+    border-radius: 14px 0 0 14px;
+  }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-drawer-body {
     max-height: calc(100dvh - 92px);
+    padding-left: 22px;
   }
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-context-surface,
   .werkzeug-ipad-context[data-orientation="landscape"] .werkzeug-ipad-context-surface .ios-glass {
