@@ -20,7 +20,7 @@ const SNAP_ITEMS = [
   ["parallel", "Parallel", SnapParallelIcon],
 ] as const;
 
-export default function ObjectSnapStrip({ compact = false, iconOnly = false }: { compact?: boolean; iconOnly?: boolean }) {
+export default function ObjectSnapStrip({ compact = false, iconOnly = false, showCount = true }: { compact?: boolean; iconOnly?: boolean; showCount?: boolean }) {
   const modes = useLayoutDrawingStore((state) => state.planSnapModes);
   const setMode = useLayoutDrawingStore((state) => state.setPlanSnapMode);
   const [open, setOpen] = useState(false);
@@ -40,10 +40,10 @@ export default function ObjectSnapStrip({ compact = false, iconOnly = false }: {
     <div ref={rootRef} className={`werkzeug-snap-dropdown ${compact ? "is-compact" : ""} ${iconOnly ? "is-icon-only" : ""}`}>
       <button type="button" title="Object snaps" aria-label={`Object snaps · ${activeCount} active`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((value) => !value)} className={`werkzeug-snap-trigger ${open ? "is-open" : ""}`}>
         <LuMagnet className="h-4 w-4" />
-        {!iconOnly && <><span>Snaps</span><span className="werkzeug-snap-count">{activeCount}</span><LuChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} /></>}
+        {!iconOnly && <><span>Snaps</span>{showCount && <span className="werkzeug-snap-count">{activeCount}</span>}<LuChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} /></>}
       </button>
       {open && <div className="werkzeug-snap-menu" role="menu" aria-label="Object snaps">
-        <div className="werkzeug-snap-menu-heading"><span>Object snaps</span><span>{activeCount} active</span></div>
+        <div className="werkzeug-snap-menu-heading"><span>Object snaps</span>{showCount && <span>{activeCount} active</span>}</div>
         <div className="werkzeug-snap-menu-grid">
           {SNAP_ITEMS.map(([mode, label, Icon]) => {
             const active = modes[mode];
