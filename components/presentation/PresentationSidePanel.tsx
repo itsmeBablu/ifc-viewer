@@ -38,9 +38,12 @@ function lightTint(hex: string, mix = 0.78): string {
 export default function PresentationSidePanel({
   includeLegend = true,
   compact = false,
+  sideSlideMenus = false,
 }: {
   includeLegend?: boolean;
   compact?: boolean;
+  /** iPad landscape: open View/Options as a right-edge sliding drawer. */
+  sideSlideMenus?: boolean;
 } = {}) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
@@ -121,7 +124,7 @@ export default function PresentationSidePanel({
     <div className="flex flex-col text-[var(--text-body)]">
       {includeLegend && (
         <div className="shrink-0">
-          <LegendBody paddedTop />
+          <LegendBody paddedTop sideSlideMenus={sideSlideMenus} />
         </div>
       )}
 

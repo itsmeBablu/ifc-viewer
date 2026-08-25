@@ -12,7 +12,8 @@
  */
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import GsapHeightAccordion from "../common/GsapHeightAccordion";
 import { IoOptionsOutline } from "react-icons/io5";
 import { MdPushPin } from "react-icons/md";
@@ -82,6 +83,8 @@ type Props = {
   compact?: boolean;
   title?: ReactNode;
   onMenuOpenChange?: (open: boolean) => void;
+  /** Use a legend-like right-edge drawer instead of an inline accordion. */
+  sideSlide?: boolean;
 };
 
 type MenuKind = "view" | "options";
@@ -156,12 +159,17 @@ export default function PresentationOptionsMenu({
   compact = false,
   title,
   onMenuOpenChange,
+  sideSlide = false,
 }: Props) {
   const [menu, setMenu] = useState<MenuKind | null>(null);
   const [panel, setPanel] = useState<MenuKind>("view");
   const [optionsPinned, setOptionsPinned] = useState(false);
   const [optionsHover, setOptionsHover] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const [drawerMounted, setDrawerMounted] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerGeometry, setDrawerGeometry] = useState({ top: 128, right: 16, width: 352 });
 
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const floors = useAppStore((s) => s.floors);
@@ -232,6 +240,7 @@ export default function PresentationOptionsMenu({
       if (optionsPinned && menu === "options") return;
       const target = e.target as Node;
       if (rootRef.current?.contains(target)) return;
+      if (drawerRef.current?.contains(target)) return;
       setMenuOpen(null);
     };
     const onKey = (e: KeyboardEvent) => {
@@ -268,6 +277,45 @@ export default function PresentationOptionsMenu({
   const viewOpen = menu === "view";
   const optionsOpen = menu === "options" || (optionsPinned && panel === "options");
   const open = menu !== null || optionsPinned;
+
+  useLayoutEffect(() => {
+    if (!sideSlide || !open) return;
+    const updateGeometry = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setDrawerGeometry({
+        top: Math.max(8, rect.top),
+        right: Math.max(8, window.innerWidth - rect.right),
+        width: rect.width,
+      });
+    };
+    updateGeometry();
+    window.addEventListener("resize", updateGeometry);
+    window.addEventListener("orientationchange", updateGeometry);
+    return () => {
+      window.removeEventListener("resize", updateGeometry);
+      window.removeEventListener("orientationchange", updateGeometry);
+    };
+  }, [open, sideSlide]);
+
+  // Mounting is intentionally tied to the transition lifecycle so the drawer
+  // remains in the DOM long enough to finish its slide-out animation.
+  useEffect(() => {
+    if (!sideSlide) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDrawerMounted(false);
+      setDrawerVisible(false);
+      return;
+    }
+    if (open) {
+      setDrawerMounted(true);
+      const frame = window.requestAnimationFrame(() => setDrawerVisible(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    setDrawerVisible(false);
+    const timeout = window.setTimeout(() => setDrawerMounted(false), 360);
+    return () => window.clearTimeout(timeout);
+  }, [open, sideSlide]);
 
   const autofocusToggle = (
     <button
@@ -573,13 +621,64 @@ export default function PresentationOptionsMenu({
         </div>
       </div>
 
-      <GsapHeightAccordion
-        open={open && (menu === panel || (optionsPinned && panel === "options"))}
-        contentKey={panel}
-        innerClassName={compact ? "px-0.5 pb-0.5 pt-1" : "px-1 pb-1.5 pt-2"}
-      >
-        {menuBody}
-      </GsapHeightAccordion>
+      {sideSlide ? (
+        drawerMounted && createPortal(
+          <div
+            ref={drawerRef}
+            data-presentation-side-drawer
+            className={`fixed z-[70] overflow-hidden rounded-3xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] shadow-2xl backdrop-blur-2xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              drawerVisible
+                ? "translate-x-0 opacity-100"
+                : "translate-x-[calc(100%+1.5rem)] opacity-0"
+            }`}
+            style={{
+              top: drawerGeometry.top,
+              right: drawerGeometry.right,
+              width: drawerGeometry.width,
+              maxHeight: `calc(100dvh - ${drawerGeometry.top + 16}px)`,
+            }}
+            role="dialog"
+            aria-label={
+              panel === "view"
+                ? t(uiLanguage, "view")
+                : t(uiLanguage, "moreOptions")
+            }
+          >
+            <div className="flex min-h-10 items-center justify-between border-b border-[var(--panel-divider)] px-3">
+              <span className="text-[11px] font-semibold text-[var(--text-strong)]">
+                {panel === "view"
+                  ? t(uiLanguage, "view")
+                  : t(uiLanguage, "moreOptions")}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setOptionsPinned(false);
+                  setMenuOpen(null);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+                aria-label={t(uiLanguage, "moreOptions")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </button>
+            </div>
+            <div className="thin-scroll max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain p-2">
+              {menuBody}
+            </div>
+          </div>,
+          document.body,
+        )
+      ) : (
+        <GsapHeightAccordion
+          open={open && (menu === panel || (optionsPinned && panel === "options"))}
+          contentKey={panel}
+          innerClassName={compact ? "px-0.5 pb-0.5 pt-1" : "px-1 pb-1.5 pt-2"}
+        >
+          {menuBody}
+        </GsapHeightAccordion>
+      )}
     </div>
   );
 }
