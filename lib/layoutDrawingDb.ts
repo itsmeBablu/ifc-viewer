@@ -297,6 +297,37 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
   }
 }
 
+export async function idbExportProject(projectId: string): Promise<Record<string, unknown>> {
+  const db = await openDb();
+  try {
+    const stores = [
+      LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+    ];
+    const tx = db.transaction([PROJECTS, ...stores], "readonly");
+    const projectRequest = reqToPromise(tx.objectStore(PROJECTS).get(projectId));
+    const dataRequests = stores.map((storeName) => {
+      const store = tx.objectStore(storeName);
+      return storeName === PRESETS
+        ? reqToPromise(store.get(projectId)).then((row) => row ? [row] : [])
+        : reqToPromise(store.index("byProject").getAll(projectId));
+    });
+    const [project, data] = await Promise.all([
+      projectRequest,
+      Promise.all(dataRequests),
+    ]);
+    return {
+      format: "v-studio-project",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      project,
+      data: Object.fromEntries(stores.map((storeName, index) => [storeName, data[index]])),
+    };
+  } finally {
+    db.close();
+  }
+}
+
 export async function idbDeleteProject(projectId: string): Promise<void> {
   const db = await openDb();
   try {

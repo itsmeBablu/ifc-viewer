@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuChevronDown, LuClock3, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
+import { LuChevronDown, LuClock3, LuDownload, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
 import GlassPanel from "@/components/common/GlassPanel";
 import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import { IconUpload } from "@/components/common/ui";
-import { idbDeleteProject, idbListProjects, type StoredLayoutProject } from "@/lib/layoutDrawingDb";
+import { idbDeleteProject, idbExportProject, idbListProjects, type StoredLayoutProject } from "@/lib/layoutDrawingDb";
 import { motion, radius } from "@/lib/designTokens";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
@@ -41,6 +41,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
+  const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
   const projectSectionRef = useRef<HTMLElement>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
@@ -120,6 +121,23 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     }
   };
 
+  const downloadProject = async (project: StoredLayoutProject) => {
+    setBusy(true);
+    try {
+      const data = await idbExportProject(project.id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${project.name.replace(/[^a-z0-9._-]+/gi, "-").replace(/^-|-$/g, "") || "v-studio-project"}.vstudio.json`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setProjectToDownload(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }),
     [],
@@ -159,12 +177,12 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-3 backdrop-blur-xl sm:p-4 lg:p-10">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-3 backdrop-blur-[2px] sm:p-4 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
             <section ref={projectSectionRef} className="order-2 flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
-              <div className="sticky top-0 z-10 -mx-1 bg-white/45 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
+              <div className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -181,7 +199,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     onChange={(event) => setProjectSearch(event.target.value)}
                     placeholder="Search previous projects"
                     aria-label="Search previous projects"
-                    className="h-9 w-full rounded-xl border border-white/50 bg-white/35 pr-3 pl-9 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-300"
+                    className="h-9 w-full rounded-xl border border-white/50 bg-white/20 pr-3 pl-9 text-xs outline-none backdrop-blur-xl placeholder:text-[var(--text-muted)] focus:border-amber-300"
                   />
                 </label>
               </div>
@@ -208,7 +226,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     {filteredProjects.map((project) => {
                       const expanded = selectedProjectId === project.id;
                       return (
-                        <article ref={(element) => { if (element) projectCardRefs.current.set(project.id, element); else projectCardRefs.current.delete(project.id); }} key={project.id} className={`min-w-0 overflow-hidden rounded-2xl border backdrop-blur-md transition-colors ${expanded ? "border-amber-300/70 bg-white/45" : "border-white/45 bg-white/25"}`}>
+                        <article ref={(element) => { if (element) projectCardRefs.current.set(project.id, element); else projectCardRefs.current.delete(project.id); }} key={project.id} className={`min-w-0 overflow-hidden rounded-2xl border backdrop-blur-xl transition-colors ${expanded ? "border-amber-300/70 bg-white/25" : "border-white/45 bg-white/10"}`}>
                           <button
                             type="button"
                             aria-expanded={expanded}
@@ -250,7 +268,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                   </div>
                                 </div>
                               )}
-                              <div className="mt-4 flex items-center justify-end gap-2">
+                              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
                                 <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
                                 <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
                               </div>
@@ -285,8 +304,24 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
         </GlassPanel>
       </div>
 
+      <GsapOverlay show={Boolean(projectToDownload)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-sm">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="download-project-title" className="p-5 sm:p-6">
+            <div className="mb-3 grid size-10 place-items-center rounded-full bg-sky-100/70 text-sky-700"><LuDownload className="size-5" /></div>
+            <h2 id="download-project-title" className="text-base font-semibold text-[var(--text-strong)]">Download project?</h2>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
+              Export <strong className="font-semibold text-[var(--text-strong)]">{projectToDownload?.name}</strong> with its complete locally stored drawing data and DWG/PDF reference data.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => setProjectToDownload(null)} className="h-9 rounded-xl bg-white/30 px-4 text-xs font-semibold text-[var(--text-strong)] transition hover:bg-white/50 disabled:opacity-45">Cancel</button>
+              <button type="button" disabled={busy || !projectToDownload} onClick={() => { if (projectToDownload) void downloadProject(projectToDownload); }} className="h-9 rounded-xl bg-sky-600 px-4 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-45">{busy ? "Preparing…" : "Confirm Download"}</button>
+            </div>
+          </div>
+        </GlassPanel>
+      </GsapOverlay>
+
       <GsapOverlay show={Boolean(projectToDelete)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className="p-5 sm:p-6">
             <div className="mb-3 grid size-10 place-items-center rounded-full bg-red-100/75 text-red-600"><LuTrash2 className="size-5" /></div>
             <h2 id="delete-project-title" className="text-base font-semibold text-[var(--text-strong)]">Delete project?</h2>
