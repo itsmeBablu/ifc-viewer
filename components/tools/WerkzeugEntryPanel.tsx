@@ -134,7 +134,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
-      const list = window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches
+      const list = window.matchMedia("(orientation: portrait)").matches
         ? projectSectionRef.current
         : projectListRef.current;
       const card = projectCardRefs.current.get(selectedProjectId);
@@ -159,12 +159,12 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-2 backdrop-blur-xl sm:p-3 lg:p-10">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-3 backdrop-blur-xl sm:p-4 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-1.5rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
-          <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section ref={projectSectionRef} className="order-2 flex min-h-0 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-3 sm:overflow-hidden sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
-              <div className="max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:bg-white/55 max-sm:pb-1 max-sm:backdrop-blur-xl">
+        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
+          <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
+            <section ref={projectSectionRef} className="order-2 flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
+              <div className="sticky top-0 z-10 -mx-1 bg-white/45 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -188,7 +188,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
               <div
                 ref={projectListRef}
-                className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overscroll-contain pr-1 max-sm:flex-none max-sm:overflow-y-visible sm:h-0 sm:overflow-y-scroll"
+                className="min-h-0 flex-none touch-pan-y overflow-x-hidden overflow-y-visible overscroll-contain pr-1 landscape:h-0 landscape:flex-1 landscape:overflow-y-scroll"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
@@ -264,7 +264,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               </div>
             </section>
 
-            <section className="order-1 flex flex-col justify-center p-3 sm:p-5 landscape:order-2 lg:p-10">
+            <section className="order-1 flex shrink-0 flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
               <p className="text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
