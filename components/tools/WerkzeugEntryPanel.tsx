@@ -160,7 +160,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-1.5rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="order-2 flex min-h-0 flex-col border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
+            <section className="order-2 flex h-full min-h-0 max-h-full flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
                   <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -181,7 +181,11 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 />
               </label>
 
-              <div ref={projectListRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-1">
+              <div
+                ref={projectListRef}
+                className="h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
                 ) : projectsError ? (
