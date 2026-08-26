@@ -257,7 +257,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Create one or upload an IFC to get started.</p>
                   </div>
                 ) : filteredProjects.length === 0 ? (
-                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match "{projectSearch.trim()}".</p>
+                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match &ldquo;{projectSearch.trim()}&rdquo;.</p>
                 ) : (
                   <div className="grid gap-2">
                     {filteredProjects.map((project) => {
