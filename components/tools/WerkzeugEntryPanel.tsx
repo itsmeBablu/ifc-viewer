@@ -112,8 +112,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   return (
     <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-y-auto bg-slate-950/25 p-3 backdrop-blur-xl sm:p-6 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass w-full max-h-[calc(100dvh-1.5rem)] touch-pan-y overflow-y-auto overscroll-contain rounded-[28px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] lg:max-h-[calc(100dvh-5rem)] lg:overflow-hidden">
-          <div className="grid min-h-0 grid-cols-1 lg:h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)]">
+        <GlassPanel variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[28px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] lg:h-[calc(100dvh-5rem)]">
+          <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] lg:grid-rows-1">
             <section className="order-2 flex min-h-0 flex-col border-t border-[var(--panel-divider)] p-4 sm:p-7 lg:order-1 lg:border-t-0 lg:border-r">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
@@ -123,7 +123,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 <span className="rounded-full bg-white/35 px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)]">{projects.length} saved</span>
               </div>
 
-              <div className="min-h-[10rem] flex-1 overflow-y-auto overscroll-contain pr-1">
+              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-1">
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
                 ) : projectsError ? (
