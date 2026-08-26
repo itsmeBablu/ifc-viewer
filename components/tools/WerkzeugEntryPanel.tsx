@@ -213,11 +213,11 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-3 backdrop-blur-[2px] sm:p-4 lg:p-10">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-2 backdrop-blur-[2px] sm:p-4 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
-          <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="relative order-2 flex h-0 min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:border-t-0 landscape:border-r lg:p-7">
+        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
+          <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
+            <section className="relative order-2 flex h-[52%] min-h-0 flex-none flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
               <div className="shrink-0 bg-transparent pb-1">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
@@ -243,8 +243,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               <div
                 ref={projectListRef}
                 onScroll={updateScrollCue}
-                className="project-history-scroll h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain pr-1"
-                style={{ WebkitOverflowScrolling: "touch" }}
+                className="project-history-scroll min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                style={{ WebkitOverflowScrolling: "touch", minHeight: 0 }}
               >
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
@@ -327,7 +327,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               )}
             </section>
 
-            <section className="order-1 flex shrink-0 flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
+            <section className="order-1 flex h-[48%] shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 landscape:h-auto sm:p-5 lg:p-10">
               <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
