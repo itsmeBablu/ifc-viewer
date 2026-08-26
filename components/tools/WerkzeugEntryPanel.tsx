@@ -217,7 +217,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
-            <section className="relative order-2 flex h-[52%] min-h-0 flex-none flex-col border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:overflow-hidden landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
+            <section className="relative order-2 grid h-[52%] min-h-0 flex-none grid-rows-[auto_1fr] overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
               <div className="shrink-0 bg-transparent pb-1">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
@@ -243,8 +243,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               <div
                 ref={projectListRef}
                 onScroll={updateScrollCue}
-                className="project-history-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
-                style={{ WebkitOverflowScrolling: "touch", minHeight: 0 }}
+                className="project-history-scroll min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
@@ -257,7 +257,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Create one or upload an IFC to get started.</p>
                   </div>
                 ) : filteredProjects.length === 0 ? (
-                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match “{projectSearch.trim()}”.</p>
+                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match "{projectSearch.trim()}".</p>
                 ) : (
                   <div className="grid gap-2">
                     {filteredProjects.map((project) => {
@@ -321,11 +321,12 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               {scrollCue.visible && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute right-1 z-20 w-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(245,158,11,0.45)]"
+                  className="pointer-events-none absolute right-1 z-20 w-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(245,158,11,0.45)] landscape:hidden"
                   style={{ top: scrollCue.top, height: scrollCue.height }}
                 />
               )}
             </section>
+
 
             <section className="order-1 flex h-[48%] shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 landscape:h-auto sm:p-5 lg:p-10">
               <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
