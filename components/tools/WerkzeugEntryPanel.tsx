@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { LuChevronDown, LuClock3, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
 import GlassPanel from "@/components/common/GlassPanel";
 import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
+import GsapOverlay from "@/components/common/GsapOverlay";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import { IconUpload } from "@/components/common/ui";
 import { idbDeleteProject, idbListProjects, type StoredLayoutProject } from "@/lib/layoutDrawingDb";
@@ -39,6 +40,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
+  const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -106,11 +108,11 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   };
 
   const deleteProject = async (project: StoredLayoutProject) => {
-    if (!window.confirm(`Delete “${project.name}” from this device?`)) return;
     setBusy(true);
     try {
       await idbDeleteProject(project.id);
       setSelectedProjectId((selected) => selected === project.id ? null : selected);
+      setProjectToDelete(null);
       await refreshProjects();
     } finally {
       setBusy(false);
@@ -240,7 +242,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                 </div>
                               )}
                               <div className="mt-4 flex items-center justify-end gap-2">
-                                <button type="button" disabled={busy} onClick={() => void deleteProject(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
+                                <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
                                 <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
                               </div>
                             </div>
@@ -273,6 +275,22 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
           </div>
         </GlassPanel>
       </div>
+
+      <GsapOverlay show={Boolean(projectToDelete)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className="p-5 sm:p-6">
+            <div className="mb-3 grid size-10 place-items-center rounded-full bg-red-100/75 text-red-600"><LuTrash2 className="size-5" /></div>
+            <h2 id="delete-project-title" className="text-base font-semibold text-[var(--text-strong)]">Delete project?</h2>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
+              <strong className="font-semibold text-[var(--text-strong)]">{projectToDelete?.name}</strong> and all of its locally stored drawing data will be permanently removed from this device.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => setProjectToDelete(null)} className="h-9 rounded-xl bg-white/40 px-4 text-xs font-semibold text-[var(--text-strong)] transition hover:bg-white/60 disabled:opacity-45">Cancel</button>
+              <button type="button" disabled={busy || !projectToDelete} onClick={() => { if (projectToDelete) void deleteProject(projectToDelete); }} className="h-9 rounded-xl bg-red-500 px-4 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-45">{busy ? "Deleting…" : "Confirm Delete"}</button>
+            </div>
+          </div>
+        </GlassPanel>
+      </GsapOverlay>
     </div>
   );
 }
