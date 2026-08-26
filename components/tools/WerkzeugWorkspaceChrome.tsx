@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import gsap from "gsap";
 import {
-  LuBox, LuChevronDown, LuChevronLeft, LuChevronRight, LuChevronUp, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
-  LuLock, LuLockOpen, LuMoon, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSun, LuUndo2,
+  LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuUndo2,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -15,6 +16,7 @@ import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
 import { buildFragBlob, downloadBlob, getCachedIfcBytes } from "@/lib/markupFragSave";
 import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import type { LayoutToolId, SelectedElementRef } from "@/lib/layoutDrawing";
+import type { RenderMode } from "@/lib/types";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import ToolFloorsSection from "./ToolFloorsSection";
 import MaterialEditorPanel from "./MaterialEditorPanel";
@@ -34,6 +36,13 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
+];
+
+const RENDER_MODES: Array<{ id: RenderMode; label: string; icon: React.ReactNode }> = [
+  { id: "realistic", label: "Realistic", icon: <LuSparkles /> },
+  { id: "fullColor", label: "Shaded", icon: <LuBox /> },
+  { id: "light", label: "Light", icon: <LuSunMedium /> },
+  { id: "wireframe", label: "Wireframe", icon: <LuGrid2X2 /> },
 ];
 
 const defaultFrame = (): Frame => {
@@ -57,6 +66,11 @@ const compactWallFrame = (current: Frame): Frame => {
   };
 };
 
+const initialLandscapePanelHeight = () =>
+  typeof window === "undefined"
+    ? 280
+    : Math.max(180, Math.min(window.innerHeight - 92, window.innerHeight * 0.4));
+
 export default function WerkzeugWorkspaceChrome({
   onFile,
   onAttachDwgPdf,
@@ -69,6 +83,10 @@ export default function WerkzeugWorkspaceChrome({
   const fileRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const fittedHeightRef = useRef(320);
+  const fittedWidthRef = useRef(300);
+  const resizingRef = useRef(false);
   const [panelKey, setPanelKey] = useState<PanelKey | null>("levels");
   const [collapsed] = useState(false);
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
@@ -77,6 +95,13 @@ export default function WerkzeugWorkspaceChrome({
   const [auxPosition, setAuxPosition] = useState({ left: 8, top: 96 });
   const [dockEdge] = useState<DockEdge>("top");
   const [panelHidden, setPanelHidden] = useState(true);
+  const [landscapePanelHeight, setLandscapePanelHeight] = useState(
+    initialLandscapePanelHeight,
+  );
+  const [landscapePanelWidth, setLandscapePanelWidth] = useState(300);
+  const [portraitPanelHeight, setPortraitPanelHeight] = useState(
+    initialLandscapePanelHeight,
+  );
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -106,7 +131,15 @@ export default function WerkzeugWorkspaceChrome({
   }, [dockEdge]);
 
   useEffect(() => {
-    const updateOrientation = () => setPortrait(window.innerHeight > window.innerWidth);
+    const updateOrientation = () => {
+      setPortrait(window.innerHeight > window.innerWidth);
+      setLandscapePanelHeight((height) =>
+        Math.max(180, Math.min(height, window.innerHeight - 92)),
+      );
+      setPortraitPanelHeight((height) =>
+        Math.max(180, Math.min(height, window.innerHeight - 48)),
+      );
+    };
     window.addEventListener("resize", updateOrientation);
     window.addEventListener("orientationchange", updateOrientation);
     return () => {
@@ -114,6 +147,58 @@ export default function WerkzeugWorkspaceChrome({
       window.removeEventListener("orientationchange", updateOrientation);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content || panelHidden || collapsed) return;
+
+    const fitToContent = () => {
+      const contentHeight = content.scrollHeight;
+      const chromeHeight = portrait ? 54 : 60;
+      const viewportLimit = window.innerHeight - (portrait ? 48 : 92);
+      const targetHeight = Math.max(
+        140,
+        Math.min(viewportLimit, contentHeight + chromeHeight),
+      );
+      fittedHeightRef.current = targetHeight;
+
+      const first = content.firstElementChild as HTMLElement | null;
+      const naturalWidth = first?.scrollWidth ?? content.scrollWidth;
+      const targetWidth = Math.max(
+        240,
+        Math.min(360, naturalWidth + 28, window.innerWidth * 0.42),
+      );
+      fittedWidthRef.current = targetWidth;
+
+      if (resizingRef.current) return;
+
+      gsap.to(panel, {
+        height: targetHeight,
+        ...(portrait ? {} : { width: targetWidth }),
+        duration: 0.34,
+        ease: "power3.inOut",
+        overwrite: true,
+        onComplete: () => {
+          if (portrait) setPortraitPanelHeight(targetHeight);
+          else {
+            setLandscapePanelHeight(targetHeight);
+            setLandscapePanelWidth(targetWidth);
+          }
+        },
+      });
+    };
+
+    const frame = window.requestAnimationFrame(fitToContent);
+    const observed = content.firstElementChild ?? content;
+    const observer = new ResizeObserver(fitToContent);
+    observer.observe(observed);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      gsap.killTweensOf(panel);
+    };
+  }, [collapsed, panelHidden, panelKey, panelTab, portrait]);
 
   useEffect(() => {
     const dismiss = () => {
@@ -188,30 +273,94 @@ export default function WerkzeugWorkspaceChrome({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
-  const beginResize = (event: ReactPointerEvent<HTMLButtonElement>, direction: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw") => {
+  const beginLandscapeResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const start = { x: event.clientX, y: event.clientY, frame };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizingRef.current = true;
+    gsap.killTweensOf(panelRef.current);
+    const startY = event.clientY;
+    const startHeight = landscapePanelHeight;
+    let latestHeight = startHeight;
     const move = (next: PointerEvent) => {
-      const dx = next.clientX - start.x;
-      const dy = next.clientY - start.y;
-      const west = direction.includes("w"), east = direction.includes("e");
-      const north = direction.includes("n"), south = direction.includes("s");
-      let x = start.frame.x, y = start.frame.y, width = start.frame.width, height = start.frame.height;
-      if (east) width = start.frame.width + dx;
-      if (south) height = start.frame.height + dy;
-      if (west) { width = start.frame.width - dx; x = start.frame.x + dx; }
-      if (north) { height = start.frame.height - dy; y = start.frame.y + dy; }
-      const minWidth = 220, minHeight = 140;
-      if (width < minWidth) { if (west) x -= minWidth - width; width = minWidth; }
-      if (height < minHeight) { if (north) y -= minHeight - height; height = minHeight; }
-      if (x < 8) { if (west) width -= 8 - x; x = 8; }
-      if (y < 8) { if (north) height -= 8 - y; y = 8; }
-      if (x + width > window.innerWidth - 8) width = window.innerWidth - 8 - x;
-      if (y + height > window.innerHeight - 8) height = window.innerHeight - 8 - y;
-      updateFrame({ x, y, width, height });
+      latestHeight = rubberBand(
+        Math.max(180, startHeight + next.clientY - startY),
+        fittedHeightRef.current,
+      );
+      setLandscapePanelHeight(latestHeight);
     };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      resizingRef.current = false;
+      if (latestHeight > fittedHeightRef.current) {
+        springValue(latestHeight, fittedHeightRef.current, setLandscapePanelHeight);
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const beginLandscapeDrawerGesture = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizingRef.current = true;
+    gsap.killTweensOf(panelRef.current);
+    const startX = event.clientX;
+    const startWidth = landscapePanelWidth;
+    let latestWidth = startWidth;
+    let dragged = false;
+    const move = (next: PointerEvent) => {
+      const delta = startX - next.clientX;
+      if (Math.abs(delta) > 4) dragged = true;
+      if (!dragged) return;
+      setPanelHidden(false);
+      latestWidth = rubberBand(
+        Math.max(220, startWidth + delta),
+        fittedWidthRef.current,
+      );
+      setLandscapePanelWidth(latestWidth);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      resizingRef.current = false;
+      if (!dragged) setPanelHidden((hidden) => !hidden);
+      else if (latestWidth > fittedWidthRef.current) {
+        springValue(latestWidth, fittedWidthRef.current, setLandscapePanelWidth);
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const beginPortraitDrawerGesture = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizingRef.current = true;
+    gsap.killTweensOf(panelRef.current);
+    const startY = event.clientY;
+    const startHeight = portraitPanelHeight;
+    let latestHeight = startHeight;
+    let dragged = false;
+    const move = (next: PointerEvent) => {
+      const delta = next.clientY - startY;
+      if (Math.abs(delta) > 4) dragged = true;
+      if (!dragged) return;
+      setPanelHidden(false);
+      latestHeight = rubberBand(
+        Math.max(180, startHeight - delta),
+        fittedHeightRef.current,
+      );
+      setPortraitPanelHeight(latestHeight);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      resizingRef.current = false;
+      if (!dragged) setPanelHidden((hidden) => !hidden);
+      else if (latestHeight > fittedHeightRef.current) {
+        springValue(latestHeight, fittedHeightRef.current, setPortraitPanelHeight);
+      }
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
@@ -246,10 +395,8 @@ export default function WerkzeugWorkspaceChrome({
     });
     setAuxOpen((open) => open === next ? null : next);
   };
-  const contentHeavy = panelKey === "levels" || panelKey === "materials" || panelTab === "layout" || panelTab === "materials";
-  const drawerHeight = portrait
-    ? Math.min(contentHeavy ? 300 : 250, window.innerHeight * .38)
-    : Math.min(contentHeavy ? 420 : 320, window.innerHeight - 92);
+  const activeRenderMode =
+    RENDER_MODES.find((mode) => mode.id === renderMode) ?? RENDER_MODES[0];
   return (
     <>
       <div data-dock={dockEdge} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
@@ -269,8 +416,8 @@ export default function WerkzeugWorkspaceChrome({
         <div className="werkzeug-ipad-snap-ribbon"><ObjectSnapStrip compact showCount={false} /></div>
         <div className="werkzeug-ipad-action-ribbon">
         <div className="relative shrink-0">
-          <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((value) => !value); }} className="btn-yellow-border-hover flex min-h-11 items-center gap-1.5 rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-3 text-[11px] font-semibold text-[var(--text-body)]"><span>{renderMode === "realistic" ? "Real" : renderMode === "light" ? "Light" : "Wireframe"}</span><LuChevronDown /></button>
-          {renderOpen && <div className="absolute right-0 top-[calc(100%+.4rem)] w-36 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 shadow-xl backdrop-blur-xl">{(["realistic", "light", "wireframe"] as const).map((mode) => <button key={mode} type="button" className="btn-yellow-border-hover block min-h-11 w-full rounded-lg border border-transparent px-2 text-left text-xs capitalize text-[var(--text-body)]" onClick={() => { useAppStore.getState().setRenderMode(mode); setRenderOpen(false); }}>{mode === "realistic" ? "Real" : mode}</button>)}</div>}
+          <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((open) => !open); }} aria-expanded={renderOpen} aria-haspopup="menu" className={`btn-yellow-border-hover flex h-11 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-semibold ${renderOpen ? "btn-v-yellow" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"}`}><span className="text-base">{activeRenderMode.icon}</span><span>{activeRenderMode.label}</span><LuChevronDown /></button>
+          {renderOpen && <div role="menu" className="absolute right-0 top-[calc(100%+.4rem)] z-[125] grid w-52 grid-cols-2 gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-xl backdrop-blur-xl">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div>}
         </div>
         <div className="relative flex shrink-0 items-center gap-1">
           <button type="button" disabled={isLoadingModel} onClick={() => fileRef.current?.click()} className="btn-yellow-border-hover werkzeug-icon-action" title="Open IFC or FRAG"><LuFolderOpen /><span>Open</span></button>
@@ -285,31 +432,48 @@ export default function WerkzeugWorkspaceChrome({
       {auxOpen && <div data-popup-surface className="werkzeug-ipad-popup werkzeug-ipad-popup-fixed" style={auxPosition}>{auxOpen === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : auxOpen === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div>}
 
       {!panelKey && <button type="button" onClick={() => { setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label="Show properties and layout options">{portrait ? <><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></> : <LuChevronLeft />}</button>}
-      {panelKey && <div data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 8, right: 8, bottom: 56, height: collapsed ? 48 : drawerHeight } : { right: 0, top: "50%", width: Math.min(330, window.innerWidth * .36), maxHeight: collapsed ? 48 : drawerHeight }}>
-        <button type="button" onClick={() => setPanelHidden((hidden) => !hidden)} className="werkzeug-ipad-drawer-toggle" title={`${panelHidden ? "Show" : "Hide"} Properties / Layout`} aria-label={`${panelHidden ? "Show" : "Hide"} Properties and Layout drawer`}>{portrait ? (panelHidden ? <LuChevronUp /> : <LuChevronDown />) : (panelHidden ? <LuChevronLeft /> : <LuChevronRight />)}</button>
+      {panelKey && <div ref={panelRef} data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 0, right: 0, bottom: 0, height: collapsed ? 48 : portraitPanelHeight } : { right: 0, top: "50%", width: landscapePanelWidth, height: collapsed ? 48 : landscapePanelHeight }}>
+        <button type="button" onPointerDown={portrait ? beginPortraitDrawerGesture : beginLandscapeDrawerGesture} className="werkzeug-ipad-drawer-toggle" title={`${panelHidden ? "Show" : "Hide"} Properties / Layout`} aria-label={`${panelHidden ? "Show" : "Hide"} Properties and Layout drawer`}>{portrait ? <span className="werkzeug-ipad-portrait-grip" /> : <span className="werkzeug-ipad-landscape-grip" />}</button>
         <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
           <div className="werkzeug-ipad-drawer-body flex h-full min-h-0 flex-col">
-            <div onPointerDown={beginDrag} className="flex h-10 shrink-0 touch-none cursor-move items-center justify-between border-b border-[var(--panel-divider)] px-2.5">
-              <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{panelKey} options</span>
+            <div onPointerDown={portrait ? beginDrag : undefined} className={`flex h-10 shrink-0 touch-none items-center justify-between border-b border-[var(--panel-divider)] px-2.5 ${portrait ? "cursor-move" : ""}`}>
+              <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{TOOL_ITEMS.find((item) => item.id === panelKey)?.label ?? panelKey} options</span>
               <div className="flex items-center gap-1">
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
             </div>
-            {!collapsed && <div className="flex shrink-0 border-b border-[var(--panel-divider)] px-1">{(panelKey === "levels" ? ["properties", "layout"] as const : ["properties", "layout", "type", "materials"] as const).map((tab) => <button key={tab} onClick={() => setPanelTab(tab)} className={`min-h-8 flex-1 border-b-2 text-[9px] font-semibold capitalize ${panelTab === tab ? "border-yellow-400 text-[var(--text-strong)]" : "border-transparent text-[var(--text-muted)]"}`}>{tab === "type" && panelKey === "lines" ? "Drawing" : tab}</button>)}</div>}
             {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
             {!collapsed && <>
-              <button type="button" onPointerDown={(e) => beginResize(e, "n")} className="absolute inset-x-5 top-0 h-2 touch-none cursor-ns-resize" aria-label="Resize panel from top" />
-              <button type="button" onPointerDown={(e) => beginResize(e, "s")} className="absolute inset-x-5 bottom-0 h-2 touch-none cursor-ns-resize" aria-label="Resize panel from bottom" />
-              <button type="button" onPointerDown={(e) => beginResize(e, "w")} className="absolute inset-y-5 left-0 w-2 touch-none cursor-ew-resize" aria-label="Resize panel from left" />
-              <button type="button" onPointerDown={(e) => beginResize(e, "e")} className="absolute inset-y-5 right-0 w-2 touch-none cursor-ew-resize" aria-label="Resize panel from right" />
-              {(["nw", "ne", "sw", "se"] as const).map((direction) => <button key={direction} type="button" onPointerDown={(e) => beginResize(e, direction)} className={`absolute h-7 w-7 touch-none ${direction === "nw" ? "left-0 top-0 cursor-nwse-resize" : direction === "ne" ? "right-0 top-0 cursor-nesw-resize" : direction === "sw" ? "bottom-0 left-0 cursor-nesw-resize" : "bottom-0 right-0 cursor-nwse-resize"}`} aria-label={`Resize panel ${direction}`} />)}
-              <span className="pointer-events-none absolute bottom-1 right-1 h-3 w-3 border-b-2 border-r-2 border-[var(--text-muted)]" />
+              {!portrait && <button type="button" onPointerDown={beginLandscapeResize} className="werkzeug-ipad-height-resize absolute inset-x-0 bottom-0 z-20 h-5 touch-none cursor-ns-resize" aria-label="Drag down to increase options height"><span /></button>}
             </>}
           </div>
         </GlassPanel>
       </div>}
     </>
   );
+}
+
+function rubberBand(value: number, naturalLimit: number) {
+  if (value <= naturalLimit) return value;
+  const excess = value - naturalLimit;
+  const resistance = 72;
+  return naturalLimit + (excess * resistance) / (excess + resistance);
+}
+
+function springValue(
+  from: number,
+  to: number,
+  update: (value: number) => void,
+) {
+  const proxy = { value: from };
+  gsap.to(proxy, {
+    value: to,
+    duration: 0.72,
+    ease: "elastic.out(1, 0.42)",
+    overwrite: true,
+    onUpdate: () => update(proxy.value),
+    onComplete: () => update(to),
+  });
 }
 
 function LevelsPanel() {
