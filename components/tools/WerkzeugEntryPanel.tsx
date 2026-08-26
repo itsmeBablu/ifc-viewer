@@ -221,11 +221,11 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                 <dd className="text-right font-medium text-[var(--text-strong)]">{project.lastModified ? dateFormatter.format(project.lastModified) : "Date unavailable"}</dd>
                                 <dt className="text-[var(--text-muted)]">Storage</dt>
                                 <dd className="text-right font-medium text-[var(--text-strong)]">This device</dd>
-                                <dt className="text-[var(--text-muted)]">Project size</dt>
-                                <dd className="text-right font-medium text-[var(--text-strong)]">{formatProjectSize(project.sizeBytes)}</dd>
-                                <dt className="text-[var(--text-muted)]">Contents</dt>
-                                <dd className="text-right font-medium text-[var(--text-strong)]">{project.levelCount ?? 0} levels · {project.elementCount ?? 0} elements</dd>
                               </dl>
+                              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-1 text-[11px]">
+                                <span className="whitespace-nowrap text-[var(--text-muted)]">Project size <strong className="ml-1 font-semibold text-[var(--text-strong)]">{formatProjectSize(project.sizeBytes)}</strong></span>
+                                <span className="whitespace-nowrap text-[var(--text-muted)]">Contents <strong className="ml-1 font-semibold text-[var(--text-strong)]">{project.levelCount ?? 0} levels · {project.elementCount ?? 0} elements</strong></span>
+                              </div>
                               {(project.referenceFiles?.length ?? 0) > 0 && (
                                 <div className="mt-3 rounded-xl bg-white/30 p-2.5">
                                   <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">DWG / PDF references</p>
@@ -253,16 +253,16 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               </div>
             </section>
 
-            <section className="order-1 flex flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
+            <section className="order-1 flex flex-col justify-center p-3 sm:p-5 landscape:order-2 lg:p-10">
               <p className="text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 max-w-sm text-xs leading-relaxed text-[var(--text-muted)]">{t(uiLanguage, "werkzeugEntryHint")}</p>
-              <div className="mt-6 flex justify-start"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>
-              <div className="relative my-5 text-center text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+              <div className="mt-3 flex justify-start sm:mt-5"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>
+              <div className="relative my-3 text-center text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase sm:my-4">
                 <span className="absolute inset-x-0 top-1/2 border-t border-[var(--panel-divider)]" />
                 <span className="relative bg-white/35 px-2 backdrop-blur-sm">{t(uiLanguage, "or")}</span>
               </div>
-              <form onSubmit={(event) => { event.preventDefault(); void create(); }} className="flex flex-col items-stretch gap-3">
+              <form onSubmit={(event) => { event.preventDefault(); void create(); }} className="flex flex-col items-stretch gap-2 sm:gap-3">
                 <label className="text-[11px] font-semibold text-[var(--text-muted)]" htmlFor="werkzeug-project-name">{t(uiLanguage, "layoutProjectName")}</label>
                 <input id="werkzeug-project-name" value={name} onChange={(event) => setName(event.target.value)} required placeholder={t(uiLanguage, "layoutProjectName")} className="h-10 w-full rounded-xl border border-white/55 bg-white/50 px-3 text-xs outline-none backdrop-blur-md focus:border-amber-300" />
                 <GlassPanel variant="control" zIndex={2} wrapperClassName="mt-1 inline-flex self-start">
