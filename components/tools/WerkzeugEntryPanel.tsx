@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
 import { LuChevronDown, LuClock3, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
 import GlassPanel from "@/components/common/GlassPanel";
 import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
@@ -8,6 +9,7 @@ import LoadIfcButton from "@/components/common/LoadIfcButton";
 import { IconUpload } from "@/components/common/ui";
 import { idbDeleteProject, idbListProjects, type StoredLayoutProject } from "@/lib/layoutDrawingDb";
 import { motion, radius } from "@/lib/designTokens";
+import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -22,6 +24,12 @@ const floorFromLevel = (level: { id: string; name: string; elevationMm: number; 
   isBuildingStory: true,
 });
 
+const formatProjectSize = (bytes = 0) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) => void }) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const [name, setName] = useState("");
@@ -31,6 +39,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
+  const projectListRef = useRef<HTMLDivElement>(null);
+  const projectCardRefs = useRef(new Map<string, HTMLElement>());
 
   const refreshProjects = useCallback(async () => {
     setProjectsLoading(true);
@@ -117,14 +127,38 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query))
       : projects;
   }, [projectSearch, projects]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const timer = window.setTimeout(() => {
+      const list = projectListRef.current;
+      const card = projectCardRefs.current.get(selectedProjectId);
+      if (!list || !card) return;
+      const listRect = list.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      let scrollTop = list.scrollTop;
+      if (cardRect.top < listRect.top) {
+        scrollTop -= listRect.top - cardRect.top + 4;
+      } else if (cardRect.bottom > listRect.bottom) {
+        scrollTop += cardRect.bottom - listRect.bottom + 4;
+      }
+      gsap.to(list, {
+        scrollTop,
+        duration: gsapDuration.accordion,
+        ease: gsapEase.iosOut,
+        overwrite: true,
+      });
+    }, gsapDuration.accordion * 1000 + 30);
+    return () => window.clearTimeout(timer);
+  }, [selectedProjectId]);
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-3 backdrop-blur-xl sm:p-6 lg:p-10">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-2 backdrop-blur-xl sm:p-3 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[28px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-5rem)]">
+        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-1.5rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="order-2 flex min-h-0 flex-col border-t border-[var(--panel-divider)] p-4 sm:p-7 landscape:order-1 landscape:border-t-0 landscape:border-r">
+            <section className="order-2 flex min-h-0 flex-col border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
                   <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -145,7 +179,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 />
               </label>
 
-              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-1">
+              <div ref={projectListRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-1">
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
                 ) : projectsError ? (
@@ -163,7 +197,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     {filteredProjects.map((project) => {
                       const expanded = selectedProjectId === project.id;
                       return (
-                        <article key={project.id} className={`min-w-0 overflow-hidden rounded-2xl border backdrop-blur-md transition-colors ${expanded ? "border-amber-300/70 bg-white/45" : "border-white/45 bg-white/25"}`}>
+                        <article ref={(element) => { if (element) projectCardRefs.current.set(project.id, element); else projectCardRefs.current.delete(project.id); }} key={project.id} className={`min-w-0 overflow-hidden rounded-2xl border backdrop-blur-md transition-colors ${expanded ? "border-amber-300/70 bg-white/45" : "border-white/45 bg-white/25"}`}>
                           <button
                             type="button"
                             aria-expanded={expanded}
@@ -187,7 +221,24 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                 <dd className="text-right font-medium text-[var(--text-strong)]">{project.lastModified ? dateFormatter.format(project.lastModified) : "Date unavailable"}</dd>
                                 <dt className="text-[var(--text-muted)]">Storage</dt>
                                 <dd className="text-right font-medium text-[var(--text-strong)]">This device</dd>
+                                <dt className="text-[var(--text-muted)]">Project size</dt>
+                                <dd className="text-right font-medium text-[var(--text-strong)]">{formatProjectSize(project.sizeBytes)}</dd>
+                                <dt className="text-[var(--text-muted)]">Contents</dt>
+                                <dd className="text-right font-medium text-[var(--text-strong)]">{project.levelCount ?? 0} levels · {project.elementCount ?? 0} elements</dd>
                               </dl>
+                              {(project.referenceFiles?.length ?? 0) > 0 && (
+                                <div className="mt-3 rounded-xl bg-white/30 p-2.5">
+                                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">DWG / PDF references</p>
+                                  <div className="grid gap-1">
+                                    {project.referenceFiles?.map((reference, index) => (
+                                      <div key={`${reference.name}-${index}`} className="flex min-w-0 items-center justify-between gap-3 text-[11px]">
+                                        <span className="truncate font-medium text-[var(--text-strong)]">{reference.name}</span>
+                                        <span className="shrink-0 rounded-md bg-white/45 px-1.5 py-0.5 text-[9px] font-bold text-[var(--text-muted)]">{reference.type}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               <div className="mt-4 flex items-center justify-end gap-2">
                                 <button type="button" disabled={busy} onClick={() => void deleteProject(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
                                 <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
@@ -202,7 +253,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               </div>
             </section>
 
-            <section className="order-1 flex flex-col justify-center p-5 sm:p-8 landscape:order-2 lg:p-10">
+            <section className="order-1 flex flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
               <p className="text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 max-w-sm text-xs leading-relaxed text-[var(--text-muted)]">{t(uiLanguage, "werkzeugEntryHint")}</p>

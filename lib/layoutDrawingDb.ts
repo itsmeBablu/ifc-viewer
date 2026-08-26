@@ -34,6 +34,10 @@ export type StoredLayoutProject = {
   id: string;
   name: string;
   lastModified: number;
+  sizeBytes?: number;
+  levelCount?: number;
+  elementCount?: number;
+  referenceFiles?: Array<{ name: string; type: "DWG" | "PDF" | "Image" }>;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -250,14 +254,43 @@ export async function idbPutPresets(
 export async function idbListProjects(): Promise<StoredLayoutProject[]> {
   const db = await openDb();
   try {
-    const tx = db.transaction(PROJECTS, "readonly");
-    const rows = await reqToPromise(tx.objectStore(PROJECTS).getAll()) as StoredLayoutProject[];
+    const detailStores = [
+      LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+    ];
+    const tx = db.transaction([PROJECTS, ...detailStores], "readonly");
+    const [rows, ...storeRows] = await Promise.all([
+      reqToPromise(tx.objectStore(PROJECTS).getAll()),
+      ...detailStores.map((storeName) => reqToPromise(tx.objectStore(storeName).getAll())),
+    ]) as [StoredLayoutProject[], ...unknown[][]];
     return rows
-      .map((row) => ({
-        id: row.id,
-        name: row.name || projectNameFromId(row.id),
-        lastModified: Number.isFinite(row.lastModified) ? row.lastModified : 0,
-      }))
+      .map((row) => {
+        const projectRows = storeRows.map((items, index) => items.filter((item) => {
+          const record = item as { projectId?: string };
+          return record.projectId === row.id || (detailStores[index] === PRESETS && record.projectId === row.id);
+        }));
+        const underlays = projectRows[detailStores.indexOf(UNDERLAYS)] as ReferenceUnderlay[];
+        const references = underlays.map((underlay) => {
+          const lowerName = underlay.sourceName.toLocaleLowerCase();
+          const type = lowerName.endsWith(".dwg") ? "DWG" : lowerName.endsWith(".pdf") ? "PDF" : "Image";
+          return { name: underlay.sourceName, type } as const;
+        });
+        const serialized = JSON.stringify([row, ...projectRows.flat()]);
+        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS];
+        const elementCount = elementStores.reduce(
+          (total, storeName) => total + projectRows[detailStores.indexOf(storeName)].length,
+          0,
+        );
+        return {
+          id: row.id,
+          name: row.name || projectNameFromId(row.id),
+          lastModified: Number.isFinite(row.lastModified) ? row.lastModified : 0,
+          sizeBytes: new Blob([serialized]).size,
+          levelCount: projectRows[detailStores.indexOf(LEVELS)].length,
+          elementCount,
+          referenceFiles: references,
+        };
+      })
       .sort((a, b) => b.lastModified - a.lastModified);
   } finally {
     db.close();
