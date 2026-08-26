@@ -44,6 +44,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
+  const [scrollCue, setScrollCue] = useState({ visible: false, top: 0, height: 0 });
 
   const refreshProjects = useCallback(async () => {
     setProjectsLoading(true);
@@ -148,6 +149,42 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       : projects;
   }, [projectSearch, projects]);
 
+  const updateScrollCue = useCallback(() => {
+    const list = projectListRef.current;
+    if (!list) return;
+    const viewport = list.clientHeight;
+    const total = list.scrollHeight;
+    if (viewport <= 0 || total <= viewport + 1) {
+      setScrollCue({ visible: false, top: 0, height: 0 });
+      return;
+    }
+    const height = Math.max(24, (viewport * viewport) / total);
+    const travel = Math.max(0, viewport - height);
+    const progress = list.scrollTop / Math.max(1, total - viewport);
+    setScrollCue({
+      visible: true,
+      top: list.offsetTop + progress * travel,
+      height,
+    });
+  }, []);
+
+  useEffect(() => {
+    const list = projectListRef.current;
+    if (!list) return;
+    const frame = window.requestAnimationFrame(updateScrollCue);
+    const resizeObserver = new ResizeObserver(updateScrollCue);
+    const mutationObserver = new MutationObserver(updateScrollCue);
+    resizeObserver.observe(list);
+    mutationObserver.observe(list, { childList: true, subtree: true, attributes: true });
+    window.addEventListener("resize", updateScrollCue);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", updateScrollCue);
+    };
+  }, [updateScrollCue]);
+
   useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
@@ -180,7 +217,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="order-2 flex h-0 min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:border-t-0 landscape:border-r lg:p-7">
+            <section className="relative order-2 flex h-0 min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:border-t-0 landscape:border-r lg:p-7">
               <div className="shrink-0 bg-transparent pb-1">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
@@ -205,6 +242,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
               <div
                 ref={projectListRef}
+                onScroll={updateScrollCue}
                 className="project-history-scroll h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
@@ -280,6 +318,13 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                   </div>
                 )}
               </div>
+              {scrollCue.visible && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-1 z-20 w-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(245,158,11,0.45)]"
+                  style={{ top: scrollCue.top, height: scrollCue.height }}
+                />
+              )}
             </section>
 
             <section className="order-1 flex shrink-0 flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
