@@ -54,8 +54,8 @@ export default function LoadIfcButton({
           onClick={() => inputRef.current?.click()}
           className={`${motion.base} ${iconOnly ? "rounded-full h-10 w-10 p-0" : radius.control} inline-flex ${iconOnly ? "" : "min-w-[168px] px-6 py-2.5 text-sm"} items-center justify-center gap-2 font-semibold active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${
             primary
-              ? "btn-liquid-hover border border-amber-200/70 bg-gradient-to-br from-amber-200/95 via-yellow-300/85 to-amber-400/75 text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_4px_14px_rgba(251,191,36,0.35)]"
-              : "glass-inset text-zinc-800 hover:bg-white/15"
+              ? "btn-v-yellow btn-liquid-hover text-[#09090b]"
+              : "glass-inset text-zinc-800 hover:bg-white/15 dark:text-zinc-100"
           } ${className}`}
           aria-label={label}
         >

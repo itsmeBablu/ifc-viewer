@@ -42,10 +42,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectSearch, setProjectSearch] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
   const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
-  const projectSectionRef = useRef<HTMLElement>(null);
-  const projectHeaderRef = useRef<HTMLDivElement>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
+  const [scrollCue, setScrollCue] = useState({ visible: false, top: 0, height: 0 });
 
   const refreshProjects = useCallback(async () => {
     setProjectsLoading(true);
@@ -150,46 +149,51 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       : projects;
   }, [projectSearch, projects]);
 
-  useEffect(() => {
-    const section = projectSectionRef.current;
-    if (!section) return;
-    let startY = 0;
-    let startScrollTop = 0;
-    const isPhonePortrait = () => window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches;
-    const onTouchStart = (event: TouchEvent) => {
-      if (!isPhonePortrait() || event.touches.length !== 1) return;
-      startY = event.touches[0].clientY;
-      startScrollTop = section.scrollTop;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      if (!isPhonePortrait() || event.touches.length !== 1) return;
-      const next = startScrollTop + startY - event.touches[0].clientY;
-      if (next === section.scrollTop) return;
-      event.preventDefault();
-      section.scrollTop = next;
-    };
-    section.addEventListener("touchstart", onTouchStart, { passive: true });
-    section.addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => {
-      section.removeEventListener("touchstart", onTouchStart);
-      section.removeEventListener("touchmove", onTouchMove);
-    };
+  const updateScrollCue = useCallback(() => {
+    const list = projectListRef.current;
+    if (!list) return;
+    const viewport = list.clientHeight;
+    const total = list.scrollHeight;
+    if (viewport <= 0 || total <= viewport + 1) {
+      setScrollCue({ visible: false, top: 0, height: 0 });
+      return;
+    }
+    const height = Math.max(24, (viewport * viewport) / total);
+    const travel = Math.max(0, viewport - height);
+    const progress = list.scrollTop / Math.max(1, total - viewport);
+    setScrollCue({
+      visible: true,
+      top: list.offsetTop + progress * travel,
+      height,
+    });
   }, []);
+
+  useEffect(() => {
+    const list = projectListRef.current;
+    if (!list) return;
+    const frame = window.requestAnimationFrame(updateScrollCue);
+    const resizeObserver = new ResizeObserver(updateScrollCue);
+    const mutationObserver = new MutationObserver(updateScrollCue);
+    resizeObserver.observe(list);
+    mutationObserver.observe(list, { childList: true, subtree: true, attributes: true });
+    window.addEventListener("resize", updateScrollCue);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", updateScrollCue);
+    };
+  }, [updateScrollCue]);
 
   useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
-      const list = window.matchMedia("(orientation: portrait)").matches
-        ? projectSectionRef.current
-        : projectListRef.current;
+      const list = projectListRef.current;
       const card = projectCardRefs.current.get(selectedProjectId);
       if (!list || !card) return;
       const listRect = list.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      const stickyOffset = list === projectSectionRef.current
-        ? (projectHeaderRef.current?.offsetHeight ?? 0)
-        : 0;
-      const visibleTop = listRect.top + stickyOffset;
+      const visibleTop = listRect.top;
       const visibleHeight = listRect.bottom - visibleTop;
       let scrollTop = list.scrollTop;
       if (cardRect.height > visibleHeight || cardRect.top < visibleTop) {
@@ -209,13 +213,20 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-3 backdrop-blur-[2px] sm:p-4 lg:p-10">
-      <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
-          <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section ref={projectSectionRef} className="project-history-scroll order-2 flex h-0 min-h-0 flex-1 touch-pan-y flex-col overflow-y-scroll border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
-              <div ref={projectHeaderRef} className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
-                <div className="mb-4 flex items-end justify-between gap-3">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-2 backdrop-blur-[2px] sm:p-4 lg:p-10">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl items-center justify-center">
+        <GlassPanel
+          fill
+          variant="panel"
+          zIndex={90}
+          preferCss
+          wrapperClassName="liquid-entry-glass h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:rounded-[28px]"
+        >
+          <div className="flex h-full min-h-0 max-h-full w-full flex-col overflow-hidden landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
+            {/* ─── Previous Projects Section ─── */}
+            <section className="relative order-2 flex h-full min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
+              <div className="shrink-0 bg-transparent pb-1">
+                <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Stored locally on this device</p>
@@ -238,7 +249,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
               <div
                 ref={projectListRef}
-                className="min-h-0 flex-none touch-pan-y overflow-x-hidden overflow-y-visible overscroll-contain pr-1 landscape:h-0 landscape:flex-1 landscape:overflow-y-scroll"
+                onScroll={updateScrollCue}
+                className="project-history-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
@@ -252,9 +264,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Create one or upload an IFC to get started.</p>
                   </div>
                 ) : filteredProjects.length === 0 ? (
-                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match “{projectSearch.trim()}”.</p>
+                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match &ldquo;{projectSearch.trim()}&rdquo;.</p>
                 ) : (
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 pb-2">
                     {filteredProjects.map((project) => {
                       const expanded = selectedProjectId === project.id;
                       return (
@@ -301,9 +313,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                 </div>
                               )}
                               <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                                <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
-                                <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
-                                <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
+                                <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 dark:text-sky-400 transition hover:bg-sky-100/40 dark:hover:bg-sky-950/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
+                                <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 dark:text-red-400 transition hover:bg-red-100/60 dark:hover:bg-red-950/40 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
+                                <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="btn-v-yellow btn-liquid-hover h-9 rounded-xl px-4 text-xs font-bold text-[#09090b] transition disabled:opacity-45">Open project</button>
                               </div>
                             </div>
                           </GsapHeightAccordion>
@@ -313,10 +325,18 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                   </div>
                 )}
               </div>
+              {scrollCue.visible && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-1 z-20 w-1.5 rounded-full bg-amber-400/90 shadow-[0_0_8px_rgba(245,158,11,0.45)] landscape:hidden"
+                  style={{ top: scrollCue.top, height: scrollCue.height }}
+                />
+              )}
             </section>
 
-            <section className="order-1 flex shrink-0 flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
-              <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
+            {/* ─── Start Designing Section ─── */}
+            <section className="order-1 flex min-h-0 shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 sm:p-5 lg:p-10">
+              <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-600 dark:text-amber-400 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
               <div className="mt-3 flex justify-start sm:mt-5"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>
@@ -336,7 +356,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       </div>
 
       <GsapOverlay show={Boolean(projectToDownload)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-sm">
-        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="liquid-entry-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
           <div role="alertdialog" aria-modal="true" aria-labelledby="download-project-title" className="p-5 sm:p-6">
             <div className="mb-3 grid size-10 place-items-center rounded-full bg-sky-100/70 text-sky-700"><LuDownload className="size-5" /></div>
             <h2 id="download-project-title" className="text-base font-semibold text-[var(--text-strong)]">Download project?</h2>
@@ -352,7 +372,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       </GsapOverlay>
 
       <GsapOverlay show={Boolean(projectToDelete)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="liquid-entry-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className="p-5 sm:p-6">
             <div className="mb-3 grid size-10 place-items-center rounded-full bg-red-100/75 text-red-600"><LuTrash2 className="size-5" /></div>
             <h2 id="delete-project-title" className="text-base font-semibold text-[var(--text-strong)]">Delete project?</h2>
