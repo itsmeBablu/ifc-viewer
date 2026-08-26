@@ -87,7 +87,6 @@ export default function WerkzeugWorkspaceChrome({
   const panelRef = useRef<HTMLDivElement>(null);
   const fittedHeightRef = useRef(320);
   const fittedWidthRef = useRef(300);
-  const resizingRef = useRef(false);
   const [panelKey, setPanelKey] = useState<PanelKey | null>("levels");
   const [collapsed] = useState(false);
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
@@ -104,7 +103,7 @@ export default function WerkzeugWorkspaceChrome({
   const [portraitPanelHeight, setPortraitPanelHeight] = useState(
     initialLandscapePanelHeight,
   );
-  const [portraitPanelWidth, setPortraitPanelWidth] = useState(320);
+  const [portraitPanelWidth] = useState(320);
   const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
@@ -153,12 +152,16 @@ export default function WerkzeugWorkspaceChrome({
   }, []);
 
   useLayoutEffect(() => {
-    const panel = panelRef.current;
     const content = contentRef.current;
-    if (!panel || !content || panelHidden || collapsed) return;
+    if (!content || panelHidden || collapsed) return;
 
-    const fitToContent = () => {
-      const contentHeight = content.scrollHeight;
+    const measureContent = () => {
+      const embeddedScroller = content.querySelector<HTMLElement>(
+        ".material-editor-embedded > div:nth-child(2)",
+      );
+      const contentHeight = embeddedScroller
+        ? embeddedScroller.scrollHeight + 82
+        : content.scrollHeight;
       const chromeHeight = portrait ? 54 : 60;
       const viewportLimit = window.innerHeight - (portrait ? 48 : 92);
       const targetHeight = Math.max(
@@ -175,36 +178,11 @@ export default function WerkzeugWorkspaceChrome({
         Math.min(widthLimit, naturalWidth + 28),
       );
       fittedWidthRef.current = targetWidth;
-
-      if (resizingRef.current) return;
-
-      gsap.to(panel, {
-        height: targetHeight,
-        width: targetWidth,
-        duration: 0.34,
-        ease: "power3.inOut",
-        overwrite: "auto",
-        onComplete: () => {
-          if (portrait) {
-            setPortraitPanelHeight(targetHeight);
-            setPortraitPanelWidth(targetWidth);
-          }
-          else {
-            setLandscapePanelHeight(targetHeight);
-            setLandscapePanelWidth(targetWidth);
-          }
-        },
-      });
     };
 
-    const frame = window.requestAnimationFrame(fitToContent);
-    const observed = content.firstElementChild ?? content;
-    const observer = new ResizeObserver(fitToContent);
-    observer.observe(observed);
+    const frame = window.requestAnimationFrame(measureContent);
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      gsap.killTweensOf(panel);
     };
   }, [collapsed, panelHidden, panelKey, panelTab, portrait]);
 
@@ -220,7 +198,7 @@ export default function WerkzeugWorkspaceChrome({
       ease: panelHidden ? "power3.inOut" : "back.out(1.35)",
       overwrite: "auto",
     });
-  }, [landscapePanelWidth, panelHidden, portrait, portraitPanelHeight]);
+  }, [panelHidden, portrait]);
 
   useLayoutEffect(() => {
     const content = contentRef.current;
@@ -311,7 +289,6 @@ export default function WerkzeugWorkspaceChrome({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    resizingRef.current = true;
     gsap.killTweensOf(panelRef.current);
     const startY = event.clientY;
     const startHeight = landscapePanelHeight;
@@ -326,7 +303,6 @@ export default function WerkzeugWorkspaceChrome({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      resizingRef.current = false;
       if (latestHeight > fittedHeightRef.current) {
         springValue(latestHeight, fittedHeightRef.current, setLandscapePanelHeight);
       }
@@ -337,7 +313,6 @@ export default function WerkzeugWorkspaceChrome({
   const beginLandscapeDrawerGesture = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    resizingRef.current = true;
     gsap.killTweensOf(panelRef.current);
     const startX = event.clientX;
     const startWidth = landscapePanelWidth;
@@ -357,7 +332,6 @@ export default function WerkzeugWorkspaceChrome({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      resizingRef.current = false;
       if (!dragged) setPanelHidden((hidden) => !hidden);
       else if (latestWidth > fittedWidthRef.current) {
         springValue(latestWidth, fittedWidthRef.current, setLandscapePanelWidth);
@@ -369,7 +343,6 @@ export default function WerkzeugWorkspaceChrome({
   const beginPortraitDrawerGesture = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    resizingRef.current = true;
     gsap.killTweensOf(panelRef.current);
     const startY = event.clientY;
     const startHeight = portraitPanelHeight;
@@ -389,7 +362,6 @@ export default function WerkzeugWorkspaceChrome({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      resizingRef.current = false;
       if (!dragged) setPanelHidden((hidden) => !hidden);
       else if (latestHeight > fittedHeightRef.current) {
         springValue(latestHeight, fittedHeightRef.current, setPortraitPanelHeight);
