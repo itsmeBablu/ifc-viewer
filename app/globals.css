@@ -1218,6 +1218,24 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   user-select: none;
 }
 
+/* Start-screen project history keeps a visible, touch-friendly scroll cue. */
+.project-history-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(234, 179, 8, 0.8) rgba(255, 255, 255, 0.16);
+  scrollbar-gutter: stable;
+}
+.project-history-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.project-history-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+.project-history-scroll::-webkit-scrollbar-thumb {
+  background: rgba(234, 179, 8, 0.82);
+  border-radius: 999px;
+}
+
 @media (max-width: 900px) {
   .werkzeug-unified-toolbar {
     right: 0.5rem;
@@ -2239,5 +2257,36 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   border-radius: 999px;
   background: #facc15;
   box-shadow: 0 1px 4px rgba(202, 138, 4, 0.3);
+}
+
+/* Portrait options must keep the full material track and editable value in view. */
+@media (orientation: portrait) and (max-width: 1400px) {
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded,
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded > div,
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded label:has(> .material-slider) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded label:has(> .material-slider) {
+    grid-template-columns: minmax(0, 1fr) 54px !important;
+    grid-template-rows: auto 26px !important;
+    overflow: visible !important;
+  }
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded label:has(> .material-slider) > .material-slider {
+    display: block;
+    width: calc(100% - 2px) !important;
+    min-width: 72px !important;
+    max-width: 100% !important;
+    margin-inline: 1px;
+  }
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded label:has(> .material-slider) > span:last-child {
+    min-width: 0 !important;
+    width: 54px;
+  }
+  .werkzeug-ipad-context[data-orientation="portrait"] .material-editor-embedded label:has(> .material-slider) input[type="number"] {
+    width: 38px !important;
+  }
 }
 

@@ -213,7 +213,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section ref={projectSectionRef} className="order-2 flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
+            <section ref={projectSectionRef} className="project-history-scroll order-2 flex h-0 min-h-0 flex-1 touch-pan-y flex-col overflow-y-scroll border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
               <div ref={projectHeaderRef} className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
