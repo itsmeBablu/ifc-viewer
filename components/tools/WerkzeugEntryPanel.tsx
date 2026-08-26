@@ -42,8 +42,6 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectSearch, setProjectSearch] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
   const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
-  const projectSectionRef = useRef<HTMLElement>(null);
-  const projectHeaderRef = useRef<HTMLDivElement>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -151,45 +149,40 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   }, [projectSearch, projects]);
 
   useEffect(() => {
-    const section = projectSectionRef.current;
-    if (!section) return;
+    const list = projectListRef.current;
+    if (!list) return;
     let startY = 0;
     let startScrollTop = 0;
     const isPhonePortrait = () => window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches;
     const onTouchStart = (event: TouchEvent) => {
       if (!isPhonePortrait() || event.touches.length !== 1) return;
       startY = event.touches[0].clientY;
-      startScrollTop = section.scrollTop;
+      startScrollTop = list.scrollTop;
     };
     const onTouchMove = (event: TouchEvent) => {
       if (!isPhonePortrait() || event.touches.length !== 1) return;
       const next = startScrollTop + startY - event.touches[0].clientY;
-      if (next === section.scrollTop) return;
+      if (next === list.scrollTop) return;
       event.preventDefault();
-      section.scrollTop = next;
+      list.scrollTop = next;
     };
-    section.addEventListener("touchstart", onTouchStart, { passive: true });
-    section.addEventListener("touchmove", onTouchMove, { passive: false });
+    list.addEventListener("touchstart", onTouchStart, { passive: true });
+    list.addEventListener("touchmove", onTouchMove, { passive: false });
     return () => {
-      section.removeEventListener("touchstart", onTouchStart);
-      section.removeEventListener("touchmove", onTouchMove);
+      list.removeEventListener("touchstart", onTouchStart);
+      list.removeEventListener("touchmove", onTouchMove);
     };
   }, []);
 
   useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
-      const list = window.matchMedia("(orientation: portrait)").matches
-        ? projectSectionRef.current
-        : projectListRef.current;
+      const list = projectListRef.current;
       const card = projectCardRefs.current.get(selectedProjectId);
       if (!list || !card) return;
       const listRect = list.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      const stickyOffset = list === projectSectionRef.current
-        ? (projectHeaderRef.current?.offsetHeight ?? 0)
-        : 0;
-      const visibleTop = listRect.top + stickyOffset;
+      const visibleTop = listRect.top;
       const visibleHeight = listRect.bottom - visibleTop;
       let scrollTop = list.scrollTop;
       if (cardRect.height > visibleHeight || cardRect.top < visibleTop) {
@@ -213,8 +206,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section ref={projectSectionRef} className="project-history-scroll order-2 flex h-0 min-h-0 flex-1 touch-pan-y flex-col overflow-y-scroll border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
-              <div ref={projectHeaderRef} className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
+            <section className="order-2 flex h-0 min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:h-auto landscape:border-t-0 landscape:border-r lg:p-7">
+              <div className="shrink-0 bg-transparent pb-1">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -238,7 +231,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
               <div
                 ref={projectListRef}
-                className="min-h-0 flex-none touch-pan-y overflow-x-hidden overflow-y-visible overscroll-contain pr-1 landscape:h-0 landscape:flex-1 landscape:overflow-y-scroll"
+                className="project-history-scroll h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
