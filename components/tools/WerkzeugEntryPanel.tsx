@@ -41,6 +41,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
+  const projectSectionRef = useRef<HTMLElement>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -133,7 +134,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
-      const list = projectListRef.current;
+      const list = window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches
+        ? projectSectionRef.current
+        : projectListRef.current;
       const card = projectCardRefs.current.get(selectedProjectId);
       if (!list || !card) return;
       const listRect = list.getBoundingClientRect();
@@ -160,30 +163,32 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-1.5rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="order-2 flex min-h-0 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
-              <div className="mb-4 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">Stored locally on this device</p>
+            <section ref={projectSectionRef} className="order-2 flex min-h-0 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-3 sm:overflow-hidden sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
+              <div className="max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:bg-white/55 max-sm:pb-1 max-sm:backdrop-blur-xl">
+                <div className="mb-4 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">Stored locally on this device</p>
+                  </div>
+                  <span className="rounded-full bg-white/35 px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)]">{projects.length} saved</span>
                 </div>
-                <span className="rounded-full bg-white/35 px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)]">{projects.length} saved</span>
-              </div>
 
-              <label className="relative mb-3 block">
-                <LuSearch className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input
-                  type="search"
-                  value={projectSearch}
-                  onChange={(event) => setProjectSearch(event.target.value)}
-                  placeholder="Search previous projects"
-                  aria-label="Search previous projects"
-                  className="h-9 w-full rounded-xl border border-white/50 bg-white/35 pr-3 pl-9 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-300"
-                />
-              </label>
+                <label className="relative mb-3 block">
+                  <LuSearch className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    type="search"
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="Search previous projects"
+                    aria-label="Search previous projects"
+                    className="h-9 w-full rounded-xl border border-white/50 bg-white/35 pr-3 pl-9 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-300"
+                  />
+                </label>
+              </div>
 
               <div
                 ref={projectListRef}
-                className="h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain pr-1"
+                className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overscroll-contain pr-1 max-sm:flex-none max-sm:overflow-y-visible sm:h-0 sm:overflow-y-scroll"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
