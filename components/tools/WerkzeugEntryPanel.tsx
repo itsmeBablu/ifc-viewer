@@ -149,32 +149,6 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   }, [projectSearch, projects]);
 
   useEffect(() => {
-    const list = projectListRef.current;
-    if (!list) return;
-    let startY = 0;
-    let startScrollTop = 0;
-    const isPhonePortrait = () => window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches;
-    const onTouchStart = (event: TouchEvent) => {
-      if (!isPhonePortrait() || event.touches.length !== 1) return;
-      startY = event.touches[0].clientY;
-      startScrollTop = list.scrollTop;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      if (!isPhonePortrait() || event.touches.length !== 1) return;
-      const next = startScrollTop + startY - event.touches[0].clientY;
-      if (next === list.scrollTop) return;
-      event.preventDefault();
-      list.scrollTop = next;
-    };
-    list.addEventListener("touchstart", onTouchStart, { passive: true });
-    list.addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => {
-      list.removeEventListener("touchstart", onTouchStart);
-      list.removeEventListener("touchmove", onTouchMove);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
       const list = projectListRef.current;
