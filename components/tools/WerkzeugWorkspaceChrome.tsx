@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import gsap from "gsap";
 import {
-  LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
-  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuUndo2,
+  LuAlignCenterHorizontal, LuBox, LuChevronDown, LuChevronLeft, LuCopy, LuDoorOpen, LuEye, LuFlipHorizontal2, LuFolderOpen, LuLayers3,
+  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -103,6 +103,7 @@ export default function WerkzeugWorkspaceChrome({
     initialLandscapePanelHeight,
   );
   const [portraitPanelWidth, setPortraitPanelWidth] = useState(320);
+  const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -402,6 +403,43 @@ export default function WerkzeugWorkspaceChrome({
   };
   const activeRenderMode =
     RENDER_MODES.find((mode) => mode.id === renderMode) ?? RENDER_MODES[0];
+  const hasContextSelection = selectedElements.some((ref) =>
+    ref.kind === "wall" || ref.kind === "door" || ref.kind === "window" ||
+    ref.kind === "slab" || ref.kind === "column" || ref.kind === "beam",
+  );
+  const modifyTitle = selectedWallId ? "Modify | Walls"
+    : selectedDoorId ? "Modify | Doors"
+      : selectedWindowId ? "Modify | Windows"
+        : selectedSlab ? `Modify | ${selectedSlab.kind === "roof" ? "Roofs" : "Floors"}`
+          : selectedColumn ? "Modify | Columns"
+            : selectedBeam ? "Modify | Beams" : "Modify";
+  const activateTransform = (mode: "translate" | "rotate") => {
+    useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+    useToolMarkupStore.getState().setTransformMode(mode);
+  };
+  const mirrorSelection = () => {
+    const store = useLayoutDrawingStore.getState();
+    const wall = store.walls.find((item) => item.id === store.selectedWallId);
+    if (wall) {
+      void store.mirrorSelected(
+        { xMm: wall.startXmm, yMm: wall.startYmm },
+        { xMm: wall.endXmm, yMm: wall.endYmm },
+      );
+      return;
+    }
+    const column = store.columns.find((item) => store.selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id));
+    const slab = store.slabs.find((item) => item.id === store.selectedSlabId);
+    const centerX = column?.xMm ?? (slab ? (slab.minXmm + slab.maxXmm) / 2 : 0);
+    void store.mirrorSelected(
+      { xMm: centerX, yMm: -1_000_000 },
+      { xMm: centerX, yMm: 1_000_000 },
+    );
+  };
+  const copySelection = () => {
+    const markup = useToolMarkupStore.getState();
+    if (markup.selectedPlacementId) void markup.duplicatePlacement(markup.selectedPlacementId);
+    else void useLayoutDrawingStore.getState().copySelected(100, 100);
+  };
   return (
     <>
       <div data-dock={dockEdge} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
@@ -418,6 +456,19 @@ export default function WerkzeugWorkspaceChrome({
             </>}</div>;
           })}
         </div>
+        {hasContextSelection && <div className="werkzeug-ipad-modify-ribbon" aria-label={modifyTitle}>
+          <span className="werkzeug-ipad-modify-title">{modifyTitle}</span>
+          <ModifyButton label="Move" icon={<LuMove />} onClick={() => activateTransform("translate")} />
+          <ModifyButton label="Rotate" icon={<LuRotate3D />} onClick={() => activateTransform("rotate")} />
+          <ModifyButton label={`Align ${alignAxis.toUpperCase()}`} icon={<LuAlignCenterHorizontal />} onClick={() => {
+            void useLayoutDrawingStore.getState().alignSelected(alignAxis);
+            setAlignAxis((axis) => axis === "x" ? "y" : "x");
+          }} />
+          <ModifyButton label="Mirror" icon={<LuFlipHorizontal2 />} onClick={mirrorSelection} />
+          <ModifyButton label="Copy" icon={<LuCopy />} onClick={copySelection} />
+          <ModifyButton label="Trim" icon={<LuScissors />} active={armed === "trim"} onClick={() => useLayoutDrawingStore.getState().setArmedLayoutTool(armed === "trim" ? null : "trim")} />
+          <ModifyButton label="Delete" icon={<LuTrash2 />} danger onClick={() => void useLayoutDrawingStore.getState().deleteSelected()} />
+        </div>}
         <div className="werkzeug-ipad-snap-ribbon"><ObjectSnapStrip compact showCount={false} /></div>
         <div className="werkzeug-ipad-action-ribbon">
         <div className="relative shrink-0">
@@ -479,6 +530,22 @@ function springValue(
     onUpdate: () => update(proxy.value),
     onComplete: () => update(to),
   });
+}
+
+function ModifyButton({
+  label,
+  icon,
+  active = false,
+  danger = false,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return <button type="button" className={`werkzeug-modify-button ${active ? "is-active btn-v-yellow" : ""} ${danger ? "is-danger" : ""}`} onClick={onClick} title={label}><span>{icon}</span><span>{label}</span></button>;
 }
 
 function LevelsPanel() {
