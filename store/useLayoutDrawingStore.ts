@@ -446,6 +446,7 @@ type LayoutDrawingState = {
   setMarqueeBox: (box: { startX: number; startY: number; currentX: number; currentY: number; isCrossing: boolean } | null) => void;
   deleteSelected: () => Promise<void>;
   moveSelected: (deltaXmm: number, deltaYmm: number) => Promise<void>;
+  alignSelected: (axis: "x" | "y") => Promise<void>;
   copySelected: (deltaXmm: number, deltaYmm: number, targetLevelId?: string) => Promise<SelectedElementRef[]>;
   mirrorSelected: (axisP1: { xMm: number; yMm: number }, axisP2: { xMm: number; yMm: number }) => Promise<void>;
   rotateSelected: (center: { xMm: number; yMm: number }, angleDeg: number) => Promise<void>;
@@ -2712,6 +2713,83 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       sketchLines: nextLines,
       lastMutatedAt: Date.now(),
     });
+  },
+
+  alignSelected: async (axis) => {
+    const state = get();
+    const selected = state.selectedElements;
+    if (selected.length < 2) return;
+    if (selected.some((ref) => state.lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
+
+    const centerOf = (ref: SelectedElementRef) => {
+      if (ref.kind === "wall") {
+        const item = state.walls.find((entry) => entry.id === ref.id);
+        return item ? { x: (item.startXmm + item.endXmm) / 2, y: (item.startYmm + item.endYmm) / 2 } : null;
+      }
+      if (ref.kind === "slab") {
+        const item = state.slabs.find((entry) => entry.id === ref.id);
+        return item ? { x: (item.minXmm + item.maxXmm) / 2, y: (item.minYmm + item.maxYmm) / 2 } : null;
+      }
+      if (ref.kind === "column") {
+        const item = state.columns.find((entry) => entry.id === ref.id);
+        return item ? { x: item.xMm, y: item.yMm } : null;
+      }
+      if (ref.kind === "beam") {
+        const item = state.beams.find((entry) => entry.id === ref.id);
+        return item ? { x: (item.startXmm + item.endXmm) / 2, y: (item.startYmm + item.endYmm) / 2 } : null;
+      }
+      if (ref.kind === "line") {
+        const item = state.sketchLines.find((entry) => entry.id === ref.id);
+        return item ? { x: (item.startXmm + item.endXmm) / 2, y: (item.startYmm + item.endYmm) / 2 } : null;
+      }
+      return null;
+    };
+
+    const target = selected.map(centerOf).find(Boolean);
+    if (!target) return;
+    pushWerkzeugHistory();
+
+    const deltaFor = (ref: SelectedElementRef) => {
+      const center = centerOf(ref);
+      if (!center) return { x: 0, y: 0 };
+      return axis === "x"
+        ? { x: target.x - center.x, y: 0 }
+        : { x: 0, y: target.y - center.y };
+    };
+    const selectedKeys = new Set(selected.map((ref) => `${ref.kind}:${ref.id}`));
+    const walls = state.walls.map((item) => {
+      if (!selectedKeys.has(`wall:${item.id}`)) return item;
+      const delta = deltaFor({ kind: "wall", id: item.id });
+      return { ...item, startXmm: item.startXmm + delta.x, endXmm: item.endXmm + delta.x, startYmm: item.startYmm + delta.y, endYmm: item.endYmm + delta.y };
+    });
+    const slabs = state.slabs.map((item) => {
+      if (!selectedKeys.has(`slab:${item.id}`)) return item;
+      const delta = deltaFor({ kind: "slab", id: item.id });
+      return { ...item, minXmm: item.minXmm + delta.x, maxXmm: item.maxXmm + delta.x, minYmm: item.minYmm + delta.y, maxYmm: item.maxYmm + delta.y, boundary: item.boundary?.map((point) => ({ xMm: point.xMm + delta.x, yMm: point.yMm + delta.y })), holes: item.holes?.map((hole) => hole.map((point) => ({ xMm: point.xMm + delta.x, yMm: point.yMm + delta.y }))) };
+    });
+    const columns = state.columns.map((item) => {
+      if (!selectedKeys.has(`column:${item.id}`)) return item;
+      const delta = deltaFor({ kind: "column", id: item.id });
+      return { ...item, xMm: item.xMm + delta.x, yMm: item.yMm + delta.y };
+    });
+    const beams = state.beams.map((item) => {
+      if (!selectedKeys.has(`beam:${item.id}`)) return item;
+      const delta = deltaFor({ kind: "beam", id: item.id });
+      return { ...item, startXmm: item.startXmm + delta.x, endXmm: item.endXmm + delta.x, startYmm: item.startYmm + delta.y, endYmm: item.endYmm + delta.y };
+    });
+    const sketchLines = state.sketchLines.map((item) => {
+      if (!selectedKeys.has(`line:${item.id}`)) return item;
+      const delta = deltaFor({ kind: "line", id: item.id });
+      return { ...item, startXmm: item.startXmm + delta.x, endXmm: item.endXmm + delta.x, startYmm: item.startYmm + delta.y, endYmm: item.endYmm + delta.y };
+    });
+
+    await Promise.all([
+      ...walls.filter((item) => selectedKeys.has(`wall:${item.id}`)).map(idbPutWall),
+      ...slabs.filter((item) => selectedKeys.has(`slab:${item.id}`)).map(idbPutSlab),
+      ...columns.filter((item) => selectedKeys.has(`column:${item.id}`)).map(idbPutColumn),
+      ...beams.filter((item) => selectedKeys.has(`beam:${item.id}`)).map(idbPutBeam),
+    ]);
+    set({ walls, slabs, columns, beams, sketchLines, lastMutatedAt: Date.now() });
   },
 
   copySelected: async (deltaXmm, deltaYmm, targetLevelId) => {

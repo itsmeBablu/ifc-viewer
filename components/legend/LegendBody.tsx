@@ -43,6 +43,8 @@ type Props = {
   className?: string;
   /** Presentation heating/options menu open — parent can grow the dock. */
   onPresentationMenuOpenChange?: (open: boolean) => void;
+  /** Render presentation menus as a right-edge drawer (iPad landscape). */
+  sideSlideMenus?: boolean;
 };
 
 function toColorInputValue(hex: string): string {
@@ -86,6 +88,7 @@ export default function LegendBody({
   compact = false,
   className = "",
   onPresentationMenuOpenChange,
+  sideSlideMenus = false,
 }: Props) {
   const colorMode = useAppStore((s) => s.colorMode);
   const setColorMode = useAppStore((s) => s.setColorMode);
@@ -292,6 +295,7 @@ export default function LegendBody({
           isPresentationView ? (
             <PresentationOptionsMenu
               compact={compact}
+              sideSlide={sideSlideMenus}
               onMenuOpenChange={onPresentationMenuOpenChange}
               title={
                 <p

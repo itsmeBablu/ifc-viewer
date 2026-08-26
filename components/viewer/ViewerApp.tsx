@@ -68,6 +68,7 @@ export default function ViewerApp() {
   const [pointerOverViewer, setPointerOverViewer] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
+  const [isTabletLandscape, setIsTabletLandscape] = useState(false);
   const [isDraggingIfc, setIsDraggingIfc] = useState(false);
   const dragDepthRef = useRef(0);
 
@@ -122,6 +123,7 @@ export default function ViewerApp() {
       // Phones in landscape are often ≥768 wide — keep compact UI when short.
       setIsDesktop(w >= 768 && h >= 560);
       setIsLandscape(w > h);
+      setIsTabletLandscape(w >= 700 && w < 1100 && w > h);
     };
     update();
     window.addEventListener("resize", update);
@@ -747,7 +749,7 @@ export default function ViewerApp() {
                 }`}
               >
                 {isPresentationView ? (
-                  <PresentationSidePanel />
+                  <PresentationSidePanel sideSlideMenus={isTabletLandscape} />
                 ) : (
                   <LegendPanel />
                 )}
