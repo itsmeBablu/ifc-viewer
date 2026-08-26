@@ -160,7 +160,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-1.5rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
-            <section className="order-2 flex h-full min-h-0 max-h-full flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
+            <section className="order-2 flex min-h-0 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 sm:p-4 landscape:order-1 landscape:border-t-0 landscape:border-r lg:p-7">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
                   <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -183,7 +183,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
               <div
                 ref={projectListRef}
-                className="h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                className="h-0 min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-scroll overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
@@ -262,7 +262,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
             <section className="order-1 flex flex-col justify-center p-3 sm:p-5 landscape:order-2 lg:p-10">
               <p className="text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
-              <p className="mt-2 max-w-sm text-xs leading-relaxed text-[var(--text-muted)]">{t(uiLanguage, "werkzeugEntryHint")}</p>
+              <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
               <div className="mt-3 flex justify-start sm:mt-5"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>
               <div className="relative my-3 text-center text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase sm:my-4">
                 <span className="absolute inset-x-0 top-1/2 border-t border-[var(--panel-divider)]" />
