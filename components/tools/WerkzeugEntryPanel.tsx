@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LuClock3, LuFolderOpen, LuTrash2 } from "react-icons/lu";
+import { LuChevronDown, LuClock3, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
 import GlassPanel from "@/components/common/GlassPanel";
+import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import { IconUpload } from "@/components/common/ui";
 import { idbDeleteProject, idbListProjects, type StoredLayoutProject } from "@/lib/layoutDrawingDb";
@@ -28,6 +29,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projects, setProjects] = useState<StoredLayoutProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectSearch, setProjectSearch] = useState("");
 
   const refreshProjects = useCallback(async () => {
     setProjectsLoading(true);
@@ -97,6 +100,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     setBusy(true);
     try {
       await idbDeleteProject(project.id);
+      setSelectedProjectId((selected) => selected === project.id ? null : selected);
       await refreshProjects();
     } finally {
       setBusy(false);
@@ -107,6 +111,12 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     () => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }),
     [],
   );
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLocaleLowerCase();
+    return query
+      ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query))
+      : projects;
+  }, [projectSearch, projects]);
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
@@ -123,6 +133,18 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 <span className="rounded-full bg-white/35 px-2.5 py-1 text-[10px] font-semibold text-[var(--text-muted)]">{projects.length} saved</span>
               </div>
 
+              <label className="relative mb-3 block">
+                <LuSearch className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                  type="search"
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Search previous projects"
+                  aria-label="Search previous projects"
+                  className="h-9 w-full rounded-xl border border-white/50 bg-white/35 pr-3 pl-9 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-300"
+                />
+              </label>
+
               <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-1">
                 {projectsLoading ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">Loading projects…</p>
@@ -134,19 +156,47 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     <p className="text-sm font-semibold text-[var(--text-strong)]">No saved projects yet</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Create one or upload an IFC to get started.</p>
                   </div>
+                ) : filteredProjects.length === 0 ? (
+                  <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match “{projectSearch.trim()}”.</p>
                 ) : (
                   <div className="grid gap-2">
-                    {projects.map((project) => (
-                      <article key={project.id} className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/45 bg-white/25 p-3 backdrop-blur-md">
-                        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-100/70 text-amber-700"><LuFolderOpen className="size-4" /></div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[var(--text-strong)]">{project.name}</p>
-                          <p className="mt-0.5 flex items-center gap-1 text-[10px] text-[var(--text-muted)]"><LuClock3 className="size-3" />{project.lastModified ? dateFormatter.format(project.lastModified) : "Date unavailable"}</p>
-                        </div>
-                        <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="rounded-xl bg-amber-300/75 px-3 py-2 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open</button>
-                        <button type="button" disabled={busy} onClick={() => void deleteProject(project)} aria-label={`Delete ${project.name}`} className="grid size-9 shrink-0 place-items-center rounded-full text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" /></button>
-                      </article>
-                    ))}
+                    {filteredProjects.map((project) => {
+                      const expanded = selectedProjectId === project.id;
+                      return (
+                        <article key={project.id} className={`min-w-0 overflow-hidden rounded-2xl border backdrop-blur-md transition-colors ${expanded ? "border-amber-300/70 bg-white/45" : "border-white/45 bg-white/25"}`}>
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() => setSelectedProjectId((selected) => selected === project.id ? null : project.id)}
+                            className="flex w-full min-w-0 items-center gap-3 p-3 text-left"
+                          >
+                            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-amber-100/70 text-amber-700"><LuFolderOpen className="size-4" /></span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-[var(--text-strong)]">{project.name}</span>
+                              <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[var(--text-muted)]"><LuClock3 className="size-3" />{project.lastModified ? dateFormatter.format(project.lastModified) : "Date unavailable"}</span>
+                            </span>
+                            <LuChevronDown className={`size-4 shrink-0 text-[var(--text-muted)] transition-transform duration-300 ${expanded ? "rotate-180" : ""}`} />
+                          </button>
+
+                          <GsapHeightAccordion open={expanded} contentKey={project.lastModified}>
+                            <div className="border-t border-white/45 px-3 pt-3 pb-4">
+                              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[11px]">
+                                <dt className="text-[var(--text-muted)]">Project name</dt>
+                                <dd className="truncate text-right font-semibold text-[var(--text-strong)]">{project.name}</dd>
+                                <dt className="text-[var(--text-muted)]">Last modified</dt>
+                                <dd className="text-right font-medium text-[var(--text-strong)]">{project.lastModified ? dateFormatter.format(project.lastModified) : "Date unavailable"}</dd>
+                                <dt className="text-[var(--text-muted)]">Storage</dt>
+                                <dd className="text-right font-medium text-[var(--text-strong)]">This device</dd>
+                              </dl>
+                              <div className="mt-4 flex items-center justify-end gap-2">
+                                <button type="button" disabled={busy} onClick={() => void deleteProject(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
+                                <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
+                              </div>
+                            </div>
+                          </GsapHeightAccordion>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </div>
