@@ -217,7 +217,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
-            <section className="relative order-2 flex h-[52%] min-h-0 flex-none flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
+            <section className="relative order-2 flex h-[52%] min-h-0 flex-none flex-col border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:overflow-hidden landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
               <div className="shrink-0 bg-transparent pb-1">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
@@ -243,7 +243,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               <div
                 ref={projectListRef}
                 onScroll={updateScrollCue}
-                className="project-history-scroll min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                className="project-history-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch", minHeight: 0 }}
               >
                 {projectsLoading ? (

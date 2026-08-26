@@ -1221,24 +1221,37 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 /* Start-screen project history keeps a visible, touch-friendly scroll cue. */
 .project-history-scroll {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(234, 179, 8, 0.8) rgba(255, 255, 255, 0.16);
-  scrollbar-gutter: stable;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* No scrollbar-gutter — let flex handle sizing */
+  scrollbar-width: none; /* hidden by default; shown in landscape below */
 }
 .project-history-scroll::-webkit-scrollbar {
+  display: none; /* hidden by default */
   width: 5px;
 }
-.project-history-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+/* Landscape: show a thin amber scrollbar */
+@media (orientation: landscape) {
+  .project-history-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(234, 179, 8, 0.8) rgba(255, 255, 255, 0.16);
+  }
+  .project-history-scroll::-webkit-scrollbar {
+    display: block;
+  }
+  .project-history-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+  }
+  .project-history-scroll::-webkit-scrollbar-thumb {
+    background: rgba(234, 179, 8, 0.82);
+    border-radius: 999px;
+  }
 }
-.project-history-scroll::-webkit-scrollbar-thumb {
-  background: rgba(234, 179, 8, 0.82);
-  border-radius: 999px;
-}
+
 
 @media (max-width: 900px) {
   .werkzeug-unified-toolbar {
