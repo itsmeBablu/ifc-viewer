@@ -15,7 +15,7 @@ import type {
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const LEVELS = "levels";
 const WALLS = "walls";
 const DOORS = "doors";
@@ -28,6 +28,17 @@ const BEAMS = "beams";
 const GRID_LINES = "gridLines";
 const GROUPS = "groups";
 const WALL_TYPES = "wallTypes";
+const PROJECTS = "projects";
+
+export type StoredLayoutProject = {
+  id: string;
+  name: string;
+  lastModified: number;
+  sizeBytes?: number;
+  levelCount?: number;
+  elementCount?: number;
+  referenceFiles?: Array<{ name: string; type: "DWG" | "PDF" | "Image" }>;
+};
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -59,10 +70,59 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(PRESETS)) {
         db.createObjectStore(PRESETS, { keyPath: "projectId" });
       }
+      if (!db.objectStoreNames.contains(PROJECTS)) {
+        const projects = db.createObjectStore(PROJECTS, { keyPath: "id" });
+        const presets = req.transaction?.objectStore(PRESETS);
+        presets?.openCursor().addEventListener("success", (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (!cursor) return;
+          const id = String(cursor.value?.projectId ?? "");
+          if (id) projects.put({
+            id,
+            name: projectNameFromId(id),
+            lastModified: Date.now(),
+          });
+          cursor.continue();
+        });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("IDB open failed"));
   });
+}
+
+function projectNameFromId(projectId: string) {
+  const raw = projectId.startsWith("empty:") ? projectId.slice(6) : projectId;
+  try {
+    return decodeURIComponent(raw).replace(/[-_]+/g, " ").trim() || "Untitled project";
+  } catch {
+    return raw.replace(/[-_]+/g, " ").trim() || "Untitled project";
+  }
+}
+
+function transactionDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("IDB transaction failed"));
+    tx.onabort = () => reject(tx.error ?? new Error("IDB transaction aborted"));
+  });
+}
+
+async function touchProject(projectId: string, name?: string): Promise<void> {
+  const db = await openDb();
+  try {
+    const tx = db.transaction(PROJECTS, "readwrite");
+    const store = tx.objectStore(PROJECTS);
+    const current = await reqToPromise(store.get(projectId)) as StoredLayoutProject | undefined;
+    store.put({
+      id: projectId,
+      name: name?.trim() || current?.name || projectNameFromId(projectId),
+      lastModified: Date.now(),
+    } satisfies StoredLayoutProject);
+    await transactionDone(tx);
+  } finally {
+    db.close();
+  }
 }
 
 function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
@@ -91,6 +151,8 @@ async function putRow<T>(storeName: string, row: T): Promise<void> {
   } finally {
     db.close();
   }
+  const projectId = (row as { projectId?: unknown })?.projectId;
+  if (typeof projectId === "string" && projectId) await touchProject(projectId);
 }
 
 async function deleteRow(storeName: string, id: string): Promise<void> {
@@ -175,6 +237,7 @@ export async function idbGetPresets(projectId: string): Promise<LayoutPresets> {
 export async function idbPutPresets(
   projectId: string,
   presets: LayoutPresets,
+  metadata?: { name?: string },
 ): Promise<void> {
   const db = await openDb();
   try {
@@ -182,6 +245,109 @@ export async function idbPutPresets(
     await reqToPromise(
       tx.objectStore(PRESETS).put({ projectId, presets }),
     );
+  } finally {
+    db.close();
+  }
+  await touchProject(projectId, metadata?.name);
+}
+
+export async function idbListProjects(): Promise<StoredLayoutProject[]> {
+  const db = await openDb();
+  try {
+    const detailStores = [
+      LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+    ];
+    const tx = db.transaction([PROJECTS, ...detailStores], "readonly");
+    const [rows, ...storeRows] = await Promise.all([
+      reqToPromise(tx.objectStore(PROJECTS).getAll()),
+      ...detailStores.map((storeName) => reqToPromise(tx.objectStore(storeName).getAll())),
+    ]) as [StoredLayoutProject[], ...unknown[][]];
+    return rows
+      .map((row) => {
+        const projectRows = storeRows.map((items, index) => items.filter((item) => {
+          const record = item as { projectId?: string };
+          return record.projectId === row.id || (detailStores[index] === PRESETS && record.projectId === row.id);
+        }));
+        const underlays = projectRows[detailStores.indexOf(UNDERLAYS)] as ReferenceUnderlay[];
+        const references = underlays.map((underlay) => {
+          const lowerName = underlay.sourceName.toLocaleLowerCase();
+          const type = lowerName.endsWith(".dwg") ? "DWG" : lowerName.endsWith(".pdf") ? "PDF" : "Image";
+          return { name: underlay.sourceName, type } as const;
+        });
+        const serialized = JSON.stringify([row, ...projectRows.flat()]);
+        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS];
+        const elementCount = elementStores.reduce(
+          (total, storeName) => total + projectRows[detailStores.indexOf(storeName)].length,
+          0,
+        );
+        return {
+          id: row.id,
+          name: row.name || projectNameFromId(row.id),
+          lastModified: Number.isFinite(row.lastModified) ? row.lastModified : 0,
+          sizeBytes: new Blob([serialized]).size,
+          levelCount: projectRows[detailStores.indexOf(LEVELS)].length,
+          elementCount,
+          referenceFiles: references,
+        };
+      })
+      .sort((a, b) => b.lastModified - a.lastModified);
+  } finally {
+    db.close();
+  }
+}
+
+export async function idbExportProject(projectId: string): Promise<Record<string, unknown>> {
+  const db = await openDb();
+  try {
+    const stores = [
+      LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+    ];
+    const tx = db.transaction([PROJECTS, ...stores], "readonly");
+    const projectRequest = reqToPromise(tx.objectStore(PROJECTS).get(projectId));
+    const dataRequests = stores.map((storeName) => {
+      const store = tx.objectStore(storeName);
+      return storeName === PRESETS
+        ? reqToPromise(store.get(projectId)).then((row) => row ? [row] : [])
+        : reqToPromise(store.index("byProject").getAll(projectId));
+    });
+    const [project, data] = await Promise.all([
+      projectRequest,
+      Promise.all(dataRequests),
+    ]);
+    return {
+      format: "v-studio-project",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      project,
+      data: Object.fromEntries(stores.map((storeName, index) => [storeName, data[index]])),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+export async function idbDeleteProject(projectId: string): Promise<void> {
+  const db = await openDb();
+  try {
+    const stores = [
+      LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, WALL_TYPES, PRESETS, PROJECTS,
+    ];
+    const tx = db.transaction(stores, "readwrite");
+    for (const storeName of stores) {
+      const store = tx.objectStore(storeName);
+      if (storeName === PRESETS) {
+        store.delete(projectId);
+      } else if (storeName === PROJECTS) {
+        store.delete(projectId);
+      } else {
+        const keys = await reqToPromise(store.index("byProject").getAllKeys(projectId));
+        for (const key of keys) store.delete(key);
+      }
+    }
+    await transactionDone(tx);
   } finally {
     db.close();
   }

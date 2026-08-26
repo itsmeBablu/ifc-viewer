@@ -134,6 +134,7 @@ export default function WerkzeugApp() {
   const loadError = useAppStore((s) => s.loadError);
   const loadProgress = useAppStore((s) => s.loadProgress);
   const loadMessage = useAppStore((s) => s.loadMessage);
+  const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const pdfCaptureActive = useAppStore((s) => s.pdfCaptureActive);
@@ -168,15 +169,15 @@ export default function WerkzeugApp() {
   }, [pdfCaptureActive]);
 
   useEffect(() => {
-    if (!activeModelLabel) return;
+    if (!activeModelId) return;
     // Auto initialize project & default Level 1 so drawing/placement works instantly
-    void useLayoutDrawingStore.getState().loadForProject(activeModelLabel, true).then(() => {
+    void useLayoutDrawingStore.getState().loadForProject(activeModelId, activeModelId.startsWith("empty:")).then(() => {
       const store = useLayoutDrawingStore.getState();
       if (store.levels.length === 0) {
         void store.addLevel({ name: "Level 1", elevationMm: 0, heightMm: 3000 });
       }
     });
-  }, [activeModelLabel]);
+  }, [activeModelId]);
 
   useEffect(() => {
     document.body.classList.add("werkzeug-active");
@@ -513,6 +514,7 @@ export default function WerkzeugApp() {
   const sceneValue = useMemo(() => ({ shellGroup, rooms }), [shellGroup, rooms]);
 
   const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
+  const hasActiveWorkspace = Boolean(projectId || shellGroup);
   const showError = Boolean(loadError && !isLoadingModel);
   const progressLabel = loadMessage?.trim() || `${Math.round(loadProgress * 100)}%`;
 
@@ -528,6 +530,7 @@ export default function WerkzeugApp() {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
+        <div className={`contents werkzeug-preproject-tools ${hasActiveWorkspace ? "" : "is-disabled"}`} aria-disabled={!hasActiveWorkspace}>
         {isDesktop ? (
           <>
             <ToolRibbon
@@ -556,6 +559,7 @@ export default function WerkzeugApp() {
             isLoadingModel={isLoadingModel}
           />
         )}
+        </div>
 
         {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
         <main
@@ -671,7 +675,7 @@ export default function WerkzeugApp() {
         {/* Welcome / Empty Project Starter Panel */}
         <GsapOverlay
           show={showWerkzeugEntry}
-          className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[90]"
         >
           <WerkzeugEntryPanel onFile={handleFile} />
         </GsapOverlay>

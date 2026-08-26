@@ -716,7 +716,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   createEmptyProject: async (name) => {
     clearWerkzeugHistory();
 
-    const projectId = emptyProjectKey(name);
+    const trimmed = name.trim() || "Untitled project";
+    const projectId = emptyProjectKey(trimmed);
     const levelEG: LayoutLevel = {
       id: newLayoutId("lvl"),
       projectId,
@@ -735,7 +736,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     };
     await idbPutLevel(levelEG);
     await idbPutLevel(levelUG);
-    await idbPutPresets(projectId, { ...EMPTY_LAYOUT_PRESETS });
+    await idbPutPresets(projectId, { ...EMPTY_LAYOUT_PRESETS }, { name: trimmed });
     await get().loadForProject(projectId, true);
     return { projectId, level: levelEG };
   },
