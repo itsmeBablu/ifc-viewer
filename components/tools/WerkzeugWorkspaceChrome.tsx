@@ -157,12 +157,15 @@ export default function WerkzeugWorkspaceChrome({
     if (!panel || !content || panelHidden || collapsed) return;
 
     const measureContent = () => {
+      const first = content.firstElementChild as HTMLElement | null;
       const embeddedScroller = content.querySelector<HTMLElement>(
         ".material-editor-embedded > div:nth-child(2)",
       );
       const contentHeight = embeddedScroller
         ? embeddedScroller.scrollHeight + 82
-        : content.scrollHeight;
+        : first
+          ? Math.max(first.scrollHeight, first.offsetHeight)
+          : 0;
       const chromeHeight = portrait ? 54 : 60;
       const viewportLimit = window.innerHeight - (portrait ? 48 : 92);
       const targetHeight = Math.max(
@@ -171,7 +174,6 @@ export default function WerkzeugWorkspaceChrome({
       );
       fittedHeightRef.current = targetHeight;
 
-      const first = content.firstElementChild as HTMLElement | null;
       const naturalWidth = first?.scrollWidth ?? content.scrollWidth;
       const widthLimit = Math.min(420, window.innerWidth - 16);
       const targetWidth = Math.max(
