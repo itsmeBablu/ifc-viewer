@@ -102,6 +102,7 @@ export default function WerkzeugWorkspaceChrome({
   const [portraitPanelHeight, setPortraitPanelHeight] = useState(
     initialLandscapePanelHeight,
   );
+  const [portraitPanelWidth, setPortraitPanelWidth] = useState(320);
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -165,9 +166,10 @@ export default function WerkzeugWorkspaceChrome({
 
       const first = content.firstElementChild as HTMLElement | null;
       const naturalWidth = first?.scrollWidth ?? content.scrollWidth;
+      const widthLimit = Math.min(420, window.innerWidth - 16);
       const targetWidth = Math.max(
         240,
-        Math.min(360, naturalWidth + 28, window.innerWidth * 0.42),
+        Math.min(widthLimit, naturalWidth + 28),
       );
       fittedWidthRef.current = targetWidth;
 
@@ -175,12 +177,15 @@ export default function WerkzeugWorkspaceChrome({
 
       gsap.to(panel, {
         height: targetHeight,
-        ...(portrait ? {} : { width: targetWidth }),
+        width: targetWidth,
         duration: 0.34,
         ease: "power3.inOut",
         overwrite: true,
         onComplete: () => {
-          if (portrait) setPortraitPanelHeight(targetHeight);
+          if (portrait) {
+            setPortraitPanelHeight(targetHeight);
+            setPortraitPanelWidth(targetWidth);
+          }
           else {
             setLandscapePanelHeight(targetHeight);
             setLandscapePanelWidth(targetWidth);
@@ -432,7 +437,7 @@ export default function WerkzeugWorkspaceChrome({
       {auxOpen && <div data-popup-surface className="werkzeug-ipad-popup werkzeug-ipad-popup-fixed" style={auxPosition}>{auxOpen === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : auxOpen === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div>}
 
       {!panelKey && <button type="button" onClick={() => { setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label="Show properties and layout options">{portrait ? <><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></> : <LuChevronLeft />}</button>}
-      {panelKey && <div ref={panelRef} data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { left: 0, right: 0, bottom: 0, height: collapsed ? 48 : portraitPanelHeight } : { right: 0, top: "50%", width: landscapePanelWidth, height: collapsed ? 48 : landscapePanelHeight }}>
+      {panelKey && <div ref={panelRef} data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { right: 8, bottom: 8, width: portraitPanelWidth, maxWidth: "calc(100vw - 16px)", height: collapsed ? 48 : portraitPanelHeight } : { right: 0, top: "50%", width: landscapePanelWidth, height: collapsed ? 48 : landscapePanelHeight }}>
         <button type="button" onPointerDown={portrait ? beginPortraitDrawerGesture : beginLandscapeDrawerGesture} className="werkzeug-ipad-drawer-toggle" title={`${panelHidden ? "Show" : "Hide"} Properties / Layout`} aria-label={`${panelHidden ? "Show" : "Hide"} Properties and Layout drawer`}>{portrait ? <span className="werkzeug-ipad-portrait-grip" /> : <span className="werkzeug-ipad-landscape-grip" />}</button>
         <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
           <div className="werkzeug-ipad-drawer-body flex h-full min-h-0 flex-col">

@@ -1723,7 +1723,7 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     max-height: 100%;
     min-height: 0 !important;
     overflow: hidden !important;
-    border-radius: 14px 14px 0 0 !important;
+    border-radius: 14px !important;
   }
   .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-context-surface .glass-surface-content {
     height: 100% !important;
