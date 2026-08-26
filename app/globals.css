@@ -1808,12 +1808,12 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     align-items: center;
     gap: 3px;
     overflow-x: auto;
-    border: 1px solid rgba(250, 204, 21, .38);
-    border-radius: 11px;
-    background: color-mix(in srgb, var(--popover-bg) 88%, transparent);
-    padding: 3px;
-    box-shadow: 0 7px 20px rgba(15, 23, 42, .14), inset 0 1px rgba(255, 255, 255, .55);
-    backdrop-filter: blur(18px) saturate(130%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 2px;
+    box-shadow: none;
+    backdrop-filter: none;
     scrollbar-width: none;
   }
   .werkzeug-ipad-modify-ribbon::-webkit-scrollbar { display: none; }
@@ -1834,8 +1834,10 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     align-items: center;
     justify-content: center;
     gap: 0;
-    border: 1px solid transparent;
-    border-radius: 8px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent !important;
+    box-shadow: none !important;
     padding: 0;
     color: var(--text-body);
     font-size: 8px;
@@ -1843,7 +1845,13 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   }
   .werkzeug-modify-button > span:first-child { font-size: 14px; }
   .werkzeug-modify-button > span:last-child { display: none; }
-  .werkzeug-modify-button:hover { border-color: rgba(250, 204, 21, .48); background: rgba(250, 204, 21, .12); }
+  .werkzeug-modify-button:hover,
+  .werkzeug-modify-button:active,
+  .werkzeug-modify-button.is-active {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #ca8a04;
+  }
   .werkzeug-modify-button.is-danger { color: #ef4444; }
   body.werkzeug-active :is(
     .werkzeug-ipad-context,
@@ -1875,6 +1883,10 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     height: 32px !important;
     padding-inline: 7px !important;
     font-size: 9px !important;
+  }
+  .werkzeug-ipad-tool-ribbon .werkzeug-tool-button,
+  .werkzeug-ipad-tool-ribbon .werkzeug-tool-button.is-active {
+    box-shadow: none !important;
   }
   .werkzeug-ipad-action-ribbon .werkzeug-icon-action {
     width: 58px !important;
