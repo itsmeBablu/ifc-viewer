@@ -313,9 +313,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                 </div>
                               )}
                               <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                                <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
-                                <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 transition hover:bg-red-100/60 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
-                                <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="h-9 rounded-xl bg-amber-300/75 px-4 text-xs font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-45">Open project</button>
+                                <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 dark:text-sky-400 transition hover:bg-sky-100/40 dark:hover:bg-sky-950/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
+                                <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 dark:text-red-400 transition hover:bg-red-100/60 dark:hover:bg-red-950/40 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
+                                <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="btn-v-yellow btn-liquid-hover h-9 rounded-xl px-4 text-xs font-bold text-[#09090b] transition disabled:opacity-45">Open project</button>
                               </div>
                             </div>
                           </GsapHeightAccordion>
@@ -336,7 +336,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
             {/* ─── Start Designing Section ─── */}
             <section className="order-1 flex min-h-0 shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 sm:p-5 lg:p-10">
-              <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
+              <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-600 dark:text-amber-400 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
               <div className="mt-3 flex justify-start sm:mt-5"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>

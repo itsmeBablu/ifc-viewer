@@ -311,27 +311,43 @@ body {
   flex-direction: column !important;
 }
 
-/* Werkzeug entry panel — transparent liquid glass */
+/* Werkzeug entry panel — thick optical liquid glass with deep refraction & specular edge */
 .liquid-entry-glass {
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(240, 244, 250, 0.48) 100%
+  ) !important;
   box-shadow:
-    0 24px 70px -12px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
-  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.08);
-  backdrop-filter: blur(40px) saturate(190%) brightness(1.08);
+    0 32px 84px -16px rgba(15, 23, 42, 0.26),
+    0 16px 36px -8px rgba(15, 23, 42, 0.14),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1.5px 0 rgba(255, 255, 255, 0.25),
+    inset 1px 0 0 rgba(255, 255, 255, 0.45),
+    inset -1px 0 0 rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(52px) saturate(220%) brightness(1.08);
+  backdrop-filter: blur(52px) saturate(220%) brightness(1.08);
 }
 
 [data-theme="dark"] .liquid-entry-glass {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(10, 14, 22, 0.38) !important;
+  border-color: rgba(255, 255, 255, 0.24);
+  background: linear-gradient(
+    145deg,
+    rgba(30, 41, 59, 0.78) 0%,
+    rgba(15, 23, 42, 0.72) 50%,
+    rgba(10, 15, 26, 0.76) 100%
+  ) !important;
   box-shadow:
-    0 24px 70px -12px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.05);
-  backdrop-filter: blur(40px) saturate(190%) brightness(1.05);
+    0 32px 84px -16px rgba(0, 0, 0, 0.65),
+    0 16px 36px -8px rgba(0, 0, 0, 0.4),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1.5px 0 rgba(255, 255, 255, 0.08),
+    inset 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset -1px 0 0 rgba(255, 255, 255, 0.15);
+  -webkit-backdrop-filter: blur(52px) saturate(220%) brightness(1.05);
+  backdrop-filter: blur(52px) saturate(220%) brightness(1.05);
 }
 
 .liquid-entry-glass .ios-glass,
@@ -2172,11 +2188,25 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 .btn-v-yellow,
 .btn-liquid-amber {
   border: 1px solid rgba(253, 230, 138, 0.7) !important;
-  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.85), rgba(251, 191, 36, 0.75)) !important;
-  color: #451a03 !important;
-  font-weight: 600 !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 4px 14px rgba(251, 191, 36, 0.35) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(251, 191, 36, 0.35) !important;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-theme="dark"] .btn-v-yellow,
+[data-theme="dark"] .btn-liquid-amber,
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-yellow, .btn-liquid-amber) {
+  color: #09090b !important;
+}
+
+.btn-v-yellow :is(svg, span, strong, p),
+.btn-liquid-amber :is(svg, span, strong, p),
+[data-theme="dark"] .btn-v-yellow :is(svg, span, strong, p),
+[data-theme="dark"] .btn-liquid-amber :is(svg, span, strong, p),
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-yellow, .btn-liquid-amber) :is(svg, span, strong, p) {
+  color: #09090b !important;
 }
 .btn-v-yellow:hover,
 .btn-liquid-amber:hover {
