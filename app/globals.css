@@ -1830,6 +1830,41 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 }
 
 @media (max-width: 1400px) {
+  body.werkzeug-active :is(
+    .werkzeug-ipad-context,
+    .werkzeug-ipad-ribbons,
+    .werkzeug-ipad-popup,
+    [data-popup-surface]
+  ) :is(input:not([type="range"]):not([type="color"]):not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    min-height: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+  body.werkzeug-active :is(.werkzeug-ipad-popup, [data-popup-surface]) {
+    padding: 4px !important;
+    font-size: 10px !important;
+  }
+  body.werkzeug-active :is(.werkzeug-ipad-popup, [data-popup-surface]) button {
+    min-height: 30px !important;
+    gap: 5px !important;
+    border-radius: 7px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+  .werkzeug-ipad-ribbons :is(.werkzeug-tool-button, .werkzeug-icon-action) {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding-inline: 7px !important;
+    font-size: 9px !important;
+  }
+  .werkzeug-ipad-ribbons .werkzeug-ipad-action-ribbon > div > button {
+    height: 32px !important;
+    padding-inline: 7px !important;
+  }
   .werkzeug-ipad-context .werkzeug-ipad-panel-content {
     font-size: 10px;
   }
