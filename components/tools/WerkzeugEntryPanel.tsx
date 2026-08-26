@@ -43,6 +43,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
   const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
   const projectSectionRef = useRef<HTMLElement>(null);
+  const projectHeaderRef = useRef<HTMLDivElement>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
 
@@ -150,6 +151,32 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   }, [projectSearch, projects]);
 
   useEffect(() => {
+    const section = projectSectionRef.current;
+    if (!section) return;
+    let startY = 0;
+    let startScrollTop = 0;
+    const isPhonePortrait = () => window.matchMedia("(max-width: 639px) and (orientation: portrait)").matches;
+    const onTouchStart = (event: TouchEvent) => {
+      if (!isPhonePortrait() || event.touches.length !== 1) return;
+      startY = event.touches[0].clientY;
+      startScrollTop = section.scrollTop;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!isPhonePortrait() || event.touches.length !== 1) return;
+      const next = startScrollTop + startY - event.touches[0].clientY;
+      if (next === section.scrollTop) return;
+      event.preventDefault();
+      section.scrollTop = next;
+    };
+    section.addEventListener("touchstart", onTouchStart, { passive: true });
+    section.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      section.removeEventListener("touchstart", onTouchStart);
+      section.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedProjectId) return;
     const timer = window.setTimeout(() => {
       const list = window.matchMedia("(orientation: portrait)").matches
@@ -159,9 +186,14 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       if (!list || !card) return;
       const listRect = list.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
+      const stickyOffset = list === projectSectionRef.current
+        ? (projectHeaderRef.current?.offsetHeight ?? 0)
+        : 0;
+      const visibleTop = listRect.top + stickyOffset;
+      const visibleHeight = listRect.bottom - visibleTop;
       let scrollTop = list.scrollTop;
-      if (cardRect.top < listRect.top) {
-        scrollTop -= listRect.top - cardRect.top + 4;
+      if (cardRect.height > visibleHeight || cardRect.top < visibleTop) {
+        scrollTop -= visibleTop - cardRect.top + 6;
       } else if (cardRect.bottom > listRect.bottom) {
         scrollTop += cardRect.bottom - listRect.bottom + 4;
       }
@@ -182,7 +214,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
         <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[24px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
           <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
             <section ref={projectSectionRef} className="order-2 flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto border-t border-[var(--panel-divider)] p-4 landscape:order-1 landscape:overflow-hidden landscape:border-t-0 landscape:border-r lg:p-7" style={{ WebkitOverflowScrolling: "touch" }}>
-              <div className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
+              <div ref={projectHeaderRef} className="sticky top-0 z-10 -mx-1 bg-white/20 px-1 pb-1 backdrop-blur-xl landscape:static landscape:mx-0 landscape:bg-transparent landscape:px-0 landscape:backdrop-blur-none">
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
@@ -199,7 +231,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                     onChange={(event) => setProjectSearch(event.target.value)}
                     placeholder="Search previous projects"
                     aria-label="Search previous projects"
-                    className="h-9 w-full rounded-xl border border-white/50 bg-white/20 pr-3 pl-9 text-xs outline-none backdrop-blur-xl placeholder:text-[var(--text-muted)] focus:border-amber-300"
+                    className="h-8 w-full border-0 border-b-2 border-amber-300/80 bg-transparent pr-2 pl-8 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-500"
                   />
                 </label>
               </div>
@@ -284,7 +316,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
             </section>
 
             <section className="order-1 flex shrink-0 flex-col justify-center p-4 sm:p-5 landscape:order-2 lg:p-10">
-              <p className="text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
+              <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
               <div className="mt-3 flex justify-start sm:mt-5"><LoadIfcButton onFile={onFile} label={t(uiLanguage, "werkzeugUploadIfc")} /></div>
@@ -293,8 +325,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 <span className="relative bg-white/35 px-2 backdrop-blur-sm">{t(uiLanguage, "or")}</span>
               </div>
               <form onSubmit={(event) => { event.preventDefault(); void create(); }} className="flex flex-col items-stretch gap-2 sm:gap-3">
-                <label className="text-[11px] font-semibold text-[var(--text-muted)]" htmlFor="werkzeug-project-name">{t(uiLanguage, "layoutProjectName")}</label>
-                <input id="werkzeug-project-name" value={name} onChange={(event) => setName(event.target.value)} required placeholder={t(uiLanguage, "layoutProjectName")} className="h-10 w-full rounded-xl border border-white/55 bg-white/50 px-3 text-xs outline-none backdrop-blur-md focus:border-amber-300" />
+                <input id="werkzeug-project-name" aria-label={t(uiLanguage, "layoutProjectName")} value={name} onChange={(event) => setName(event.target.value)} required placeholder={t(uiLanguage, "layoutProjectName")} className="h-9 w-full border-0 border-b-2 border-amber-300/80 bg-transparent px-1 text-xs outline-none placeholder:text-[var(--text-muted)] focus:border-amber-500" />
                 <GlassPanel variant="control" zIndex={2} wrapperClassName="mt-1 inline-flex self-start">
                   <button type="submit" disabled={busy || !name.trim()} className={amberBtn} aria-label={t(uiLanguage, "layoutCreateEmpty")}><IconUpload />{t(uiLanguage, "layoutCreateEmpty")}</button>
                 </GlassPanel>
