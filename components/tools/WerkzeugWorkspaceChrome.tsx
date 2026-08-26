@@ -103,7 +103,7 @@ export default function WerkzeugWorkspaceChrome({
   const [portraitPanelHeight, setPortraitPanelHeight] = useState(
     initialLandscapePanelHeight,
   );
-  const [portraitPanelWidth] = useState(320);
+  const [portraitPanelWidth, setPortraitPanelWidth] = useState(320);
   const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
@@ -152,8 +152,9 @@ export default function WerkzeugWorkspaceChrome({
   }, []);
 
   useLayoutEffect(() => {
+    const panel = panelRef.current;
     const content = contentRef.current;
-    if (!content || panelHidden || collapsed) return;
+    if (!panel || !content || panelHidden || collapsed) return;
 
     const measureContent = () => {
       const embeddedScroller = content.querySelector<HTMLElement>(
@@ -178,13 +179,32 @@ export default function WerkzeugWorkspaceChrome({
         Math.min(widthLimit, naturalWidth + 28),
       );
       fittedWidthRef.current = targetWidth;
+
+      gsap.to(panel, {
+        height: targetHeight,
+        width: portrait ? targetWidth : landscapePanelWidth,
+        duration: 0.42,
+        ease: "back.out(1.18)",
+        overwrite: "auto",
+        onComplete: () => {
+          if (portrait) {
+            setPortraitPanelHeight(targetHeight);
+            setPortraitPanelWidth(targetWidth);
+          } else {
+            setLandscapePanelHeight(targetHeight);
+          }
+        },
+      });
     };
 
     const frame = window.requestAnimationFrame(measureContent);
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [collapsed, panelHidden, panelKey, panelTab, portrait]);
+  // Fit once when the user changes tools/options. Deliberately no
+  // ResizeObserver: nested content reflow must not make the panel "breathe".
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed, panelKey, panelTab, portrait]);
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
