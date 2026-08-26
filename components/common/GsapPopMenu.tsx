@@ -8,12 +8,13 @@
  * callers can keep a hover-triggered menu open while the pointer is inside.
  */
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { animateMenuIn, animateMenuOut } from "@/lib/gsapMotion";
 
 type Props = {
   show: boolean;
   className?: string;
+  style?: CSSProperties;
   children: ReactNode;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -23,6 +24,7 @@ type Props = {
 export default function GsapPopMenu({
   show,
   className = "",
+  style,
   children,
   onMouseEnter,
   onMouseLeave,
@@ -57,7 +59,7 @@ export default function GsapPopMenu({
     <div
       ref={ref}
       className={className}
-      style={{ visibility: "hidden" }}
+      style={{ ...style, visibility: "hidden" }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
