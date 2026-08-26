@@ -110,9 +110,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const amberBtn = `${motion.base} ${radius.control} btn-v-yellow btn-liquid-hover inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 px-6 py-2 text-sm active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45`;
 
   return (
-    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-y-auto bg-slate-950/25 p-3 backdrop-blur-xl sm:p-6 lg:p-10">
+    <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-slate-950/25 p-3 backdrop-blur-xl sm:p-6 lg:p-10">
       <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[28px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] lg:h-[calc(100dvh-5rem)]">
+        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1.5rem)] w-full overflow-hidden rounded-[28px] border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-5rem)]">
           <div className="grid h-full min-h-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] landscape:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] landscape:grid-rows-1">
             <section className="order-2 flex min-h-0 flex-col border-t border-[var(--panel-divider)] p-4 sm:p-7 landscape:order-1 landscape:border-t-0 landscape:border-r">
               <div className="mb-4 flex items-end justify-between gap-3">
