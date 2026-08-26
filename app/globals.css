@@ -292,9 +292,55 @@ body {
     brightness(1.05);
 }
 
-.ios-glass--fill {
-  height: 100%;
-  min-height: 100%;
+.ios-glass--fill,
+.glass-surface--fill {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.ios-glass--fill > .glass-surface-content,
+.glass-surface--fill > .glass-surface-content {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 0% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Werkzeug entry panel — transparent liquid glass */
+.liquid-entry-glass {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    0 24px 70px -12px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.08);
+  backdrop-filter: blur(40px) saturate(190%) brightness(1.08);
+}
+
+[data-theme="dark"] .liquid-entry-glass {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(10, 14, 22, 0.38) !important;
+  box-shadow:
+    0 24px 70px -12px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(40px) saturate(190%) brightness(1.05);
+  backdrop-filter: blur(40px) saturate(190%) brightness(1.05);
+}
+
+.liquid-entry-glass .ios-glass,
+.liquid-entry-glass .glass-surface {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* Explicit Werkzeug chrome — always frosted, never opaque flat. */
@@ -1220,9 +1266,12 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 
 /* Start-screen project history keeps a visible, touch-friendly scroll cue. */
 .project-history-scroll {
+  display: block;
+  height: 100%;
+  max-height: 100%;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: auto !important;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;

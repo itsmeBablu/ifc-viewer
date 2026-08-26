@@ -214,12 +214,19 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
 
   return (
     <div className="pointer-events-auto relative h-full min-h-0 w-full overflow-hidden bg-transparent p-2 backdrop-blur-[2px] sm:p-4 lg:p-10">
-      <div className="mx-auto flex min-h-full w-full max-w-6xl items-center justify-center">
-        <GlassPanel fill variant="panel" zIndex={90} preferCss wrapperClassName="tool-glass h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl border border-white/55 shadow-[0_28px_90px_rgba(15,23,42,0.28)] sm:h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:rounded-[28px]">
-          <div className="flex h-full min-h-0 flex-col landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
-            <section className="relative order-2 grid h-[52%] min-h-0 flex-none grid-rows-[auto_1fr] overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:h-full landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl items-center justify-center">
+        <GlassPanel
+          fill
+          variant="panel"
+          zIndex={90}
+          preferCss
+          wrapperClassName="liquid-entry-glass h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full overflow-hidden rounded-2xl sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[24px] lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:rounded-[28px]"
+        >
+          <div className="flex h-full min-h-0 max-h-full w-full flex-col overflow-hidden landscape:grid landscape:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] landscape:grid-rows-1">
+            {/* ─── Previous Projects Section ─── */}
+            <section className="relative order-2 flex h-full min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--panel-divider)] p-3 landscape:order-1 landscape:border-t-0 landscape:border-r sm:p-4 lg:p-7">
               <div className="shrink-0 bg-transparent pb-1">
-                <div className="mb-4 flex items-end justify-between gap-3">
+                <div className="mb-3 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold text-[var(--text-strong)]">Previous projects</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">Stored locally on this device</p>
@@ -243,7 +250,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               <div
                 ref={projectListRef}
                 onScroll={updateScrollCue}
-                className="project-history-scroll min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
+                className="project-history-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {projectsLoading ? (
@@ -259,7 +266,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                 ) : filteredProjects.length === 0 ? (
                   <p className="py-10 text-center text-xs text-[var(--text-muted)]">No projects match &ldquo;{projectSearch.trim()}&rdquo;.</p>
                 ) : (
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 pb-2">
                     {filteredProjects.map((project) => {
                       const expanded = selectedProjectId === project.id;
                       return (
@@ -327,8 +334,8 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               )}
             </section>
 
-
-            <section className="order-1 flex h-[48%] shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 landscape:h-auto sm:p-5 lg:p-10">
+            {/* ─── Start Designing Section ─── */}
+            <section className="order-1 flex min-h-0 shrink-0 flex-col justify-center overflow-hidden p-4 landscape:order-2 sm:p-5 lg:p-10">
               <p className="text-center text-[11px] font-bold tracking-[0.24em] text-amber-700 uppercase">V Studio</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text-strong)] sm:text-3xl">Start designing</h1>
               <p className="mt-2 hidden max-w-sm text-xs leading-relaxed text-[var(--text-muted)] sm:block">{t(uiLanguage, "werkzeugEntryHint")}</p>
@@ -349,7 +356,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       </div>
 
       <GsapOverlay show={Boolean(projectToDownload)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/20 p-4 backdrop-blur-sm">
-        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="liquid-entry-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
           <div role="alertdialog" aria-modal="true" aria-labelledby="download-project-title" className="p-5 sm:p-6">
             <div className="mb-3 grid size-10 place-items-center rounded-full bg-sky-100/70 text-sky-700"><LuDownload className="size-5" /></div>
             <h2 id="download-project-title" className="text-base font-semibold text-[var(--text-strong)]">Download project?</h2>
@@ -365,7 +372,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       </GsapOverlay>
 
       <GsapOverlay show={Boolean(projectToDelete)} className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="tool-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+        <GlassPanel variant="panel" zIndex={141} preferCss wrapperClassName="liquid-entry-glass w-full max-w-sm rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className="p-5 sm:p-6">
             <div className="mb-3 grid size-10 place-items-center rounded-full bg-red-100/75 text-red-600"><LuTrash2 className="size-5" /></div>
             <h2 id="delete-project-title" className="text-base font-semibold text-[var(--text-strong)]">Delete project?</h2>
