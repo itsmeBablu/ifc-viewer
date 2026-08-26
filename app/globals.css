@@ -1211,6 +1211,13 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 .werkzeug-snap-pill.is-active .werkzeug-snap-check { opacity: 1; color: #eab308; }
 .werkzeug-ipad-snap-ribbon { display: none; }
 
+.werkzeug-preproject-tools.is-disabled > * {
+  pointer-events: none !important;
+  opacity: 0.32 !important;
+  filter: saturate(0.35) blur(0.25px);
+  user-select: none;
+}
+
 @media (max-width: 900px) {
   .werkzeug-unified-toolbar {
     right: 0.5rem;

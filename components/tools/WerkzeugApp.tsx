@@ -513,6 +513,7 @@ export default function WerkzeugApp() {
   const sceneValue = useMemo(() => ({ shellGroup, rooms }), [shellGroup, rooms]);
 
   const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
+  const hasActiveWorkspace = Boolean(projectId || shellGroup);
   const showError = Boolean(loadError && !isLoadingModel);
   const progressLabel = loadMessage?.trim() || `${Math.round(loadProgress * 100)}%`;
 
@@ -528,6 +529,7 @@ export default function WerkzeugApp() {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
+        <div className={`contents werkzeug-preproject-tools ${hasActiveWorkspace ? "" : "is-disabled"}`} aria-disabled={!hasActiveWorkspace}>
         {isDesktop ? (
           <>
             <ToolRibbon
@@ -556,6 +558,7 @@ export default function WerkzeugApp() {
             isLoadingModel={isLoadingModel}
           />
         )}
+        </div>
 
         {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
         <main
