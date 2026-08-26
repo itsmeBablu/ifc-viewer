@@ -9,6 +9,7 @@ import {
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
+import GsapPopMenu from "@/components/common/GsapPopMenu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
@@ -92,6 +93,7 @@ export default function WerkzeugWorkspaceChrome({
   const [panelFrame, setPanelFrame] = useState<Frame>(defaultFrame);
   const [renderOpen, setRenderOpen] = useState(false);
   const [auxOpen, setAuxOpen] = useState<"views" | "scale" | "elements" | null>(null);
+  const [lastAux, setLastAux] = useState<"views" | "scale" | "elements">("views");
   const [auxPosition, setAuxPosition] = useState({ left: 8, top: 96 });
   const [dockEdge] = useState<DockEdge>("top");
   const [panelHidden, setPanelHidden] = useState(true);
@@ -181,7 +183,7 @@ export default function WerkzeugWorkspaceChrome({
         width: targetWidth,
         duration: 0.34,
         ease: "power3.inOut",
-        overwrite: true,
+        overwrite: "auto",
         onComplete: () => {
           if (portrait) {
             setPortraitPanelHeight(targetHeight);
@@ -205,6 +207,32 @@ export default function WerkzeugWorkspaceChrome({
       gsap.killTweensOf(panel);
     };
   }, [collapsed, panelHidden, panelKey, panelTab, portrait]);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    gsap.to(panel, {
+      x: 0,
+      xPercent: portrait ? 0 : panelHidden ? 100 : 0,
+      y: portrait && panelHidden ? Math.max(0, panel.offsetHeight - 20) : 0,
+      yPercent: portrait ? 0 : -50,
+      duration: panelHidden ? 0.46 : 0.58,
+      ease: panelHidden ? "power3.inOut" : "back.out(1.35)",
+      overwrite: "auto",
+    });
+  }, [landscapePanelWidth, panelHidden, portrait, portraitPanelHeight]);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || panelHidden) return;
+    gsap.fromTo(content, { autoAlpha: 0, y: 8 }, {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.34,
+      ease: "back.out(1.25)",
+      overwrite: "auto",
+    });
+  }, [panelHidden, panelKey, panelTab]);
 
   useEffect(() => {
     const dismiss = () => {
@@ -399,6 +427,7 @@ export default function WerkzeugWorkspaceChrome({
       left: Math.max(8, Math.min(window.innerWidth - 158, rect.left)),
       top: Math.min(window.innerHeight - 230, rect.bottom + 7),
     });
+    setLastAux(next);
     setAuxOpen((open) => open === next ? null : next);
   };
   const activeRenderMode =
@@ -473,7 +502,7 @@ export default function WerkzeugWorkspaceChrome({
         <div className="werkzeug-ipad-action-ribbon">
         <div className="relative shrink-0">
           <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((open) => !open); }} aria-expanded={renderOpen} aria-haspopup="menu" className={`btn-yellow-border-hover flex h-11 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-semibold ${renderOpen ? "btn-v-yellow" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"}`}><span className="text-base">{activeRenderMode.icon}</span><span>{activeRenderMode.label}</span><LuChevronDown /></button>
-          {renderOpen && <div role="menu" className="absolute right-0 top-[calc(100%+.4rem)] z-[125] grid w-52 grid-cols-2 gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-xl backdrop-blur-xl">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div>}
+          <GsapPopMenu show={renderOpen} className="absolute right-0 top-[calc(100%+.4rem)] z-[125]"><div role="menu" className="grid w-52 grid-cols-2 gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-xl backdrop-blur-xl">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div></GsapPopMenu>
         </div>
         <div className="relative flex shrink-0 items-center gap-1">
           <button type="button" disabled={isLoadingModel} onClick={() => fileRef.current?.click()} className="btn-yellow-border-hover werkzeug-icon-action" title="Open IFC or FRAG"><LuFolderOpen /><span>Open</span></button>
@@ -485,7 +514,7 @@ export default function WerkzeugWorkspaceChrome({
         </div>
       </div>
 
-      {auxOpen && <div data-popup-surface className="werkzeug-ipad-popup werkzeug-ipad-popup-fixed" style={auxPosition}>{auxOpen === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : auxOpen === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div>}
+      <GsapPopMenu show={Boolean(auxOpen)} className="z-[120]"><div data-popup-surface className="werkzeug-ipad-popup werkzeug-ipad-popup-fixed" style={{ ...auxPosition, position: "fixed" }}>{lastAux === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : lastAux === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div></GsapPopMenu>
 
       {!panelKey && <button type="button" onClick={() => { setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label="Show properties and layout options">{portrait ? <><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></> : <LuChevronLeft />}</button>}
       {panelKey && <div ref={panelRef} data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { right: 8, bottom: 8, width: portraitPanelWidth, maxWidth: "calc(100vw - 16px)", height: collapsed ? 48 : portraitPanelHeight } : { right: 0, top: "50%", width: landscapePanelWidth, height: collapsed ? 48 : landscapePanelHeight }}>
