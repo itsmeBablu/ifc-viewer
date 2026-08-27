@@ -918,6 +918,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         }
       });
     }
+    if (markupLayerRef.current?.group) {
+      markupLayerRef.current.group.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.visible && !o.userData.isMarkupPreview) {
+          const b = new THREE.Box3().setFromObject(o);
+          if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+            box.union(b);
+            has = true;
+          }
+        }
+      });
+    }
 
     if (!has) {
       const gridSpan = 52;
@@ -3024,6 +3035,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             ) {
               box.expandByObject(o);
             }
+          }
+        });
+      }
+
+      const markupLayer = markupLayerRef.current;
+      if (markupLayer) {
+        markupLayer.group.traverse((o) => {
+          if (o instanceof THREE.Mesh && o.visible && !o.userData.isMarkupPreview) {
+            box.expandByObject(o);
           }
         });
       }
@@ -6007,147 +6027,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     };
 
     let lastTapTime = 0;
-    const handleDblClickOrTap = (clientX: number, clientY: number) => {
-      const camera = preparePointerRayRef.current(clientX, clientY) ?? perspectiveCameraRef.current;
-      if (!camera) return;
-      raycaster.current.setFromCamera(pointerNdc.current, camera);
-
-      const layoutLayer = layoutLayerRef.current;
-      const layoutStore = useLayoutDrawingStore.getState();
-      const markupStore = useToolMarkupStore.getState();
-
-      // 1. Try to pick layout element
-      if (layoutLayer && useAppStore.getState().toolMode) {
-        const lh = layoutLayer.pickLayout(raycaster.current);
-        if (
-          lh &&
-          lh.kind !== "ground" &&
-          lh.kind !== "underlay" &&
-          lh.kind !== "wall-endpoint"
-        ) {
-          // Select layout element
-          layoutStore.clearSelection();
-          useAppStore.getState().setSelectedElement(null);
-          layoutStore.selectElement({
-            kind: lh.kind as any,
-            id: lh.id,
-          });
-
-          // Compute bounding box for layout element by traversing the layout group
-          const box = new THREE.Box3();
-          let framed = false;
-          layoutLayer.group.traverse((o) => {
-            if (
-              (lh.kind === "wall" && o.userData?.layoutWallId === lh.id) ||
-              (lh.kind === "door" && o.userData?.layoutDoorId === lh.id) ||
-              (lh.kind === "window" && o.userData?.layoutWindowId === lh.id) ||
-              (lh.kind === "slab" && o.userData?.layoutSlabId === lh.id) ||
-              (lh.kind === "column" && o.userData?.layoutColumnId === lh.id) ||
-              (lh.kind === "beam" && o.userData?.layoutBeamId === lh.id) ||
-              (lh.kind === "grid" && o.userData?.layoutGridId === lh.id) ||
-              (lh.kind === "sketch-line" && o.userData?.layoutSketchLineId === lh.id)
-            ) {
-              box.expandByObject(o);
-              framed = true;
-            }
-          });
-
-          if (framed && !box.isEmpty() && Number.isFinite(box.min.x)) {
-            const controls = controlsRef.current;
-            if (controls) {
-              const { position, target } = frameBoundingBox(box, camera, 1.4);
-              void flyTo(camera, controls, position, target, 850);
-              return;
-            }
-          }
-        }
-      }
-
-      // 2. Try standard pickHit (for IFC model components / rooms)
-      const hit = pickHit(clientX, clientY);
-      if (hit && hit.object) {
-        if (useAppStore.getState().dataViewMode === "luftung") {
-          const { roomId } = pickIdsFromObject(hit.object);
-          const room =
-            roomId != null
-              ? (rooms.find((r) => r.id === roomId) ??
-                roomsFromStore.find((r) => r.id === roomId))
-              : undefined;
-          if (
-            roomId &&
-            room &&
-            isRoomPickAllowed(room.id, room.floorId)
-          ) {
-            const zoneKey = roomVentilationZoneKey(room);
-            if (
-              useAppStore.getState().selectedVentilationZoneKey !== zoneKey
-            ) {
-              setSelectedVentilationZoneKey(zoneKey);
-            }
-            applyPickSelection(hit);
-            if (useAppStore.getState().autoFocusSelection) {
-              requestRoomFocus(roomId);
-            }
-            return;
-          }
-        }
-
-        // Default layout element framing (QuadView check)
-        if (
-          useAppStore.getState().toolMode &&
-          useToolMarkupStore.getState().quadView
-        ) {
-          const markupLayer = markupLayerRef.current;
-          const box = new THREE.Box3();
-          let framed = false;
-
-          if (markupLayer) {
-            const picked = markupLayer.pickMarkup(raycaster.current);
-            if (picked?.kind === "placement") {
-              markupStore.selectPlacement(picked.id);
-              const mesh = markupLayer.getMesh(picked.id);
-              if (mesh) {
-                box.setFromObject(mesh);
-                framed = true;
-              }
-            }
-          }
-
-          if (!framed && hit) {
-            applyPickSelection(hit);
-            box.setFromObject(hit.object);
-            framed = Number.isFinite(box.min.x);
-          }
-
-          if (!framed) {
-            const shell = shellCloneRef.current;
-            if (shell) box.setFromObject(shell);
-          }
-          if (!box.isEmpty()) fitAllQuadsToBoxRef.current(box);
-          return;
-        }
-
-        // Standard 3D element focus
-        applyPickSelection(hit);
-        const box = new THREE.Box3().setFromObject(hit.object);
-        if (!box.isEmpty() && Number.isFinite(box.min.x)) {
-          const controls = controlsRef.current;
-          if (controls) {
-            const { position, target } = frameBoundingBox(box, camera, 1.4);
-            void flyTo(camera, controls, position, target, 850);
-            return;
-          }
-        }
-      }
-
-      // 3. Clicked empty space -> Fit visible scene
+    const handleDblClickOrTap = () => {
+      // Double click / double tap: zoom in and fit all components in 3D / any view, or show complete graph if empty
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
     };
 
     const onDblClick = (e: MouseEvent) => {
       e.preventDefault();
-      handleDblClickOrTap(e.clientX, e.clientY);
+      handleDblClickOrTap();
     };
 
     let lastTapX = 0;
@@ -6158,7 +6046,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const dist = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
         if (now - lastTapTime < 350 && dist < 40) {
           e.preventDefault();
-          handleDblClickOrTap(e.clientX, e.clientY);
+          handleDblClickOrTap();
           lastTapTime = 0;
           lastTapX = 0;
           lastTapY = 0;
