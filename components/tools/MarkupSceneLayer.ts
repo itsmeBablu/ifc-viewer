@@ -5,9 +5,11 @@ import {
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
   createPlacementMesh,
+  createShapeGeometry,
   rebuildPlacementMesh,
   type MarkupNote,
   type MarkupPlacement,
+  type MarkupShapeType,
 } from "@/lib/toolMarkup";
 import { toMm } from "@/lib/markupUnits";
 import type { MarkupMeasurement } from "@/store/useToolMarkupStore";
@@ -129,41 +131,103 @@ export class MarkupSceneLayer {
     return this.meshes.get(id) ?? null;
   }
 
+  /** Live footprint & 3D extrusion while drawing any shape (cube, cylinder, sphere, cone, torus, capsule, pyramid). */
+  setShapeDrawPreview(
+    type: MarkupShapeType | null,
+    start: { x: number; y: number; z: number } | null,
+    current: { x: number; y: number; z: number } | null,
+    height = 0.5,
+    footprintEnd: { x: number; y: number; z: number } | null = null,
+  ) {
+    if (!type || !start || !current) {
+      if (this.cubePreview) {
+        this.cubePreview.visible = false;
+      }
+      return;
+    }
+    const end = footprintEnd ?? current;
+    let sizeX = 0.5;
+    let sizeY = Math.max(0.05, height);
+    let sizeZ = 0.5;
+    let cx = start.x;
+    let cy = start.y + sizeY / 2;
+    let cz = start.z;
+
+    if (type === "cube") {
+      sizeX = Math.max(0.05, Math.abs(end.x - start.x));
+      sizeZ = Math.max(0.05, Math.abs(end.z - start.z));
+      cx = (end.x + start.x) / 2;
+      cz = (end.z + start.z) / 2;
+      cy = start.y + sizeY / 2;
+    } else if (type === "sphere") {
+      const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+      sizeX = radius;
+      sizeY = radius;
+      sizeZ = radius;
+      cx = start.x;
+      cy = start.y + radius;
+      cz = start.z;
+    } else if (type === "cylinder" || type === "cone" || type === "pyramid") {
+      const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+      sizeX = radius * 2;
+      sizeZ = radius * 2;
+      cx = start.x;
+      cz = start.z;
+      cy = start.y + sizeY / 2;
+    } else if (type === "capsule") {
+      const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+      sizeX = radius;
+      sizeY = Math.max(0.05, height);
+      sizeZ = radius;
+      cx = start.x;
+      cz = start.z;
+      cy = start.y + sizeY / 2;
+    } else if (type === "torus") {
+      const major = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+      sizeX = major;
+      sizeY = Math.max(0.01, sizeY * 0.15);
+      sizeZ = major;
+      cx = start.x;
+      cz = start.z;
+      cy = start.y + sizeY;
+    }
+
+    if (!this.cubePreview || this.cubePreview.userData.previewType !== type) {
+      if (this.cubePreview) {
+        this.group.remove(this.cubePreview);
+        this.cubePreview.geometry.dispose();
+        (this.cubePreview.material as THREE.Material).dispose();
+      }
+      const geo = createShapeGeometry(type, sizeX, sizeY, sizeZ);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+        roughness: 0.5,
+      });
+      this.cubePreview = new THREE.Mesh(geo, mat);
+      this.cubePreview.name = "markup-shape-preview";
+      this.cubePreview.userData.isMarkupPreview = true;
+      this.cubePreview.userData.previewType = type;
+      this.group.add(this.cubePreview);
+    } else {
+      this.cubePreview.geometry.dispose();
+      this.cubePreview.geometry = createShapeGeometry(type, sizeX, sizeY, sizeZ);
+    }
+
+    this.cubePreview.visible = true;
+    this.cubePreview.position.set(cx, cy, cz);
+    this.cubePreview.scale.set(1, 1, 1);
+  }
+
   /** Live footprint while drawing a cube (corner → opposite corner). */
   setCubeDrawPreview(
     start: { x: number; y: number; z: number } | null,
     current: { x: number; y: number; z: number } | null,
     height = 0.5,
   ) {
-    if (!start || !current) {
-      if (this.cubePreview) {
-        this.cubePreview.visible = false;
-      }
-      return;
-    }
-    const w = Math.max(0.05, Math.abs(current.x - start.x));
-    const d = Math.max(0.05, Math.abs(current.z - start.z));
-    const h = Math.max(0.05, height);
-    const cx = (current.x + start.x) / 2;
-    const cz = (current.z + start.z) / 2;
-    const cy = start.y + h / 2;
-    if (!this.cubePreview) {
-      const geo = new THREE.BoxGeometry(1, 1, 1);
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xf59e0b,
-        transparent: true,
-        opacity: 0.35,
-        depthWrite: false,
-        roughness: 0.6,
-      });
-      this.cubePreview = new THREE.Mesh(geo, mat);
-      this.cubePreview.name = "markup-cube-preview";
-      this.cubePreview.userData.isMarkupPreview = true;
-      this.group.add(this.cubePreview);
-    }
-    this.cubePreview.visible = true;
-    this.cubePreview.position.set(cx, cy, cz);
-    this.cubePreview.scale.set(w, h, d);
+    this.setShapeDrawPreview("cube", start, current, height);
   }
 
   /** Small sphere showing note vertex/face snap target. */

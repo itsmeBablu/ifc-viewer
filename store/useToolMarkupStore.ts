@@ -31,6 +31,7 @@ import {
 } from "@/lib/werkzeugHistory";
 
 type CubeDrawState = {
+  shape?: MarkupShapeType;
   start: { x: number; y: number; z: number };
   current: { x: number; y: number; z: number };
   /** After footprint locked: opposite corner used for W/D. */

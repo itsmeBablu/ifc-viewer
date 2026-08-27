@@ -5010,31 +5010,50 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           } else {
             layer.setSnapIndicator(null);
           }
+          const currentShape = ms.cubeDraw?.shape ?? (ms.armedTool && isShapeTool(ms.armedTool) ? ms.armedTool : "cube");
           if (surface && ms.cubeDraw?.phase === "footprint") {
             let p = surface.point.clone();
             if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
             ms.setCubeDraw({
               ...ms.cubeDraw,
+              shape: currentShape,
               current: { x: p.x, y: p.y, z: p.z },
             });
-            layer.setCubeDrawPreview(
+            layer.setShapeDrawPreview(
+              currentShape,
               ms.cubeDraw.start,
               { x: p.x, y: p.y, z: p.z },
               ms.cubeDraw.height,
+              null,
             );
-            const w = Math.abs(p.x - ms.cubeDraw.start.x);
-            const d = Math.abs(p.z - ms.cubeDraw.start.z);
-            ms.setDragSnapHint({
-              text: `${Math.round(toMm(w))} × ${Math.round(toMm(d))} mm`,
-              clientX: e.clientX,
-              clientY: e.clientY,
-            });
+            if (currentShape === "cube") {
+              const w = Math.abs(p.x - ms.cubeDraw.start.x);
+              const d = Math.abs(p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `${Math.round(toMm(w))} × ${Math.round(toMm(d))} mm · click for height`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (currentShape === "sphere") {
+              const radius = Math.hypot(p.x - ms.cubeDraw.start.x, p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `⌀ ${Math.round(toMm(radius * 2))} mm (r: ${Math.round(toMm(radius))} mm) · click to place`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else {
+              const radius = Math.hypot(p.x - ms.cubeDraw.start.x, p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `⌀ ${Math.round(toMm(radius * 2))} mm · click for height`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            }
           } else if (ms.cubeDraw?.phase === "height") {
             const start = ms.cubeDraw.start;
             const end = ms.cubeDraw.footprintEnd ?? ms.cubeDraw.current;
             let h = 0.5;
             // Prefer screen-Y drag (works in Top ortho — vertical plane rays don't).
-            // ~20 mm per pixel, always 50 mm steps so the third click feels snappy.
             if (ms.cubeDraw.heightScreenY != null) {
               const dy = ms.cubeDraw.heightScreenY - e.clientY; // drag up = taller
               h = Math.max(0.05, dy * 0.02);
@@ -5045,15 +5064,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               h = Math.max(h, fromY);
             }
             h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
-            ms.setCubeDraw({ ...ms.cubeDraw, height: h, current: end });
-            layer.setCubeDrawPreview(start, end, h);
+            ms.setCubeDraw({ ...ms.cubeDraw, shape: currentShape, height: h, current: end });
+            layer.setShapeDrawPreview(currentShape, start, end, h, ms.cubeDraw.footprintEnd);
             ms.setDragSnapHint({
-              text: `${Math.round(toMm(h))} mm`,
+              text: `H: ${Math.round(toMm(h))} mm · click to place`,
               clientX: e.clientX,
               clientY: e.clientY,
             });
           } else if (!ms.cubeDraw) {
-            layer.setCubeDrawPreview(null, null);
+            layer.setShapeDrawPreview(null, null, null);
             if (surface && ms.snapToFaces) {
               const snapped = enhanceHitWithVertexSnap(
                 surface,
@@ -5764,10 +5783,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const floorId =
               markupStore.markupFloorId ?? ids.floorId ?? null;
 
-            // Cube: 1st click corner · 2nd click width/depth · 3rd click height
-            if (armed === "cube") {
+            // All 3D shapes (cube, sphere, cylinder, cone, torus, capsule, pyramid):
+            // 1st click start/center · 2nd click area/radius · 3rd click height (extrude)
+            if (isShapeTool(armed)) {
+              const shapeType = armed;
               if (!markupStore.cubeDraw) {
                 markupStore.setCubeDraw({
+                  shape: shapeType,
                   start: { x: p.x, y: p.y, z: p.z },
                   current: { x: p.x, y: p.y, z: p.z },
                   footprintEnd: null,
@@ -5778,18 +5800,40 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 return;
               }
               if (markupStore.cubeDraw.phase === "footprint") {
+                if (shapeType === "sphere") {
+                  const start = markupStore.cubeDraw.start;
+                  const radius = Math.max(0.05, Math.hypot(p.x - start.x, p.z - start.z));
+                  void markupStore.placeShape(
+                    "sphere",
+                    { x: start.x, y: start.y + radius, z: start.z },
+                    {
+                      floorId,
+                      rot: { x: 0, y: 0, z: 0 },
+                      sizeX: radius,
+                      sizeY: radius,
+                      sizeZ: radius,
+                    },
+                  );
+                  markupStore.setCubeDraw(null);
+                  layer.setShapeDrawPreview(null, null, null);
+                  return;
+                }
+
                 markupStore.setCubeDraw({
                   ...markupStore.cubeDraw,
+                  shape: shapeType,
                   current: { x: p.x, y: p.y, z: p.z },
                   footprintEnd: { x: p.x, y: p.y, z: p.z },
                   phase: "height",
                   heightScreenY: e.clientY,
                   height: 0.5,
                 });
-                layer.setCubeDrawPreview(
+                layer.setShapeDrawPreview(
+                  shapeType,
                   markupStore.cubeDraw.start,
                   { x: p.x, y: p.y, z: p.z },
                   0.5,
+                  { x: p.x, y: p.y, z: p.z },
                 );
                 return;
               }
@@ -5808,24 +5852,58 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   h = Math.max(h, Math.abs(p.y - start.y));
                 }
                 h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
-                const w = Math.max(0.05, Math.abs(end.x - start.x));
-                const d = Math.max(0.05, Math.abs(end.z - start.z));
-                const cx = (end.x + start.x) / 2;
-                const cz = (end.z + start.z) / 2;
-                const cy = start.y + h / 2;
+
+                let sizeX = 0.5;
+                let sizeY = h;
+                let sizeZ = 0.5;
+                let cx = start.x;
+                let cy = start.y + h / 2;
+                let cz = start.z;
+
+                if (shapeType === "cube") {
+                  sizeX = Math.max(0.05, Math.abs(end.x - start.x));
+                  sizeZ = Math.max(0.05, Math.abs(end.z - start.z));
+                  cx = (end.x + start.x) / 2;
+                  cz = (end.z + start.z) / 2;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "cylinder" || shapeType === "cone" || shapeType === "pyramid") {
+                  const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = radius * 2;
+                  sizeZ = radius * 2;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "capsule") {
+                  const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = radius;
+                  sizeY = h;
+                  sizeZ = radius;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "torus") {
+                  const major = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = major;
+                  sizeY = Math.max(0.01, h * 0.15);
+                  sizeZ = major;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + sizeY;
+                }
+
                 void markupStore.placeShape(
-                  "cube",
+                  shapeType,
                   { x: cx, y: cy, z: cz },
                   {
                     floorId,
-                    rot: { x: 0, y: 0, z: 0 },
-                    sizeX: w,
-                    sizeY: h,
-                    sizeZ: d,
+                    rot,
+                    sizeX,
+                    sizeY,
+                    sizeZ,
                   },
                 );
                 markupStore.setCubeDraw(null);
-                layer.setCubeDrawPreview(null, null);
+                layer.setShapeDrawPreview(null, null, null);
                 return;
               }
             }
@@ -5854,12 +5932,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   elementName: elName,
                   floorId,
                 },
-              );
-            } else if (isShapeTool(armed) && armed !== "cube") {
-              void markupStore.placeShape(
-                armed,
-                { x: p.x, y: p.y, z: p.z },
-                { floorId, rot },
               );
             }
             return;
