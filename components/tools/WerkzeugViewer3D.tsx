@@ -6109,13 +6109,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           ) {
             const cam = preparePointerRayRef.current(e.clientX, e.clientY);
             const layoutLayer = layoutLayerRef.current;
-            if (cam && layoutLayer) {
               if (e.ctrlKey || e.metaKey) {
-                // Revit-style Ctrl-drag always starts a selection window,
-                // even when the gesture begins over model geometry.
+                // Control-drag always starts a box selection window (both in 2D and 3D)
                 marqueeActive = true;
                 marqueeStartX = e.clientX;
                 marqueeStartY = e.clientY;
+                const controls = controlsRef.current;
+                if (controls) controls.enabled = false;
                 return;
               }
               raycaster.current.setFromCamera(pointerNdc.current, cam);
@@ -6144,13 +6144,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(hit.id);
                 const u = layoutStore.underlays.find((x) => x.id === hit.id);
                 if (u && !u.locked) pendingUnderlayMoveId = hit.id;
-              } else if (!hit) {
-                // Empty canvas click down -> start marquee drag-box selection
+              } else if (!hit && activeViewPresetRef.current !== "free") {
+                // In 2D ortho/plan mode only: empty canvas drag starts marquee box selection
                 marqueeActive = true;
                 marqueeStartX = e.clientX;
                 marqueeStartY = e.clientY;
+                const controls = controlsRef.current;
+                if (controls) controls.enabled = false;
               }
-            }
           }
         }
       }
