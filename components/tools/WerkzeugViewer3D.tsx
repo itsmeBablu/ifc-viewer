@@ -2430,7 +2430,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       });
       layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
       if (helpersRef.current) {
-        helpersRef.current.visible = false;
+        helpersRef.current.visible = !isPlanView;
       }
       if (s.wallDraw) {
         const lvl =
@@ -5726,163 +5726,139 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     let lastTapTime = 0;
     const handleDblClickOrTap = (clientX: number, clientY: number) => {
-      const hit = pickHit(clientX, clientY);
-      if (!hit) {
-        const presentation = useAppStore.getState().isPresentationView;
-        fitToVisible(presentation ? 2000 : 850);
-        return;
-      }
+      const camera = preparePointerRayRef.current(clientX, clientY) ?? perspectiveCameraRef.current;
+      if (!camera) return;
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
 
-      if (useAppStore.getState().dataViewMode === "luftung") {
-        const { roomId } = pickIdsFromObject(hit.object);
-        const room =
-          roomId != null
-            ? (rooms.find((r) => r.id === roomId) ??
-              roomsFromStore.find((r) => r.id === roomId))
-            : undefined;
+      const layoutLayer = layoutLayerRef.current;
+      const layoutStore = useLayoutDrawingStore.getState();
+      const markupStore = useToolMarkupStore.getState();
+
+      // 1. Try to pick layout element
+      if (layoutLayer && useAppStore.getState().toolMode) {
+        const lh = layoutLayer.pickLayout(raycaster.current);
         if (
-          roomId &&
-          room &&
-          isRoomPickAllowed(room.id, room.floorId)
+          lh &&
+          lh.kind !== "ground" &&
+          lh.kind !== "underlay" &&
+          lh.kind !== "wall-endpoint"
         ) {
-          const zoneKey = roomVentilationZoneKey(room);
-          if (
-            useAppStore.getState().selectedVentilationZoneKey !== zoneKey
-          ) {
-            setSelectedVentilationZoneKey(zoneKey);
+          // Select layout element
+          layoutStore.clearSelection();
+          useAppStore.getState().setSelectedElement(null);
+          layoutStore.selectElement({
+            kind: lh.kind as any,
+            id: lh.id,
+          });
+
+          // Compute bounding box for layout element by traversing the layout group
+          const box = new THREE.Box3();
+          let framed = false;
+          layoutLayer.group.traverse((o) => {
+            if (
+              (lh.kind === "wall" && o.userData?.layoutWallId === lh.id) ||
+              (lh.kind === "door" && o.userData?.layoutDoorId === lh.id) ||
+              (lh.kind === "window" && o.userData?.layoutWindowId === lh.id) ||
+              (lh.kind === "slab" && o.userData?.layoutSlabId === lh.id) ||
+              (lh.kind === "column" && o.userData?.layoutColumnId === lh.id) ||
+              (lh.kind === "beam" && o.userData?.layoutBeamId === lh.id) ||
+              (lh.kind === "grid" && o.userData?.layoutGridId === lh.id) ||
+              (lh.kind === "sketch-line" && o.userData?.layoutSketchLineId === lh.id)
+            ) {
+              box.expandByObject(o);
+              framed = true;
+            }
+          });
+
+          if (framed && !box.isEmpty() && Number.isFinite(box.min.x)) {
+            const controls = controlsRef.current;
+            if (controls) {
+              const { position, target } = frameBoundingBox(box, camera, 1.4);
+              void flyTo(camera, controls, position, target, 850);
+              return;
+            }
           }
-          applyPickSelection(hit);
-          if (useAppStore.getState().autoFocusSelection) {
-            requestRoomFocus(roomId);
-          }
-          return;
         }
       }
 
-      if (
-        useAppStore.getState().toolMode &&
-        useToolMarkupStore.getState().quadView
-      ) {
-        const cam = preparePointerRayRef.current(clientX, clientY);
-        const markupStore = useToolMarkupStore.getState();
-        const layoutStore = useLayoutDrawingStore.getState();
-        const markupLayer = markupLayerRef.current;
-        const layoutLayer = layoutLayerRef.current;
-        const box = new THREE.Box3();
-        let framed = false;
-
-        if (cam && markupLayer) {
-          raycaster.current.setFromCamera(pointerNdc.current, cam);
-          const picked = markupLayer.pickMarkup(raycaster.current);
-          if (picked?.kind === "placement") {
-            markupStore.selectPlacement(picked.id);
-            const mesh = markupLayer.getMesh(picked.id);
-            if (mesh) {
-              box.setFromObject(mesh);
-              framed = true;
+      // 2. Try standard pickHit (for IFC model components / rooms)
+      const hit = pickHit(clientX, clientY);
+      if (hit && hit.object) {
+        if (useAppStore.getState().dataViewMode === "luftung") {
+          const { roomId } = pickIdsFromObject(hit.object);
+          const room =
+            roomId != null
+              ? (rooms.find((r) => r.id === roomId) ??
+                roomsFromStore.find((r) => r.id === roomId))
+              : undefined;
+          if (
+            roomId &&
+            room &&
+            isRoomPickAllowed(room.id, room.floorId)
+          ) {
+            const zoneKey = roomVentilationZoneKey(room);
+            if (
+              useAppStore.getState().selectedVentilationZoneKey !== zoneKey
+            ) {
+              setSelectedVentilationZoneKey(zoneKey);
             }
-          } else if (layoutLayer) {
-            const lh = layoutLayer.pickLayout(raycaster.current);
-            if (lh?.kind === "wall") {
-              layoutStore.selectWall(lh.id);
-            } else if (lh?.kind === "door") {
-              layoutStore.selectDoor(lh.id);
-            } else if (lh?.kind === "window") {
-              layoutStore.selectWindow(lh.id);
-            } else if (lh?.kind === "slab") {
-              layoutStore.selectSlab(lh.id);
-            } else if (lh?.kind === "sketch-line") {
-              layoutStore.selectSketchLine(lh.id);
+            applyPickSelection(hit);
+            if (useAppStore.getState().autoFocusSelection) {
+              requestRoomFocus(roomId);
             }
-            if (lh && lh.kind !== "ground") {
-              layoutLayer.group.traverse((o) => {
-                if (
-                  (lh.kind === "wall" &&
-                    o.userData?.layoutWallId === lh.id) ||
-                  (lh.kind === "door" &&
-                    o.userData?.layoutDoorId === lh.id) ||
-                  (lh.kind === "window" &&
-                    o.userData?.layoutWindowId === lh.id) ||
-                  (lh.kind === "slab" &&
-                    o.userData?.layoutSlabId === lh.id) ||
-                  (lh.kind === "sketch-line" &&
-                    o.userData?.layoutSketchLineId === lh.id)
-                ) {
-                  box.expandByObject(o);
-                  framed = true;
-                }
-              });
-            }
-          }
-          if (!framed) {
-            const roots: THREE.Object3D[] = [];
-            if (shellCloneRef.current) roots.push(shellCloneRef.current);
-            roots.push(markupLayer.group);
-            if (layoutLayer) roots.push(layoutLayer.group);
-            const surface = pickMarkupSurface(raycaster.current, roots);
-            if (surface) {
-              applyPickSelection({
-                distance: surface.distance,
-                point: surface.point,
-                object: surface.object,
-                face: null,
-                faceIndex: 0,
-                uv: undefined,
-              } as THREE.Intersection);
-              box.setFromObject(surface.object);
-              framed = Number.isFinite(box.min.x);
-            }
+            return;
           }
         }
 
-        if (!framed && hit) {
-          applyPickSelection(hit);
-          box.setFromObject(hit.object);
-          framed = Number.isFinite(box.min.x);
-        }
-        if (!framed) {
-          const wallId = layoutStore.selectedWallId;
-          const doorId = layoutStore.selectedDoorId;
-          const windowId = layoutStore.selectedWindowId;
-          const placementId = markupStore.selectedPlacementId;
-          if (placementId && markupLayer) {
-            const mesh = markupLayer.getMesh(placementId);
-            if (mesh) {
-              box.setFromObject(mesh);
-              framed = true;
-            }
-          } else if ((wallId || doorId || windowId) && layoutLayer) {
-            layoutLayer.group.traverse((o) => {
-              if (
-                (wallId && o.userData?.layoutWallId === wallId) ||
-                (doorId && o.userData?.layoutDoorId === doorId) ||
-                (windowId && o.userData?.layoutWindowId === windowId)
-              ) {
-                box.expandByObject(o);
+        // Default layout element framing (QuadView check)
+        if (
+          useAppStore.getState().toolMode &&
+          useToolMarkupStore.getState().quadView
+        ) {
+          const markupLayer = markupLayerRef.current;
+          const box = new THREE.Box3();
+          let framed = false;
+
+          if (markupLayer) {
+            const picked = markupLayer.pickMarkup(raycaster.current);
+            if (picked?.kind === "placement") {
+              markupStore.selectPlacement(picked.id);
+              const mesh = markupLayer.getMesh(picked.id);
+              if (mesh) {
+                box.setFromObject(mesh);
                 framed = true;
               }
-            });
+            }
           }
-        }
-        if (!framed) {
-          const shell = shellCloneRef.current;
-          if (shell) box.setFromObject(shell);
-        }
-        if (!box.isEmpty()) fitAllQuadsToBoxRef.current(box);
-        return;
-      }
 
-      // Default: fit scene or object to screen
-      const camera = perspectiveCameraRef.current;
-      const controls = controlsRef.current;
-      if (camera && controls && hit.object) {
-        const box = new THREE.Box3().setFromObject(hit.object);
-        if (!box.isEmpty() && Number.isFinite(box.min.x)) {
-          const { position, target } = frameBoundingBox(box, camera, 1.4);
-          void flyTo(camera, controls, position, target, 850);
+          if (!framed && hit) {
+            applyPickSelection(hit);
+            box.setFromObject(hit.object);
+            framed = Number.isFinite(box.min.x);
+          }
+
+          if (!framed) {
+            const shell = shellCloneRef.current;
+            if (shell) box.setFromObject(shell);
+          }
+          if (!box.isEmpty()) fitAllQuadsToBoxRef.current(box);
           return;
         }
+
+        // Standard 3D element focus
+        applyPickSelection(hit);
+        const box = new THREE.Box3().setFromObject(hit.object);
+        if (!box.isEmpty() && Number.isFinite(box.min.x)) {
+          const controls = controlsRef.current;
+          if (controls) {
+            const { position, target } = frameBoundingBox(box, camera, 1.4);
+            void flyTo(camera, controls, position, target, 850);
+            return;
+          }
+        }
       }
+
+      // 3. Clicked empty space -> Fit visible scene
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
     };
