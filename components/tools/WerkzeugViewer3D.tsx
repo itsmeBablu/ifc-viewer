@@ -5229,6 +5229,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 const surface = pickMarkupSurface(raycaster.current, roots);
                 if (surface) plan = planPointFromHit(surface.point);
               }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
+              }
               if (plan) {
                 let levelId =
                   markupStore.markupFloorId ??
@@ -5285,6 +5288,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (shellCloneRef.current) roots.push(shellCloneRef.current);
                 const surface = pickMarkupSurface(raycaster.current, roots);
                 if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
               }
               if (plan) {
                 let levelId =
@@ -6102,6 +6108,20 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         suppressNextClick = false;
         pendingWallMoveId = null;
         pendingUnderlayMoveId = null;
+
+        if (
+          useAppStore.getState().toolMode &&
+          (useLayoutDrawingStore.getState().armedLayoutTool ||
+            useLayoutDrawingStore.getState().wallDraw ||
+            useLayoutDrawingStore.getState().slabDraw ||
+            useLayoutDrawingStore.getState().sketchDraw ||
+            useToolMarkupStore.getState().armedTool ||
+            useToolMarkupStore.getState().measureMode)
+        ) {
+          // When drawing or measuring, disable orbit rotation so left-click places points reliably
+          const controls = controlsRef.current;
+          if (controls) controls.enabled = false;
+        }
 
         if (
           useAppStore.getState().toolMode &&
