@@ -920,15 +920,19 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     }
 
     if (!has) {
-      if (helpersRef.current) {
-        box.setFromObject(helpersRef.current);
-      }
-      if (box.isEmpty() || !Number.isFinite(box.min.x)) {
-        box.setFromCenterAndSize(
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(50, 6, 50),
-        );
-      }
+      const gridSpan = 52;
+      const fov = (camera.fov * Math.PI) / 180;
+      const aspect = camera.aspect || 1.6;
+      const vDist = (gridSpan * 0.72) / Math.tan(fov / 2);
+      const hDist = (gridSpan * 0.72) / (Math.tan(fov / 2) * Math.min(aspect, 1.2));
+      const dist = Math.max(vDist, hDist, 68);
+
+      const dir = new THREE.Vector3(1, 0.82, 1).normalize();
+      const pos = new THREE.Vector3(0, 0, 0).add(dir.multiplyScalar(dist));
+      const tgt = new THREE.Vector3(0, 0, 0);
+
+      void flyTo(camera, controls, pos, tgt, durationMs);
+      return;
     }
     const presentation = useAppStore.getState().isPresentationView;
     // Basic view: keep orbit rotation. Presentation: isometric framing that fits screen.
@@ -3025,15 +3029,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       }
 
       if (box.isEmpty() || !Number.isFinite(box.min.x)) {
-        if (helpersRef.current) {
-          box.setFromObject(helpersRef.current);
-        }
-        if (box.isEmpty() || !Number.isFinite(box.min.x)) {
-          box.setFromCenterAndSize(
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(50, 6, 50),
-          );
-        }
+        box.setFromCenterAndSize(
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(52, 6, 52),
+        );
       }
       return box;
     };
