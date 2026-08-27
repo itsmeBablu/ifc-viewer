@@ -38,13 +38,8 @@ export default function ObjectSnapStrip({ compact = false, iconOnly = false, sho
 
   return (
     <div ref={rootRef} className={`werkzeug-snap-dropdown ${compact ? "is-compact" : ""} ${iconOnly ? "is-icon-only" : ""}`}>
-      <button type="button" title="Object snaps" aria-label={`Object snaps · ${activeCount} active`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((value) => !value)} className={`werkzeug-snap-trigger ${open ? "is-open" : ""} relative`}>
+      <button type="button" title="Object snaps" aria-label={`Object snaps · ${activeCount} active`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((value) => !value)} className={`werkzeug-snap-trigger ${open ? "is-open" : ""}`}>
         <LuMagnet className="h-4 w-4" />
-        {activeCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-zinc-950 shadow-sm">
-            {activeCount}
-          </span>
-        )}
         {!iconOnly && <><span>Snaps</span>{showCount && <span className="werkzeug-snap-count">{activeCount}</span>}<LuChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} /></>}
       </button>
       {open && <div className="werkzeug-snap-menu" role="menu" aria-label="Object snaps">
