@@ -788,6 +788,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     (clientX: number, clientY: number) => THREE.Camera | null
   >(() => null);
   const activateQuadIndexRef = useRef<(index: QuadIndex) => void>(() => {});
+  const applyPresetRef = useRef<((preset: string) => void) | null>(null);
   const fitAllQuadsToBoxRef = useRef<(box: THREE.Box3) => void>(() => {});
 
   const { shellGroup, rooms } = useModelScene();
@@ -858,7 +859,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const inTool = useAppStore.getState().toolMode;
     const preset = useToolMarkupStore.getState().viewPreset;
     if (inTool && preset !== "free") {
-      useToolMarkupStore.getState().setViewPreset(preset);
+      if (applyPresetRef.current) {
+        applyPresetRef.current(preset);
+      } else {
+        useToolMarkupStore.getState().setViewPreset(preset);
+      }
       return;
     }
 
@@ -895,8 +900,55 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (overlays) consider(overlays);
     if (shell) consider(shell);
     if (compareRootRef.current) consider(compareRootRef.current);
+    if (layoutLayerRef.current?.group) {
+      layoutLayerRef.current.group.traverse((o) => {
+        if (
+          (o.userData?.layoutWallId && !o.userData?.isLayoutEndpoint) ||
+          o.userData?.layoutDoorId ||
+          o.userData?.layoutWindowId ||
+          o.userData?.layoutSlabId ||
+          o.userData?.layoutColumnId ||
+          o.userData?.layoutBeamId ||
+          o.userData?.layoutGridId ||
+          o.userData?.layoutSketchLineId
+        ) {
+          if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
+            const b = new THREE.Box3().setFromObject(o);
+            if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+              box.union(b);
+              has = true;
+            }
+          }
+        }
+      });
+    }
+    if (markupLayerRef.current?.group) {
+      markupLayerRef.current.group.traverse((o) => {
+        if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
+          const b = new THREE.Box3().setFromObject(o);
+          if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+            box.union(b);
+            has = true;
+          }
+        }
+      });
+    }
 
-    if (!has) return;
+    if (!has) {
+      const gridSpan = 52;
+      const fov = (camera.fov * Math.PI) / 180;
+      const aspect = camera.aspect || 1.6;
+      const vDist = (gridSpan * 0.72) / Math.tan(fov / 2);
+      const hDist = (gridSpan * 0.72) / (Math.tan(fov / 2) * Math.min(aspect, 1.2));
+      const dist = Math.max(vDist, hDist, 68);
+
+      const dir = new THREE.Vector3(1, 0.82, 1).normalize();
+      const pos = new THREE.Vector3(0, 0, 0).add(dir.multiplyScalar(dist));
+      const tgt = new THREE.Vector3(0, 0, 0);
+
+      void flyTo(camera, controls, pos, tgt, durationMs);
+      return;
+    }
     const presentation = useAppStore.getState().isPresentationView;
     // Basic view: keep orbit rotation. Presentation: isometric framing that fits screen.
     if (presentation) {
@@ -934,8 +986,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       return;
     }
     const keepDirection = camera.position.clone().sub(controls.target);
-    const { position, target } = frameBoundingBox(box, camera, 1.35, {
-      keepDirection,
+    const { position, target } = frameBoundingBox(box, camera, 1.25, {
+      keepDirection: keepDirection.lengthSq() > 0.01 ? keepDirection : new THREE.Vector3(1, 0.75, 1),
     });
     void flyTo(camera, controls, position, target, durationMs);
   };
@@ -1084,7 +1136,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       THREE.PerspectiveCamera | THREE.OrthographicCamera
     >(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    controls.dampingFactor = 0.1;
+    controls.rotateSpeed = 0.85;
+    controls.zoomSpeed = 1.1;
+    controls.panSpeed = 0.85;
     controls.maxPolarAngle = Math.PI; // allow full orbit — avoids horizon clipping flicker
     // Right-click opens the context menu — do not pan on button 2.
     controls.mouseButtons = {
@@ -1161,6 +1216,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     markupLayerRef.current = markup;
 
     const layoutLayer = new LayoutSceneLayer();
+    layoutLayer.setRenderMode(useAppStore.getState().renderMode);
     scene.add(layoutLayer.group);
     layoutLayerRef.current = layoutLayer;
 
@@ -1227,7 +1283,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const aspect = rect.w / Math.max(1, rect.h);
           const cam = applySlotToCameras(slots[index], aspect, camera, ortho);
           // Top pane → CAD door/window symbols; others → solid 3D boxes.
-          layoutLayerRef.current?.setOpeningsPlanMode(
+          layoutLayerRef.current?.setPlanMode(
             slots[index].preset === "top",
           );
           if (tcHelper) {
@@ -1240,7 +1296,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           renderer.render(scene, cam);
         }
         // Restore display mode for the active pane (picking / labels).
-        layoutLayerRef.current?.setOpeningsPlanMode(
+        layoutLayerRef.current?.setPlanMode(
           slots[activeIdx].preset === "top",
         );
 
@@ -2359,17 +2415,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const markupFloor = useToolMarkupStore.getState().markupFloorId;
       const activeLevel =
         s.levels.find((l) => l.id === markupFloor) ?? s.levels[0] ?? null;
-      if (s.isEmptyProject || s.armedLayoutTool || s.wallDraw || s.slabDraw) {
-        layer.ensureGround(activeLevel?.elevationMm ?? 0);
-      } else if (!s.walls.length && !s.slabs.length) {
-        layer.hideGround();
-      } else {
-        layer.ensureGround(activeLevel?.elevationMm ?? 0);
-      }
+
       const ms = useToolMarkupStore.getState();
       const isPlanView = ms.quadView
         ? ms.quadPresets[ms.quadActiveIndex] === "top"
         : ms.viewPreset === "top";
+
+      if (isPlanView && (s.isEmptyProject || s.armedLayoutTool || s.wallDraw || s.slabDraw || s.walls.length || s.slabs.length)) {
+        layer.ensureGround(activeLevel?.elevationMm ?? 0);
+      } else {
+        layer.hideGround();
+      }
+
       // Top/plan: respect active floor filter. 3D: always show every level.
       const showAllLevels = !isPlanView || markupFloor == null;
       const sel = s.selectedElements || [];
@@ -2414,7 +2471,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
-      layer.syncUnderlays(s.underlays, s.levels, {
+      layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
         activeLevelId: markupFloor,
         showAllLevels,
         selectedUnderlayId: s.selectedUnderlayId,
@@ -2427,6 +2484,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         ),
       });
       layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
+      if (helpersRef.current) {
+        helpersRef.current.visible = !isPlanView;
+      }
       if (s.wallDraw) {
         const lvl =
           s.levels.find((l) => l.id === s.wallDraw!.levelId) ?? activeLevel;
@@ -2843,11 +2903,42 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const box = new THREE.Box3();
       const shell = shellCloneRef.current;
       if (shell) box.setFromObject(shell);
-      else
+
+      const layoutLayer = layoutLayerRef.current;
+      if (layoutLayer) {
+        layoutLayer.group.traverse((o) => {
+          if (
+            (o.userData?.layoutWallId && !o.userData?.isLayoutEndpoint) ||
+            o.userData?.layoutDoorId ||
+            o.userData?.layoutWindowId ||
+            o.userData?.layoutSlabId ||
+            o.userData?.layoutColumnId ||
+            o.userData?.layoutBeamId ||
+            o.userData?.layoutGridId ||
+            o.userData?.layoutSketchLineId
+          ) {
+            if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
+              box.expandByObject(o);
+            }
+          }
+        });
+      }
+
+      const markupLayer = markupLayerRef.current;
+      if (markupLayer) {
+        markupLayer.group.traverse((o) => {
+          if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
+            box.expandByObject(o);
+          }
+        });
+      }
+
+      if (box.isEmpty() || !Number.isFinite(box.min.x)) {
         box.setFromCenterAndSize(
-          new THREE.Vector3(),
-          new THREE.Vector3(20, 10, 20),
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(52, 6, 52),
         );
+      }
       return box;
     };
 
@@ -3002,6 +3093,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         controls.minPolarAngle = 0;
         controls.maxPolarAngle = Math.PI;
         controls.target.copy(center);
+        controls.touches = {
+          ONE: THREE.TOUCH.PAN,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+        controls.mouseButtons = {
+          LEFT: MOUSE.PAN,
+          MIDDLE: MOUSE.DOLLY,
+          RIGHT: MOUSE.PAN,
+        };
         if (tc) {
           (tc as TransformControls & { camera: THREE.Camera }).camera = ortho;
         }
@@ -3019,6 +3119,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         controls.enableRotate = true;
         controls.screenSpacePanning = false;
         controls.target.copy(center);
+        controls.touches = {
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+        controls.mouseButtons = {
+          LEFT: MOUSE.ROTATE,
+          MIDDLE: MOUSE.DOLLY,
+          RIGHT: MOUSE.PAN,
+        };
         if (tc) {
           (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
         }
@@ -3072,7 +3181,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       activeViewPresetRef.current = "free";
     }
 
-    return unsub;
+    applyPresetRef.current = applyPreset;
+
+    return () => {
+      applyPresetRef.current = null;
+      unsub();
+    };
   }, [toolMode]);
 
   // Live element-to-element + distance snap while dragging a markup shape.
@@ -4801,31 +4915,50 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           } else {
             layer.setSnapIndicator(null);
           }
+          const currentShape = ms.cubeDraw?.shape ?? (ms.armedTool && isShapeTool(ms.armedTool) ? ms.armedTool : "cube");
           if (surface && ms.cubeDraw?.phase === "footprint") {
             let p = surface.point.clone();
             if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
             ms.setCubeDraw({
               ...ms.cubeDraw,
+              shape: currentShape,
               current: { x: p.x, y: p.y, z: p.z },
             });
-            layer.setCubeDrawPreview(
+            layer.setShapeDrawPreview(
+              currentShape,
               ms.cubeDraw.start,
               { x: p.x, y: p.y, z: p.z },
               ms.cubeDraw.height,
+              null,
             );
-            const w = Math.abs(p.x - ms.cubeDraw.start.x);
-            const d = Math.abs(p.z - ms.cubeDraw.start.z);
-            ms.setDragSnapHint({
-              text: `${Math.round(toMm(w))} × ${Math.round(toMm(d))} mm`,
-              clientX: e.clientX,
-              clientY: e.clientY,
-            });
+            if (currentShape === "cube") {
+              const w = Math.abs(p.x - ms.cubeDraw.start.x);
+              const d = Math.abs(p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `${Math.round(toMm(w))} × ${Math.round(toMm(d))} mm · click for height`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (currentShape === "sphere") {
+              const radius = Math.hypot(p.x - ms.cubeDraw.start.x, p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `⌀ ${Math.round(toMm(radius * 2))} mm (r: ${Math.round(toMm(radius))} mm) · click to place`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else {
+              const radius = Math.hypot(p.x - ms.cubeDraw.start.x, p.z - ms.cubeDraw.start.z);
+              ms.setDragSnapHint({
+                text: `⌀ ${Math.round(toMm(radius * 2))} mm · click for height`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            }
           } else if (ms.cubeDraw?.phase === "height") {
             const start = ms.cubeDraw.start;
             const end = ms.cubeDraw.footprintEnd ?? ms.cubeDraw.current;
             let h = 0.5;
             // Prefer screen-Y drag (works in Top ortho — vertical plane rays don't).
-            // ~20 mm per pixel, always 50 mm steps so the third click feels snappy.
             if (ms.cubeDraw.heightScreenY != null) {
               const dy = ms.cubeDraw.heightScreenY - e.clientY; // drag up = taller
               h = Math.max(0.05, dy * 0.02);
@@ -4836,15 +4969,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               h = Math.max(h, fromY);
             }
             h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
-            ms.setCubeDraw({ ...ms.cubeDraw, height: h, current: end });
-            layer.setCubeDrawPreview(start, end, h);
+            ms.setCubeDraw({ ...ms.cubeDraw, shape: currentShape, height: h, current: end });
+            layer.setShapeDrawPreview(currentShape, start, end, h, ms.cubeDraw.footprintEnd);
             ms.setDragSnapHint({
-              text: `${Math.round(toMm(h))} mm`,
+              text: `H: ${Math.round(toMm(h))} mm · click to place`,
               clientX: e.clientX,
               clientY: e.clientY,
             });
           } else if (!ms.cubeDraw) {
-            layer.setCubeDrawPreview(null, null);
+            layer.setShapeDrawPreview(null, null, null);
             if (surface && ms.snapToFaces) {
               const snapped = enhanceHitWithVertexSnap(
                 surface,
@@ -5020,6 +5153,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 const surface = pickMarkupSurface(raycaster.current, roots);
                 if (surface) plan = planPointFromHit(surface.point);
               }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
+              }
               if (plan) {
                 let levelId =
                   markupStore.markupFloorId ??
@@ -5076,6 +5212,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (shellCloneRef.current) roots.push(shellCloneRef.current);
                 const surface = pickMarkupSurface(raycaster.current, roots);
                 if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
               }
               if (plan) {
                 let levelId =
@@ -5549,10 +5688,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const floorId =
               markupStore.markupFloorId ?? ids.floorId ?? null;
 
-            // Cube: 1st click corner · 2nd click width/depth · 3rd click height
-            if (armed === "cube") {
+            // All 3D shapes (cube, sphere, cylinder, cone, torus, capsule, pyramid):
+            // 1st click start/center · 2nd click area/radius · 3rd click height (extrude)
+            if (isShapeTool(armed)) {
+              const shapeType = armed;
               if (!markupStore.cubeDraw) {
                 markupStore.setCubeDraw({
+                  shape: shapeType,
                   start: { x: p.x, y: p.y, z: p.z },
                   current: { x: p.x, y: p.y, z: p.z },
                   footprintEnd: null,
@@ -5563,18 +5705,40 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 return;
               }
               if (markupStore.cubeDraw.phase === "footprint") {
+                if (shapeType === "sphere") {
+                  const start = markupStore.cubeDraw.start;
+                  const radius = Math.max(0.05, Math.hypot(p.x - start.x, p.z - start.z));
+                  void markupStore.placeShape(
+                    "sphere",
+                    { x: start.x, y: start.y + radius, z: start.z },
+                    {
+                      floorId,
+                      rot: { x: 0, y: 0, z: 0 },
+                      sizeX: radius,
+                      sizeY: radius,
+                      sizeZ: radius,
+                    },
+                  );
+                  markupStore.setCubeDraw(null);
+                  layer.setShapeDrawPreview(null, null, null);
+                  return;
+                }
+
                 markupStore.setCubeDraw({
                   ...markupStore.cubeDraw,
+                  shape: shapeType,
                   current: { x: p.x, y: p.y, z: p.z },
                   footprintEnd: { x: p.x, y: p.y, z: p.z },
                   phase: "height",
                   heightScreenY: e.clientY,
                   height: 0.5,
                 });
-                layer.setCubeDrawPreview(
+                layer.setShapeDrawPreview(
+                  shapeType,
                   markupStore.cubeDraw.start,
                   { x: p.x, y: p.y, z: p.z },
                   0.5,
+                  { x: p.x, y: p.y, z: p.z },
                 );
                 return;
               }
@@ -5593,24 +5757,58 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   h = Math.max(h, Math.abs(p.y - start.y));
                 }
                 h = Math.max(0.05, Math.round(h / 0.05) * 0.05);
-                const w = Math.max(0.05, Math.abs(end.x - start.x));
-                const d = Math.max(0.05, Math.abs(end.z - start.z));
-                const cx = (end.x + start.x) / 2;
-                const cz = (end.z + start.z) / 2;
-                const cy = start.y + h / 2;
+
+                let sizeX = 0.5;
+                let sizeY = h;
+                let sizeZ = 0.5;
+                let cx = start.x;
+                let cy = start.y + h / 2;
+                let cz = start.z;
+
+                if (shapeType === "cube") {
+                  sizeX = Math.max(0.05, Math.abs(end.x - start.x));
+                  sizeZ = Math.max(0.05, Math.abs(end.z - start.z));
+                  cx = (end.x + start.x) / 2;
+                  cz = (end.z + start.z) / 2;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "cylinder" || shapeType === "cone" || shapeType === "pyramid") {
+                  const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = radius * 2;
+                  sizeZ = radius * 2;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "capsule") {
+                  const radius = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = radius;
+                  sizeY = h;
+                  sizeZ = radius;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + h / 2;
+                } else if (shapeType === "torus") {
+                  const major = Math.max(0.05, Math.hypot(end.x - start.x, end.z - start.z));
+                  sizeX = major;
+                  sizeY = Math.max(0.01, h * 0.15);
+                  sizeZ = major;
+                  cx = start.x;
+                  cz = start.z;
+                  cy = start.y + sizeY;
+                }
+
                 void markupStore.placeShape(
-                  "cube",
+                  shapeType,
                   { x: cx, y: cy, z: cz },
                   {
                     floorId,
-                    rot: { x: 0, y: 0, z: 0 },
-                    sizeX: w,
-                    sizeY: h,
-                    sizeZ: d,
+                    rot,
+                    sizeX,
+                    sizeY,
+                    sizeZ,
                   },
                 );
                 markupStore.setCubeDraw(null);
-                layer.setCubeDrawPreview(null, null);
+                layer.setShapeDrawPreview(null, null, null);
                 return;
               }
             }
@@ -5639,12 +5837,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   elementName: elName,
                   floorId,
                 },
-              );
-            } else if (isShapeTool(armed) && armed !== "cube") {
-              void markupStore.placeShape(
-                armed,
-                { x: p.x, y: p.y, z: p.z },
-                { floorId, rot },
               );
             }
             return;
@@ -5719,152 +5911,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       applyPickSelection(hit);
     };
 
-    const onDblClick = (e: MouseEvent) => {
-      e.preventDefault();
-      const hit = pickHit(e.clientX, e.clientY);
-      if (hit && useAppStore.getState().dataViewMode === "luftung") {
-        const { roomId } = pickIdsFromObject(hit.object);
-        const room =
-          roomId != null
-            ? (rooms.find((r) => r.id === roomId) ??
-              roomsFromStore.find((r) => r.id === roomId))
-            : undefined;
-        if (
-          roomId &&
-          room &&
-          isRoomPickAllowed(room.id, room.floorId)
-        ) {
-          const zoneKey = roomVentilationZoneKey(room);
-          if (
-            useAppStore.getState().selectedVentilationZoneKey !== zoneKey
-          ) {
-            setSelectedVentilationZoneKey(zoneKey);
-          }
-          applyPickSelection(hit);
-          if (useAppStore.getState().autoFocusSelection) {
-            requestRoomFocus(roomId);
-          }
-          return;
-        }
-      }
-      // Werkzeug quad: select hit (if any) and frame it in all 4 views.
-      if (
-        useAppStore.getState().toolMode &&
-        useToolMarkupStore.getState().quadView
-      ) {
-        const cam = preparePointerRayRef.current(e.clientX, e.clientY);
-        const markupStore = useToolMarkupStore.getState();
-        const layoutStore = useLayoutDrawingStore.getState();
-        const markupLayer = markupLayerRef.current;
-        const layoutLayer = layoutLayerRef.current;
-        const box = new THREE.Box3();
-        let framed = false;
-
-        if (cam && markupLayer) {
-          raycaster.current.setFromCamera(pointerNdc.current, cam);
-          const picked = markupLayer.pickMarkup(raycaster.current);
-          if (picked?.kind === "placement") {
-            markupStore.selectPlacement(picked.id);
-            const mesh = markupLayer.getMesh(picked.id);
-            if (mesh) {
-              box.setFromObject(mesh);
-              framed = true;
-            }
-          } else if (layoutLayer) {
-            const lh = layoutLayer.pickLayout(raycaster.current);
-            if (lh?.kind === "wall") {
-              layoutStore.selectWall(lh.id);
-            } else if (lh?.kind === "door") {
-              layoutStore.selectDoor(lh.id);
-            } else if (lh?.kind === "window") {
-              layoutStore.selectWindow(lh.id);
-            } else if (lh?.kind === "slab") {
-              layoutStore.selectSlab(lh.id);
-            } else if (lh?.kind === "sketch-line") {
-              layoutStore.selectSketchLine(lh.id);
-            }
-            if (lh && lh.kind !== "ground") {
-              layoutLayer.group.traverse((o) => {
-                if (
-                  (lh.kind === "wall" &&
-                    o.userData?.layoutWallId === lh.id) ||
-                  (lh.kind === "door" &&
-                    o.userData?.layoutDoorId === lh.id) ||
-                  (lh.kind === "window" &&
-                    o.userData?.layoutWindowId === lh.id) ||
-                  (lh.kind === "slab" &&
-                    o.userData?.layoutSlabId === lh.id) ||
-                  (lh.kind === "sketch-line" &&
-                    o.userData?.layoutSketchLineId === lh.id)
-                ) {
-                  box.expandByObject(o);
-                  framed = true;
-                }
-              });
-            }
-          }
-          if (!framed) {
-            const roots: THREE.Object3D[] = [];
-            if (shellCloneRef.current) roots.push(shellCloneRef.current);
-            roots.push(markupLayer.group);
-            if (layoutLayer) roots.push(layoutLayer.group);
-            const surface = pickMarkupSurface(raycaster.current, roots);
-            if (surface) {
-              applyPickSelection({
-                distance: surface.distance,
-                point: surface.point,
-                object: surface.object,
-                face: null,
-                faceIndex: 0,
-                uv: undefined,
-              } as THREE.Intersection);
-              box.setFromObject(surface.object);
-              framed = Number.isFinite(box.min.x);
-            }
-          }
-        }
-
-        if (!framed && hit) {
-          applyPickSelection(hit);
-          box.setFromObject(hit.object);
-          framed = Number.isFinite(box.min.x);
-        }
-        if (!framed) {
-          const wallId = layoutStore.selectedWallId;
-          const doorId = layoutStore.selectedDoorId;
-          const windowId = layoutStore.selectedWindowId;
-          const placementId = markupStore.selectedPlacementId;
-          if (placementId && markupLayer) {
-            const mesh = markupLayer.getMesh(placementId);
-            if (mesh) {
-              box.setFromObject(mesh);
-              framed = true;
-            }
-          } else if ((wallId || doorId || windowId) && layoutLayer) {
-            layoutLayer.group.traverse((o) => {
-              if (
-                (wallId && o.userData?.layoutWallId === wallId) ||
-                (doorId && o.userData?.layoutDoorId === doorId) ||
-                (windowId && o.userData?.layoutWindowId === windowId)
-              ) {
-                box.expandByObject(o);
-                framed = true;
-              }
-            });
-          }
-        }
-        if (!framed) {
-          const shell = shellCloneRef.current;
-          if (shell) box.setFromObject(shell);
-        }
-        if (!box.isEmpty()) fitAllQuadsToBoxRef.current(box);
-        return;
-      }
+    let lastTapTime = 0;
+    const handleDblClickOrTap = () => {
+      // Double click / double tap: zoom in and fit all components in 3D / any view, or show complete graph if empty
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
     };
 
+    const onDblClick = (e: MouseEvent) => {
+      e.preventDefault();
+      handleDblClickOrTap();
+    };
+
+    let lastTapX = 0;
+    let lastTapY = 0;
     const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || e.pointerType === "pen") {
+        const now = performance.now();
+        const dist = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
+        if (now - lastTapTime < 350 && dist < 40) {
+          e.preventDefault();
+          handleDblClickOrTap();
+          lastTapTime = 0;
+          lastTapX = 0;
+          lastTapY = 0;
+          return;
+        }
+        lastTapTime = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
+      }
       if (
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView
@@ -5877,6 +5953,20 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         suppressNextClick = false;
         pendingWallMoveId = null;
         pendingUnderlayMoveId = null;
+
+        if (
+          useAppStore.getState().toolMode &&
+          (useLayoutDrawingStore.getState().armedLayoutTool ||
+            useLayoutDrawingStore.getState().wallDraw ||
+            useLayoutDrawingStore.getState().slabDraw ||
+            useLayoutDrawingStore.getState().sketchDraw ||
+            useToolMarkupStore.getState().armedTool ||
+            useToolMarkupStore.getState().measureMode)
+        ) {
+          // When drawing or measuring, disable orbit rotation so left-click places points reliably
+          const controls = controlsRef.current;
+          if (controls) controls.enabled = false;
+        }
 
         if (
           useAppStore.getState().toolMode &&
@@ -5893,13 +5983,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           ) {
             const cam = preparePointerRayRef.current(e.clientX, e.clientY);
             const layoutLayer = layoutLayerRef.current;
-            if (cam && layoutLayer) {
               if (e.ctrlKey || e.metaKey) {
-                // Revit-style Ctrl-drag always starts a selection window,
-                // even when the gesture begins over model geometry.
+                // Control-drag always starts a box selection window (both in 2D and 3D)
                 marqueeActive = true;
                 marqueeStartX = e.clientX;
                 marqueeStartY = e.clientY;
+                const controls = controlsRef.current;
+                if (controls) controls.enabled = false;
                 return;
               }
               raycaster.current.setFromCamera(pointerNdc.current, cam);
@@ -5928,13 +6018,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(hit.id);
                 const u = layoutStore.underlays.find((x) => x.id === hit.id);
                 if (u && !u.locked) pendingUnderlayMoveId = hit.id;
-              } else if (!hit) {
-                // Empty canvas click down -> start marquee drag-box selection
+              } else if (!hit && activeViewPresetRef.current !== "free") {
+                // In 2D ortho/plan mode only: empty canvas drag starts marquee box selection
                 marqueeActive = true;
                 marqueeStartX = e.clientX;
                 marqueeStartY = e.clientY;
+                const controls = controlsRef.current;
+                if (controls) controls.enabled = false;
               }
-            }
           }
         }
       }

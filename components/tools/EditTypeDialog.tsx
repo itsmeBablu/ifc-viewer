@@ -293,69 +293,76 @@ export default function EditTypeDialog({
             )}
 
             {/* Layers Table */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {(formData.layers || []).map((layer, idx) => (
-                <div key={layer.id || idx} className="flex items-center gap-1.5 rounded-lg bg-[var(--surface-overlay)] p-1.5 border border-[var(--panel-divider)]/60 text-[11px]">
-                  <select
-                    value={layer.function}
-                    onChange={(e) => {
-                      const updated = (formData.layers || []).map((l, i) =>
-                        i === idx ? { ...l, function: e.target.value as WallLayerFunction } : l
-                      );
-                      setFormData({ ...formData, layers: updated });
-                    }}
-                    className="vstudio-select vstudio-select-compact w-24 text-[10px]"
-                  >
-                    <option value="finish1">Finish 1 [Int]</option>
-                    <option value="substrate">Substrate</option>
-                    <option value="structure">Structure</option>
-                    <option value="core">Core Cavity</option>
-                    <option value="insulation">Insulation</option>
-                    <option value="finish2">Finish 2 [Ext]</option>
-                  </select>
-
-                  <input
-                    type="text"
-                    value={layer.material}
-                    onChange={(e) => {
-                      const updated = (formData.layers || []).map((l, i) =>
-                        i === idx ? { ...l, material: e.target.value, name: e.target.value } : l
-                      );
-                      setFormData({ ...formData, layers: updated });
-                    }}
-                    placeholder="Material"
-                    className="flex-1 rounded border border-[var(--panel-divider)] bg-slate-900 px-1.5 py-0.5 text-[10px] text-[var(--text-strong)]"
-                  />
-
-                  <div className="flex items-center gap-0.5">
-                    <input
-                      type="number"
-                      value={layer.thicknessMm}
+                <div
+                  key={layer.id || idx}
+                  className="flex flex-col gap-1.5 rounded-lg bg-[var(--surface-overlay)] p-2 border border-[var(--panel-divider)]/70 text-[11px] shadow-sm"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={layer.function}
                       onChange={(e) => {
-                        const val = Math.max(1, Number(e.target.value));
                         const updated = (formData.layers || []).map((l, i) =>
-                          i === idx ? { ...l, thicknessMm: val } : l
+                          i === idx ? { ...l, function: e.target.value as WallLayerFunction } : l
                         );
+                        setFormData({ ...formData, layers: updated });
+                      }}
+                      className="vstudio-select vstudio-select-compact flex-1 min-w-0 text-[10px]"
+                    >
+                      <option value="finish1">Finish 1 [Int]</option>
+                      <option value="substrate">Substrate</option>
+                      <option value="structure">Structure</option>
+                      <option value="core">Core Cavity</option>
+                      <option value="insulation">Insulation</option>
+                      <option value="finish2">Finish 2 [Ext]</option>
+                    </select>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input
+                        type="number"
+                        value={layer.thicknessMm}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value));
+                          const updated = (formData.layers || []).map((l, i) =>
+                            i === idx ? { ...l, thicknessMm: val } : l
+                          );
+                          const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                          setFormData({ ...formData, layers: updated, thicknessMm: total });
+                        }}
+                        className="w-14 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-1.5 py-0.5 text-right font-mono text-[10px] text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none"
+                      />
+                      <span className="text-[9px] text-[var(--text-muted)] font-mono">mm</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = (formData.layers || []).filter((_, i) => i !== idx);
                         const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
                         setFormData({ ...formData, layers: updated, thicknessMm: total });
                       }}
-                      className="w-14 rounded border border-[var(--panel-divider)] bg-slate-900 px-1 py-0.5 text-right font-mono text-[10px] text-[var(--text-strong)]"
-                    />
-                    <span className="text-[9px] text-[var(--text-muted)] font-mono">mm</span>
+                      className="text-[var(--text-muted)] hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors shrink-0"
+                      title="Remove layer"
+                    >
+                      <LuTrash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = (formData.layers || []).filter((_, i) => i !== idx);
-                      const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
-                      setFormData({ ...formData, layers: updated, thicknessMm: total });
-                    }}
-                    className="text-slate-500 hover:text-red-400 p-0.5"
-                    title="Remove layer"
-                  >
-                    <LuTrash2 className="h-3 w-3" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={layer.material}
+                      onChange={(e) => {
+                        const updated = (formData.layers || []).map((l, i) =>
+                          i === idx ? { ...l, material: e.target.value, name: e.target.value } : l
+                        );
+                        setFormData({ ...formData, layers: updated });
+                      }}
+                      placeholder="Material name..."
+                      className="min-w-0 flex-1 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-1 text-[10px] text-[var(--text-strong)] placeholder:text-[var(--text-muted)] focus:border-yellow-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
               ))}
             </div>

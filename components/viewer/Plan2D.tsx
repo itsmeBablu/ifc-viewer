@@ -22,6 +22,7 @@ import { canHover } from "@/lib/canHover";
 import { isRoomPickAllowed } from "@/lib/pickAllowed";
 import { roomPassesFilter } from "@/lib/roomFilter";
 import { frameBoundingBoxOrtho } from "@/lib/flyTo";
+import gsap from "gsap";
 import type { Room } from "@/lib/types";
 import { THEME_COLORS } from "@/lib/themeColors";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
@@ -210,7 +211,7 @@ export default function Plan2D({ onPointerMove, className }: Props) {
 
   const colorTheme = useAppStore((s) => s.colorTheme);
 
-  const fitOrtho = () => {
+  const fitOrtho = (animate = false) => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     const overlays = overlaysRef.current;
@@ -222,21 +223,52 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     const consider = (obj: THREE.Object3D) => {
       if (!obj.visible) return;
       const b = new THREE.Box3().setFromObject(obj);
-      if (!b.isEmpty()) {
+      if (!b.isEmpty() && Number.isFinite(b.min.x)) {
         box.union(b);
         has = true;
       }
     };
     if (overlays) consider(overlays);
     if (shell) consider(shell);
-    if (!has) return;
+    if (!has) {
+      box.setFromCenterAndSize(
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(52, 6, 52),
+      );
+    }
 
     const { position, target, zoom } = frameBoundingBoxOrtho(box, camera);
-    camera.position.copy(position);
-    controls.target.copy(target);
-    camera.zoom = zoom;
-    camera.updateProjectionMatrix();
-    controls.update();
+    if (animate) {
+      gsap.to(camera.position, {
+        x: position.x,
+        y: position.y,
+        z: position.z,
+        duration: 0.6,
+        ease: "power2.out",
+      });
+      gsap.to(controls.target, {
+        x: target.x,
+        y: target.y,
+        z: target.z,
+        duration: 0.6,
+        ease: "power2.out",
+      });
+      gsap.to(camera, {
+        zoom,
+        duration: 0.6,
+        ease: "power2.out",
+        onUpdate: () => {
+          camera.updateProjectionMatrix();
+          controls.update();
+        },
+      });
+    } else {
+      camera.position.copy(position);
+      controls.target.copy(target);
+      camera.zoom = zoom;
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
   };
 
   useEffect(() => {
@@ -571,8 +603,31 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     let pointerDownX = 0;
     let pointerDownY = 0;
     let suppressNextClick = false;
+    let lastTapTime = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
+
+    const onDblClick = (e: MouseEvent) => {
+      e.preventDefault();
+      fitOrtho(true);
+    };
 
     const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || e.pointerType === "pen") {
+        const now = performance.now();
+        const dist = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
+        if (now - lastTapTime < 350 && dist < 40) {
+          e.preventDefault();
+          fitOrtho(true);
+          lastTapTime = 0;
+          lastTapX = 0;
+          lastTapY = 0;
+          return;
+        }
+        lastTapTime = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
+      }
       pointerDownX = e.clientX;
       pointerDownY = e.clientY;
       suppressNextClick = false;
@@ -596,11 +651,13 @@ export default function Plan2D({ onPointerMove, className }: Props) {
     canvas.addEventListener("pointerleave", onLeave);
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("click", onClick);
+    canvas.addEventListener("dblclick", onDblClick);
     return () => {
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("click", onClick);
+      canvas.removeEventListener("dblclick", onDblClick);
     };
   }, [onPointerMove, rooms, roomsFromStore, setHoveredRoom, setSelectedRoomId]);
 

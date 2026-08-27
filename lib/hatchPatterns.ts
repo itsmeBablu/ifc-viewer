@@ -226,6 +226,122 @@ export function getHatchCanvasTexture(
         ctx.stroke();
         break;
 
+      case "reinforced-concrete":
+        // 45 degree diagonal hatching + random concrete aggregate stipples/triangles
+        ctx.lineWidth = 1.5;
+        for (let i = -64; i < 128; i += 16) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i + 64, 64);
+          ctx.stroke();
+        }
+        ctx.fillStyle = strokeColor;
+        const rcDots = [
+          [10, 18, 1.8], [30, 10, 2.2], [48, 22, 1.6],
+          [20, 42, 2.4], [38, 48, 1.8], [54, 38, 2.2],
+        ];
+        for (const [x, y, r] of rcDots) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.moveTo(14, 28); ctx.lineTo(19, 24); ctx.lineTo(17, 31); ctx.closePath();
+        ctx.moveTo(42, 14); ctx.lineTo(47, 10); ctx.lineTo(45, 17); ctx.closePath();
+        ctx.fill();
+        break;
+
+      case "insulation":
+        // Standard architectural batt insulation looping curve
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        for (let x = 0; x <= 64; x += 16) {
+          ctx.moveTo(x, 0);
+          ctx.bezierCurveTo(x + 4, 20, x - 4, 44, x + 8, 64);
+          ctx.bezierCurveTo(x + 20, 44, x + 12, 20, x + 16, 0);
+        }
+        ctx.stroke();
+        break;
+
+      case "gypsum":
+        // Paired fine diagonal lines (plasterboard / drywall standard)
+        ctx.lineWidth = 1.2;
+        for (let i = -64; i < 128; i += 24) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 64, 64); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(i + 4, 0); ctx.lineTo(i + 68, 64); ctx.stroke();
+        }
+        break;
+
+      case "stone":
+        // Random rubble masonry stone outlines
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(4, 8); ctx.lineTo(24, 6); ctx.lineTo(28, 22); ctx.lineTo(6, 26); ctx.closePath();
+        ctx.moveTo(32, 4); ctx.lineTo(58, 8); ctx.lineTo(62, 24); ctx.lineTo(34, 20); ctx.closePath();
+        ctx.moveTo(2, 32); ctx.lineTo(20, 28); ctx.lineTo(26, 46); ctx.lineTo(4, 50); ctx.closePath();
+        ctx.moveTo(28, 26); ctx.lineTo(48, 24); ctx.lineTo(52, 44); ctx.lineTo(26, 46); ctx.closePath();
+        ctx.moveTo(54, 28); ctx.lineTo(64, 30); ctx.lineTo(64, 48); ctx.lineTo(54, 46); ctx.closePath();
+        ctx.moveTo(6, 54); ctx.lineTo(34, 52); ctx.lineTo(32, 64); ctx.lineTo(4, 64); ctx.closePath();
+        ctx.moveTo(38, 50); ctx.lineTo(62, 52); ctx.lineTo(60, 64); ctx.lineTo(36, 64); ctx.closePath();
+        ctx.stroke();
+        break;
+
+      case "timber-cut":
+        // Structural lumber cut cross (45° diagonals + growth ring arcs)
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(64, 64);
+        ctx.moveTo(64, 0); ctx.lineTo(0, 64);
+        ctx.stroke();
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.arc(32, 32, 12, 0, Math.PI * 2);
+        ctx.arc(32, 32, 22, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+
+      case "glass":
+        // Architectural glass triple-slash pattern
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        // Group 1
+        ctx.moveTo(12, 4); ctx.lineTo(4, 20);
+        ctx.moveTo(18, 4); ctx.lineTo(10, 20);
+        ctx.moveTo(24, 4); ctx.lineTo(16, 20);
+        // Group 2
+        ctx.moveTo(48, 36); ctx.lineTo(40, 52);
+        ctx.moveTo(54, 36); ctx.lineTo(46, 52);
+        ctx.moveTo(60, 36); ctx.lineTo(52, 52);
+        ctx.stroke();
+        break;
+
+      case "gravel":
+        // Packed pebble aggregate
+        ctx.lineWidth = 1.2;
+        ctx.fillStyle = strokeColor;
+        const pebbles = [
+          [12, 14, 4, 3], [28, 10, 5, 4], [46, 16, 4, 3], [58, 8, 3, 3],
+          [8, 32, 4, 4], [24, 28, 6, 4], [40, 34, 5, 4], [56, 30, 4, 3],
+          [16, 48, 5, 3], [34, 46, 4, 4], [50, 48, 5, 3], [60, 44, 3, 3],
+          [8, 60, 3, 3], [24, 60, 4, 3], [42, 58, 5, 4], [58, 60, 4, 3],
+        ];
+        for (const [cx, cy, rx, ry] of pebbles) {
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rx, ry, (cx + cy) * 0.1, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+
+      case "membrane":
+        // Waterproofing membrane barrier (dashed / thick line)
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        for (let y = 10; y < 64; y += 18) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        break;
+
       default:
         break;
     }

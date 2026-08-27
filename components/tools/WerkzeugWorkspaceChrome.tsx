@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import gsap from "gsap";
 import {
   LuAlignCenterHorizontal, LuBox, LuChevronDown, LuChevronLeft, LuCopy, LuDoorOpen, LuEye, LuFlipHorizontal2, LuFolderOpen, LuLayers3,
-  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2,
+  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -473,11 +473,24 @@ export default function WerkzeugWorkspaceChrome({
   };
   return (
     <>
-      <div data-dock={dockEdge} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
+      <div data-dock={dockEdge} data-panel-open={String(Boolean(panelKey && !panelHidden))} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
         <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-snap-left"><ObjectSnapStrip compact iconOnly showCount={false} /></div>
         <div className="werkzeug-ipad-tool-ribbon">
+          <button
+            type="button"
+            onClick={() => {
+              useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+              useToolMarkupStore.getState().setArmedTool(null);
+              setPanelKey(null);
+            }}
+            className={`werkzeug-tool-button ${!armed && !panelKey ? "is-active btn-v-yellow" : ""}`}
+            title="Select"
+          >
+            <LuMousePointer2 />
+            <span className="werkzeug-tool-label">Select</span>
+          </button>
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("views", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "views" ? "is-active btn-v-yellow" : ""}`}><LuEye /><span className="werkzeug-tool-label">Views</span><LuChevronDown /></button></div>
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button></div>
           <button type="button" onClick={() => attachRef.current?.click()} className="werkzeug-tool-button"><LuPaperclip /><span className="werkzeug-tool-label">Attach</span></button>
