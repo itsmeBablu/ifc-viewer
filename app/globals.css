@@ -2196,11 +2196,24 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     font-size: 10px !important;
     line-height: 1.15 !important;
   }
-  .werkzeug-ipad-ribbons :is(.werkzeug-tool-button, .werkzeug-icon-action) {
-    min-height: 32px !important;
-    height: 32px !important;
+  .werkzeug-ipad-ribbons :is(.werkzeug-tool-button, .werkzeug-icon-action, .werkzeug-snap-trigger) {
+    min-height: 26px !important;
+    height: 26px !important;
     padding-inline: 7px !important;
     font-size: 9px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+  .werkzeug-ipad-ribbons :is(.werkzeug-tool-button, .werkzeug-icon-action, .werkzeug-snap-trigger) > * {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: auto !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   .werkzeug-ipad-tool-ribbon .werkzeug-tool-button,
   .werkzeug-ipad-tool-ribbon .werkzeug-tool-button.is-active {
@@ -2224,9 +2237,23 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     line-height: 1;
     text-align: left;
   }
-  .werkzeug-ipad-ribbons .werkzeug-ipad-action-ribbon > div > button {
-    height: 32px !important;
+  .werkzeug-ipad-ribbons .werkzeug-ipad-action-ribbon :is(> div > button, > .relative > button) {
+    min-height: 26px !important;
+    height: 26px !important;
     padding-inline: 7px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+  .werkzeug-ipad-ribbons .werkzeug-ipad-action-ribbon :is(> div > button, > .relative > button) > * {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: auto !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   .werkzeug-ipad-context .werkzeug-ipad-panel-content {
     font-size: 10px;
