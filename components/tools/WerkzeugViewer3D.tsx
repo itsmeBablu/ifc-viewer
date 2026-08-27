@@ -2360,17 +2360,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const markupFloor = useToolMarkupStore.getState().markupFloorId;
       const activeLevel =
         s.levels.find((l) => l.id === markupFloor) ?? s.levels[0] ?? null;
-      if (s.isEmptyProject || s.armedLayoutTool || s.wallDraw || s.slabDraw) {
-        layer.ensureGround(activeLevel?.elevationMm ?? 0);
-      } else if (!s.walls.length && !s.slabs.length) {
-        layer.hideGround();
-      } else {
-        layer.ensureGround(activeLevel?.elevationMm ?? 0);
-      }
+
       const ms = useToolMarkupStore.getState();
       const isPlanView = ms.quadView
         ? ms.quadPresets[ms.quadActiveIndex] === "top"
         : ms.viewPreset === "top";
+
+      if (isPlanView && (s.isEmptyProject || s.armedLayoutTool || s.wallDraw || s.slabDraw || s.walls.length || s.slabs.length)) {
+        layer.ensureGround(activeLevel?.elevationMm ?? 0);
+      } else {
+        layer.hideGround();
+      }
+
       // Top/plan: respect active floor filter. 3D: always show every level.
       const showAllLevels = !isPlanView || markupFloor == null;
       const sel = s.selectedElements || [];
@@ -2415,7 +2416,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
-      layer.syncUnderlays(s.underlays, s.levels, {
+      layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
         activeLevelId: markupFloor,
         showAllLevels,
         selectedUnderlayId: s.selectedUnderlayId,
@@ -2429,7 +2430,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       });
       layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
       if (helpersRef.current) {
-        helpersRef.current.visible = !isPlanView;
+        helpersRef.current.visible = false;
       }
       if (s.wallDraw) {
         const lvl =
