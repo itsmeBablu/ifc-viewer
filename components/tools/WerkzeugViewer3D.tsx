@@ -789,6 +789,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   >(() => null);
   const activateQuadIndexRef = useRef<(index: QuadIndex) => void>(() => {});
   const applyPresetRef = useRef<((preset: string) => void) | null>(null);
+  const centerOrbitOnSelectionRef = useRef<((animate?: boolean) => void) | null>(null);
   const fitAllQuadsToBoxRef = useRef<(box: THREE.Box3) => void>(() => {});
 
   const { shellGroup, rooms } = useModelScene();
@@ -900,8 +901,30 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (overlays) consider(overlays);
     if (shell) consider(shell);
     if (compareRootRef.current) consider(compareRootRef.current);
+    if (layoutLayerRef.current?.group) {
+      layoutLayerRef.current.group.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.visible) {
+          if (
+            !o.userData.isLayoutGround &&
+            !o.userData.isLayoutUnderlay &&
+            !o.userData.isLayoutLevelSlab
+          ) {
+            const b = new THREE.Box3().setFromObject(o);
+            if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+              box.union(b);
+              has = true;
+            }
+          }
+        }
+      });
+    }
 
-    if (!has) return;
+    if (!has) {
+      box.setFromCenterAndSize(
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(20, 10, 20),
+      );
+    }
     const presentation = useAppStore.getState().isPresentationView;
     // Basic view: keep orbit rotation. Presentation: isometric framing that fits screen.
     if (presentation) {
@@ -1016,6 +1039,130 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     },
   }));
 
+  const centerOrbitOnSelection = (animate = true) => {
+    const camera = perspectiveCameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls || cameraRef.current !== camera) return;
+
+    const layoutLayer = layoutLayerRef.current;
+    const shellClone = shellCloneRef.current;
+    const box = new THREE.Box3();
+    let found = false;
+
+    const layout = useLayoutDrawingStore.getState();
+    const selList = layout.selectedElements || [];
+    const selIds = new Set(selList.map((e) => e.id));
+    if (layout.selectedWallId) selIds.add(layout.selectedWallId);
+    if (layout.selectedDoorId) selIds.add(layout.selectedDoorId);
+    if (layout.selectedWindowId) selIds.add(layout.selectedWindowId);
+    if (layout.selectedSlabId) selIds.add(layout.selectedSlabId);
+    if (layout.selectedColumnId) selIds.add(layout.selectedColumnId);
+    if (layout.selectedBeamId) selIds.add(layout.selectedBeamId);
+    if (layout.selectedGridLineId) selIds.add(layout.selectedGridLineId);
+    if (layout.selectedSketchLineId) selIds.add(layout.selectedSketchLineId);
+
+    if (layoutLayer && selIds.size > 0) {
+      layoutLayer.group.traverse((o) => {
+        if (
+          (o.userData?.layoutWallId && selIds.has(o.userData.layoutWallId)) ||
+          (o.userData?.layoutDoorId && selIds.has(o.userData.layoutDoorId)) ||
+          (o.userData?.layoutWindowId && selIds.has(o.userData.layoutWindowId)) ||
+          (o.userData?.layoutSlabId && selIds.has(o.userData.layoutSlabId)) ||
+          (o.userData?.layoutColumnId && selIds.has(o.userData.layoutColumnId)) ||
+          (o.userData?.layoutBeamId && selIds.has(o.userData.layoutBeamId)) ||
+          (o.userData?.layoutGridId && selIds.has(o.userData.layoutGridId)) ||
+          (o.userData?.layoutSketchLineId && selIds.has(o.userData.layoutSketchLineId))
+        ) {
+          if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
+            const b = new THREE.Box3().setFromObject(o);
+            if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+              box.union(b);
+              found = true;
+            }
+          }
+        }
+      });
+    }
+
+    if (!found) {
+      const app = useAppStore.getState();
+      if (app.selectedRoomId) {
+        const roomMesh = roomMeshById.current.get(app.selectedRoomId);
+        if (roomMesh) {
+          const b = new THREE.Box3().setFromObject(roomMesh);
+          if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+            box.union(b);
+            found = true;
+          }
+        }
+      } else if (app.toolSelectedExpressId != null || app.selectedElement?.expressID != null) {
+        const expressId = app.toolSelectedExpressId ?? app.selectedElement?.expressID;
+        if (shellClone && expressId != null) {
+          shellClone.traverse((o) => {
+            if (o.userData?.expressId === expressId || o.userData?.expressID === expressId) {
+              const b = new THREE.Box3().setFromObject(o);
+              if (!b.isEmpty() && Number.isFinite(b.min.x)) {
+                box.union(b);
+                found = true;
+              }
+            }
+          });
+        }
+      }
+    }
+
+    if (found && !box.isEmpty() && Number.isFinite(box.min.x)) {
+      const center = box.getCenter(new THREE.Vector3());
+      if (controls.target.distanceTo(center) < 0.02) return;
+      if (animate) {
+        gsap.to(controls.target, {
+          x: center.x,
+          y: center.y,
+          z: center.z,
+          duration: 0.3,
+          ease: "power2.out",
+          onUpdate: () => controls.update(),
+        });
+      } else {
+        controls.target.copy(center);
+        controls.update();
+      }
+    }
+  };
+  centerOrbitOnSelectionRef.current = centerOrbitOnSelection;
+
+  useEffect(() => {
+    const unsub = useLayoutDrawingStore.subscribe((s, prev) => {
+      if (
+        s.selectedWallId !== prev.selectedWallId ||
+        s.selectedDoorId !== prev.selectedDoorId ||
+        s.selectedWindowId !== prev.selectedWindowId ||
+        s.selectedSlabId !== prev.selectedSlabId ||
+        s.selectedColumnId !== prev.selectedColumnId ||
+        s.selectedBeamId !== prev.selectedBeamId ||
+        s.selectedGridLineId !== prev.selectedGridLineId ||
+        s.selectedSketchLineId !== prev.selectedSketchLineId ||
+        s.selectedElements !== prev.selectedElements
+      ) {
+        centerOrbitOnSelectionRef.current?.(true);
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = useAppStore.subscribe((s, prev) => {
+      if (
+        s.selectedRoomId !== prev.selectedRoomId ||
+        s.toolSelectedExpressId !== prev.toolSelectedExpressId ||
+        s.selectedElement !== prev.selectedElement
+      ) {
+        centerOrbitOnSelectionRef.current?.(true);
+      }
+    });
+    return unsub;
+  }, []);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -1089,7 +1236,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       THREE.PerspectiveCamera | THREE.OrthographicCamera
     >(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    controls.dampingFactor = 0.1;
+    controls.rotateSpeed = 0.85;
+    controls.zoomSpeed = 1.1;
+    controls.panSpeed = 0.85;
     controls.maxPolarAngle = Math.PI; // allow full orbit — avoids horizon clipping flicker
     // Right-click opens the context menu — do not pan on button 2.
     controls.mouseButtons = {
@@ -3029,6 +3179,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         controls.minPolarAngle = 0;
         controls.maxPolarAngle = Math.PI;
         controls.target.copy(center);
+        controls.touches = {
+          ONE: THREE.TOUCH.PAN,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+        controls.mouseButtons = {
+          LEFT: MOUSE.PAN,
+          MIDDLE: MOUSE.DOLLY,
+          RIGHT: MOUSE.PAN,
+        };
         if (tc) {
           (tc as TransformControls & { camera: THREE.Camera }).camera = ortho;
         }
@@ -3046,6 +3205,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         controls.enableRotate = true;
         controls.screenSpacePanning = false;
         controls.target.copy(center);
+        controls.touches = {
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        };
+        controls.mouseButtons = {
+          LEFT: MOUSE.ROTATE,
+          MIDDLE: MOUSE.DOLLY,
+          RIGHT: MOUSE.PAN,
+        };
         if (tc) {
           (tc as TransformControls & { camera: THREE.Camera }).camera = persp;
         }
@@ -5895,16 +6063,23 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       handleDblClickOrTap(e.clientX, e.clientY);
     };
 
+    let lastTapX = 0;
+    let lastTapY = 0;
     const onPointerDown = (e: PointerEvent) => {
       if (e.pointerType === "touch" || e.pointerType === "pen") {
         const now = performance.now();
-        if (now - lastTapTime < 300) {
+        const dist = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
+        if (now - lastTapTime < 350 && dist < 40) {
           e.preventDefault();
           handleDblClickOrTap(e.clientX, e.clientY);
           lastTapTime = 0;
+          lastTapX = 0;
+          lastTapY = 0;
           return;
         }
         lastTapTime = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
       }
       if (
         useAppStore.getState().toolMode &&
