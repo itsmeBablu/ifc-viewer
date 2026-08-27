@@ -788,6 +788,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     (clientX: number, clientY: number) => THREE.Camera | null
   >(() => null);
   const activateQuadIndexRef = useRef<(index: QuadIndex) => void>(() => {});
+  const applyPresetRef = useRef<((preset: string) => void) | null>(null);
   const fitAllQuadsToBoxRef = useRef<(box: THREE.Box3) => void>(() => {});
 
   const { shellGroup, rooms } = useModelScene();
@@ -858,7 +859,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const inTool = useAppStore.getState().toolMode;
     const preset = useToolMarkupStore.getState().viewPreset;
     if (inTool && preset !== "free") {
-      useToolMarkupStore.getState().setViewPreset(preset);
+      if (applyPresetRef.current) {
+        applyPresetRef.current(preset);
+      } else {
+        useToolMarkupStore.getState().setViewPreset(preset);
+      }
       return;
     }
 
@@ -2848,11 +2853,28 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const box = new THREE.Box3();
       const shell = shellCloneRef.current;
       if (shell) box.setFromObject(shell);
-      else
+
+      const layoutLayer = layoutLayerRef.current;
+      if (layoutLayer) {
+        layoutLayer.group.traverse((o) => {
+          if (o instanceof THREE.Mesh && o.visible) {
+            if (
+              !o.userData.isLayoutGround &&
+              !o.userData.isLayoutUnderlay &&
+              !o.userData.isLayoutLevelSlab
+            ) {
+              box.expandByObject(o);
+            }
+          }
+        });
+      }
+
+      if (box.isEmpty() || !Number.isFinite(box.min.x)) {
         box.setFromCenterAndSize(
           new THREE.Vector3(),
           new THREE.Vector3(20, 10, 20),
         );
+      }
       return box;
     };
 
@@ -3077,7 +3099,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       activeViewPresetRef.current = "free";
     }
 
-    return unsub;
+    applyPresetRef.current = applyPreset;
+
+    return () => {
+      applyPresetRef.current = null;
+      unsub();
+    };
   }, [toolMode]);
 
   // Live element-to-element + distance snap while dragging a markup shape.
