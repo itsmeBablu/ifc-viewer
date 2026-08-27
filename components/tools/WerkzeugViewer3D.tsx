@@ -1161,6 +1161,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     markupLayerRef.current = markup;
 
     const layoutLayer = new LayoutSceneLayer();
+    layoutLayer.setRenderMode(useAppStore.getState().renderMode);
     scene.add(layoutLayer.group);
     layoutLayerRef.current = layoutLayer;
 
@@ -1227,7 +1228,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const aspect = rect.w / Math.max(1, rect.h);
           const cam = applySlotToCameras(slots[index], aspect, camera, ortho);
           // Top pane → CAD door/window symbols; others → solid 3D boxes.
-          layoutLayerRef.current?.setOpeningsPlanMode(
+          layoutLayerRef.current?.setPlanMode(
             slots[index].preset === "top",
           );
           if (tcHelper) {
@@ -1240,7 +1241,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           renderer.render(scene, cam);
         }
         // Restore display mode for the active pane (picking / labels).
-        layoutLayerRef.current?.setOpeningsPlanMode(
+        layoutLayerRef.current?.setPlanMode(
           slots[activeIdx].preset === "top",
         );
 
@@ -2427,6 +2428,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         ),
       });
       layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
+      if (helpersRef.current) {
+        helpersRef.current.visible = !isPlanView;
+      }
       if (s.wallDraw) {
         const lvl =
           s.levels.find((l) => l.id === s.wallDraw!.levelId) ?? activeLevel;

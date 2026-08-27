@@ -170,11 +170,11 @@ export default function WerkzeugApp() {
 
   useEffect(() => {
     if (!activeModelId) return;
-    // Auto initialize project & default Level 1 so drawing/placement works instantly
+    // Auto initialize project & default Erdgeschoss level so drawing/placement works instantly
     void useLayoutDrawingStore.getState().loadForProject(activeModelId, activeModelId.startsWith("empty:")).then(() => {
       const store = useLayoutDrawingStore.getState();
       if (store.levels.length === 0) {
-        void store.addLevel({ name: "Level 1", elevationMm: 0, heightMm: 3000 });
+        void store.addLevel({ name: "Erdgeschoss", elevationMm: 0, heightMm: 3000 });
       }
     });
   }, [activeModelId]);

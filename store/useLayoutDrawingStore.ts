@@ -661,12 +661,35 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbGetPresets(projectId),
     ]);
     levels.sort((a, b) => a.elevationMm - b.elevationMm);
-    const uniqueLevels = Array.from(
-      levels.reduce((unique, level) => {
-        const key = `${level.name.trim().toLocaleLowerCase().replace(/\s+/g, " ")}|${Math.round(level.elevationMm / 25)}`;
-        if (!unique.has(key)) unique.set(key, level);
-        return unique;
-      }, new Map<string, LayoutLevel>()).values(),
+    // Deduplicate levels by elevation collision (within 50mm)
+    const uniqueLevelsMap = new Map<number, LayoutLevel>();
+    const duplicateLevelIdsToRemove: string[] = [];
+    for (const lvl of levels) {
+      const elevKey = Math.round(lvl.elevationMm / 50) * 50;
+      const existing = uniqueLevelsMap.get(elevKey);
+      if (!existing) {
+        uniqueLevelsMap.set(elevKey, lvl);
+      } else {
+        // Keep the level with more canonical name or earlier creation, merge walls
+        const preferCurrent =
+          lvl.name.toLowerCase().includes("erdgeschoss") ||
+          (!existing.name.toLowerCase().includes("erdgeschoss") && lvl.name.length > existing.name.length);
+        const retained = preferCurrent ? lvl : existing;
+        const discarded = preferCurrent ? existing : lvl;
+        uniqueLevelsMap.set(elevKey, retained);
+        duplicateLevelIdsToRemove.push(discarded.id);
+        // Remap any walls on discarded level to retained level
+        for (const w of walls) {
+          if (w.levelId === discarded.id) {
+            w.levelId = retained.id;
+            void idbPutWall(w);
+          }
+        }
+        void idbDeleteLevel(discarded.id);
+      }
+    }
+    const uniqueLevels = Array.from(uniqueLevelsMap.values()).sort(
+      (a, b) => a.elevationMm - b.elevationMm,
     );
     set({
       projectId,
@@ -747,14 +770,64 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const projectId = get().projectId;
     if (!projectId) return null;
     const levels = get().levels;
-    const maxElev = levels.reduce((m, l) => Math.max(m, l.elevationMm), -DEFAULT_LEVEL_HEIGHT_MM);
+
+    // Check if elevation is already occupied:
+    if (opts?.elevationMm != null) {
+      const existingAtElev = levels.find(
+        (l) => Math.abs(l.elevationMm - opts.elevationMm!) < 50,
+      );
+      if (existingAtElev) {
+        if (opts.name && existingAtElev.name !== opts.name) {
+          await get().updateLevel(existingAtElev.id, {
+            name: opts.name,
+            heightMm: opts.heightMm ?? existingAtElev.heightMm,
+          });
+        }
+        return existingAtElev;
+      }
+    }
+
+    const maxElev =
+      levels.length > 0
+        ? levels.reduce(
+            (m, l) => Math.max(m, l.elevationMm),
+            -DEFAULT_LEVEL_HEIGHT_MM,
+          )
+        : -DEFAULT_LEVEL_HEIGHT_MM;
+
     const elevationMm =
-      opts?.elevationMm ?? maxElev + DEFAULT_LEVEL_HEIGHT_MM;
+      opts?.elevationMm ??
+      (levels.length === 0 ? 0 : maxElev + DEFAULT_LEVEL_HEIGHT_MM);
     const heightMm = opts?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM;
-    const n = levels.length;
-    const name =
-      opts?.name ??
-      (n === 0 ? "EG" : n === 1 ? "OG1" : `OG${n}`);
+
+    // Prevent duplicate level creation at the same elevation
+    const existing = levels.find(
+      (l) => Math.abs(l.elevationMm - elevationMm) < 50,
+    );
+    if (existing) {
+      return existing;
+    }
+
+    // Consistent hierarchical naming:
+    const upperLevels = levels
+      .filter((l) => l.elevationMm > 25)
+      .sort((a, b) => a.elevationMm - b.elevationMm);
+    const lowerLevels = levels
+      .filter((l) => l.elevationMm < -25)
+      .sort((a, b) => b.elevationMm - a.elevationMm);
+
+    let defaultName: string;
+    if (Math.abs(elevationMm) < 50) {
+      defaultName = "Erdgeschoss";
+    } else if (elevationMm > 0) {
+      const idx = upperLevels.length + 1;
+      defaultName = `${idx}. OG`;
+    } else {
+      const idx = lowerLevels.length + 1;
+      defaultName = idx === 1 ? "Untergeschoss" : `${idx}. UG`;
+    }
+
+    const name = opts?.name || defaultName;
     const level: LayoutLevel = {
       id: newLayoutId("lvl"),
       projectId,
@@ -1213,8 +1286,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       endYmm: end.yMm,
       thicknessMm,
       heightMm,
-      material: "concrete",
-      color: "#878683",
+      color: "#d6d3d1",
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();

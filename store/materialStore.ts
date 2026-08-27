@@ -21,7 +21,15 @@ export type HatchStyle =
   | "steel"
   | "zigzag"
   | "wood"
-  | "concrete";
+  | "concrete"
+  | "reinforced-concrete"
+  | "insulation"
+  | "gypsum"
+  | "stone"
+  | "timber-cut"
+  | "glass"
+  | "gravel"
+  | "membrane";
 
 export type MaterialPreviewShape = "sphere" | "cube" | "cylinder" | "fabric";
 
@@ -60,12 +68,27 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     hatchStyle: "concrete",
     hatchScaleMm: 200,
     tilingScale: 1.0,
-    bumpScale: 0.3,
+    bumpScale: 0.35,
+    isPreset: true,
+  },
+  {
+    id: "reinforced-concrete",
+    name: "Reinforced Concrete (Stahlbeton)",
+    category: "Concrete",
+    color: "#71717a",
+    roughness: 0.88,
+    metalness: 0.05,
+    opacity: 1.0,
+    transmission: 0.0,
+    hatchStyle: "reinforced-concrete",
+    hatchScaleMm: 180,
+    tilingScale: 1.0,
+    bumpScale: 0.4,
     isPreset: true,
   },
   {
     id: "brick",
-    name: "Clay Brick Coursing",
+    name: "Clay Brick Masonry",
     category: "Masonry",
     color: "#a0522d",
     roughness: 0.9,
@@ -87,7 +110,7 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.0,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "cross",
+    hatchStyle: "stone",
     hatchScaleMm: 300,
     tilingScale: 1.0,
     bumpScale: 0.4,
@@ -102,10 +125,25 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.1,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "dots",
+    hatchStyle: "tile",
     hatchScaleMm: 150,
     tilingScale: 1.0,
     bumpScale: 0.2,
+    isPreset: true,
+  },
+  {
+    id: "gravel-bed",
+    name: "Drainage Gravel (Kies)",
+    category: "Masonry",
+    color: "#94a3b8",
+    roughness: 0.95,
+    metalness: 0.0,
+    opacity: 1.0,
+    transmission: 0.0,
+    hatchStyle: "gravel",
+    hatchScaleMm: 200,
+    tilingScale: 1.0,
+    bumpScale: 0.5,
     isPreset: true,
   },
 
@@ -149,10 +187,42 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.0,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "wood",
+    hatchStyle: "timber-cut",
     hatchScaleMm: 200,
     tilingScale: 1.0,
     bumpScale: 0.2,
+    isPreset: true,
+  },
+
+  // Insulation & Drywall
+  {
+    id: "thermal-insulation",
+    name: "Mineral Wool Insulation (Dämmung)",
+    category: "Finishes",
+    color: "#fef08a",
+    roughness: 0.98,
+    metalness: 0.0,
+    opacity: 1.0,
+    transmission: 0.0,
+    hatchStyle: "insulation",
+    hatchScaleMm: 160,
+    tilingScale: 1.0,
+    bumpScale: 0.6,
+    isPreset: true,
+  },
+  {
+    id: "gypsum-board",
+    name: "Gypsum Drywall (Gipskarton)",
+    category: "Finishes",
+    color: "#f1f5f9",
+    roughness: 0.92,
+    metalness: 0.0,
+    opacity: 1.0,
+    transmission: 0.0,
+    hatchStyle: "gypsum",
+    hatchScaleMm: 120,
+    tilingScale: 1.0,
+    bumpScale: 0.1,
     isPreset: true,
   },
 
@@ -166,7 +236,7 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.1,
     opacity: 0.35,
     transmission: 0.92,
-    hatchStyle: "solid",
+    hatchStyle: "glass",
     hatchScaleMm: 200,
     tilingScale: 1.0,
     bumpScale: 0.0,
@@ -196,7 +266,7 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.2,
     opacity: 0.45,
     transmission: 0.85,
-    hatchStyle: "solid",
+    hatchStyle: "diagonal",
     hatchScaleMm: 200,
     tilingScale: 1.0,
     bumpScale: 0.0,
@@ -228,7 +298,7 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.85,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "diagonal",
+    hatchStyle: "steel",
     hatchScaleMm: 150,
     tilingScale: 1.0,
     bumpScale: 0.2,
@@ -243,7 +313,7 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.8,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "cross",
+    hatchStyle: "membrane",
     hatchScaleMm: 200,
     tilingScale: 1.0,
     bumpScale: 0.3,
@@ -260,8 +330,8 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
     metalness: 0.0,
     opacity: 1.0,
     transmission: 0.0,
-    hatchStyle: "solid",
-    hatchScaleMm: 200,
+    hatchStyle: "sand",
+    hatchScaleMm: 150,
     tilingScale: 1.0,
     bumpScale: 0.1,
     isPreset: true,
