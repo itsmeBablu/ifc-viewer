@@ -2315,12 +2315,198 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 
 /* Neutral glass button with a restrained V-Yellow border hover. */
 .btn-yellow-border-hover {
-  transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 .btn-yellow-border-hover:hover {
-  border-color: rgba(250, 204, 21, 0.95) !important;
-  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+  border-color: rgba(253, 230, 138, 0.75) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(251, 191, 36, 0.35) !important;
+}
+.btn-yellow-border-hover:hover :is(svg, span, strong, p) {
+  color: #09090b !important;
+}
+
+/* Constraint ribbon width to prevent overlapping properties panel in landscape */
+@media (min-width: 901px) and (max-width: 1400px) {
+  .werkzeug-ipad-ribbons[data-panel-open="true"] {
+    width: calc(100vw - 340px) !important;
+    left: 8px !important;
+    transform: none !important;
+  }
+}
+@media (max-width: 900px) {
+  @media (orientation: landscape) {
+    .werkzeug-ipad-ribbons[data-panel-open="true"] {
+      width: calc(100vw - 320px) !important;
+      left: 8px !important;
+      transform: none !important;
+    }
+  }
+}
+
+/* Ensure all tool, action, and snap buttons hover to VYellow */
+body.werkzeug-active .werkzeug-tool-button:hover,
+body.werkzeug-active .werkzeug-tool-button:active,
+body.werkzeug-active .werkzeug-tool-button.is-active {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72), 0 4px 14px rgba(251, 191, 36, 0.36) !important;
+}
+body.werkzeug-active .werkzeug-tool-button:hover :is(svg, span, strong, p, small),
+body.werkzeug-active .werkzeug-tool-button:active :is(svg, span, strong, p, small),
+body.werkzeug-active .werkzeug-tool-button.is-active :is(svg, span, strong, p, small) {
+  color: #09090b !important;
+}
+
+body.werkzeug-active .werkzeug-theme-knob:hover {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72), 0 4px 14px rgba(251, 191, 36, 0.36) !important;
+}
+body.werkzeug-active .werkzeug-theme-knob:hover svg {
+  color: #09090b !important;
+}
+
+body.werkzeug-active .werkzeug-ipad-action-ribbon > .relative > button:hover,
+body.werkzeug-active .werkzeug-ipad-action-ribbon > .relative > button[aria-expanded="true"] {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72), 0 4px 14px rgba(251, 191, 36, 0.36) !important;
+}
+body.werkzeug-active .werkzeug-ipad-action-ribbon > .relative > button:hover :is(svg, span),
+body.werkzeug-active .werkzeug-ipad-action-ribbon > .relative > button[aria-expanded="true"] :is(svg, span) {
+  color: #09090b !important;
+}
+
+body.werkzeug-active .werkzeug-snap-trigger:hover,
+body.werkzeug-active .werkzeug-snap-trigger.is-open {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+}
+body.werkzeug-active .werkzeug-snap-pill:hover,
+body.werkzeug-active .werkzeug-snap-pill.is-active {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 8px rgba(251,191,36,0.2) !important;
+}
+body.werkzeug-active .werkzeug-snap-pill:hover :is(svg, span),
+body.werkzeug-active .werkzeug-snap-pill.is-active :is(svg, span) {
+  color: #09090b !important;
+}
+
+/* Custom levels, floors, and action button hovers */
+body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(.bg-sky-100, .bg-amber-100, [data-underlay-chip].bg-amber-400, [data-underlay-chip].bg-amber-100) {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+}
+body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(.bg-sky-100, .bg-amber-100, [data-underlay-chip].bg-amber-400, [data-underlay-chip].bg-amber-100) :is(button, span, strong, small) {
+  color: #09090b !important;
+}
+body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(div, button, span):hover {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+}
+body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(.hover\:bg-\[var\(--surface-muted\)\]\/40, .hover\:bg-sky-50):hover {
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+}
+body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(.hover\:bg-\[var\(--surface-muted\)\]\/40, .hover\:bg-sky-50):hover :is(button, span, strong, small) {
+  color: #09090b !important;
+}
+
+/* Properties Panel list item and input action hover styling */
+body.werkzeug-active :is(.werkzeug-ipad-context, .tool-right-panel) :is(
+  .hover\:bg-sky-50,
+  .hover\:bg-amber-100,
+  .hover\:bg-red-500\/10,
+  .hover\:bg-red-500\/15,
+  .hover\:bg-\[var\(--surface-muted\)\]\/60
+):hover {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+}
+body.werkzeug-active :is(.werkzeug-ipad-context, .tool-right-panel) :is(
+  .hover\:bg-sky-50,
+  .hover\:bg-amber-100,
+  .hover\:bg-red-500\/10,
+  .hover\:bg-red-500\/15,
+  .hover\:bg-\[var\(--surface-muted\)\]\/60
+):hover :is(svg, span, strong, p, button) {
+  color: #09090b !important;
+}
+
+/* Ensure all entry panel and history card action buttons hover to VYellow */
+body.werkzeug-active :is(.liquid-entry-glass, .project-history-scroll) button:hover {
+  border-color: rgba(253, 224, 71, 0.9) !important;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(251, 191, 36, 0.35) !important;
+}
+body.werkzeug-active :is(.liquid-entry-glass, .project-history-scroll) button:hover :is(svg, span, strong, p) {
+  color: #09090b !important;
+}
+.project-history-scroll article button:hover {
+  background: color-mix(in srgb, var(--accent-yellow) 22%, var(--glass-inset-bg)) !important;
+}
+.project-history-scroll article button:hover span.bg-amber-100\/70 {
+  background: #facc15 !important;
+  color: #09090b !important;
+}
+
+/* Adapt Slate Material Editor to Dark/Light theme tokens */
+body.werkzeug-active :is(.material-editor-embedded, .material-compact-preview, .material-shape-options, section.border-b) {
+  background: transparent !important;
+  color: var(--text-body) !important;
+  border-color: var(--panel-divider) !important;
+}
+body.werkzeug-active :is(.material-editor-embedded, .material-compact-preview, .material-shape-options) :is(input, select, textarea) {
+  background: var(--glass-inset-bg) !important;
   color: var(--text-strong) !important;
+  border-color: var(--panel-divider) !important;
+}
+body.werkzeug-active :is(.material-editor-embedded, .material-compact-preview, .material-shape-options) span {
+  color: var(--text-body) !important;
+}
+body.werkzeug-active .material-editor-embedded button:not(.btn-liquid-amber):not(.btn-v-yellow) {
+  background: var(--glass-inset-bg) !important;
+  color: var(--text-body) !important;
+  border-color: var(--panel-divider) !important;
+}
+body.werkzeug-active .material-editor-embedded button:hover:not(.btn-liquid-amber):not(.btn-v-yellow) {
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85)) !important;
+  color: #09090b !important;
+  border-color: rgba(253, 224, 71, 0.9) !important;
+}
+[data-theme="dark"] body.werkzeug-active .material-editor-embedded {
+  color: #f4f4f5 !important;
+}
+[data-theme="dark"] body.werkzeug-active .material-editor-embedded :is(div, span, button) {
+  color: #f4f4f5 !important;
+}
+
+/* Thick optical liquid glass effects at borders */
+.ios-glass,
+.glass-surface {
+  border-width: 1.5px !important;
+  border-color: var(--glass-border) !important;
+  box-shadow:
+    inset 0 1.5px 0 var(--glass-specular),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.16) !important;
+}
+.ios-glass--menu,
+.glass-surface--menu {
+  border-width: 2px !important;
+  border-color: var(--glass-border) !important;
+  box-shadow:
+    inset 0 2px 0 var(--glass-specular),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.22) !important;
 }
 
 /* Werkzeug default range: material-style liquid amber, even without a class. */
