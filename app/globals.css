@@ -2327,9 +2327,9 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   color: #09090b !important;
 }
 
-/* Constraint ribbon width to prevent overlapping properties panel in landscape */
+/* Constraint ribbon width permanently in landscape to prevent overlapping and layout shift */
 @media (min-width: 901px) and (max-width: 1400px) {
-  .werkzeug-ipad-ribbons[data-panel-open="true"] {
+  .werkzeug-ipad-ribbons {
     width: calc(100vw - 340px) !important;
     left: 8px !important;
     transform: none !important;
@@ -2337,7 +2337,7 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 }
 @media (max-width: 900px) {
   @media (orientation: landscape) {
-    .werkzeug-ipad-ribbons[data-panel-open="true"] {
+    .werkzeug-ipad-ribbons {
       width: calc(100vw - 320px) !important;
       left: 8px !important;
       transform: none !important;
