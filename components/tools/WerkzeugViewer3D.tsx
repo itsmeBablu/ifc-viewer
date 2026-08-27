@@ -5723,10 +5723,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       applyPickSelection(hit);
     };
 
-    const onDblClick = (e: MouseEvent) => {
-      e.preventDefault();
-      const hit = pickHit(e.clientX, e.clientY);
-      if (hit && useAppStore.getState().dataViewMode === "luftung") {
+    let lastTapTime = 0;
+    const handleDblClickOrTap = (clientX: number, clientY: number) => {
+      const hit = pickHit(clientX, clientY);
+      if (!hit) {
+        const presentation = useAppStore.getState().isPresentationView;
+        fitToVisible(presentation ? 2000 : 850);
+        return;
+      }
+
+      if (useAppStore.getState().dataViewMode === "luftung") {
         const { roomId } = pickIdsFromObject(hit.object);
         const room =
           roomId != null
@@ -5751,12 +5757,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
       }
-      // Werkzeug quad: select hit (if any) and frame it in all 4 views.
+
       if (
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView
       ) {
-        const cam = preparePointerRayRef.current(e.clientX, e.clientY);
+        const cam = preparePointerRayRef.current(clientX, clientY);
         const markupStore = useToolMarkupStore.getState();
         const layoutStore = useLayoutDrawingStore.getState();
         const markupLayer = markupLayerRef.current;
@@ -5864,11 +5870,38 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (!box.isEmpty()) fitAllQuadsToBoxRef.current(box);
         return;
       }
+
+      // Default: fit scene or object to screen
+      const camera = perspectiveCameraRef.current;
+      const controls = controlsRef.current;
+      if (camera && controls && hit.object) {
+        const box = new THREE.Box3().setFromObject(hit.object);
+        if (!box.isEmpty() && Number.isFinite(box.min.x)) {
+          const { position, target } = frameBoundingBox(box, camera, 1.4);
+          void flyTo(camera, controls, position, target, 850);
+          return;
+        }
+      }
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
     };
 
+    const onDblClick = (e: MouseEvent) => {
+      e.preventDefault();
+      handleDblClickOrTap(e.clientX, e.clientY);
+    };
+
     const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || e.pointerType === "pen") {
+        const now = performance.now();
+        if (now - lastTapTime < 300) {
+          e.preventDefault();
+          handleDblClickOrTap(e.clientX, e.clientY);
+          lastTapTime = 0;
+          return;
+        }
+        lastTapTime = now;
+      }
       if (
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView
