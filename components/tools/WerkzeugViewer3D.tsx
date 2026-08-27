@@ -903,12 +903,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (compareRootRef.current) consider(compareRootRef.current);
     if (layoutLayerRef.current?.group) {
       layoutLayerRef.current.group.traverse((o) => {
-        if (o instanceof THREE.Mesh && o.visible) {
-          if (
-            !o.userData.isLayoutGround &&
-            !o.userData.isLayoutUnderlay &&
-            !o.userData.isLayoutLevelSlab
-          ) {
+        if (
+          (o.userData?.layoutWallId && !o.userData?.isLayoutEndpoint) ||
+          o.userData?.layoutDoorId ||
+          o.userData?.layoutWindowId ||
+          o.userData?.layoutSlabId ||
+          o.userData?.layoutColumnId ||
+          o.userData?.layoutBeamId ||
+          o.userData?.layoutGridId ||
+          o.userData?.layoutSketchLineId
+        ) {
+          if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
             const b = new THREE.Box3().setFromObject(o);
             if (!b.isEmpty() && Number.isFinite(b.min.x)) {
               box.union(b);
@@ -920,7 +925,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     }
     if (markupLayerRef.current?.group) {
       markupLayerRef.current.group.traverse((o) => {
-        if (o instanceof THREE.Mesh && o.visible && !o.userData.isMarkupPreview) {
+        if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
           const b = new THREE.Box3().setFromObject(o);
           if (!b.isEmpty() && Number.isFinite(b.min.x)) {
             box.union(b);
@@ -3027,12 +3032,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const layoutLayer = layoutLayerRef.current;
       if (layoutLayer) {
         layoutLayer.group.traverse((o) => {
-          if (o instanceof THREE.Mesh && o.visible) {
-            if (
-              !o.userData.isLayoutGround &&
-              !o.userData.isLayoutUnderlay &&
-              !o.userData.isLayoutLevelSlab
-            ) {
+          if (
+            (o.userData?.layoutWallId && !o.userData?.isLayoutEndpoint) ||
+            o.userData?.layoutDoorId ||
+            o.userData?.layoutWindowId ||
+            o.userData?.layoutSlabId ||
+            o.userData?.layoutColumnId ||
+            o.userData?.layoutBeamId ||
+            o.userData?.layoutGridId ||
+            o.userData?.layoutSketchLineId
+          ) {
+            if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
               box.expandByObject(o);
             }
           }
@@ -3042,7 +3052,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const markupLayer = markupLayerRef.current;
       if (markupLayer) {
         markupLayer.group.traverse((o) => {
-          if (o instanceof THREE.Mesh && o.visible && !o.userData.isMarkupPreview) {
+          if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
             box.expandByObject(o);
           }
         });
