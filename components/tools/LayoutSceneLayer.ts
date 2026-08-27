@@ -1787,6 +1787,48 @@ export default class LayoutSceneLayer {
     return geometry;
   }
 
+  private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
+    const geo = this.buildSlabGeometry(slab);
+    const mat = new THREE.MeshStandardMaterial({
+      roughness: 0.9,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.85,
+    });
+    this.applyMaterialAndColor(mat, slab.color, slab.material);
+    if (!slab.color && !slab.material) {
+      mat.color.setHex(slab.kind === "roof" ? ROOF_COLOR : FLOOR_COLOR);
+    }
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.layoutSlabId = slab.id;
+    mesh.userData.kind = "layout-slab";
+    this.updateSlabMesh(mesh, slab, elevMm);
+    return mesh;
+  }
+
+  private updateSlabMesh(
+    mesh: THREE.Mesh,
+    slab: LayoutSlab,
+    elevMm: number,
+  ) {
+    mesh.geometry.dispose();
+    mesh.geometry = this.buildSlabGeometry(slab);
+
+    const thickness = fromMm(Math.max(50, slab.thicknessMm));
+    
+    // Position mesh and rotate extrusion: Extrusion local Z maps to global Y pointing up
+    mesh.position.set(0, 0, 0);
+    mesh.rotation.set(-Math.PI / 2, 0, 0);
+
+    const baseY = fromMm(elevMm + slab.elevationOffsetMm);
+    if (slab.kind === "roof") {
+      mesh.position.y = baseY;
+    } else {
+      mesh.position.y = baseY - thickness;
+    }
+    mesh.userData.layoutSlabId = slab.id;
+  }
+
   setRenderMode(mode: RenderMode) {
     this.currentRenderMode = mode;
     this.refreshMaterials();
