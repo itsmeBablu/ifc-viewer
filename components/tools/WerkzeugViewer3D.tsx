@@ -5905,14 +5905,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
               if (plan) {
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
-                void layoutStore.addEquipment({
+                void layoutStore.placeEquipment({
                   levelId,
                   category: layoutStore.draftEquipmentCategory,
                   name: layoutStore.draftEquipmentCategory,
                   xMm: plan.xMm,
                   yMm: plan.yMm,
+                  rotationDeg: layoutStore.draftEquipmentRotationDeg ?? 0,
                   elevationMm: layoutStore.draftEquipmentElevationMm,
                   flowM3h: layoutStore.draftEquipmentFlowM3h,
+                  airflowM3h: layoutStore.draftEquipmentFlowM3h,
+                  powerWatts: layoutStore.draftEquipmentHeatingWatts,
+                  coolingWatts: layoutStore.draftEquipmentCoolingWatts,
                 });
                 return;
               }
