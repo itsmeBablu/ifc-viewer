@@ -1757,8 +1757,8 @@ export default function ToolRibbon({
             </button>
           </div>
 
-          {/* Center: Tools Cluster or Sketch Slabs Conversion */}
-          {sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
+          {/* Center: mode-specific touch ribbon */}
+          {!mepModeActive && sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
             <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
               <span className="text-xs font-bold text-yellow-400 px-1.5">
                 {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
@@ -1802,6 +1802,14 @@ export default function ToolRibbon({
                 <LuTrash2 className="h-4 w-4" />
               </button>
             </div>
+          ) : mepModeActive ? (
+            <div className="flex items-center gap-1">
+              {mepClusters.map((cluster) => (
+                <div key={cluster.key} className="flex-shrink-0">
+                  {cluster.node}
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="flex items-center gap-1">
               {buildCluster}
@@ -1811,11 +1819,33 @@ export default function ToolRibbon({
             </div>
           )}
 
-          {/* Right: Theme Toggle */}
-          <div className="flex items-center gap-2">
+          {/* Right: discipline and theme toggles */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const nextMepMode = !mepModeActive;
+                setArmedLayoutTool(null);
+                setArmedTool(null);
+                setActiveDropdown(null);
+                setActiveTab(nextMepMode ? "mep" : "vstudio");
+                setMepModeActive(nextMepMode);
+              }}
+              title={mepModeActive ? "Switch to Architecture tools" : "Switch to MEP tools"}
+              aria-pressed={mepModeActive}
+              className={`flex min-h-8 items-center gap-1 rounded-lg border px-2 text-[10px] font-bold transition-colors ${
+                mepModeActive
+                  ? "border-sky-400/60 bg-sky-400/20 text-sky-500 dark:text-sky-300"
+                  : "border-yellow-400/60 bg-yellow-400/15 text-yellow-600 dark:text-yellow-300"
+              }`}
+            >
+              <span aria-hidden="true">{mepModeActive ? "⚡" : "⌂"}</span>
+              <span>{mepModeActive ? "MEP" : "Arch"}</span>
+            </button>
             <button
               type="button"
               onClick={() => setColorTheme(isDark ? "light" : "dark")}
+              title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
               className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
             >
               {isDark ? <LuSun className="h-4 w-4 text-yellow-400" /> : <LuMoon className="h-4 w-4" />}
