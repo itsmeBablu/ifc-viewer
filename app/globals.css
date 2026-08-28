@@ -2623,9 +2623,13 @@ body.werkzeug-active.mep-mode-active :is(
 ) :is(svg, span, strong, small) {
   color: #082f49 !important;
 }
-body.werkzeug-active.mep-mode-active :is(.werkzeug-ipad-tool-ribbon, .werkzeug-ipad-snap-ribbon, .werkzeug-ipad-context-surface, [data-popup-surface]) {
+body.werkzeug-active.mep-mode-active :is(.werkzeug-ipad-snap-ribbon, .werkzeug-ipad-context-surface, [data-popup-surface]) {
   border-color: rgba(56,189,248,.28) !important;
   box-shadow: inset 0 1px rgba(255,255,255,.32), 0 8px 26px rgba(14,165,233,.14) !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-ipad-tool-ribbon {
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 body.werkzeug-active.mep-mode-active :is(input, select, textarea):focus {
   border-color: #38bdf8 !important;
