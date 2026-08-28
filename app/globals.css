@@ -1524,13 +1524,13 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   }
   .werkzeug-discipline-toggle[data-mode="arch"] .werkzeug-discipline-option.is-active {
     color: #18181b !important;
-    background: linear-gradient(135deg, rgba(254,240,138,.9), rgba(250,204,21,.72)) !important;
-    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(250,204,21,.3) !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
   .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option.is-active {
     color: #082f49 !important;
-    background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(56,189,248,.7)) !important;
-    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(56,189,248,.34) !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon,
@@ -2660,8 +2660,8 @@ body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle .werkzeug-disci
 }
 body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option.is-active {
   color: #082f49 !important;
-  background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(56,189,248,.7)) !important;
-  box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(56,189,248,.34) !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option:not(.is-active),
 body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"]:hover .werkzeug-discipline-option:not(.is-active) {

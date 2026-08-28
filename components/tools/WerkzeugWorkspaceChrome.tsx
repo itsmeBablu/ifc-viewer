@@ -95,6 +95,11 @@ export default function WerkzeugWorkspaceChrome({
   const attachRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const disciplineToggleRef = useRef<HTMLButtonElement>(null);
+  const disciplineThumbRef = useRef<HTMLSpanElement>(null);
+  const archDisciplineRef = useRef<HTMLSpanElement>(null);
+  const mepDisciplineRef = useRef<HTMLSpanElement>(null);
+  const disciplineThumbReadyRef = useRef(false);
   const fittedHeightRef = useRef(320);
   const fittedWidthRef = useRef(300);
   const [panelKey, setPanelKey] = useState<PanelKey | null>("levels");
@@ -144,6 +149,32 @@ export default function WerkzeugWorkspaceChrome({
   const setDrawingScale = useLayoutDrawingStore((s) => s.setDrawingScale);
   const levels = useLayoutDrawingStore((s) => s.levels);
   const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
+
+  useLayoutEffect(() => {
+    const toggle = disciplineToggleRef.current;
+    const thumb = disciplineThumbRef.current;
+    const target = mepModeActive ? mepDisciplineRef.current : archDisciplineRef.current;
+    if (!toggle || !thumb || !target) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const properties = {
+      x: target.offsetLeft - 1,
+      width: target.offsetWidth,
+      backgroundColor: mepModeActive ? "rgba(56, 189, 248, 0.82)" : "rgba(250, 204, 21, 0.82)",
+      boxShadow: mepModeActive
+        ? "inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(56,189,248,.34)"
+        : "inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(250,204,21,.3)",
+    };
+
+    if (!disciplineThumbReadyRef.current || reduceMotion) {
+      gsap.set(thumb, properties);
+      disciplineThumbReadyRef.current = true;
+      return;
+    }
+
+    gsap.to(thumb, { ...properties, duration: 0.48, ease: "power3.inOut", overwrite: true });
+    return () => { gsap.killTweensOf(thumb); };
+  }, [mepModeActive]);
 
   useEffect(() => {
     document.documentElement.dataset.werkzeugDock = dockEdge;
@@ -545,6 +576,7 @@ export default function WerkzeugWorkspaceChrome({
           <Image src="/ibv_logo.svg" alt="IBV" width={72} height={22} className="h-5 w-auto object-contain" priority />
         </div>
         <button
+          ref={disciplineToggleRef}
           type="button"
           onClick={() => {
             const nextMepMode = !mepModeActive;
@@ -560,10 +592,11 @@ export default function WerkzeugWorkspaceChrome({
           title={mepModeActive ? "MEP mode active — switch to Architecture" : "Architecture mode active — switch to MEP"}
           className="werkzeug-discipline-toggle group relative flex h-6 shrink-0 items-center gap-0 rounded-full border-0 p-px transition-all backdrop-blur-xl"
         >
-          <span className={`werkzeug-discipline-option flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-all ${!mepModeActive ? "is-active" : "text-[var(--text-muted)]"}`}>
+          <span ref={disciplineThumbRef} className="werkzeug-discipline-thumb pointer-events-none absolute left-px top-px h-5 rounded-full" aria-hidden="true" />
+          <span ref={archDisciplineRef} className={`werkzeug-discipline-option relative z-[1] flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-colors duration-300 ${!mepModeActive ? "is-active" : "text-[var(--text-muted)]"}`}>
             <LuBuilding2 className="h-2.5 w-2.5" /><span>Arch</span>
           </span>
-          <span className={`werkzeug-discipline-option flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-all ${mepModeActive ? "is-active" : "text-[var(--text-muted)]"}`}>
+          <span ref={mepDisciplineRef} className={`werkzeug-discipline-option relative z-[1] flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-colors duration-300 ${mepModeActive ? "is-active" : "text-[var(--text-muted)]"}`}>
             <LuZap className="h-2.5 w-2.5" /><span>MEP</span>
           </span>
         </button>
