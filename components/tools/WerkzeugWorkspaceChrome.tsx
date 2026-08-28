@@ -114,11 +114,15 @@ export default function WerkzeugWorkspaceChrome({
   const slabs = useLayoutDrawingStore((s) => s.slabs);
   const columns = useLayoutDrawingStore((s) => s.columns);
   const beams = useLayoutDrawingStore((s) => s.beams);
+  const stairs = useLayoutDrawingStore((s) => s.stairs);
+  const ramps = useLayoutDrawingStore((s) => s.ramps);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const lockedKeys = useLayoutDrawingStore((s) => s.lockedElementKeys);
   const renderMode = useAppStore((s) => s.renderMode);
   const colorTheme = useAppStore((s) => s.colorTheme);
@@ -253,6 +257,8 @@ export default function WerkzeugWorkspaceChrome({
   const selectedDoor = doors.find((item) => item.id === selectedDoorId) ?? null;
   const selectedWindow = windows.find((item) => item.id === selectedWindowId) ?? null;
   const selectedSlab = slabs.find((item) => item.id === selectedSlabId) ?? null;
+  const selectedStair = stairs.find((item) => item.id === selectedStairId) ?? null;
+  const selectedRamp = ramps.find((item) => item.id === selectedRampId) ?? null;
   const selectedColumn = columns.find((item) => selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id)) ?? null;
   const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id)) ?? null;
   const selectedRef: SelectedElementRef | null = selectedWall
@@ -260,8 +266,10 @@ export default function WerkzeugWorkspaceChrome({
     : selectedDoor ? { kind: "door", id: selectedDoor.id }
       : selectedWindow ? { kind: "window", id: selectedWindow.id }
         : selectedSlab ? { kind: "slab", id: selectedSlab.id }
-          : selectedColumn ? { kind: "column", id: selectedColumn.id }
-            : selectedBeam ? { kind: "beam", id: selectedBeam.id } : null;
+          : selectedStair ? { kind: "stair", id: selectedStair.id }
+            : selectedRamp ? { kind: "ramp", id: selectedRamp.id }
+              : selectedColumn ? { kind: "column", id: selectedColumn.id }
+                : selectedBeam ? { kind: "beam", id: selectedBeam.id } : null;
   const locked = Boolean(selectedRef && lockedKeys.includes(`${selectedRef.kind}:${selectedRef.id}`));
 
   useEffect(() => useLayoutDrawingStore.subscribe((state, previous) => {
@@ -281,6 +289,8 @@ export default function WerkzeugWorkspaceChrome({
       const slab = state.slabs.find((item) => item.id === state.selectedSlabId);
       if (slab) reveal(slab.kind);
     }
+    else if (state.selectedStairId !== previous.selectedStairId && state.selectedStairId) reveal("stair");
+    else if (state.selectedRampId !== previous.selectedRampId && state.selectedRampId) reveal("ramp");
     else if (state.selectedElements !== previous.selectedElements) {
       const structural = state.selectedElements.find((item) => item.kind === "column" || item.kind === "beam");
       if (structural) {
@@ -436,14 +446,17 @@ export default function WerkzeugWorkspaceChrome({
   const activeViewLabel = viewItems.find((view) => view.value === viewPreset)?.label ?? "3D";
   const hasContextSelection = selectedElements.some((ref) =>
     ref.kind === "wall" || ref.kind === "door" || ref.kind === "window" ||
-    ref.kind === "slab" || ref.kind === "column" || ref.kind === "beam",
+    ref.kind === "slab" || ref.kind === "stair" || ref.kind === "ramp" ||
+    ref.kind === "column" || ref.kind === "beam",
   );
   const modifyTitle = selectedWallId ? "Modify | Walls"
     : selectedDoorId ? "Modify | Doors"
       : selectedWindowId ? "Modify | Windows"
         : selectedSlab ? `Modify | ${selectedSlab.kind === "roof" ? "Roofs" : "Floors"}`
-          : selectedColumn ? "Modify | Columns"
-            : selectedBeam ? "Modify | Beams" : "Modify";
+          : selectedStair ? "Modify | Stairs"
+            : selectedRamp ? "Modify | Ramps"
+              : selectedColumn ? "Modify | Columns"
+                : selectedBeam ? "Modify | Beams" : "Modify";
   const activateTransform = (mode: "translate" | "rotate") => {
     useLayoutDrawingStore.getState().setArmedLayoutTool(null);
     useToolMarkupStore.getState().setTransformMode(mode);
@@ -604,7 +617,7 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   const slab = store.slabs.find((item) => item.id === store.selectedSlabId && item.kind === panelKey);
   const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-transparent px-2 text-[11px] text-[var(--text-strong)] disabled:opacity-50";
   if (tab === "type") return <TypeOptions panelKey={panelKey} locked={locked} />;
-  if (panelKey === "column" || panelKey === "beam") return <LayoutPropertiesPanel />;
+  if (panelKey === "column" || panelKey === "beam" || panelKey === "stair" || panelKey === "ramp") return <LayoutPropertiesPanel />;
   if ((panelKey === "floor" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
     const loops = detectLoopsFromSegments(store.sketchLines);
     const openingCount = [...loops.nestedHoles.values()].reduce((sum, holes) => sum + holes.length, 0);

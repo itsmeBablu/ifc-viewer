@@ -1032,7 +1032,7 @@ export default function LayoutPropertiesPanel({
                     <option value="straight">Straight Run</option>
                     <option value="l-shape">L-Shape (Quarter-Turn 90°)</option>
                     <option value="u-shape">U-Shape (Switchback 180°)</option>
-                    <option value="spiral">Spiral (Helical)</option>
+                    <option value="spiral">Circular / Spiral (Helical)</option>
                   </select>
                 </label>
                 <div className="grid grid-cols-2 gap-2">

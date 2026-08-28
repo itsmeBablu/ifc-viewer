@@ -101,6 +101,8 @@ export default function ToolOptionsBar() {
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
+  const selectedStair = useLayoutDrawingStore((s) => s.stairs.find((item) => item.id === s.selectedStairId));
+  const updateStair = useLayoutDrawingStore((s) => s.updateStair);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
@@ -978,6 +980,29 @@ export default function ToolOptionsBar() {
 
           {selectedStairId && (
             <>
+              <span className="text-[10px] font-semibold text-[var(--text-muted)]">Stair type:</span>
+              {(
+                [
+                  { id: "straight", label: "Straight" },
+                  { id: "l-shape", label: "L-Shape" },
+                  { id: "u-shape", label: "U-Shape" },
+                  { id: "spiral", label: "Circular" },
+                ] as const
+              ).map((type) => (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => void updateStair(selectedStairId, { stairType: type.id })}
+                  aria-pressed={selectedStair?.stairType === type.id}
+                  className={`rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                    selectedStair?.stairType === type.id
+                      ? "border-amber-500 bg-amber-500/20 text-amber-500"
+                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)] hover:border-amber-300"
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={() => duplicateStair(selectedStairId)}
