@@ -85,7 +85,6 @@ import type { MarkupShapeType, MarkupViewPreset } from "@/lib/toolMarkup";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { RenderMode } from "@/lib/types";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
-import ObjectSnapStrip from "./ObjectSnapStrip";
 
 // Primary tabs plus MEP and contextual modify
 export type RibbonTab = "vstudio" | "mep" | "manage" | "modify";
@@ -775,12 +774,6 @@ export default function ToolRibbon({
     </Cluster>
   );
 
-  const snapsCluster = (
-    <Cluster label="Snaps" border={false}>
-      <ObjectSnapStrip />
-    </Cluster>
-  );
-
   // -- Manage tab content -----------------------------------------------------
   const manageTabContent = (
     <div className="flex items-center gap-3">
@@ -1086,7 +1079,6 @@ export default function ToolRibbon({
     { key: "rooms", node: roomsCluster },
     { key: "shapes", node: shapesCluster },
     { key: "annotate", node: annotateCluster },
-    { key: "snaps", node: snapsCluster },
   ];
 
   // -- MEP tab content clusters -----------------------------------------------
@@ -1300,7 +1292,6 @@ export default function ToolRibbon({
     { key: "hvac", node: mepHvacCluster },
     { key: "piping", node: mepPipingCluster },
     { key: "electrical", node: mepElectricalCluster },
-    { key: "snaps", node: snapsCluster },
     { key: "analysis", node: mepCalculationsCluster },
   ];
 
@@ -1607,7 +1598,6 @@ export default function ToolRibbon({
               {roomsCluster}
               {shapesCluster}
               {annotateCluster}
-              {snapsCluster}
             </div>
           )}
 
