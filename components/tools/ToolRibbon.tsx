@@ -393,6 +393,10 @@ export default function ToolRibbon({
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
+  const setDraftDuctShape = useLayoutDrawingStore((s) => s.setDraftDuctShape);
+  const setDraftPipeSystem = useLayoutDrawingStore((s) => s.setDraftPipeSystem);
+  const setDraftCableTrayType = useLayoutDrawingStore((s) => s.setDraftCableTrayType);
+  const setDraftEquipmentCategory = useLayoutDrawingStore((s) => s.setDraftEquipmentCategory);
   const [sketchError, setSketchError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<RibbonTab>(mepModeActive ? "mep" : "vstudio");
