@@ -1453,7 +1453,8 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   .werkzeug-ipad-tool-ribbon::-webkit-scrollbar { display: none; }
   .werkzeug-ipad-action-ribbon {
     position: absolute;
-    right: 4px;
+    left: 4px;
+    right: auto;
     bottom: calc(100% + 6px);
     margin-left: auto;
     padding: 0;
@@ -1505,6 +1506,11 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     padding-inline: 10px;
   }
   .werkzeug-ipad-action-ribbon > .relative:first-child > button span { display: none; }
+  .werkzeug-ipad-action-ribbon .werkzeug-render-trigger {
+    width: 42px !important;
+    min-width: 42px !important;
+    padding-inline: 6px !important;
+  }
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-action-ribbon,
