@@ -2600,7 +2600,7 @@ body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-c
 body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-context, .werkzeug-ipad-ribbons) :is(
   button:hover,
   [role="button"]:hover
-):not(.is-danger):not([class*="red"]) {
+):not(.is-danger):not(.werkzeug-discipline-toggle):not([class*="red"]) {
   border-color: rgba(125,211,252,.78) !important;
   background: linear-gradient(135deg, rgba(186,230,253,.92), rgba(125,211,252,.84), rgba(56,189,248,.74)) !important;
   color: #082f49 !important;
@@ -2613,7 +2613,7 @@ body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-c
   [aria-pressed="true"],
   button:hover,
   [role="button"]:hover
-):not(.is-danger):not([class*="red"]) :is(svg, span, strong, small, p) {
+):not(.is-danger):not(.werkzeug-discipline-toggle):not([class*="red"]) :is(svg, span, strong, small, p) {
   color: #082f49 !important;
 }
 body.werkzeug-active.mep-mode-active .werkzeug-options-bar :is(
@@ -2662,6 +2662,16 @@ body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"
   color: #082f49 !important;
   background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(56,189,248,.7)) !important;
   box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(56,189,248,.34) !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option:not(.is-active),
+body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"]:hover .werkzeug-discipline-option:not(.is-active) {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option:not(.is-active) :is(svg, span) {
+  color: var(--text-muted) !important;
 }
 
 /* MEP discipline: all interactive workspace accents become V-Blue liquid glass. */
