@@ -329,15 +329,23 @@ export default function ToolRibbon({
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
   const deleteSlab = useLayoutDrawingStore((s) => s.deleteSlab);
+  const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
+  const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
+  const duplicateStair = useLayoutDrawingStore((s) => s.duplicateStair);
+  const duplicateRamp = useLayoutDrawingStore((s) => s.duplicateRamp);
   const selectWall = useLayoutDrawingStore((s) => s.selectWall);
   const selectDoor = useLayoutDrawingStore((s) => s.selectDoor);
   const selectWindow = useLayoutDrawingStore((s) => s.selectWindow);
   const selectSlab = useLayoutDrawingStore((s) => s.selectSlab);
+  const selectStair = useLayoutDrawingStore((s) => s.selectStair);
+  const selectRamp = useLayoutDrawingStore((s) => s.selectRamp);
 
   // Markup Store
   const armedTool = useToolMarkupStore((s) => s.armedTool);
@@ -364,6 +372,8 @@ export default function ToolRibbon({
   const columns = useLayoutDrawingStore((s) => s.columns);
   const beams = useLayoutDrawingStore((s) => s.beams);
   const gridLines = useLayoutDrawingStore((s) => s.gridLines);
+  const stairs = useLayoutDrawingStore((s) => s.stairs);
+  const ramps = useLayoutDrawingStore((s) => s.ramps);
   const gapHighlightPoints = useLayoutDrawingStore((s) => s.gapHighlightPoints);
   const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
@@ -455,6 +465,10 @@ export default function ToolRibbon({
     ? "Modify | Windows"
     : selectedSlabId
     ? "Modify | Floors"
+    : selectedStairId
+    ? "Modify | Stairs"
+    : selectedRampId
+    ? "Modify | Ramps"
     : selectedElements.length > 1
     ? `Modify | ${selectedElements.length} Elements`
     : selectedPlacementId
@@ -468,6 +482,8 @@ export default function ToolRibbon({
     { kind: "door" as const, label: "Doors", ids: doors.map((item) => item.id) },
     { kind: "window" as const, label: "Windows", ids: windows.map((item) => item.id) },
     { kind: "slab" as const, label: "Floors / Roofs", ids: slabs.map((item) => item.id) },
+    { kind: "stair" as const, label: "Stairs", ids: stairs.map((item) => item.id) },
+    { kind: "ramp" as const, label: "Ramps", ids: ramps.map((item) => item.id) },
     { kind: "column" as const, label: "Columns", ids: columns.map((item) => item.id) },
     { kind: "beam" as const, label: "Beams", ids: beams.map((item) => item.id) },
     { kind: "grid" as const, label: "Grids", ids: gridLines.map((item) => item.id) },
@@ -554,6 +570,8 @@ export default function ToolRibbon({
     selectDoor(null);
     selectWindow(null);
     selectSlab(null);
+    selectStair(null);
+    selectRamp(null);
     selectPlacement(null);
   };
 
@@ -580,15 +598,15 @@ export default function ToolRibbon({
     <Cluster label="Build">
       <div className="relative">
         <RibbonBtn
-          active={["wall", "door", "window", "floor", "roof", "lines"].includes(armedLayoutTool || "")}
+          active={["wall", "door", "window", "floor", "roof", "stair", "ramp", "lines"].includes(armedLayoutTool || "")}
           onClick={() => setActiveDropdown(activeDropdown === "build" ? null : "build")}
-          title="Build Elements (Walls, Doors, Windows, Slabs, Lines)"
+          title="Build Elements (Walls, Doors, Windows, Stairs, Ramps, Slabs, Lines)"
         >
           <IconMarkupWall className="h-4.5 w-4.5" />
           <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
         </RibbonBtn>
         {activeDropdown === "build" && (
-          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-32 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-36 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("wall"); setActiveDropdown(null); }}>
               <IconMarkupWall className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Wall (W)</span>
             </button>
@@ -597,6 +615,12 @@ export default function ToolRibbon({
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("window"); setActiveDropdown(null); }}>
               <IconMarkupWindow className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Window</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("stair"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">🪜</span> <span className="text-xs">Stairs (ST)</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("ramp"); setActiveDropdown(null); }}>
+              <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">⊿</span> <span className="text-xs">Ramp (RP)</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("floor"); setActiveDropdown(null); }}>
               <IconMarkupFloor className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Floor</span>

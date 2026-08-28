@@ -8,7 +8,7 @@ import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
 export type ElementTypeDefinition = {
   id: string;
   name: string;
-  category: "Wall" | "Door" | "Window" | "Floor" | "Roof" | "Shape";
+  category: "Wall" | "Door" | "Window" | "Floor" | "Roof" | "Shape" | "Stair" | "Ramp";
   thicknessMm?: number;
   widthMm?: number;
   heightMm?: number;
@@ -157,6 +157,66 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     material: "Concrete + PIR Insulation",
     functionType: "Exterior",
     thermalConductivity: "0.15 W/m²K",
+  },
+
+  // Stair Types
+  "stair-straight-1000": {
+    id: "stair-straight-1000",
+    name: "Straight Run - 1000mm Width",
+    category: "Stair",
+    widthMm: 1000,
+    material: "Cast-in-Place Concrete",
+    functionType: "Interior",
+    fireRating: "REI 90",
+  },
+  "stair-lshape-1000": {
+    id: "stair-lshape-1000",
+    name: "L-Shape 90° - 1000mm Width",
+    category: "Stair",
+    widthMm: 1000,
+    material: "Precast Concrete with Timber Treads",
+    functionType: "Interior",
+    fireRating: "REI 90",
+  },
+  "stair-ushape-1200": {
+    id: "stair-ushape-1200",
+    name: "U-Shape Switchback - 1200mm Width",
+    category: "Stair",
+    widthMm: 1200,
+    material: "Cast-in-Place Concrete",
+    functionType: "Interior",
+    fireRating: "REI 120",
+  },
+  "stair-spiral-1600": {
+    id: "stair-spiral-1600",
+    name: "Spiral Helical - 1600mm Diameter",
+    category: "Stair",
+    widthMm: 800,
+    material: "Steel Spine & Hardwood Treads",
+    functionType: "Interior",
+    fireRating: "F30",
+  },
+
+  // Ramp Types
+  "ramp-ada-1200": {
+    id: "ramp-ada-1200",
+    name: "ADA Accessible Ramp (1:12 Max)",
+    category: "Ramp",
+    widthMm: 1200,
+    thicknessMm: 150,
+    material: "Broom Finish Concrete",
+    functionType: "Exterior",
+    fireRating: "REI 60",
+  },
+  "ramp-service-1500": {
+    id: "ramp-service-1500",
+    name: "Service & Delivery Ramp (1:8)",
+    category: "Ramp",
+    widthMm: 1500,
+    thicknessMm: 200,
+    material: "Reinforced Concrete C30/37",
+    functionType: "Exterior",
+    fireRating: "REI 120",
   },
 };
 

@@ -2441,6 +2441,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const selColIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
       const selBeamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
       const selGridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+      const selStairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+      if (s.selectedStairId) selStairIds.add(s.selectedStairId);
+      const selRampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
+      if (s.selectedRampId) selRampIds.add(s.selectedRampId);
 
       layer.sync(s.levels, s.walls, s.doors, s.windows, s.slabs, {
         activeLevelId: markupFloor,
@@ -2470,6 +2474,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         selectedGridLineIds: selGridIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.syncStairs(s.stairs || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedStairIds: selStairIds,
+        showAllLevels,
+        planMode: isPlanView,
+      });
+      layer.syncRamps(s.ramps || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedRampIds: selRampIds,
+        showAllLevels,
+        planMode: isPlanView,
       });
       layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
         activeLevelId: markupFloor,
@@ -2522,6 +2538,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         );
       } else {
         layer.setSlabPreview(null, null, 0, 200, "floor");
+      }
+      if (s.stairDraw?.start && s.stairDraw.cursor) {
+        const lvl =
+          s.levels.find((l) => l.id === s.stairDraw!.levelId) ?? activeLevel;
+        layer.setStairPreview(
+          s.stairDraw.start,
+          s.stairDraw.cursor,
+          lvl?.elevationMm ?? 0,
+          lvl?.heightMm ?? 3000,
+          s.draftStairWidthMm,
+          s.draftStairTargetRiserMm,
+          s.draftStairTreadDepthMm,
+          s.draftStairType,
+        );
+      } else {
+        layer.setStairPreview(null, null, 0, 3000, 1000, 175, 280, "straight");
+      }
+      if (s.rampDraw?.start && s.rampDraw.cursor) {
+        const lvl =
+          s.levels.find((l) => l.id === s.rampDraw!.levelId) ?? activeLevel;
+        layer.setRampPreview(
+          s.rampDraw.start,
+          s.rampDraw.cursor,
+          lvl?.elevationMm ?? 0,
+          lvl?.heightMm ?? 3000,
+          s.draftRampWidthMm,
+          s.draftRampThicknessMm,
+        );
+      } else {
+        layer.setRampPreview(null, null, 0, 3000, 1200, 150);
       }
       // Sync Lines sketch layer
       layer.syncSketch(
@@ -2648,6 +2694,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (layout.tracePreview) layout.clearTracePreview();
         if (layout.wallDraw) layout.finishWallDraw();
         else if (layout.slabDraw) layout.cancelSlabDraw();
+        else if (layout.stairDraw) layout.cancelStairDraw();
+        else if (layout.rampDraw) layout.cancelRampDraw();
         else layout.setArmedLayoutTool(null);
         layout.clearLayoutSelection();
       }
@@ -2676,6 +2724,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (layout.selectedSlabId) {
           e.preventDefault();
           void layout.deleteSlab(layout.selectedSlabId);
+          return;
+        }
+        if (layout.selectedStairId) {
+          e.preventDefault();
+          void layout.deleteStair(layout.selectedStairId);
+          return;
+        }
+        if (layout.selectedRampId) {
+          e.preventDefault();
+          void layout.deleteRamp(layout.selectedRampId);
           return;
         }
         if (layout.selectedElements.length) {
@@ -4726,6 +4784,98 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
 
+        if (layoutStore.stairDraw || layoutStore.armedLayoutTool === "stair") {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          if (camRay && layoutLayer) {
+            raycaster.current.setFromCamera(pointerNdc.current, camRay);
+            const hit = layoutLayer.pickLayout(raycaster.current);
+            let pt: THREE.Vector3 | null = hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+            if (!pt) {
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+            }
+            if (!pt) {
+              const ms = useToolMarkupStore.getState();
+              const activeLvl = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+              const levelElevMm = activeLvl?.elevationMm ?? 0;
+              const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+              const targetPt = new THREE.Vector3();
+              if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+            }
+            if (pt) {
+              const ms = useToolMarkupStore.getState();
+              if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+              const plan = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+              if (layoutStore.stairDraw) {
+                layoutStore.updateStairDrawCursor(plan);
+                const sStart = layoutStore.stairDraw.start;
+                const d = Math.round(Math.hypot(plan.xMm - sStart.xMm, plan.yMm - sStart.yMm));
+                ms.setDragSnapHint({
+                  text: `Stair run: ${d}mm · click to finish`,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              } else {
+                ms.setDragSnapHint({
+                  text: "Click start point for stair",
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }
+            }
+          }
+          canvas.style.cursor = "crosshair";
+          setHoveredRoom(null);
+          return;
+        }
+
+        if (layoutStore.rampDraw || layoutStore.armedLayoutTool === "ramp") {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          if (camRay && layoutLayer) {
+            raycaster.current.setFromCamera(pointerNdc.current, camRay);
+            const hit = layoutLayer.pickLayout(raycaster.current);
+            let pt: THREE.Vector3 | null = hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+            if (!pt) {
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+            }
+            if (!pt) {
+              const ms = useToolMarkupStore.getState();
+              const activeLvl = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+              const levelElevMm = activeLvl?.elevationMm ?? 0;
+              const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+              const targetPt = new THREE.Vector3();
+              if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+            }
+            if (pt) {
+              const ms = useToolMarkupStore.getState();
+              if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+              const plan = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+              if (layoutStore.rampDraw) {
+                layoutStore.updateRampDrawCursor(plan);
+                const rStart = layoutStore.rampDraw.start;
+                const d = Math.round(Math.hypot(plan.xMm - rStart.xMm, plan.yMm - rStart.yMm));
+                ms.setDragSnapHint({
+                  text: `Ramp run: ${d}mm · click to finish`,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              } else {
+                ms.setDragSnapHint({
+                  text: "Click start point for ramp",
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }
+            }
+          }
+          canvas.style.cursor = "crosshair";
+          setHoveredRoom(null);
+          return;
+        }
+
         // Door / window armed — show offset along wall under cursor
         if (
           (layoutStore.armedLayoutTool === "door" ||
@@ -5412,6 +5562,76 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "stair") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!layoutStore.stairDraw) {
+                  layoutStore.startStairDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishStairDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "ramp") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!layoutStore.rampDraw) {
+                  layoutStore.startRampDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishRampDraw();
+                }
+                return;
+              }
+            }
+
             if (
               layoutStore.armedLayoutTool === "door" ||
               layoutStore.armedLayoutTool === "window"
@@ -5629,6 +5849,20 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (layoutHit.kind === "sketch-line") {
                 layoutStore.selectElement(
                   { kind: "line", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "stair") {
+                layoutStore.selectElement(
+                  { kind: "stair", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "ramp") {
+                layoutStore.selectElement(
+                  { kind: "ramp", id: layoutHit.id },
                   e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;

@@ -9,7 +9,10 @@ import {
   beamTranslated,
   beamWithLengthFromEnd,
   beamWithLengthFromStart,
+  calculateRampMetrics,
+  calculateStairMetrics,
   columnTranslated,
+  deriveRiseMm,
   nearestParallelFaceGapMm,
   wallAngleDeg,
   wallFlipped,
@@ -31,6 +34,8 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
  * Slab: plan size, thickness, Z offset.
  * Column: profile, width/depth/height, base/top level, position.
  * Beam: length, width/depth, angle, endpoints, Z offset.
+ * Stair: shape, rise/riser/tread, 2R+T formula, railings, base/top levels.
+ * Ramp: slope 1:12 ADA check, thickness, railings, base/top levels.
  */
 export default function LayoutPropertiesPanel({
   className = "",
@@ -45,10 +50,14 @@ export default function LayoutPropertiesPanel({
   const slabs = useLayoutDrawingStore((s) => s.slabs);
   const columns = useLayoutDrawingStore((s) => s.columns);
   const beams = useLayoutDrawingStore((s) => s.beams);
+  const stairs = useLayoutDrawingStore((s) => s.stairs);
+  const ramps = useLayoutDrawingStore((s) => s.ramps);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
@@ -56,23 +65,31 @@ export default function LayoutPropertiesPanel({
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
   const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
+  const updateStair = useLayoutDrawingStore((s) => s.updateStair);
+  const updateRamp = useLayoutDrawingStore((s) => s.updateRamp);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
   const deleteSlab = useLayoutDrawingStore((s) => s.deleteSlab);
   const deleteColumn = useLayoutDrawingStore((s) => s.deleteColumn);
   const deleteBeam = useLayoutDrawingStore((s) => s.deleteBeam);
+  const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
+  const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
   const duplicateDoor = useLayoutDrawingStore((s) => s.duplicateDoor);
   const duplicateWindow = useLayoutDrawingStore((s) => s.duplicateWindow);
   const duplicateSlab = useLayoutDrawingStore((s) => s.duplicateSlab);
   const duplicateColumn = useLayoutDrawingStore((s) => s.duplicateColumn);
   const duplicateBeam = useLayoutDrawingStore((s) => s.duplicateBeam);
+  const duplicateStair = useLayoutDrawingStore((s) => s.duplicateStair);
+  const duplicateRamp = useLayoutDrawingStore((s) => s.duplicateRamp);
 
   const wall = walls.find((w) => w.id === selectedWallId) ?? null;
   const door = doors.find((d) => d.id === selectedDoorId) ?? null;
   const win = windows.find((w) => w.id === selectedWindowId) ?? null;
   const slab = slabs.find((s) => s.id === selectedSlabId) ?? null;
+  const stair = stairs.find((st) => st.id === (selectedStairId ?? selectedElements.find((e) => e.kind === "stair")?.id)) ?? null;
+  const ramp = ramps.find((rp) => rp.id === (selectedRampId ?? selectedElements.find((e) => e.kind === "ramp")?.id)) ?? null;
   // Columns/beams have no dedicated single-id field — read from multi-selection.
   const selectedColumnId =
     selectedElements.find((e) => e.kind === "column")?.id ?? null;
@@ -81,7 +98,7 @@ export default function LayoutPropertiesPanel({
   const column = columns.find((c) => c.id === selectedColumnId) ?? null;
   const beam = beams.find((b) => b.id === selectedBeamId) ?? null;
 
-  if (!wall && !door && !win && !slab && !column && !beam) return null;
+  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp) return null;
 
   const len = wall ? Math.round(wallLengthMm(wall)) : 0;
   const ang = wall ? Math.round(wallAngleDeg(wall) * 10) / 10 : 0;
@@ -931,6 +948,302 @@ export default function LayoutPropertiesPanel({
           </div>
         </>
       )}
+
+      {stair && (() => {
+        const riseMm = deriveRiseMm(stair.levelId, stair.topLevelId, stair.baseOffsetMm, stair.topOffsetMm, levels);
+        const metrics = calculateStairMetrics(riseMm, stair.targetRiserHeightMm, stair.treadDepthMm, stair.stairType);
+        const isComfortable = metrics.strideMm >= 600 && metrics.strideMm <= 650;
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
+                Stair ({stair.stairType})
+              </p>
+              <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold text-sky-600 uppercase">
+                {metrics.riserCount} Risers
+              </span>
+            </div>
+
+            <Section title="Constraints">
+              <div className="grid grid-cols-2 gap-2">
+                <LevelSelect
+                  label="Base Level"
+                  value={stair.levelId}
+                  levels={levels}
+                  onChange={(id) => void updateStair(stair.id, { levelId: id })}
+                />
+                <MmInput
+                  label="Base Offset"
+                  value={stair.baseOffsetMm ?? 0}
+                  onCommit={(v) => void updateStair(stair.id, { baseOffsetMm: v })}
+                />
+                <LevelSelect
+                  label="Top Level"
+                  value={stair.topLevelId ?? ""}
+                  levels={levels}
+                  allowUnconnected={false}
+                  onChange={(id) => void updateStair(stair.id, { topLevelId: id })}
+                />
+                <MmInput
+                  label="Top Offset"
+                  value={stair.topOffsetMm ?? 0}
+                  onCommit={(v) => void updateStair(stair.id, { topOffsetMm: v })}
+                />
+              </div>
+              <div className="mt-2 rounded-lg bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-medium flex justify-between">
+                <span className="text-[var(--text-muted)]">Total Rise:</span>
+                <span className="font-bold text-[var(--text-strong)]">{Math.round(riseMm)} mm</span>
+              </div>
+            </Section>
+
+            <Section title="Dimensions & Shape">
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">Stair Type</span>
+                  <select
+                    value={stair.stairType}
+                    onChange={(e) => void updateStair(stair.id, { stairType: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none focus:border-sky-300"
+                  >
+                    <option value="straight">Straight Run</option>
+                    <option value="l-shape">L-Shape (Quarter-Turn 90°)</option>
+                    <option value="u-shape">U-Shape (Switchback 180°)</option>
+                    <option value="spiral">Spiral (Helical)</option>
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <MmInput
+                    label="Run Width"
+                    value={stair.widthMm}
+                    onCommit={(v) => void updateStair(stair.id, { widthMm: v })}
+                  />
+                  <MmInput
+                    label="Target Riser"
+                    value={stair.targetRiserHeightMm}
+                    onCommit={(v) => void updateStair(stair.id, { targetRiserHeightMm: v })}
+                  />
+                  <MmInput
+                    label="Tread Depth"
+                    value={stair.treadDepthMm}
+                    onCommit={(v) => void updateStair(stair.id, { treadDepthMm: v })}
+                  />
+                  <MmInput
+                    label="Nosing"
+                    value={stair.nosingMm ?? 25}
+                    onCommit={(v) => void updateStair(stair.id, { nosingMm: v })}
+                  />
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Calculated Rules & Comfort">
+              <div className="flex flex-col gap-1.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Actual Riser:</span>
+                  <span className="font-bold">{metrics.actualRiserMm} mm</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Riser Count:</span>
+                  <span className="font-bold">{metrics.riserCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Tread Count:</span>
+                  <span className="font-bold">{metrics.treadCount}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1 border-t border-[var(--panel-divider)]/60">
+                  <span className="text-[var(--text-muted)]">2R + T Stride:</span>
+                  <span className={`font-mono font-bold ${isComfortable ? "text-emerald-600" : "text-amber-600"}`}>
+                    {metrics.strideMm} mm
+                  </span>
+                </div>
+                <div className={`mt-1 rounded-md px-2 py-1 text-[10px] font-medium leading-tight ${isComfortable ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
+                  {isComfortable ? "✓ Optimum Stride Comfort (600–650mm)" : "⚠ Outside standard stride range (600–650mm)"}
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Railings">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4 text-[11px]">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stair.hasRailingLeft !== false}
+                      onChange={(e) => void updateStair(stair.id, { hasRailingLeft: e.target.checked })}
+                      className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Left Railing</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stair.hasRailingRight !== false}
+                      onChange={(e) => void updateStair(stair.id, { hasRailingRight: e.target.checked })}
+                      className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Right Railing</span>
+                  </label>
+                </div>
+                <MmInput
+                  label="Railing Height"
+                  value={stair.railingHeightMm ?? 900}
+                  onCommit={(v) => void updateStair(stair.id, { railingHeightMm: v })}
+                />
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateStair(stair.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteStair(stair.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {ramp && (() => {
+        const riseMm = deriveRiseMm(ramp.levelId, ramp.topLevelId, ramp.baseOffsetMm, ramp.topOffsetMm, levels);
+        const runLengthMm = Math.hypot(ramp.endXmm - ramp.startXmm, ramp.endYmm - ramp.startYmm);
+        const metrics = calculateRampMetrics(riseMm, runLengthMm);
+        const isAdaCompliant = metrics.isAdaCompliant;
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
+                Ramp
+              </p>
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAdaCompliant ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+                {metrics.slopeRatioText}
+              </span>
+            </div>
+
+            <Section title="Constraints">
+              <div className="grid grid-cols-2 gap-2">
+                <LevelSelect
+                  label="Base Level"
+                  value={ramp.levelId}
+                  levels={levels}
+                  onChange={(id) => void updateRamp(ramp.id, { levelId: id })}
+                />
+                <MmInput
+                  label="Base Offset"
+                  value={ramp.baseOffsetMm ?? 0}
+                  onCommit={(v) => void updateRamp(ramp.id, { baseOffsetMm: v })}
+                />
+                <LevelSelect
+                  label="Top Level"
+                  value={ramp.topLevelId ?? ""}
+                  levels={levels}
+                  allowUnconnected={false}
+                  onChange={(id) => void updateRamp(ramp.id, { topLevelId: id })}
+                />
+                <MmInput
+                  label="Top Offset"
+                  value={ramp.topOffsetMm ?? 0}
+                  onCommit={(v) => void updateRamp(ramp.id, { topOffsetMm: v })}
+                />
+              </div>
+              <div className="mt-2 rounded-lg bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-medium flex justify-between">
+                <span className="text-[var(--text-muted)]">Total Rise:</span>
+                <span className="font-bold text-[var(--text-strong)]">{Math.round(riseMm)} mm</span>
+              </div>
+            </Section>
+
+            <Section title="Dimensions">
+              <div className="grid grid-cols-2 gap-2">
+                <MmInput
+                  label="Width"
+                  value={ramp.widthMm}
+                  onCommit={(v) => void updateRamp(ramp.id, { widthMm: v })}
+                />
+                <MmInput
+                  label="Thickness"
+                  value={ramp.thicknessMm}
+                  onCommit={(v) => void updateRamp(ramp.id, { thicknessMm: v })}
+                />
+              </div>
+              <div className="mt-2 rounded-lg bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-medium flex justify-between">
+                <span className="text-[var(--text-muted)]">Run Length:</span>
+                <span className="font-bold text-[var(--text-strong)]">{Math.round(runLengthMm)} mm</span>
+              </div>
+            </Section>
+
+            <Section title="Slope & Accessibility">
+              <div className="flex flex-col gap-1.5 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Slope Ratio:</span>
+                  <span className="font-bold">{metrics.slopeRatioText}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Slope Grade:</span>
+                  <span className="font-bold">{metrics.slopePercent}%</span>
+                </div>
+                <div className={`mt-1 rounded-md px-2 py-1 text-[10px] font-medium leading-tight ${isAdaCompliant ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
+                  {isAdaCompliant ? "✓ ADA Compliant Slope (≤ 1:12 / 8.33%)" : "⚠ Steeper than ADA max slope 1:12 (8.33%)"}
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Railings & Curbs">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4 text-[11px]">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ramp.hasRailingLeft !== false}
+                      onChange={(e) => void updateRamp(ramp.id, { hasRailingLeft: e.target.checked })}
+                      className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Left Railing</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ramp.hasRailingRight !== false}
+                      onChange={(e) => void updateRamp(ramp.id, { hasRailingRight: e.target.checked })}
+                      className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Right Railing</span>
+                  </label>
+                </div>
+                <MmInput
+                  label="Railing Height"
+                  value={ramp.railingHeightMm ?? 900}
+                  onCommit={(v) => void updateRamp(ramp.id, { railingHeightMm: v })}
+                />
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateRamp(ramp.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteRamp(ramp.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

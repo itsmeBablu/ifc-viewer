@@ -15,12 +15,17 @@ import {
   type LayoutDoor,
   type LayoutGridLine,
   type LayoutLevel,
+  type LayoutRamp,
   type LayoutSlab,
   type LayoutSketchLine,
+  type LayoutStair,
   type LayoutWall,
   type LayoutWindow,
   type WallCenterlineMm,
   type WallMiterOffsets,
+  calculateRampMetrics,
+  calculateStairMetrics,
+  deriveRiseMm,
 } from "@/lib/layoutDrawing";
 import {
   underlayHeightMm,
@@ -42,6 +47,10 @@ const FLOOR_COLOR = 0xa8a29e;
 const FLOOR_SEL = 0xfacc15;
 const ROOF_COLOR = 0x78716c;
 const ROOF_SEL = 0xfacc15;
+const STAIR_TREAD_COLOR = 0xd4a373;
+const STAIR_SEL = 0xfacc15;
+const RAMP_COLOR = 0x94a3b8;
+const RAMP_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
@@ -53,8 +62,12 @@ export default class LayoutSceneLayer {
   private columnMeshes = new Map<string, THREE.Mesh>();
   private beamMeshes = new Map<string, THREE.Mesh>();
   private gridMeshes = new Map<string, THREE.Group>();
+  private stairMeshes = new Map<string, THREE.Group>();
+  private rampMeshes = new Map<string, THREE.Group>();
   private previewLine: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
+  private stairPreview: THREE.Group | null = null;
+  private rampPreview: THREE.Group | null = null;
   private tracePreviewGroup: THREE.Group | null = null;
   private ground: THREE.Mesh | null = null;
   private levelSlabs = new Map<string, THREE.Mesh>();
@@ -605,6 +618,100 @@ export default class LayoutSceneLayer {
         ring.renderOrder = 113;
         grp.add(ring);
       }
+    }
+  }
+
+  syncStairs(
+    stairs: LayoutStair[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedStairIds: Set<string>;
+      showAllLevels: boolean;
+      planMode?: boolean;
+    },
+  ) {
+    const keep = new Set(stairs.map((s) => s.id));
+    for (const [id, grp] of this.stairMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.stairMeshes.delete(id);
+      }
+    }
+
+    const planMode = Boolean(opts.planMode ?? this.isPlanModeActive);
+
+    for (const stair of stairs) {
+      const isSelected = opts.selectedStairIds.has(stair.id);
+      const isVisible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        stair.levelId === opts.activeLevelId ||
+        stair.topLevelId === opts.activeLevelId;
+
+      let grp = this.stairMeshes.get(stair.id);
+      if (grp) {
+        this.disposeGroup(grp);
+        grp.clear();
+      } else {
+        grp = new THREE.Group();
+        grp.name = `stair-${stair.id}`;
+        grp.userData.layoutStairId = stair.id;
+        grp.userData.kind = "stair";
+        this.stairMeshes.set(stair.id, grp);
+        this.group.add(grp);
+      }
+
+      this.buildStairGeometry(grp, stair, levels, isSelected, planMode);
+      grp.visible = isVisible;
+    }
+  }
+
+  syncRamps(
+    ramps: LayoutRamp[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedRampIds: Set<string>;
+      showAllLevels: boolean;
+      planMode?: boolean;
+    },
+  ) {
+    const keep = new Set(ramps.map((r) => r.id));
+    for (const [id, grp] of this.rampMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.rampMeshes.delete(id);
+      }
+    }
+
+    const planMode = Boolean(opts.planMode ?? this.isPlanModeActive);
+
+    for (const ramp of ramps) {
+      const isSelected = opts.selectedRampIds.has(ramp.id);
+      const isVisible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        ramp.levelId === opts.activeLevelId ||
+        ramp.topLevelId === opts.activeLevelId;
+
+      let grp = this.rampMeshes.get(ramp.id);
+      if (grp) {
+        this.disposeGroup(grp);
+        grp.clear();
+      } else {
+        grp = new THREE.Group();
+        grp.name = `ramp-${ramp.id}`;
+        grp.userData.layoutRampId = ramp.id;
+        grp.userData.kind = "ramp";
+        this.rampMeshes.set(ramp.id, grp);
+        this.group.add(grp);
+      }
+
+      this.buildRampGeometry(grp, ramp, levels, isSelected, planMode);
+      grp.visible = isVisible;
     }
   }
 
@@ -1270,6 +1377,949 @@ export default class LayoutSceneLayer {
     this.group.add(g);
   }
 
+  setStairPreview(
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    elevationMm: number,
+    levelHeightMm: number,
+    widthMm: number,
+    targetRiserMm: number,
+    treadDepthMm: number,
+    stairType: import("@/lib/layoutDrawing").StairShapeType = "straight",
+  ) {
+    if (this.stairPreview) {
+      this.disposeGroup(this.stairPreview);
+      this.group.remove(this.stairPreview);
+      this.stairPreview = null;
+    }
+    if (!start || !cursor) return;
+
+    const dxMm = cursor.xMm - start.xMm;
+    const dzMm = cursor.yMm - start.yMm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    if (lengthMm < 50) return;
+
+    const g = new THREE.Group();
+    g.name = "layout-stair-preview";
+    g.userData.isLayoutPreview = true;
+
+    const dummyStair: LayoutStair = {
+      id: "preview-stair",
+      projectId: "",
+      levelId: "preview-level",
+      stairType,
+      startXmm: start.xMm,
+      startYmm: start.yMm,
+      endXmm: cursor.xMm,
+      endYmm: cursor.yMm,
+      widthMm,
+      targetRiserHeightMm: targetRiserMm,
+      treadDepthMm,
+      nosingDepthMm: 25,
+      hasRailingLeft: true,
+      hasRailingRight: true,
+      createdAt: Date.now(),
+    };
+
+    const dummyLevel: LayoutLevel = {
+      id: "preview-level",
+      projectId: "",
+      name: "Preview",
+      elevationMm,
+      heightMm: levelHeightMm,
+      createdAt: Date.now(),
+    };
+
+    this.buildStairGeometry(g, dummyStair, [dummyLevel], true, false);
+
+    g.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.Material) {
+        child.material.transparent = true;
+        child.material.opacity = 0.6;
+        child.material.depthWrite = false;
+      }
+    });
+
+    this.stairPreview = g;
+    this.group.add(g);
+  }
+
+  setRampPreview(
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    elevationMm: number,
+    levelHeightMm: number,
+    widthMm: number,
+    thicknessMm: number,
+  ) {
+    if (this.rampPreview) {
+      this.disposeGroup(this.rampPreview);
+      this.group.remove(this.rampPreview);
+      this.rampPreview = null;
+    }
+    if (!start || !cursor) return;
+
+    const dxMm = cursor.xMm - start.xMm;
+    const dzMm = cursor.yMm - start.yMm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    if (lengthMm < 50) return;
+
+    const g = new THREE.Group();
+    g.name = "layout-ramp-preview";
+    g.userData.isLayoutPreview = true;
+
+    const dummyRamp: LayoutRamp = {
+      id: "preview-ramp",
+      projectId: "",
+      levelId: "preview-level",
+      startXmm: start.xMm,
+      startYmm: start.yMm,
+      endXmm: cursor.xMm,
+      endYmm: cursor.yMm,
+      widthMm,
+      thicknessMm,
+      hasRailingLeft: true,
+      hasRailingRight: true,
+      createdAt: Date.now(),
+    };
+
+    const dummyLevel: LayoutLevel = {
+      id: "preview-level",
+      projectId: "",
+      name: "Preview",
+      elevationMm,
+      heightMm: levelHeightMm,
+      createdAt: Date.now(),
+    };
+
+    this.buildRampGeometry(g, dummyRamp, [dummyLevel], true, false);
+
+    g.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.Material) {
+        child.material.transparent = true;
+        child.material.opacity = 0.6;
+        child.material.depthWrite = false;
+      }
+    });
+
+    this.rampPreview = g;
+    this.group.add(g);
+  }
+
+  private buildStairGeometry(
+    root: THREE.Group,
+    stair: LayoutStair,
+    levels: LayoutLevel[],
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const baseLevel = levels.find((l) => l.id === stair.levelId);
+    const baseElevMm = (baseLevel?.elevationMm ?? 0) + (stair.baseOffsetMm || 0);
+    const totalRiseMm = deriveRiseMm(
+      levels,
+      stair.levelId,
+      stair.topLevelId,
+      stair.baseOffsetMm,
+      stair.topOffsetMm,
+    );
+    const metrics = calculateStairMetrics(
+      totalRiseMm,
+      stair.targetRiserHeightMm,
+      stair.treadDepthMm,
+    );
+    const { riserCount, actualRiserMm } = metrics;
+    const treadDepthMm = stair.treadDepthMm || 280;
+    const widthMm = stair.widthMm || 1000;
+    const nosingMm = stair.nosingDepthMm ?? 25;
+    const railingHeightMm = stair.railingHeightMm ?? 900;
+    const hasRailLeft = stair.hasRailingLeft !== false;
+    const hasRailRight = stair.hasRailingRight !== false;
+
+    const baseElevM = fromMm(baseElevMm);
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+    const railHM = fromMm(railingHeightMm);
+
+    const treadMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : (stair.color ? parseInt(stair.color.replace("#", ""), 16) : STAIR_TREAD_COLOR),
+      roughness: 0.6,
+      metalness: 0.1,
+    });
+    const riserMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0xf1f5f9,
+      roughness: 0.7,
+      metalness: 0.05,
+    });
+    const stringerMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x475569,
+      roughness: 0.5,
+      metalness: 0.3,
+    });
+    const railMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x1e293b,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+    const postMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x334155,
+      roughness: 0.4,
+      metalness: 0.7,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.35,
+      roughness: 0.1,
+    });
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    const angle = Math.atan2(dzMm, dxMm);
+    const startM = new THREE.Vector3(fromMm(stair.startXmm), baseElevM, fromMm(stair.startYmm));
+
+    if (stair.stairType === "spiral") {
+      this.buildSpiralStair(
+        root,
+        stair,
+        startM,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        treadMat,
+        postMat,
+        railMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    if (stair.stairType === "l-shape") {
+      this.buildLShapeStair(
+        root,
+        stair,
+        startM,
+        levels,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        widthMm,
+        treadDepthMm,
+        nosingMm,
+        treadMat,
+        riserMat,
+        stringerMat,
+        postMat,
+        railMat,
+        glassMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    if (stair.stairType === "u-shape") {
+      this.buildUShapeStair(
+        root,
+        stair,
+        startM,
+        levels,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        widthMm,
+        treadDepthMm,
+        nosingMm,
+        treadMat,
+        riserMat,
+        stringerMat,
+        postMat,
+        railMat,
+        glassMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    // Straight stair
+    const stepCount = Math.max(1, riserCount);
+    const runTotalLengthM = fromMm(Math.max(lengthMm, (stepCount - 1) * treadDepthMm));
+    const stepRunM = (stepCount > 1 ? runTotalLengthM / (stepCount - 1) : treadM);
+
+    if (planMode) {
+      this.buildStraightStairPlanSymbol(
+        root,
+        stair,
+        startM,
+        angle,
+        stepCount,
+        stepRunM,
+        widthM,
+        isSelected,
+      );
+      return;
+    }
+
+    const stairFlight = new THREE.Group();
+    stairFlight.position.copy(startM);
+    stairFlight.rotation.y = -angle;
+
+    // Steps (Risers + Treads)
+    for (let i = 0; i < stepCount; i++) {
+      const stepY = i * riserM;
+      const stepX = i * stepRunM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riserMesh = new THREE.Mesh(riserGeo, riserMat);
+      riserMesh.position.set(stepX, stepY + riserM / 2, 0);
+      stairFlight.add(riserMesh);
+
+      const treadBoardLen = stepRunM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadBoardLen, 0.03, widthM);
+      const treadMesh = new THREE.Mesh(treadGeo, treadMat);
+      treadMesh.position.set(stepX + treadBoardLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      stairFlight.add(treadMesh);
+    }
+
+    // Side stringers
+    const stringerThick = 0.04;
+    const stringerHeight = 0.2;
+    const totalRiseM = fromMm(totalRiseMm);
+    const slopeLenM = Math.hypot(runTotalLengthM, totalRiseM);
+    const slopeAngle = Math.atan2(totalRiseM, runTotalLengthM);
+
+    for (const side of [-1, 1]) {
+      const stringerGeo = new THREE.BoxGeometry(slopeLenM, stringerHeight, stringerThick);
+      const stringerMesh = new THREE.Mesh(stringerGeo, stringerMat);
+      stringerMesh.position.set(
+        runTotalLengthM / 2,
+        totalRiseM / 2 - 0.05,
+        side * (widthM / 2 + stringerThick / 2),
+      );
+      stringerMesh.rotation.z = slopeAngle;
+      stairFlight.add(stringerMesh);
+    }
+
+    // Auto-generated Railings
+    if (hasRailLeft || hasRailRight) {
+      for (const side of [-1, 1]) {
+        if (side === -1 && !hasRailLeft) continue;
+        if (side === 1 && !hasRailRight) continue;
+        const zOffset = side * (widthM / 2 - 0.03);
+
+        const handrailGeo = new THREE.CylinderGeometry(0.02, 0.02, slopeLenM, 12);
+        handrailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const handrailMesh = new THREE.Mesh(handrailGeo, railMat);
+        handrailMesh.position.set(
+          runTotalLengthM / 2,
+          totalRiseM / 2 + railHM,
+          zOffset,
+        );
+        stairFlight.add(handrailMesh);
+
+        const postSpacingSteps = Math.max(1, Math.floor(stepCount / Math.min(stepCount, 5)));
+        for (let i = 0; i < stepCount; i += postSpacingSteps) {
+          const px = i * stepRunM;
+          const py = (i + 1) * riserM;
+          const postGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+          const postMesh = new THREE.Mesh(postGeo, postMat);
+          postMesh.position.set(px, py + railHM / 2 - 0.02, zOffset);
+          stairFlight.add(postMesh);
+        }
+        const topPostGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+        const topPostMesh = new THREE.Mesh(topPostGeo, postMat);
+        topPostMesh.position.set(runTotalLengthM, totalRiseM + railHM / 2 - 0.02, zOffset);
+        stairFlight.add(topPostMesh);
+
+        if (stair.railingStyle === "glass") {
+          const glassPanelGeo = new THREE.BoxGeometry(slopeLenM * 0.95, railHM * 0.75, 0.01);
+          const glassMesh = new THREE.Mesh(glassPanelGeo, glassMat);
+          glassMesh.position.set(
+            runTotalLengthM / 2,
+            totalRiseM / 2 + railHM * 0.45,
+            zOffset,
+          );
+          glassMesh.rotation.z = slopeAngle;
+          stairFlight.add(glassMesh);
+        }
+      }
+    }
+
+    const pickGeo = new THREE.BoxGeometry(runTotalLengthM + 0.1, totalRiseM + 0.1, widthM + 0.1);
+    const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    const pickMesh = new THREE.Mesh(pickGeo, pickMat);
+    pickMesh.position.set(runTotalLengthM / 2, totalRiseM / 2, 0);
+    pickMesh.userData.layoutStairId = stair.id;
+    stairFlight.add(pickMesh);
+
+    root.add(stairFlight);
+  }
+
+  private buildSpiralStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    treadMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const totalRiseM = fromMm(totalRiseMm);
+    const riserM = fromMm(actualRiserMm);
+    const totalAngleDeg = stair.spiralAngleDeg ?? 360;
+    const totalAngleRad = (totalAngleDeg * Math.PI) / 180;
+    const outerRadiusM = fromMm(stair.outerRadiusMm ?? (stair.widthMm ? stair.widthMm / 2 + 100 : 900));
+    const innerRadiusM = fromMm(stair.innerRadiusMm ?? 100);
+    const railHM = fromMm(stair.railingHeightMm ?? 900);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+
+    if (planMode) {
+      const centerDiscGeo = new THREE.CircleGeometry(innerRadiusM, 24);
+      centerDiscGeo.rotateX(-Math.PI / 2);
+      const disc = new THREE.Mesh(centerDiscGeo, new THREE.MeshBasicMaterial({ color: 0x64748b, depthTest: false }));
+      disc.position.y = 0.02;
+      group.add(disc);
+
+      const outerRingGeo = new THREE.RingGeometry(outerRadiusM - 0.02, outerRadiusM, 32);
+      outerRingGeo.rotateX(-Math.PI / 2);
+      const ring = new THREE.Mesh(outerRingGeo, new THREE.MeshBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false }));
+      ring.position.y = 0.02;
+      group.add(ring);
+
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x475569, depthTest: false });
+      for (let i = 0; i <= riserCount; i++) {
+        const theta = (i / riserCount) * totalAngleRad;
+        const cos = Math.cos(theta);
+        const sin = Math.sin(theta);
+        const p1 = new THREE.Vector3(innerRadiusM * cos, 0.025, innerRadiusM * sin);
+        const p2 = new THREE.Vector3(outerRadiusM * cos, 0.025, outerRadiusM * sin);
+        const lGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const lMesh = new THREE.Line(lGeo, lineMat);
+        group.add(lMesh);
+      }
+      root.add(group);
+      return;
+    }
+
+    // 3D Central Column Pole
+    const poleGeo = new THREE.CylinderGeometry(innerRadiusM, innerRadiusM, totalRiseM, 24);
+    const poleMesh = new THREE.Mesh(poleGeo, postMat);
+    poleMesh.position.set(0, totalRiseM / 2, 0);
+    group.add(poleMesh);
+
+    // Helical Wedge Steps
+    const dTheta = totalAngleRad / riserCount;
+    const handrailPts: THREE.Vector3[] = [];
+
+    for (let i = 0; i < riserCount; i++) {
+      const thetaStart = i * dTheta;
+      const thetaEnd = (i + 1) * dTheta + 0.04;
+      const stepY = i * riserM;
+
+      const wedgeShape = new THREE.Shape();
+      const x0 = innerRadiusM * Math.cos(thetaStart);
+      const z0 = innerRadiusM * Math.sin(thetaStart);
+      wedgeShape.moveTo(x0, z0);
+      wedgeShape.absarc(0, 0, innerRadiusM, thetaStart, thetaEnd, false);
+      wedgeShape.lineTo(outerRadiusM * Math.cos(thetaEnd), outerRadiusM * Math.sin(thetaEnd));
+      wedgeShape.absarc(0, 0, outerRadiusM, thetaEnd, thetaStart, true);
+      wedgeShape.closePath();
+
+      const treadGeo = new THREE.ExtrudeGeometry(wedgeShape, { depth: 0.035, bevelEnabled: false });
+      treadGeo.rotateX(Math.PI / 2);
+      const treadMesh = new THREE.Mesh(treadGeo, treadMat);
+      treadMesh.position.set(0, stepY + riserM, 0);
+      group.add(treadMesh);
+
+      const midTheta = thetaStart + dTheta * 0.8;
+      const bx = (outerRadiusM - 0.03) * Math.cos(midTheta);
+      const bz = (outerRadiusM - 0.03) * Math.sin(midTheta);
+      const postGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(bx, stepY + riserM + railHM / 2, bz);
+      group.add(post);
+
+      handrailPts.push(new THREE.Vector3(bx, stepY + riserM + railHM, bz));
+    }
+
+    if (handrailPts.length >= 2 && stair.hasRailingRight !== false) {
+      const curve = new THREE.CatmullRomCurve3(handrailPts);
+      const tubeGeo = new THREE.TubeGeometry(curve, riserCount * 4, 0.02, 8, false);
+      const railMesh = new THREE.Mesh(tubeGeo, railMat);
+      group.add(railMesh);
+    }
+
+    root.add(group);
+  }
+
+  private buildLShapeStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    levels: LayoutLevel[],
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    widthMm: number,
+    treadDepthMm: number,
+    nosingMm: number,
+    treadMat: THREE.Material,
+    riserMat: THREE.Material,
+    stringerMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    glassMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+
+    const count1 = Math.max(1, Math.floor(riserCount / 2));
+    const count2 = Math.max(1, riserCount - count1);
+    const run1LengthM = count1 * treadM;
+    const isLeft = stair.turnDirection === "left";
+    const turnSign = isLeft ? 1 : -1;
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const angle1 = Math.atan2(dzMm, dxMm);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle1;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false });
+
+      for (let i = 0; i <= count1; i++) {
+        const x = i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2),
+          new THREE.Vector3(x, 0.02, widthM / 2),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      const landX1 = run1LengthM;
+      const landX2 = run1LengthM + widthM;
+      const landGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(landX1, 0.02, -widthM / 2),
+        new THREE.Vector3(landX2, 0.02, -widthM / 2),
+        new THREE.Vector3(landX2, 0.02, widthM / 2 + (isLeft ? widthM : -widthM)),
+        new THREE.Vector3(landX1, 0.02, widthM / 2 + (isLeft ? widthM : -widthM)),
+        new THREE.Vector3(landX1, 0.02, -widthM / 2),
+      ]);
+      group.add(new THREE.Line(landGeo, lineMat));
+
+      root.add(group);
+      return;
+    }
+
+    for (let i = 0; i < count1; i++) {
+      const stepY = i * riserM;
+      const stepX = i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, 0);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX + treadLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      group.add(tread);
+    }
+
+    const landY = count1 * riserM;
+    const landGeo = new THREE.BoxGeometry(widthM, 0.05, widthM);
+    const landMesh = new THREE.Mesh(landGeo, treadMat);
+    landMesh.position.set(run1LengthM + widthM / 2, landY - 0.025, 0);
+    group.add(landMesh);
+
+    const run2Group = new THREE.Group();
+    run2Group.position.set(run1LengthM + widthM / 2, landY, 0);
+    run2Group.rotation.y = turnSign * (Math.PI / 2);
+
+    for (let i = 0; i < count2; i++) {
+      const stepY = i * riserM;
+      const stepX = (i + 1) * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX - treadM / 2, stepY + riserM / 2, 0);
+      run2Group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX, stepY + riserM - 0.015, 0);
+      run2Group.add(tread);
+    }
+    group.add(run2Group);
+
+    root.add(group);
+  }
+
+  private buildUShapeStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    levels: LayoutLevel[],
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    widthMm: number,
+    treadDepthMm: number,
+    nosingMm: number,
+    treadMat: THREE.Material,
+    riserMat: THREE.Material,
+    stringerMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    glassMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+    const gapM = 0.15;
+
+    const count1 = Math.max(1, Math.floor(riserCount / 2));
+    const count2 = Math.max(1, riserCount - count1);
+    const run1LengthM = count1 * treadM;
+    const isLeft = stair.turnDirection === "left";
+    const sideOffset = (widthM + gapM) * (isLeft ? 1 : -1);
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const angle1 = Math.atan2(dzMm, dxMm);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle1;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false });
+
+      for (let i = 0; i <= count1; i++) {
+        const x = i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2),
+          new THREE.Vector3(x, 0.02, widthM / 2),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      const landX = run1LengthM;
+      const landGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(landX, 0.02, -widthM / 2),
+        new THREE.Vector3(landX + widthM, 0.02, -widthM / 2),
+        new THREE.Vector3(landX + widthM, 0.02, -widthM / 2 + sideOffset + widthM),
+        new THREE.Vector3(landX, 0.02, -widthM / 2 + sideOffset + widthM),
+        new THREE.Vector3(landX, 0.02, -widthM / 2),
+      ]);
+      group.add(new THREE.Line(landGeo, lineMat));
+
+      for (let i = 0; i <= count2; i++) {
+        const x = run1LengthM - i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2 + sideOffset),
+          new THREE.Vector3(x, 0.02, widthM / 2 + sideOffset),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      root.add(group);
+      return;
+    }
+
+    for (let i = 0; i < count1; i++) {
+      const stepY = i * riserM;
+      const stepX = i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, 0);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX + treadLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      group.add(tread);
+    }
+
+    const landY = count1 * riserM;
+    const landWidth = widthM * 2 + gapM;
+    const landGeo = new THREE.BoxGeometry(widthM, 0.05, landWidth);
+    const landMesh = new THREE.Mesh(landGeo, treadMat);
+    landMesh.position.set(run1LengthM + widthM / 2, landY - 0.025, sideOffset / 2);
+    group.add(landMesh);
+
+    for (let i = 0; i < count2; i++) {
+      const stepY = landY + i * riserM;
+      const stepX = run1LengthM - i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, sideOffset);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX - treadLen / 2 + nosingM, stepY + riserM - 0.015, sideOffset);
+      group.add(tread);
+    }
+
+    root.add(group);
+  }
+
+  private buildStraightStairPlanSymbol(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    angle: number,
+    stepCount: number,
+    stepRunM: number,
+    widthM: number,
+    isSelected: boolean,
+  ) {
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle;
+
+    const runLenM = Math.max(0.1, (stepCount - 1) * stepRunM);
+    const halfW = widthM / 2;
+    const cutStep = Math.max(1, Math.floor(stepCount * 0.55));
+    const cutXM = cutStep * stepRunM;
+
+    const solidMat = new THREE.LineBasicMaterial({
+      color: isSelected ? STAIR_SEL : 0x18181b,
+      depthTest: false,
+    });
+    const dashedMat = new THREE.LineDashedMaterial({
+      color: isSelected ? STAIR_SEL : 0x94a3b8,
+      dashSize: 0.12,
+      gapSize: 0.06,
+      depthTest: false,
+    });
+
+    const boundaryGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.02, -halfW),
+      new THREE.Vector3(runLenM, 0.02, -halfW),
+      new THREE.Vector3(runLenM, 0.02, halfW),
+      new THREE.Vector3(0, 0.02, halfW),
+      new THREE.Vector3(0, 0.02, -halfW),
+    ]);
+    group.add(new THREE.Line(boundaryGeo, solidMat));
+
+    for (let i = 0; i < stepCount; i++) {
+      const x = i * stepRunM;
+      const isAboveCut = i > cutStep;
+      const stepGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, 0.02, -halfW),
+        new THREE.Vector3(x, 0.02, halfW),
+      ]);
+      const stepLine = new THREE.Line(stepGeo, isAboveCut ? dashedMat : solidMat);
+      if (isAboveCut) stepLine.computeLineDistances();
+      group.add(stepLine);
+    }
+
+    const breakOffset = 0.08;
+    for (const d of [-breakOffset, breakOffset]) {
+      const bx = cutXM + d;
+      const breakGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(bx - 0.15, 0.025, -halfW - 0.05),
+        new THREE.Vector3(bx + 0.15, 0.025, halfW + 0.05),
+      ]);
+      group.add(new THREE.Line(breakGeo, solidMat));
+    }
+
+    const dotGeo = new THREE.CircleGeometry(0.04, 16);
+    dotGeo.rotateX(-Math.PI / 2);
+    const dotMesh = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x2563eb, depthTest: false }));
+    dotMesh.position.set(0.08, 0.025, 0);
+    group.add(dotMesh);
+
+    const arrowEndXM = runLenM - 0.05;
+    const arrowLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0.08, 0.025, 0),
+      new THREE.Vector3(arrowEndXM, 0.025, 0),
+    ]);
+    group.add(new THREE.Line(arrowLineGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+
+    const headGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(arrowEndXM - 0.15, 0.025, -0.08),
+      new THREE.Vector3(arrowEndXM, 0.025, 0),
+      new THREE.Vector3(arrowEndXM - 0.15, 0.025, 0.08),
+    ]);
+    group.add(new THREE.Line(headGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+
+    root.add(group);
+  }
+
+  private buildRampGeometry(
+    root: THREE.Group,
+    ramp: LayoutRamp,
+    levels: LayoutLevel[],
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const baseLevel = levels.find((l) => l.id === ramp.levelId);
+    const baseElevMm = (baseLevel?.elevationMm ?? 0) + (ramp.baseOffsetMm || 0);
+    const totalRiseMm = deriveRiseMm(
+      levels,
+      ramp.levelId,
+      ramp.topLevelId,
+      ramp.baseOffsetMm,
+      ramp.topOffsetMm,
+    );
+    const dxMm = ramp.endXmm - ramp.startXmm;
+    const dzMm = ramp.endYmm - ramp.startYmm;
+    const runLengthMm = Math.hypot(dxMm, dzMm);
+
+    const widthMm = ramp.widthMm || 1200;
+    const thicknessMm = ramp.thicknessMm || 150;
+    const widthM = fromMm(widthMm);
+    const thickM = fromMm(thicknessMm);
+    const baseElevM = fromMm(baseElevMm);
+    const totalRiseM = fromMm(totalRiseMm);
+    const runLenM = fromMm(Math.max(100, runLengthMm));
+    const slopeLenM = Math.hypot(runLenM, totalRiseM);
+    const slopeAngle = Math.atan2(totalRiseM, runLenM);
+    const angle = Math.atan2(dzMm, dxMm);
+    const railHM = fromMm(ramp.railingHeightMm ?? 900);
+
+    const startM = new THREE.Vector3(fromMm(ramp.startXmm), baseElevM, fromMm(ramp.startYmm));
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? RAMP_SEL : 0x18181b, depthTest: false });
+      const halfW = widthM / 2;
+      const borderGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0.02, -halfW),
+        new THREE.Vector3(runLenM, 0.02, -halfW),
+        new THREE.Vector3(runLenM, 0.02, halfW),
+        new THREE.Vector3(0, 0.02, halfW),
+        new THREE.Vector3(0, 0.02, -halfW),
+      ]);
+      group.add(new THREE.Line(borderGeo, lineMat));
+
+      const arrowPts = [
+        new THREE.Vector3(0.1, 0.025, 0),
+        new THREE.Vector3(runLenM - 0.1, 0.025, 0),
+      ];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arrowPts), new THREE.LineBasicMaterial({ color: 0x0284c7, depthTest: false })));
+
+      const headPts = [
+        new THREE.Vector3(runLenM - 0.25, 0.025, -0.1),
+        new THREE.Vector3(runLenM - 0.1, 0.025, 0),
+        new THREE.Vector3(runLenM - 0.25, 0.025, 0.1),
+      ];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(headPts), new THREE.LineBasicMaterial({ color: 0x0284c7, depthTest: false })));
+
+      root.add(group);
+      return;
+    }
+
+    // 3D Ramp Solid Sloped Slab
+    const rampMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? RAMP_SEL : (ramp.color ? parseInt(ramp.color.replace("#", ""), 16) : RAMP_COLOR),
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const railMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? RAMP_SEL : 0x334155,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+
+    const slabGeo = new THREE.BoxGeometry(slopeLenM, thickM, widthM);
+    const slabMesh = new THREE.Mesh(slabGeo, rampMat);
+    slabMesh.position.set(
+      runLenM / 2,
+      totalRiseM / 2 - thickM / 2,
+      0,
+    );
+    slabMesh.rotation.z = slopeAngle;
+    group.add(slabMesh);
+
+    // Curbs on left and right edge
+    const curbHeight = 0.06;
+    const curbThick = 0.05;
+    for (const side of [-1, 1]) {
+      const curbGeo = new THREE.BoxGeometry(slopeLenM, curbHeight, curbThick);
+      const curbMesh = new THREE.Mesh(curbGeo, rampMat);
+      curbMesh.position.set(
+        runLenM / 2,
+        totalRiseM / 2 + curbHeight / 2,
+        side * (widthM / 2 - curbThick / 2),
+      );
+      curbMesh.rotation.z = slopeAngle;
+      group.add(curbMesh);
+    }
+
+    // Railings
+    if (ramp.hasRailingLeft !== false || ramp.hasRailingRight !== false) {
+      for (const side of [-1, 1]) {
+        if (side === -1 && ramp.hasRailingLeft === false) continue;
+        if (side === 1 && ramp.hasRailingRight === false) continue;
+
+        const zOffset = side * (widthM / 2 - 0.03);
+
+        const topRailGeo = new THREE.CylinderGeometry(0.02, 0.02, slopeLenM, 12);
+        topRailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const topRail = new THREE.Mesh(topRailGeo, railMat);
+        topRail.position.set(runLenM / 2, totalRiseM / 2 + railHM, zOffset);
+        group.add(topRail);
+
+        const midRailGeo = new THREE.CylinderGeometry(0.015, 0.015, slopeLenM, 12);
+        midRailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const midRail = new THREE.Mesh(midRailGeo, railMat);
+        midRail.position.set(runLenM / 2, totalRiseM / 2 + railHM * 0.75, zOffset);
+        group.add(midRail);
+
+        const postCount = Math.max(3, Math.ceil(runLenM / 1.2));
+        for (let i = 0; i <= postCount; i++) {
+          const t = i / postCount;
+          const px = t * runLenM;
+          const py = t * totalRiseM;
+          const postGeo = new THREE.CylinderGeometry(0.015, 0.015, railHM, 8);
+          const post = new THREE.Mesh(postGeo, railMat);
+          post.position.set(px, py + railHM / 2, zOffset);
+          group.add(post);
+        }
+      }
+    }
+
+    const pickGeo = new THREE.BoxGeometry(runLenM + 0.1, totalRiseM + thickM + 0.2, widthM + 0.1);
+    const pickMesh = new THREE.Mesh(pickGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    pickMesh.position.set(runLenM / 2, totalRiseM / 2, 0);
+    pickMesh.userData.layoutRampId = ramp.id;
+    group.add(pickMesh);
+
+    root.add(group);
+  }
+
   pickLayout(
     raycaster: THREE.Raycaster,
   ):
@@ -1282,6 +2332,8 @@ export default class LayoutSceneLayer {
     | { kind: "beam"; id: string }
     | { kind: "grid"; id: string }
     | { kind: "sketch-line"; id: string }
+    | { kind: "stair"; id: string }
+    | { kind: "ramp"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
@@ -1340,6 +2392,10 @@ export default class LayoutSceneLayer {
           return { kind: "grid", id: o.userData.layoutGridId as string };
         if (o.userData.layoutSketchLineId)
           return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
+        if (o.userData.layoutStairId)
+          return { kind: "stair", id: o.userData.layoutStairId as string };
+        if (o.userData.layoutRampId)
+          return { kind: "ramp", id: o.userData.layoutRampId as string };
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {
             kind: "underlay",
@@ -1543,6 +2599,8 @@ export default class LayoutSceneLayer {
       (mesh.material as THREE.Material).dispose();
     }
     for (const grp of this.gridMeshes.values()) this.disposeGroup(grp);
+    for (const grp of this.stairMeshes.values()) this.disposeGroup(grp);
+    for (const grp of this.rampMeshes.values()) this.disposeGroup(grp);
     this.wallMeshes.clear();
     this.doorMeshes.clear();
     this.windowMeshes.clear();
@@ -1550,6 +2608,8 @@ export default class LayoutSceneLayer {
     this.columnMeshes.clear();
     this.beamMeshes.clear();
     this.gridMeshes.clear();
+    this.stairMeshes.clear();
+    this.rampMeshes.clear();
     for (const mesh of this.levelSlabs.values()) {
       this.group.remove(mesh);
       mesh.geometry.dispose();
@@ -1592,6 +2652,14 @@ export default class LayoutSceneLayer {
     if (this.slabPreview) {
       this.disposeGroup(this.slabPreview);
       this.slabPreview = null;
+    }
+    if (this.stairPreview) {
+      this.disposeGroup(this.stairPreview);
+      this.stairPreview = null;
+    }
+    if (this.rampPreview) {
+      this.disposeGroup(this.rampPreview);
+      this.rampPreview = null;
     }
     if (this.tracePreviewGroup) {
       this.disposeGroup(this.tracePreviewGroup);

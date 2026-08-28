@@ -294,6 +294,8 @@ export default function WerkzeugApp() {
         }
         layout.finishWallDraw();
         layout.cancelSlabDraw();
+        layout.cancelStairDraw();
+        layout.cancelRampDraw();
         layout.finishSketchLineDraw();
         layout.clearTracePreview();
         layout.setArmedLayoutTool(null);
@@ -346,6 +348,18 @@ export default function WerkzeugApp() {
 
       if (e.key.toLowerCase() === "g" && !e.ctrlKey && !e.metaKey) {
         setArmedLayoutTool("grid");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("stair");
+        setArmedTool(null);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
+        setArmedLayoutTool("ramp");
         setArmedTool(null);
         return;
       }

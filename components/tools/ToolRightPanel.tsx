@@ -130,6 +130,8 @@ export default function ToolRightPanel({
   const columns = useLayoutDrawingStore((s) => s.columns);
   const beams = useLayoutDrawingStore((s) => s.beams);
   const gridLines = useLayoutDrawingStore((s) => s.gridLines);
+  const stairs = useLayoutDrawingStore((s) => s.stairs);
+  const ramps = useLayoutDrawingStore((s) => s.ramps);
   const groups = useLayoutDrawingStore((s) => s.groups);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
@@ -146,6 +148,8 @@ export default function ToolRightPanel({
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
@@ -189,6 +193,8 @@ export default function ToolRightPanel({
   const selectedDoor = doors.find((d) => d.id === selectedDoorId);
   const selectedWindow = windows.find((w) => w.id === selectedWindowId);
   const selectedSlab = slabs.find((s) => s.id === selectedSlabId);
+  const selectedStair = stairs.find((st) => st.id === (selectedStairId ?? selectedElements.find((e) => e.kind === "stair")?.id));
+  const selectedRamp = ramps.find((rp) => rp.id === (selectedRampId ?? selectedElements.find((e) => e.kind === "ramp")?.id));
   const selectedColumn = columns.find((item) => selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id));
   const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id));
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
@@ -196,7 +202,7 @@ export default function ToolRightPanel({
 
   const hasLineSelection = Boolean(selectedSketchLine || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedColumn || selectedBeam || hasLineSelection || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || hasLineSelection || selectedPlacement
   );
 
   const propertiesTitle = selectedWall
@@ -209,6 +215,10 @@ export default function ToolRightPanel({
     ? selectedSlab.kind === "roof"
       ? "Roof Properties"
       : "Floor Properties"
+    : selectedStair
+    ? "Stair Properties"
+    : selectedRamp
+    ? "Ramp Properties"
     : selectedColumn
     ? "Column Properties"
     : selectedBeam
@@ -1074,16 +1084,20 @@ function BulkSelectionProperties() {
   const slabs = useLayoutDrawingStore((s) => s.slabs);
   const columns = useLayoutDrawingStore((s) => s.columns);
   const beams = useLayoutDrawingStore((s) => s.beams);
+  const stairs = useLayoutDrawingStore((s) => s.stairs);
+  const ramps = useLayoutDrawingStore((s) => s.ramps);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
   const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
+  const updateStair = useLayoutDrawingStore((s) => s.updateStair);
+  const updateRamp = useLayoutDrawingStore((s) => s.updateRamp);
   const kinds = [...new Set(selected.map((item) => item.kind))];
   const kind = kinds.length === 1 ? kinds[0] : null;
   const ids = new Set(selected.filter((item) => item.kind === kind).map((item) => item.id));
-  const records = (kind === "wall" ? walls : kind === "door" ? doors : kind === "window" ? windows : kind === "slab" ? slabs : kind === "column" ? columns : kind === "beam" ? beams : [])
+  const records = (kind === "wall" ? walls : kind === "door" ? doors : kind === "window" ? windows : kind === "slab" ? slabs : kind === "column" ? columns : kind === "beam" ? beams : kind === "stair" ? stairs : kind === "ramp" ? ramps : [])
     .filter((item) => ids.has(item.id)) as unknown as Array<Record<string, unknown> & { id: string }>;
 
   const fields: Record<string, Array<{ key: string; label: string; suffix?: string }>> = {
@@ -1093,6 +1107,8 @@ function BulkSelectionProperties() {
     slab: [{ key: "thicknessMm", label: "Thickness", suffix: "mm" }, { key: "elevationOffsetMm", label: "Elevation offset", suffix: "mm" }],
     column: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "depthMm", label: "Depth", suffix: "mm" }, { key: "heightMm", label: "Height", suffix: "mm" }],
     beam: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "depthMm", label: "Depth", suffix: "mm" }, { key: "elevationOffsetMm", label: "Elevation offset", suffix: "mm" }],
+    stair: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "targetRiserHeightMm", label: "Target Riser", suffix: "mm" }, { key: "treadDepthMm", label: "Tread Depth", suffix: "mm" }],
+    ramp: [{ key: "widthMm", label: "Width", suffix: "mm" }, { key: "thicknessMm", label: "Thickness", suffix: "mm" }],
   };
 
   const apply = (key: string, value: number | string) => {
@@ -1104,6 +1120,8 @@ function BulkSelectionProperties() {
       else if (kind === "slab") void updateSlab(id, patch);
       else if (kind === "column") void updateColumn(id, patch);
       else if (kind === "beam") void updateBeam(id, patch);
+      else if (kind === "stair") void updateStair(id, patch);
+      else if (kind === "ramp") void updateRamp(id, patch);
     }
   };
 

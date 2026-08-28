@@ -33,17 +33,43 @@ export default function ToolOptionsBar() {
   const setDraftWindowSize = useLayoutDrawingStore((s) => s.setDraftWindowSize);
   const draftSlabThicknessMm = useLayoutDrawingStore((s) => s.draftSlabThicknessMm);
   const setDraftSlabThicknessMm = useLayoutDrawingStore((s) => s.setDraftSlabThicknessMm);
+  const draftStairWidthMm = useLayoutDrawingStore((s) => s.draftStairWidthMm);
+  const setDraftStairWidthMm = useLayoutDrawingStore((s) => s.setDraftStairWidthMm);
+  const draftStairTargetRiserMm = useLayoutDrawingStore((s) => s.draftStairTargetRiserMm);
+  const setDraftStairTargetRiserMm = useLayoutDrawingStore((s) => s.setDraftStairTargetRiserMm);
+  const draftStairTreadDepthMm = useLayoutDrawingStore((s) => s.draftStairTreadDepthMm);
+  const setDraftStairTreadDepthMm = useLayoutDrawingStore((s) => s.setDraftStairTreadDepthMm);
+  const draftStairType = useLayoutDrawingStore((s) => s.draftStairType);
+  const setDraftStairType = useLayoutDrawingStore((s) => s.setDraftStairType);
+  const draftStairBaseLevelId = useLayoutDrawingStore((s) => s.draftStairBaseLevelId);
+  const setDraftStairBaseLevelId = useLayoutDrawingStore((s) => s.setDraftStairBaseLevelId);
+  const draftStairTopLevelId = useLayoutDrawingStore((s) => s.draftStairTopLevelId);
+  const setDraftStairTopLevelId = useLayoutDrawingStore((s) => s.setDraftStairTopLevelId);
+  const draftRampWidthMm = useLayoutDrawingStore((s) => s.draftRampWidthMm);
+  const setDraftRampWidthMm = useLayoutDrawingStore((s) => s.setDraftRampWidthMm);
+  const draftRampThicknessMm = useLayoutDrawingStore((s) => s.draftRampThicknessMm);
+  const setDraftRampThicknessMm = useLayoutDrawingStore((s) => s.setDraftRampThicknessMm);
+  const draftRampBaseLevelId = useLayoutDrawingStore((s) => s.draftRampBaseLevelId);
+  const setDraftRampBaseLevelId = useLayoutDrawingStore((s) => s.setDraftRampBaseLevelId);
+  const draftRampTopLevelId = useLayoutDrawingStore((s) => s.draftRampTopLevelId);
+  const setDraftRampTopLevelId = useLayoutDrawingStore((s) => s.setDraftRampTopLevelId);
 
   // Selection
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
   const deleteSlab = useLayoutDrawingStore((s) => s.deleteSlab);
+  const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
+  const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
+  const duplicateStair = useLayoutDrawingStore((s) => s.duplicateStair);
+  const duplicateRamp = useLayoutDrawingStore((s) => s.duplicateRamp);
 
   // Markup Store
   const armedTool = useToolMarkupStore((s) => s.armedTool);
@@ -57,7 +83,7 @@ export default function ToolOptionsBar() {
   const duplicatePlacement = useToolMarkupStore((s) => s.duplicatePlacement);
 
   const hasSelection = Boolean(
-    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedPlacementId
+    selectedWallId || selectedDoorId || selectedWindowId || selectedSlabId || selectedStairId || selectedRampId || selectedPlacementId
   );
 
   return (
@@ -230,6 +256,168 @@ export default function ToolOptionsBar() {
           </div>
         )}
 
+        {/* STAIR TOOL OPTIONS */}
+        {armedLayoutTool === "stair" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-amber-500">Stair Properties:</span>
+            {/* Shape */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Type:</span>
+              {(
+                [
+                  { id: "straight", label: "Straight" },
+                  { id: "l-shape", label: "L-Shape" },
+                  { id: "u-shape", label: "U-Shape" },
+                  { id: "spiral", label: "Spiral" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setDraftStairType(t.id)}
+                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold border ${
+                    draftStairType === t.id
+                      ? "border-amber-500 bg-amber-500/20 text-amber-500"
+                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Base Level */}
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Base:</span>
+              <select
+                value={draftStairBaseLevelId ?? markupFloorId ?? levels[0]?.id ?? ""}
+                onChange={(e) => {
+                  setDraftStairBaseLevelId(e.target.value);
+                  setMarkupFloorId(e.target.value);
+                }}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px]"
+              >
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} ({lvl.elevationMm}mm)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Top Level */}
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Top:</span>
+              <select
+                value={draftStairTopLevelId ?? levels[1]?.id ?? levels[0]?.id ?? ""}
+                onChange={(e) => setDraftStairTopLevelId(e.target.value)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px]"
+              >
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} ({lvl.elevationMm}mm)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Width */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Width:</span>
+              {[900, 1000, 1200].map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setDraftStairWidthMm(w)}
+                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold border ${
+                    draftStairWidthMm === w
+                      ? "border-amber-500 bg-amber-500/20 text-amber-500"
+                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)]"
+                  }`}
+                >
+                  {w}mm
+                </button>
+              ))}
+            </div>
+
+            <span className="text-[10px] text-emerald-500 font-medium italic">Click start, then click end of stair run</span>
+          </div>
+        )}
+
+        {/* RAMP TOOL OPTIONS */}
+        {armedLayoutTool === "ramp" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-amber-500">Ramp Properties:</span>
+            {/* Base Level */}
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Base:</span>
+              <select
+                value={draftRampBaseLevelId ?? markupFloorId ?? levels[0]?.id ?? ""}
+                onChange={(e) => {
+                  setDraftRampBaseLevelId(e.target.value);
+                  setMarkupFloorId(e.target.value);
+                }}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px]"
+              >
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} ({lvl.elevationMm}mm)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Top Level */}
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Top:</span>
+              <select
+                value={draftRampTopLevelId ?? levels[1]?.id ?? levels[0]?.id ?? ""}
+                onChange={(e) => setDraftRampTopLevelId(e.target.value)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px]"
+              >
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} ({lvl.elevationMm}mm)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Width */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Width:</span>
+              {[1000, 1200, 1500].map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setDraftRampWidthMm(w)}
+                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold border ${
+                    draftRampWidthMm === w
+                      ? "border-amber-500 bg-amber-500/20 text-amber-500"
+                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)]"
+                  }`}
+                >
+                  {w}mm
+                </button>
+              ))}
+            </div>
+
+            {/* Thickness */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Thick:</span>
+              <input
+                type="number"
+                value={draftRampThicknessMm}
+                onChange={(e) => setDraftRampThicknessMm(Number(e.target.value))}
+                className="w-14 rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right font-mono text-[11px]"
+              />
+              <span className="text-[10px] text-[var(--text-muted)]">mm</span>
+            </div>
+
+            <span className="text-[10px] text-emerald-500 font-medium italic">Click start, then click top landing</span>
+          </div>
+        )}
+
         {/* 3D SHAPE OPTIONS */}
         {armedTool && armedTool !== "note" && (
           <div className="flex items-center gap-3">
@@ -320,6 +508,63 @@ export default function ToolOptionsBar() {
               <LuTrash2 className="h-3 w-3" />
               <span>Delete Window</span>
             </button>
+          )}
+
+          {selectedSlabId && (
+            <button
+              type="button"
+              onClick={() => deleteSlab(selectedSlabId)}
+              className="flex items-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/30 text-[10px] font-semibold text-red-500 hover:bg-red-500/20"
+            >
+              <LuTrash2 className="h-3 w-3" />
+              <span>Delete Slab</span>
+            </button>
+          )}
+
+          {selectedStairId && (
+            <>
+              <button
+                type="button"
+                onClick={() => duplicateStair(selectedStairId)}
+                title="Duplicate Stair"
+                className="flex items-center gap-1 rounded-md px-2 py-1 bg-[var(--surface-overlay)] border border-[var(--panel-divider)] text-[10px] font-semibold text-[var(--text-body)] hover:text-[var(--text-strong)]"
+              >
+                <LuCopy className="h-3 w-3" />
+                <span>Duplicate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteStair(selectedStairId)}
+                title="Delete Stair"
+                className="flex items-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/30 text-[10px] font-semibold text-red-500 hover:bg-red-500/20"
+              >
+                <LuTrash2 className="h-3 w-3" />
+                <span>Delete</span>
+              </button>
+            </>
+          )}
+
+          {selectedRampId && (
+            <>
+              <button
+                type="button"
+                onClick={() => duplicateRamp(selectedRampId)}
+                title="Duplicate Ramp"
+                className="flex items-center gap-1 rounded-md px-2 py-1 bg-[var(--surface-overlay)] border border-[var(--panel-divider)] text-[10px] font-semibold text-[var(--text-body)] hover:text-[var(--text-strong)]"
+              >
+                <LuCopy className="h-3 w-3" />
+                <span>Duplicate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteRamp(selectedRampId)}
+                title="Delete Ramp"
+                className="flex items-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/30 text-[10px] font-semibold text-red-500 hover:bg-red-500/20"
+              >
+                <LuTrash2 className="h-3 w-3" />
+                <span>Delete</span>
+              </button>
+            </>
           )}
 
           {selectedPlacementId && (
