@@ -57,9 +57,10 @@ export function detectMepClashes(
 
   // Check Ducts vs Walls
   for (const d of ducts) {
+    const ductSystem = d.systemType ?? (d as LayoutDuct & { system?: LayoutDuct["systemType"] }).system ?? "supply";
     const dp1 = { x: d.startXmm, y: d.startYmm };
     const dp2 = { x: d.endXmm, y: d.endYmm };
-    const dElev = levelElevationMm + d.elevationOffsetMm;
+    const dElev = levelElevationMm + (d.elevationMm ?? d.elevationOffsetMm ?? 0);
 
     for (const w of walls) {
       if (w.levelId !== d.levelId) continue;
@@ -81,7 +82,7 @@ export function detectMepClashes(
             pointMm: { xMm: Math.round(hit.x), yMm: Math.round(hit.y) },
             elevationMm: dElev,
             severity: "hard_clash",
-            description: `Duct (${d.system}) penetrates Wall without dedicated sleeve opening`,
+            description: `Duct (${ductSystem}) penetrates Wall without dedicated sleeve opening`,
           });
         }
       }
@@ -117,9 +118,10 @@ export function detectMepClashes(
 
   // Check Pipes vs Walls
   for (const p of pipes) {
+    const pipeSystem = p.systemType ?? (p as LayoutPipe & { system?: LayoutPipe["systemType"] }).system ?? "hydronic_supply";
     const pp1 = { x: p.startXmm, y: p.startYmm };
     const pp2 = { x: p.endXmm, y: p.endYmm };
-    const pElev = levelElevationMm + p.elevationOffsetMm;
+    const pElev = levelElevationMm + (p.elevationMm ?? p.elevationOffsetMm ?? 0);
 
     for (const w of walls) {
       if (w.levelId !== p.levelId) continue;
@@ -140,7 +142,7 @@ export function detectMepClashes(
             pointMm: { xMm: Math.round(hit.x), yMm: Math.round(hit.y) },
             elevationMm: pElev,
             severity: "hard_clash",
-            description: `Pipe (${p.system}) penetrates Wall without sleeve`,
+            description: `Pipe (${pipeSystem}) penetrates Wall without sleeve`,
           });
         }
       }

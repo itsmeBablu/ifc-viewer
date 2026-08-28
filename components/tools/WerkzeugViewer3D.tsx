@@ -4655,8 +4655,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
         if (
           (layoutStore.armedLayoutTool === "duct" ||
+            layoutStore.armedLayoutTool === "flex_duct" ||
+            layoutStore.armedLayoutTool === "mep_placeholder" ||
             layoutStore.armedLayoutTool === "pipe" ||
             layoutStore.armedLayoutTool === "cabletray" ||
+            layoutStore.armedLayoutTool === "wire" ||
+            layoutStore.armedLayoutTool === "workplane" ||
             layoutStore.armedLayoutTool === "equipment") &&
           cam &&
           layoutLayer
@@ -4701,7 +4705,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (snapHintText) break;
               }
 
-              const start = layoutStore.ductDraw?.startPointMm ?? null;
+              const start = layoutStore.ductDraw?.start ?? null;
+              if (start) layoutStore.updateDuctDrawCursor(effectiveCursor);
               layoutLayer.setMepPreview(kind, start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftDuctElevationMm,
@@ -4733,7 +4738,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (snapHintText) break;
               }
 
-              const start = layoutStore.pipeDraw?.startPointMm ?? null;
+              const start = layoutStore.pipeDraw?.start ?? null;
+              if (start) layoutStore.updatePipeDrawCursor(effectiveCursor);
               layoutLayer.setMepPreview("pipe", start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftPipeElevationMm,
@@ -4745,7 +4751,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 clientY: e.clientY,
               });
             } else if (kind === "cabletray") {
-              const start = layoutStore.cableTrayDraw?.startPointMm ?? null;
+              const start = layoutStore.cableTrayDraw?.start ?? null;
+              if (start) layoutStore.updateCableTrayDrawCursor(cursor);
               layoutLayer.setMepPreview("cabletray", start, cursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftCableTrayElevationMm,
@@ -4759,6 +4766,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               });
             } else if (kind === "wire") {
               const start = layoutStore.wireDraw?.start ?? null;
+              if (start) layoutStore.updateWireDrawCursor(cursor);
               layoutLayer.setMepPreview("wire", start, cursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: 2800,
@@ -4996,7 +5004,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (layoutStore.stairDraw) {
                 layoutStore.updateStairDrawCursor(plan);
                 const sStart = layoutStore.stairDraw.start;
-                const d = Math.round(Math.hypot(plan.xMm - sStart.xMm, plan.yMm - sStart.yMm));
+                const d = sStart ? Math.round(Math.hypot(plan.xMm - sStart.xMm, plan.yMm - sStart.yMm)) : 0;
                 ms.setDragSnapHint({
                   text: `Stair run: ${d}mm · click to finish`,
                   clientX: e.clientX,
@@ -5042,7 +5050,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (layoutStore.rampDraw) {
                 layoutStore.updateRampDrawCursor(plan);
                 const rStart = layoutStore.rampDraw.start;
-                const d = Math.round(Math.hypot(plan.xMm - rStart.xMm, plan.yMm - rStart.yMm));
+                const d = rStart ? Math.round(Math.hypot(plan.xMm - rStart.xMm, plan.yMm - rStart.yMm)) : 0;
                 ms.setDragSnapHint({
                   text: `Ramp run: ${d}mm · click to finish`,
                   clientX: e.clientX,
@@ -5855,6 +5863,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (!layoutStore.ductDraw) {
                   layoutStore.startDuctDraw(levelId, plan);
                 } else {
+                  layoutStore.updateDuctDrawCursor(plan);
                   void layoutStore.finishDuctDraw().then((duct) => {
                     if (duct && (toolKind === "flex_duct" || toolKind === "mep_placeholder")) {
                       void layoutStore.updateDuct(duct.id, {
@@ -5900,6 +5909,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (!layoutStore.pipeDraw) {
                   layoutStore.startPipeDraw(levelId, plan);
                 } else {
+                  layoutStore.updatePipeDrawCursor(plan);
                   void layoutStore.finishPipeDraw();
                 }
                 return;
@@ -5925,6 +5935,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (!layoutStore.cableTrayDraw) {
                   layoutStore.startCableTrayDraw(levelId, plan);
                 } else {
+                  layoutStore.updateCableTrayDrawCursor(plan);
                   void layoutStore.finishCableTrayDraw();
                 }
                 return;
@@ -5950,6 +5961,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (!layoutStore.wireDraw) {
                   layoutStore.startWireDraw(levelId, plan);
                 } else {
+                  layoutStore.updateWireDrawCursor(plan);
                   void layoutStore.finishWireDraw();
                 }
                 return;
@@ -6629,6 +6641,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           ) {
             const cam = preparePointerRayRef.current(e.clientX, e.clientY);
             const layoutLayer = layoutLayerRef.current;
+            if (!cam || !layoutLayer) return;
               if (e.ctrlKey || e.metaKey) {
                 // Control-drag always starts a box selection window (both in 2D and 3D)
                 marqueeActive = true;

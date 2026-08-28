@@ -45,6 +45,8 @@ import {
   LuDroplets,
   LuActivity,
   LuShieldAlert,
+  LuLock,
+  LuLockOpen,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -117,6 +119,40 @@ function Cluster({
         {label}
       </span>
     </div>
+  );
+}
+
+function MepToolDropdown({
+  label,
+  title,
+  open,
+  active,
+  icon,
+  onToggle,
+  children,
+}: {
+  label: string;
+  title: string;
+  open: boolean;
+  active: boolean;
+  icon: React.ReactNode;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Cluster label={label}>
+      <div className="relative">
+        <RibbonBtn active={active || open} onClick={onToggle} title={title}>
+          {icon}
+          <LuChevronDown className={`ml-0.5 h-2.5 w-2.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} />
+        </RibbonBtn>
+        {open && (
+          <div className="absolute top-full left-0 z-50 mt-1 grid min-w-[148px] grid-cols-1 gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl animate-in fade-in zoom-in-95">
+            {children}
+          </div>
+        )}
+      </div>
+    </Cluster>
   );
 }
 
@@ -393,10 +429,15 @@ export default function ToolRibbon({
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
+  const mepArchitectureLocked = useLayoutDrawingStore((s) => s.mepArchitectureLocked);
+  const setMepArchitectureLocked = useLayoutDrawingStore((s) => s.setMepArchitectureLocked);
   const setDraftDuctShape = useLayoutDrawingStore((s) => s.setDraftDuctShape);
   const setDraftPipeSystem = useLayoutDrawingStore((s) => s.setDraftPipeSystem);
   const setDraftCableTrayType = useLayoutDrawingStore((s) => s.setDraftCableTrayType);
   const setDraftEquipmentCategory = useLayoutDrawingStore((s) => s.setDraftEquipmentCategory);
+  const draftDuctShape = useLayoutDrawingStore((s) => s.draftDuctShape);
+  const draftPipeSystem = useLayoutDrawingStore((s) => s.draftPipeSystem);
+  const draftEquipmentCategory = useLayoutDrawingStore((s) => s.draftEquipmentCategory);
   const [sketchError, setSketchError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<RibbonTab>(mepModeActive ? "mep" : "vstudio");
@@ -406,7 +447,19 @@ export default function ToolRibbon({
   const [saveMenuOpen, setSaveMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [isTouchMode, setIsTouchMode] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | "annotate" | "snaps" | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<
+    | "build"
+    | "shapes"
+    | "rooms"
+    | "annotate"
+    | "snaps"
+    | "mep-hvac"
+    | "mep-piping"
+    | "mep-electrical"
+    | "mep-model"
+    | "mep-analysis"
+    | null
+  >(null);
   const [selectionFilterOpen, setSelectionFilterOpen] = useState(false);
   const [copyToLevelOpen, setCopyToLevelOpen] = useState(false);
 
@@ -540,6 +593,13 @@ export default function ToolRibbon({
     setArmedTool(null);
     const active = armedLayoutTool === id || ((id === "floor" || id === "roof") && sketchTargetKind === id);
     setArmedLayoutTool(active ? null : id);
+    setActiveDropdown(null);
+  };
+
+  const handleSelectMepTool = (id: LayoutToolId) => {
+    setArmedTool(null);
+    setArmedLayoutTool(id);
+    setActiveDropdown(null);
   };
 
   const handleSelectShape = (shape: MarkupShapeType) => {
@@ -838,6 +898,14 @@ export default function ToolRibbon({
     <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
       {/* Universal Modify Tools */}
       <Cluster label="Modify Tools">
+        <RibbonBtn
+          active={rightPanelOpen}
+          onClick={() => setRightPanelOpen(true)}
+          title="Edit all properties for the selected element"
+        >
+          <LuSlidersHorizontal className="h-4 w-4 text-amber-500" />
+          <span className="text-[9px]">Edit Properties</span>
+        </RibbonBtn>
         <div className="relative">
           <RibbonBtn active={selectionFilterOpen} onClick={() => setSelectionFilterOpen((open) => !open)} title="Selection Filter / Select Similar">
             <LuFilter className="h-4 w-4" />
@@ -1099,13 +1167,43 @@ export default function ToolRibbon({
   ];
 
   // -- MEP tab content clusters -----------------------------------------------
+  const hvacActive = armedLayoutTool === "duct" || armedLayoutTool === "flex_duct" || armedLayoutTool === "mep_placeholder" ||
+    (armedLayoutTool === "equipment" && ["air_terminal", "diffuser_supply", "diffuser_extract"].includes(draftEquipmentCategory));
+  const pipingActive = armedLayoutTool === "pipe" ||
+    (armedLayoutTool === "equipment" && draftEquipmentCategory === "sprinkler");
+  const electricalActive = armedLayoutTool === "cabletray" || armedLayoutTool === "wire" ||
+    (armedLayoutTool === "equipment" && ["lighting_fixture", "panel", "socket"].includes(draftEquipmentCategory));
+  const modelActive = armedLayoutTool === "workplane" ||
+    (armedLayoutTool === "equipment" && draftEquipmentCategory === "generic_component");
+
+  const hvacIcon = armedLayoutTool === "duct"
+    ? <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-400">{draftDuctShape === "round" ? "◯" : draftDuctShape === "oval" ? "⬭" : "▭"}</span>
+    : armedLayoutTool === "flex_duct"
+    ? <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-300">〰</span>
+    : armedLayoutTool === "mep_placeholder"
+    ? <span className="flex h-4 w-4 items-center justify-center font-bold text-sky-400">⋯</span>
+    : <LuFan className="h-4 w-4 text-cyan-400" />;
+  const pipingIcon = draftPipeSystem === "hydronic_supply"
+    ? <LuFlame className="h-4 w-4 text-rose-500" />
+    : <LuDroplets className="h-4 w-4 text-blue-500" />;
+  const electricalIcon = armedLayoutTool === "equipment" && draftEquipmentCategory === "lighting_fixture"
+    ? <LuSun className="h-4 w-4 text-yellow-300" />
+    : <LuZap className="h-4 w-4 text-yellow-400" />;
+
   const mepHvacCluster = (
-    <Cluster label="HVAC / Air">
+    <MepToolDropdown
+      label="HVAC / Air"
+      title="HVAC and air tools"
+      open={activeDropdown === "mep-hvac"}
+      active={hvacActive}
+      icon={hvacIcon}
+      onToggle={() => setActiveDropdown(activeDropdown === "mep-hvac" ? null : "mep-hvac")}
+    >
       <RibbonBtn
-        active={armedLayoutTool === "duct" && useLayoutDrawingStore.getState().draftDuctShape === "rectangular"}
+        active={armedLayoutTool === "duct" && draftDuctShape === "rectangular"}
         onClick={() => {
           setDraftDuctShape("rectangular");
-          handleSelectLayoutTool("duct");
+          handleSelectMepTool("duct");
         }}
         title="Rectangular Air Duct"
       >
@@ -1114,10 +1212,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "duct" && useLayoutDrawingStore.getState().draftDuctShape === "round"}
+        active={armedLayoutTool === "duct" && draftDuctShape === "round"}
         onClick={() => {
           setDraftDuctShape("round");
-          handleSelectLayoutTool("duct");
+          handleSelectMepTool("duct");
         }}
         title="Round Air Duct"
       >
@@ -1126,10 +1224,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "duct" && useLayoutDrawingStore.getState().draftDuctShape === "oval"}
+        active={armedLayoutTool === "duct" && draftDuctShape === "oval"}
         onClick={() => {
           setDraftDuctShape("oval");
-          handleSelectLayoutTool("duct");
+          handleSelectMepTool("duct");
         }}
         title="Flat Oval Air Duct"
       >
@@ -1140,7 +1238,7 @@ export default function ToolRibbon({
       <RibbonBtn
         active={armedLayoutTool === "flex_duct"}
         onClick={() => {
-          handleSelectLayoutTool("flex_duct");
+          handleSelectMepTool("flex_duct");
         }}
         title="Flexible Duct Connection (Flexkanal)"
       >
@@ -1151,7 +1249,7 @@ export default function ToolRibbon({
       <RibbonBtn
         active={armedLayoutTool === "mep_placeholder"}
         onClick={() => {
-          handleSelectLayoutTool("mep_placeholder");
+          handleSelectMepTool("mep_placeholder");
         }}
         title="Duct / Pipe Route Placeholder (Platzhalter)"
       >
@@ -1160,10 +1258,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "air_terminal"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "air_terminal"}
         onClick={() => {
           setDraftEquipmentCategory("air_terminal");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Air Terminal / Diffuser (Luftdurchlass)"
       >
@@ -1172,10 +1270,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "diffuser_supply"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "diffuser_supply"}
         onClick={() => {
           setDraftEquipmentCategory("diffuser_supply");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Supply Air Diffuser (Zuluft)"
       >
@@ -1184,26 +1282,33 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "diffuser_extract"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "diffuser_extract"}
         onClick={() => {
           setDraftEquipmentCategory("diffuser_extract");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Extract Air Diffuser (Abluft)"
       >
         <LuFan className="h-4 w-4 text-amber-400" />
         <span className="text-[9px]">Extract</span>
       </RibbonBtn>
-    </Cluster>
+    </MepToolDropdown>
   );
 
   const mepPipingCluster = (
-    <Cluster label="Piping & Fire">
+    <MepToolDropdown
+      label="Piping & Fire"
+      title="Piping and fire protection tools"
+      open={activeDropdown === "mep-piping"}
+      active={pipingActive}
+      icon={pipingIcon}
+      onToggle={() => setActiveDropdown(activeDropdown === "mep-piping" ? null : "mep-piping")}
+    >
       <RibbonBtn
-        active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "hydronic_supply"}
+        active={armedLayoutTool === "pipe" && draftPipeSystem === "hydronic_supply"}
         onClick={() => {
           setDraftPipeSystem("hydronic_supply");
-          handleSelectLayoutTool("pipe");
+          handleSelectMepTool("pipe");
         }}
         title="Hydronic Heating Supply Pipe (Vorlauf)"
       >
@@ -1212,10 +1317,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "hydronic_return"}
+        active={armedLayoutTool === "pipe" && draftPipeSystem === "hydronic_return"}
         onClick={() => {
           setDraftPipeSystem("hydronic_return");
-          handleSelectLayoutTool("pipe");
+          handleSelectMepTool("pipe");
         }}
         title="Hydronic Heating Return Pipe (Rücklauf)"
       >
@@ -1224,10 +1329,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "domestic_cold"}
+        active={armedLayoutTool === "pipe" && draftPipeSystem === "domestic_cold"}
         onClick={() => {
           setDraftPipeSystem("domestic_cold");
-          handleSelectLayoutTool("pipe");
+          handleSelectMepTool("pipe");
         }}
         title="Domestic Cold Water Pipe"
       >
@@ -1236,10 +1341,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "sanitary_waste"}
+        active={armedLayoutTool === "pipe" && draftPipeSystem === "sanitary_waste"}
         onClick={() => {
           setDraftPipeSystem("sanitary_waste");
-          handleSelectLayoutTool("pipe");
+          handleSelectMepTool("pipe");
         }}
         title="Sanitary Drainage / Waste Pipe"
       >
@@ -1248,26 +1353,33 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "sprinkler"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "sprinkler"}
         onClick={() => {
           setDraftEquipmentCategory("sprinkler");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Fire Suppression Sprinkler Head"
       >
         <span className="flex h-4 w-4 items-center justify-center font-bold text-red-500">🚿</span>
         <span className="text-[9px]">Sprinkler</span>
       </RibbonBtn>
-    </Cluster>
+    </MepToolDropdown>
   );
 
   const mepElectricalCluster = (
-    <Cluster label="Electrical">
+    <MepToolDropdown
+      label="Electrical"
+      title="Electrical tools"
+      open={activeDropdown === "mep-electrical"}
+      active={electricalActive}
+      icon={electricalIcon}
+      onToggle={() => setActiveDropdown(activeDropdown === "mep-electrical" ? null : "mep-electrical")}
+    >
       <RibbonBtn
         active={armedLayoutTool === "cabletray"}
         onClick={() => {
           setDraftCableTrayType("ladder");
-          handleSelectLayoutTool("cabletray");
+          handleSelectMepTool("cabletray");
         }}
         title="Cable Tray (Kabelpritsche)"
       >
@@ -1278,7 +1390,7 @@ export default function ToolRibbon({
       <RibbonBtn
         active={armedLayoutTool === "wire"}
         onClick={() => {
-          handleSelectLayoutTool("wire");
+          handleSelectMepTool("wire");
         }}
         title="Electrical Wire / Conductor Run (Leitung)"
       >
@@ -1287,10 +1399,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "lighting_fixture"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "lighting_fixture"}
         onClick={() => {
           setDraftEquipmentCategory("lighting_fixture");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Lighting Fixture (Leuchte)"
       >
@@ -1299,10 +1411,10 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "panel"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "panel"}
         onClick={() => {
           setDraftEquipmentCategory("panel");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Electrical Distribution Panel / Box"
       >
@@ -1311,26 +1423,33 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "socket"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "socket"}
         onClick={() => {
           setDraftEquipmentCategory("socket");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Power Socket / Outlet"
       >
         <span className="flex h-4 w-4 items-center justify-center font-bold text-amber-400">🔌</span>
         <span className="text-[9px]">Socket</span>
       </RibbonBtn>
-    </Cluster>
+    </MepToolDropdown>
   );
 
   const mepModelCluster = (
-    <Cluster label="Model & Reference">
+    <MepToolDropdown
+      label="Model & Reference"
+      title="Model and reference tools"
+      open={activeDropdown === "mep-model"}
+      active={modelActive}
+      icon={<IconMarkupCube className="h-4 w-4 text-slate-300" />}
+      onToggle={() => setActiveDropdown(activeDropdown === "mep-model" ? null : "mep-model")}
+    >
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "generic_component"}
+        active={armedLayoutTool === "equipment" && draftEquipmentCategory === "generic_component"}
         onClick={() => {
           setDraftEquipmentCategory("generic_component");
-          handleSelectLayoutTool("equipment");
+          handleSelectMepTool("equipment");
         }}
         title="Generic MEP Model Component"
       >
@@ -1341,22 +1460,30 @@ export default function ToolRibbon({
       <RibbonBtn
         active={armedLayoutTool === "workplane"}
         onClick={() => {
-          handleSelectLayoutTool("workplane");
+          handleSelectMepTool("workplane");
         }}
         title="Set Reference Work Plane (Festlegen / Arbeitsebene)"
       >
         <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-400">▱</span>
         <span className="text-[9px]">Work Plane</span>
       </RibbonBtn>
-    </Cluster>
+    </MepToolDropdown>
   );
 
   const mepCalculationsCluster = (
-    <Cluster label="Analysis & Sizing" border={false}>
+    <MepToolDropdown
+      label="Analysis & Sizing"
+      title="Analysis and sizing tools"
+      open={activeDropdown === "mep-analysis"}
+      active={false}
+      icon={<LuActivity className="h-4 w-4 text-cyan-400" />}
+      onToggle={() => setActiveDropdown(activeDropdown === "mep-analysis" ? null : "mep-analysis")}
+    >
       <RibbonBtn
         active={false}
         onClick={() => {
           onOpenRoomSchedule?.();
+          setActiveDropdown(null);
         }}
         title="View Room Ventilation Airflows & Heat Loads (DIN 1946-6 / Solar-Computer)"
       >
@@ -1368,13 +1495,14 @@ export default function ToolRibbon({
         active={false}
         onClick={() => {
           window.dispatchEvent(new CustomEvent("mep-run-clash-check"));
+          setActiveDropdown(null);
         }}
         title="Check MEP Penetrations vs Structural Walls & Columns"
       >
         <LuShieldAlert className="h-4 w-4 text-amber-400" />
         <span className="text-[9px]">Clash Check</span>
       </RibbonBtn>
-    </Cluster>
+    </MepToolDropdown>
   );
 
   const mepClusters = [
@@ -1637,8 +1765,8 @@ export default function ToolRibbon({
             </button>
           </div>
 
-          {/* Center: Tools Cluster or Sketch Slabs Conversion */}
-          {sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
+          {/* Center: mode-specific touch ribbon */}
+          {!mepModeActive && sketchLines.length > 0 && armedLayoutTool !== "lines" ? (
             <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
               <span className="text-xs font-bold text-yellow-400 px-1.5">
                 {sketchLines.length} {sketchLines.length === 1 ? "Line" : "Lines"}
@@ -1682,6 +1810,14 @@ export default function ToolRibbon({
                 <LuTrash2 className="h-4 w-4" />
               </button>
             </div>
+          ) : mepModeActive ? (
+            <div className="flex items-center gap-1">
+              {mepClusters.map((cluster) => (
+                <div key={cluster.key} className="flex-shrink-0">
+                  {cluster.node}
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="flex items-center gap-1">
               {buildCluster}
@@ -1691,11 +1827,33 @@ export default function ToolRibbon({
             </div>
           )}
 
-          {/* Right: Theme Toggle */}
-          <div className="flex items-center gap-2">
+          {/* Right: discipline and theme toggles */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const nextMepMode = !mepModeActive;
+                setArmedLayoutTool(null);
+                setArmedTool(null);
+                setActiveDropdown(null);
+                setActiveTab(nextMepMode ? "mep" : "vstudio");
+                setMepModeActive(nextMepMode);
+              }}
+              title={mepModeActive ? "Switch to Architecture tools" : "Switch to MEP tools"}
+              aria-pressed={mepModeActive}
+              className={`flex min-h-8 items-center gap-1 rounded-lg border px-2 text-[10px] font-bold transition-colors ${
+                mepModeActive
+                  ? "border-sky-400/60 bg-sky-400/20 text-sky-500 dark:text-sky-300"
+                  : "border-yellow-400/60 bg-yellow-400/15 text-yellow-600 dark:text-yellow-300"
+              }`}
+            >
+              <span aria-hidden="true">{mepModeActive ? "⚡" : "⌂"}</span>
+              <span>{mepModeActive ? "MEP" : "Arch"}</span>
+            </button>
             <button
               type="button"
               onClick={() => setColorTheme(isDark ? "light" : "dark")}
+              title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
               className="p-1.5 rounded-lg text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
             >
               {isDark ? <LuSun className="h-4 w-4 text-yellow-400" /> : <LuMoon className="h-4 w-4" />}
@@ -1745,6 +1903,22 @@ export default function ToolRibbon({
                 <span>MEP</span>
               </span>
             </UnifiedButton>
+
+            {activeTab === "mep" && (
+              <UnifiedButton
+                size="xs"
+                variant={mepArchitectureLocked ? "v-blue" : "secondary"}
+                onClick={() => setMepArchitectureLocked(!mepArchitectureLocked)}
+                title={mepArchitectureLocked
+                  ? "Architecture is reference-only. Click to allow architecture selection."
+                  : "Architecture selection is enabled. Click to lock architecture."}
+              >
+                <span className="flex items-center gap-1">
+                  {mepArchitectureLocked ? <LuLock className="h-3.5 w-3.5" /> : <LuLockOpen className="h-3.5 w-3.5" />}
+                  <span>{mepArchitectureLocked ? "Arch Locked" : "Arch Select"}</span>
+                </span>
+              </UnifiedButton>
+            )}
 
             {/* Modify (Contextual) */}
             {hasSelection && (

@@ -32,6 +32,7 @@ import {
   calculateRampMetrics,
   calculateStairMetrics,
   deriveRiseMm,
+  getEquipmentConnectors,
   MEP_SYSTEM_COLORS,
 } from "@/lib/layoutDrawing";
 import {
@@ -87,6 +88,10 @@ export default class LayoutSceneLayer {
   private underlayMeshes = new Map<string, THREE.Mesh>();
   private underlayTextures = new Map<string, THREE.Texture>();
   private underlayEdges = new Map<string, THREE.LineSegments>();
+  private mepDimmingMaterialState = new WeakMap<
+    THREE.Material,
+    { opacity: number; transparent: boolean; depthWrite: boolean }
+  >();
   private endpointGroup = new THREE.Group();
   private endpointStart: THREE.Mesh | null = null;
   private endpointEnd: THREE.Mesh | null = null;
@@ -670,8 +675,7 @@ export default class LayoutSceneLayer {
 
       let grp = this.stairMeshes.get(stair.id);
       if (grp) {
-        this.disposeGroup(grp);
-        grp.clear();
+        this.clearGroupContents(grp);
       } else {
         grp = new THREE.Group();
         grp.name = `stair-${stair.id}`;
@@ -717,8 +721,7 @@ export default class LayoutSceneLayer {
 
       let grp = this.rampMeshes.get(ramp.id);
       if (grp) {
-        this.disposeGroup(grp);
-        grp.clear();
+        this.clearGroupContents(grp);
       } else {
         grp = new THREE.Group();
         grp.name = `ramp-${ramp.id}`;
@@ -2359,9 +2362,10 @@ export default class LayoutSceneLayer {
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
-    const isMepMode = useLayoutDrawingStore.getState().mepModeActive;
+    const layoutState = useLayoutDrawingStore.getState();
+    const architectureLocked = layoutState.mepModeActive && layoutState.mepArchitectureLocked;
 
-    if (!isMepMode && this.endpointGroup.visible) {
+    if (!architectureLocked && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
         this.endpointGroup.children,
         false,
@@ -2402,8 +2406,9 @@ export default class LayoutSceneLayer {
         if (o.userData.layoutEquipmentId)
           return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
 
-        // If in MEP mode, architectural elements cannot be picked
-        if (!isMepMode) {
+        // Architecture is reference-only by default in MEP mode. The toolbar
+        // override restores normal picking without affecting MEP selection.
+        if (!architectureLocked) {
           if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
             return {
               kind: "wall-endpoint",
@@ -2423,15 +2428,16 @@ export default class LayoutSceneLayer {
             return { kind: "column", id: o.userData.layoutColumnId as string };
           if (o.userData.layoutBeamId)
             return { kind: "beam", id: o.userData.layoutBeamId as string };
-          if (o.userData.layoutGridId)
-            return { kind: "grid", id: o.userData.layoutGridId as string };
-          if (o.userData.layoutSketchLineId)
-            return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
           if (o.userData.layoutStairId)
             return { kind: "stair", id: o.userData.layoutStairId as string };
           if (o.userData.layoutRampId)
             return { kind: "ramp", id: o.userData.layoutRampId as string };
         }
+
+        if (o.userData.layoutGridId)
+          return { kind: "grid", id: o.userData.layoutGridId as string };
+        if (o.userData.layoutSketchLineId)
+          return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
 
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {
@@ -4139,9 +4145,11 @@ export default class LayoutSceneLayer {
       const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
       const angle = Math.atan2(dz, dx);
 
+      const systemType = duct.systemType ?? (duct as LayoutDuct & { system?: LayoutDuct["systemType"] }).system ?? "supply";
+      const systemColor = MEP_SYSTEM_COLORS[`duct_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
       const hexColor = duct.color
         ? parseInt(duct.color.replace("#", ""), 16)
-        : (MEP_SYSTEM_COLORS[duct.systemType] ? parseInt(MEP_SYSTEM_COLORS[duct.systemType].replace("#", ""), 16) : 0x06b6d4);
+        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : 0x06b6d4;
 
       let mesh = this.ductMeshes.get(duct.id);
       const isFlex = Boolean(duct.isFlex);
@@ -4265,9 +4273,11 @@ export default class LayoutSceneLayer {
       const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
       const angle = Math.atan2(dz, dx);
 
+      const systemType = pipe.systemType ?? (pipe as LayoutPipe & { system?: LayoutPipe["systemType"] }).system ?? "hydronic_supply";
+      const systemColor = MEP_SYSTEM_COLORS[`pipe_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
       const hexColor = pipe.color
         ? parseInt(pipe.color.replace("#", ""), 16)
-        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : (pipe.systemType === "fire_protection" ? 0xef4444 : 0x3b82f6));
+        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : (systemType === "fire_protection" ? 0xef4444 : 0x3b82f6);
 
       const r = isPlaceholder ? 0.012 : fromMm((pipe.diameterMm ?? 28) / 2);
       const geoKey = `pipe:${isPlaceholder ? "ph" : r}:${len}`;
@@ -4875,40 +4885,50 @@ export default class LayoutSceneLayer {
   }
 
   setMepModeDimming(dimmed: boolean) {
-    const opacity = dimmed ? 0.35 : 1.0;
-    const transparent = dimmed;
+    const dimObject = (root: THREE.Object3D, opacityFactor: number) => {
+      root.traverse((object) => {
+        if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line)) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!material) continue;
+          if (dimmed) {
+            if (!this.mepDimmingMaterialState.has(material)) {
+              this.mepDimmingMaterialState.set(material, {
+                opacity: material.opacity,
+                transparent: material.transparent,
+                depthWrite: material.depthWrite,
+              });
+            }
+            const original = this.mepDimmingMaterialState.get(material)!;
+            material.transparent = true;
+            material.opacity = original.opacity * opacityFactor;
+            material.depthWrite = false;
+          } else {
+            const original = this.mepDimmingMaterialState.get(material);
+            if (!original) continue;
+            material.opacity = original.opacity;
+            material.transparent = original.transparent;
+            material.depthWrite = original.depthWrite;
+            this.mepDimmingMaterialState.delete(material);
+          }
+          material.needsUpdate = true;
+        }
+      });
+    };
 
-    for (const mesh of this.wallMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.slabMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = dimmed ? 0.25 : 1.0;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.columnMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.beamMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
+    const architectureCollections: Iterable<THREE.Object3D>[] = [
+      this.wallMeshes.values(),
+      this.doorMeshes.values(),
+      this.windowMeshes.values(),
+      this.slabMeshes.values(),
+      this.columnMeshes.values(),
+      this.beamMeshes.values(),
+      this.stairMeshes.values(),
+      this.rampMeshes.values(),
+    ];
+
+    for (const collection of architectureCollections) {
+      for (const object of collection) dimObject(object, 0.35);
     }
   }
 
