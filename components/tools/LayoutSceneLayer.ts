@@ -15,12 +15,22 @@ import {
   type LayoutDoor,
   type LayoutGridLine,
   type LayoutLevel,
+  type LayoutRamp,
   type LayoutSlab,
   type LayoutSketchLine,
+  type LayoutStair,
   type LayoutWall,
   type LayoutWindow,
+  type LayoutDuct,
+  type LayoutPipe,
+  type LayoutCableTray,
+  type LayoutMepEquipment,
   type WallCenterlineMm,
   type WallMiterOffsets,
+  calculateRampMetrics,
+  calculateStairMetrics,
+  deriveRiseMm,
+  MEP_SYSTEM_COLORS,
 } from "@/lib/layoutDrawing";
 import {
   underlayHeightMm,
@@ -42,6 +52,10 @@ const FLOOR_COLOR = 0xa8a29e;
 const FLOOR_SEL = 0xfacc15;
 const ROOF_COLOR = 0x78716c;
 const ROOF_SEL = 0xfacc15;
+const STAIR_TREAD_COLOR = 0xd4a373;
+const STAIR_SEL = 0xfacc15;
+const RAMP_COLOR = 0x94a3b8;
+const RAMP_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
@@ -53,8 +67,16 @@ export default class LayoutSceneLayer {
   private columnMeshes = new Map<string, THREE.Mesh>();
   private beamMeshes = new Map<string, THREE.Mesh>();
   private gridMeshes = new Map<string, THREE.Group>();
+  private stairMeshes = new Map<string, THREE.Group>();
+  private rampMeshes = new Map<string, THREE.Group>();
+  private ductMeshes = new Map<string, THREE.Mesh>();
+  private pipeMeshes = new Map<string, THREE.Mesh>();
+  private cableTrayMeshes = new Map<string, THREE.Mesh>();
+  private equipmentMeshes = new Map<string, THREE.Group>();
   private previewLine: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
+  private stairPreview: THREE.Group | null = null;
+  private rampPreview: THREE.Group | null = null;
   private tracePreviewGroup: THREE.Group | null = null;
   private ground: THREE.Mesh | null = null;
   private levelSlabs = new Map<string, THREE.Mesh>();
@@ -66,6 +88,7 @@ export default class LayoutSceneLayer {
   private endpointEnd: THREE.Mesh | null = null;
   private sketchGroup = new THREE.Group();
   private structuralPreview = new THREE.Group();
+  private mepPreview = new THREE.Group();
 
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
@@ -76,9 +99,11 @@ export default class LayoutSceneLayer {
     this.endpointGroup.name = "layout-wall-endpoints";
     this.sketchGroup.name = "layout-sketch-lines";
     this.structuralPreview.name = "layout-structural-preview";
+    this.mepPreview.name = "layout-mep-preview";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
     this.group.add(this.structuralPreview);
+    this.group.add(this.mepPreview);
   }
 
   setStructuralPreview(
@@ -605,6 +630,100 @@ export default class LayoutSceneLayer {
         ring.renderOrder = 113;
         grp.add(ring);
       }
+    }
+  }
+
+  syncStairs(
+    stairs: LayoutStair[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedStairIds: Set<string>;
+      showAllLevels: boolean;
+      planMode?: boolean;
+    },
+  ) {
+    const keep = new Set(stairs.map((s) => s.id));
+    for (const [id, grp] of this.stairMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.stairMeshes.delete(id);
+      }
+    }
+
+    const planMode = Boolean(opts.planMode ?? this.isPlanModeActive);
+
+    for (const stair of stairs) {
+      const isSelected = opts.selectedStairIds.has(stair.id);
+      const isVisible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        stair.levelId === opts.activeLevelId ||
+        stair.topLevelId === opts.activeLevelId;
+
+      let grp = this.stairMeshes.get(stair.id);
+      if (grp) {
+        this.disposeGroup(grp);
+        grp.clear();
+      } else {
+        grp = new THREE.Group();
+        grp.name = `stair-${stair.id}`;
+        grp.userData.layoutStairId = stair.id;
+        grp.userData.kind = "stair";
+        this.stairMeshes.set(stair.id, grp);
+        this.group.add(grp);
+      }
+
+      this.buildStairGeometry(grp, stair, levels, isSelected, planMode);
+      grp.visible = isVisible;
+    }
+  }
+
+  syncRamps(
+    ramps: LayoutRamp[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedRampIds: Set<string>;
+      showAllLevels: boolean;
+      planMode?: boolean;
+    },
+  ) {
+    const keep = new Set(ramps.map((r) => r.id));
+    for (const [id, grp] of this.rampMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.rampMeshes.delete(id);
+      }
+    }
+
+    const planMode = Boolean(opts.planMode ?? this.isPlanModeActive);
+
+    for (const ramp of ramps) {
+      const isSelected = opts.selectedRampIds.has(ramp.id);
+      const isVisible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        ramp.levelId === opts.activeLevelId ||
+        ramp.topLevelId === opts.activeLevelId;
+
+      let grp = this.rampMeshes.get(ramp.id);
+      if (grp) {
+        this.disposeGroup(grp);
+        grp.clear();
+      } else {
+        grp = new THREE.Group();
+        grp.name = `ramp-${ramp.id}`;
+        grp.userData.layoutRampId = ramp.id;
+        grp.userData.kind = "ramp";
+        this.rampMeshes.set(ramp.id, grp);
+        this.group.add(grp);
+      }
+
+      this.buildRampGeometry(grp, ramp, levels, isSelected, planMode);
+      grp.visible = isVisible;
     }
   }
 
@@ -1270,6 +1389,949 @@ export default class LayoutSceneLayer {
     this.group.add(g);
   }
 
+  setStairPreview(
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    elevationMm: number,
+    levelHeightMm: number,
+    widthMm: number,
+    targetRiserMm: number,
+    treadDepthMm: number,
+    stairType: import("@/lib/layoutDrawing").StairShapeType = "straight",
+  ) {
+    if (this.stairPreview) {
+      this.disposeGroup(this.stairPreview);
+      this.group.remove(this.stairPreview);
+      this.stairPreview = null;
+    }
+    if (!start || !cursor) return;
+
+    const dxMm = cursor.xMm - start.xMm;
+    const dzMm = cursor.yMm - start.yMm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    if (lengthMm < 50) return;
+
+    const g = new THREE.Group();
+    g.name = "layout-stair-preview";
+    g.userData.isLayoutPreview = true;
+
+    const dummyStair: LayoutStair = {
+      id: "preview-stair",
+      projectId: "",
+      levelId: "preview-level",
+      stairType,
+      startXmm: start.xMm,
+      startYmm: start.yMm,
+      endXmm: cursor.xMm,
+      endYmm: cursor.yMm,
+      widthMm,
+      targetRiserHeightMm: targetRiserMm,
+      treadDepthMm,
+      nosingDepthMm: 25,
+      hasRailingLeft: true,
+      hasRailingRight: true,
+      createdAt: Date.now(),
+    };
+
+    const dummyLevel: LayoutLevel = {
+      id: "preview-level",
+      projectId: "",
+      name: "Preview",
+      elevationMm,
+      heightMm: levelHeightMm,
+      createdAt: Date.now(),
+    };
+
+    this.buildStairGeometry(g, dummyStair, [dummyLevel], true, false);
+
+    g.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.Material) {
+        child.material.transparent = true;
+        child.material.opacity = 0.6;
+        child.material.depthWrite = false;
+      }
+    });
+
+    this.stairPreview = g;
+    this.group.add(g);
+  }
+
+  setRampPreview(
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    elevationMm: number,
+    levelHeightMm: number,
+    widthMm: number,
+    thicknessMm: number,
+  ) {
+    if (this.rampPreview) {
+      this.disposeGroup(this.rampPreview);
+      this.group.remove(this.rampPreview);
+      this.rampPreview = null;
+    }
+    if (!start || !cursor) return;
+
+    const dxMm = cursor.xMm - start.xMm;
+    const dzMm = cursor.yMm - start.yMm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    if (lengthMm < 50) return;
+
+    const g = new THREE.Group();
+    g.name = "layout-ramp-preview";
+    g.userData.isLayoutPreview = true;
+
+    const dummyRamp: LayoutRamp = {
+      id: "preview-ramp",
+      projectId: "",
+      levelId: "preview-level",
+      startXmm: start.xMm,
+      startYmm: start.yMm,
+      endXmm: cursor.xMm,
+      endYmm: cursor.yMm,
+      widthMm,
+      thicknessMm,
+      hasRailingLeft: true,
+      hasRailingRight: true,
+      createdAt: Date.now(),
+    };
+
+    const dummyLevel: LayoutLevel = {
+      id: "preview-level",
+      projectId: "",
+      name: "Preview",
+      elevationMm,
+      heightMm: levelHeightMm,
+      createdAt: Date.now(),
+    };
+
+    this.buildRampGeometry(g, dummyRamp, [dummyLevel], true, false);
+
+    g.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.Material) {
+        child.material.transparent = true;
+        child.material.opacity = 0.6;
+        child.material.depthWrite = false;
+      }
+    });
+
+    this.rampPreview = g;
+    this.group.add(g);
+  }
+
+  private buildStairGeometry(
+    root: THREE.Group,
+    stair: LayoutStair,
+    levels: LayoutLevel[],
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const baseLevel = levels.find((l) => l.id === stair.levelId);
+    const baseElevMm = (baseLevel?.elevationMm ?? 0) + (stair.baseOffsetMm || 0);
+    const totalRiseMm = deriveRiseMm(
+      levels,
+      stair.levelId,
+      stair.topLevelId,
+      stair.baseOffsetMm,
+      stair.topOffsetMm,
+    );
+    const metrics = calculateStairMetrics(
+      totalRiseMm,
+      stair.targetRiserHeightMm,
+      stair.treadDepthMm,
+    );
+    const { riserCount, actualRiserMm } = metrics;
+    const treadDepthMm = stair.treadDepthMm || 280;
+    const widthMm = stair.widthMm || 1000;
+    const nosingMm = stair.nosingDepthMm ?? 25;
+    const railingHeightMm = stair.railingHeightMm ?? 900;
+    const hasRailLeft = stair.hasRailingLeft !== false;
+    const hasRailRight = stair.hasRailingRight !== false;
+
+    const baseElevM = fromMm(baseElevMm);
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+    const railHM = fromMm(railingHeightMm);
+
+    const treadMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : (stair.color ? parseInt(stair.color.replace("#", ""), 16) : STAIR_TREAD_COLOR),
+      roughness: 0.6,
+      metalness: 0.1,
+    });
+    const riserMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0xf1f5f9,
+      roughness: 0.7,
+      metalness: 0.05,
+    });
+    const stringerMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x475569,
+      roughness: 0.5,
+      metalness: 0.3,
+    });
+    const railMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x1e293b,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+    const postMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? STAIR_SEL : 0x334155,
+      roughness: 0.4,
+      metalness: 0.7,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.35,
+      roughness: 0.1,
+    });
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const lengthMm = Math.hypot(dxMm, dzMm);
+    const angle = Math.atan2(dzMm, dxMm);
+    const startM = new THREE.Vector3(fromMm(stair.startXmm), baseElevM, fromMm(stair.startYmm));
+
+    if (stair.stairType === "spiral") {
+      this.buildSpiralStair(
+        root,
+        stair,
+        startM,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        treadMat,
+        postMat,
+        railMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    if (stair.stairType === "l-shape") {
+      this.buildLShapeStair(
+        root,
+        stair,
+        startM,
+        levels,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        widthMm,
+        treadDepthMm,
+        nosingMm,
+        treadMat,
+        riserMat,
+        stringerMat,
+        postMat,
+        railMat,
+        glassMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    if (stair.stairType === "u-shape") {
+      this.buildUShapeStair(
+        root,
+        stair,
+        startM,
+        levels,
+        riserCount,
+        actualRiserMm,
+        totalRiseMm,
+        widthMm,
+        treadDepthMm,
+        nosingMm,
+        treadMat,
+        riserMat,
+        stringerMat,
+        postMat,
+        railMat,
+        glassMat,
+        isSelected,
+        planMode,
+      );
+      return;
+    }
+
+    // Straight stair
+    const stepCount = Math.max(1, riserCount);
+    const runTotalLengthM = fromMm(Math.max(lengthMm, (stepCount - 1) * treadDepthMm));
+    const stepRunM = (stepCount > 1 ? runTotalLengthM / (stepCount - 1) : treadM);
+
+    if (planMode) {
+      this.buildStraightStairPlanSymbol(
+        root,
+        stair,
+        startM,
+        angle,
+        stepCount,
+        stepRunM,
+        widthM,
+        isSelected,
+      );
+      return;
+    }
+
+    const stairFlight = new THREE.Group();
+    stairFlight.position.copy(startM);
+    stairFlight.rotation.y = -angle;
+
+    // Steps (Risers + Treads)
+    for (let i = 0; i < stepCount; i++) {
+      const stepY = i * riserM;
+      const stepX = i * stepRunM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riserMesh = new THREE.Mesh(riserGeo, riserMat);
+      riserMesh.position.set(stepX, stepY + riserM / 2, 0);
+      stairFlight.add(riserMesh);
+
+      const treadBoardLen = stepRunM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadBoardLen, 0.03, widthM);
+      const treadMesh = new THREE.Mesh(treadGeo, treadMat);
+      treadMesh.position.set(stepX + treadBoardLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      stairFlight.add(treadMesh);
+    }
+
+    // Side stringers
+    const stringerThick = 0.04;
+    const stringerHeight = 0.2;
+    const totalRiseM = fromMm(totalRiseMm);
+    const slopeLenM = Math.hypot(runTotalLengthM, totalRiseM);
+    const slopeAngle = Math.atan2(totalRiseM, runTotalLengthM);
+
+    for (const side of [-1, 1]) {
+      const stringerGeo = new THREE.BoxGeometry(slopeLenM, stringerHeight, stringerThick);
+      const stringerMesh = new THREE.Mesh(stringerGeo, stringerMat);
+      stringerMesh.position.set(
+        runTotalLengthM / 2,
+        totalRiseM / 2 - 0.05,
+        side * (widthM / 2 + stringerThick / 2),
+      );
+      stringerMesh.rotation.z = slopeAngle;
+      stairFlight.add(stringerMesh);
+    }
+
+    // Auto-generated Railings
+    if (hasRailLeft || hasRailRight) {
+      for (const side of [-1, 1]) {
+        if (side === -1 && !hasRailLeft) continue;
+        if (side === 1 && !hasRailRight) continue;
+        const zOffset = side * (widthM / 2 - 0.03);
+
+        const handrailGeo = new THREE.CylinderGeometry(0.02, 0.02, slopeLenM, 12);
+        handrailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const handrailMesh = new THREE.Mesh(handrailGeo, railMat);
+        handrailMesh.position.set(
+          runTotalLengthM / 2,
+          totalRiseM / 2 + railHM,
+          zOffset,
+        );
+        stairFlight.add(handrailMesh);
+
+        const postSpacingSteps = Math.max(1, Math.floor(stepCount / Math.min(stepCount, 5)));
+        for (let i = 0; i < stepCount; i += postSpacingSteps) {
+          const px = i * stepRunM;
+          const py = (i + 1) * riserM;
+          const postGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+          const postMesh = new THREE.Mesh(postGeo, postMat);
+          postMesh.position.set(px, py + railHM / 2 - 0.02, zOffset);
+          stairFlight.add(postMesh);
+        }
+        const topPostGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+        const topPostMesh = new THREE.Mesh(topPostGeo, postMat);
+        topPostMesh.position.set(runTotalLengthM, totalRiseM + railHM / 2 - 0.02, zOffset);
+        stairFlight.add(topPostMesh);
+
+        if (stair.railingStyle === "glass") {
+          const glassPanelGeo = new THREE.BoxGeometry(slopeLenM * 0.95, railHM * 0.75, 0.01);
+          const glassMesh = new THREE.Mesh(glassPanelGeo, glassMat);
+          glassMesh.position.set(
+            runTotalLengthM / 2,
+            totalRiseM / 2 + railHM * 0.45,
+            zOffset,
+          );
+          glassMesh.rotation.z = slopeAngle;
+          stairFlight.add(glassMesh);
+        }
+      }
+    }
+
+    const pickGeo = new THREE.BoxGeometry(runTotalLengthM + 0.1, totalRiseM + 0.1, widthM + 0.1);
+    const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    const pickMesh = new THREE.Mesh(pickGeo, pickMat);
+    pickMesh.position.set(runTotalLengthM / 2, totalRiseM / 2, 0);
+    pickMesh.userData.layoutStairId = stair.id;
+    stairFlight.add(pickMesh);
+
+    root.add(stairFlight);
+  }
+
+  private buildSpiralStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    treadMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const totalRiseM = fromMm(totalRiseMm);
+    const riserM = fromMm(actualRiserMm);
+    const totalAngleDeg = stair.spiralAngleDeg ?? 360;
+    const totalAngleRad = (totalAngleDeg * Math.PI) / 180;
+    const outerRadiusM = fromMm(stair.outerRadiusMm ?? (stair.widthMm ? stair.widthMm / 2 + 100 : 900));
+    const innerRadiusM = fromMm(stair.innerRadiusMm ?? 100);
+    const railHM = fromMm(stair.railingHeightMm ?? 900);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+
+    if (planMode) {
+      const centerDiscGeo = new THREE.CircleGeometry(innerRadiusM, 24);
+      centerDiscGeo.rotateX(-Math.PI / 2);
+      const disc = new THREE.Mesh(centerDiscGeo, new THREE.MeshBasicMaterial({ color: 0x64748b, depthTest: false }));
+      disc.position.y = 0.02;
+      group.add(disc);
+
+      const outerRingGeo = new THREE.RingGeometry(outerRadiusM - 0.02, outerRadiusM, 32);
+      outerRingGeo.rotateX(-Math.PI / 2);
+      const ring = new THREE.Mesh(outerRingGeo, new THREE.MeshBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false }));
+      ring.position.y = 0.02;
+      group.add(ring);
+
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x475569, depthTest: false });
+      for (let i = 0; i <= riserCount; i++) {
+        const theta = (i / riserCount) * totalAngleRad;
+        const cos = Math.cos(theta);
+        const sin = Math.sin(theta);
+        const p1 = new THREE.Vector3(innerRadiusM * cos, 0.025, innerRadiusM * sin);
+        const p2 = new THREE.Vector3(outerRadiusM * cos, 0.025, outerRadiusM * sin);
+        const lGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const lMesh = new THREE.Line(lGeo, lineMat);
+        group.add(lMesh);
+      }
+      root.add(group);
+      return;
+    }
+
+    // 3D Central Column Pole
+    const poleGeo = new THREE.CylinderGeometry(innerRadiusM, innerRadiusM, totalRiseM, 24);
+    const poleMesh = new THREE.Mesh(poleGeo, postMat);
+    poleMesh.position.set(0, totalRiseM / 2, 0);
+    group.add(poleMesh);
+
+    // Helical Wedge Steps
+    const dTheta = totalAngleRad / riserCount;
+    const handrailPts: THREE.Vector3[] = [];
+
+    for (let i = 0; i < riserCount; i++) {
+      const thetaStart = i * dTheta;
+      const thetaEnd = (i + 1) * dTheta + 0.04;
+      const stepY = i * riserM;
+
+      const wedgeShape = new THREE.Shape();
+      const x0 = innerRadiusM * Math.cos(thetaStart);
+      const z0 = innerRadiusM * Math.sin(thetaStart);
+      wedgeShape.moveTo(x0, z0);
+      wedgeShape.absarc(0, 0, innerRadiusM, thetaStart, thetaEnd, false);
+      wedgeShape.lineTo(outerRadiusM * Math.cos(thetaEnd), outerRadiusM * Math.sin(thetaEnd));
+      wedgeShape.absarc(0, 0, outerRadiusM, thetaEnd, thetaStart, true);
+      wedgeShape.closePath();
+
+      const treadGeo = new THREE.ExtrudeGeometry(wedgeShape, { depth: 0.035, bevelEnabled: false });
+      treadGeo.rotateX(Math.PI / 2);
+      const treadMesh = new THREE.Mesh(treadGeo, treadMat);
+      treadMesh.position.set(0, stepY + riserM, 0);
+      group.add(treadMesh);
+
+      const midTheta = thetaStart + dTheta * 0.8;
+      const bx = (outerRadiusM - 0.03) * Math.cos(midTheta);
+      const bz = (outerRadiusM - 0.03) * Math.sin(midTheta);
+      const postGeo = new THREE.CylinderGeometry(0.012, 0.012, railHM, 8);
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(bx, stepY + riserM + railHM / 2, bz);
+      group.add(post);
+
+      handrailPts.push(new THREE.Vector3(bx, stepY + riserM + railHM, bz));
+    }
+
+    if (handrailPts.length >= 2 && stair.hasRailingRight !== false) {
+      const curve = new THREE.CatmullRomCurve3(handrailPts);
+      const tubeGeo = new THREE.TubeGeometry(curve, riserCount * 4, 0.02, 8, false);
+      const railMesh = new THREE.Mesh(tubeGeo, railMat);
+      group.add(railMesh);
+    }
+
+    root.add(group);
+  }
+
+  private buildLShapeStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    levels: LayoutLevel[],
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    widthMm: number,
+    treadDepthMm: number,
+    nosingMm: number,
+    treadMat: THREE.Material,
+    riserMat: THREE.Material,
+    stringerMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    glassMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+
+    const count1 = Math.max(1, Math.floor(riserCount / 2));
+    const count2 = Math.max(1, riserCount - count1);
+    const run1LengthM = count1 * treadM;
+    const isLeft = stair.turnDirection === "left";
+    const turnSign = isLeft ? 1 : -1;
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const angle1 = Math.atan2(dzMm, dxMm);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle1;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false });
+
+      for (let i = 0; i <= count1; i++) {
+        const x = i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2),
+          new THREE.Vector3(x, 0.02, widthM / 2),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      const landX1 = run1LengthM;
+      const landX2 = run1LengthM + widthM;
+      const landGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(landX1, 0.02, -widthM / 2),
+        new THREE.Vector3(landX2, 0.02, -widthM / 2),
+        new THREE.Vector3(landX2, 0.02, widthM / 2 + (isLeft ? widthM : -widthM)),
+        new THREE.Vector3(landX1, 0.02, widthM / 2 + (isLeft ? widthM : -widthM)),
+        new THREE.Vector3(landX1, 0.02, -widthM / 2),
+      ]);
+      group.add(new THREE.Line(landGeo, lineMat));
+
+      root.add(group);
+      return;
+    }
+
+    for (let i = 0; i < count1; i++) {
+      const stepY = i * riserM;
+      const stepX = i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, 0);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX + treadLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      group.add(tread);
+    }
+
+    const landY = count1 * riserM;
+    const landGeo = new THREE.BoxGeometry(widthM, 0.05, widthM);
+    const landMesh = new THREE.Mesh(landGeo, treadMat);
+    landMesh.position.set(run1LengthM + widthM / 2, landY - 0.025, 0);
+    group.add(landMesh);
+
+    const run2Group = new THREE.Group();
+    run2Group.position.set(run1LengthM + widthM / 2, landY, 0);
+    run2Group.rotation.y = turnSign * (Math.PI / 2);
+
+    for (let i = 0; i < count2; i++) {
+      const stepY = i * riserM;
+      const stepX = (i + 1) * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX - treadM / 2, stepY + riserM / 2, 0);
+      run2Group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX, stepY + riserM - 0.015, 0);
+      run2Group.add(tread);
+    }
+    group.add(run2Group);
+
+    root.add(group);
+  }
+
+  private buildUShapeStair(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    levels: LayoutLevel[],
+    riserCount: number,
+    actualRiserMm: number,
+    totalRiseMm: number,
+    widthMm: number,
+    treadDepthMm: number,
+    nosingMm: number,
+    treadMat: THREE.Material,
+    riserMat: THREE.Material,
+    stringerMat: THREE.Material,
+    postMat: THREE.Material,
+    railMat: THREE.Material,
+    glassMat: THREE.Material,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const widthM = fromMm(widthMm);
+    const riserM = fromMm(actualRiserMm);
+    const treadM = fromMm(treadDepthMm);
+    const nosingM = fromMm(nosingMm);
+    const gapM = 0.15;
+
+    const count1 = Math.max(1, Math.floor(riserCount / 2));
+    const count2 = Math.max(1, riserCount - count1);
+    const run1LengthM = count1 * treadM;
+    const isLeft = stair.turnDirection === "left";
+    const sideOffset = (widthM + gapM) * (isLeft ? 1 : -1);
+
+    const dxMm = stair.endXmm - stair.startXmm;
+    const dzMm = stair.endYmm - stair.startYmm;
+    const angle1 = Math.atan2(dzMm, dxMm);
+
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle1;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? STAIR_SEL : 0x18181b, depthTest: false });
+
+      for (let i = 0; i <= count1; i++) {
+        const x = i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2),
+          new THREE.Vector3(x, 0.02, widthM / 2),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      const landX = run1LengthM;
+      const landGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(landX, 0.02, -widthM / 2),
+        new THREE.Vector3(landX + widthM, 0.02, -widthM / 2),
+        new THREE.Vector3(landX + widthM, 0.02, -widthM / 2 + sideOffset + widthM),
+        new THREE.Vector3(landX, 0.02, -widthM / 2 + sideOffset + widthM),
+        new THREE.Vector3(landX, 0.02, -widthM / 2),
+      ]);
+      group.add(new THREE.Line(landGeo, lineMat));
+
+      for (let i = 0; i <= count2; i++) {
+        const x = run1LengthM - i * treadM;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, 0.02, -widthM / 2 + sideOffset),
+          new THREE.Vector3(x, 0.02, widthM / 2 + sideOffset),
+        ]);
+        group.add(new THREE.Line(geo, lineMat));
+      }
+
+      root.add(group);
+      return;
+    }
+
+    for (let i = 0; i < count1; i++) {
+      const stepY = i * riserM;
+      const stepX = i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, 0);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX + treadLen / 2 - nosingM, stepY + riserM - 0.015, 0);
+      group.add(tread);
+    }
+
+    const landY = count1 * riserM;
+    const landWidth = widthM * 2 + gapM;
+    const landGeo = new THREE.BoxGeometry(widthM, 0.05, landWidth);
+    const landMesh = new THREE.Mesh(landGeo, treadMat);
+    landMesh.position.set(run1LengthM + widthM / 2, landY - 0.025, sideOffset / 2);
+    group.add(landMesh);
+
+    for (let i = 0; i < count2; i++) {
+      const stepY = landY + i * riserM;
+      const stepX = run1LengthM - i * treadM;
+
+      const riserGeo = new THREE.BoxGeometry(0.02, riserM, widthM);
+      const riser = new THREE.Mesh(riserGeo, riserMat);
+      riser.position.set(stepX, stepY + riserM / 2, sideOffset);
+      group.add(riser);
+
+      const treadLen = treadM + nosingM;
+      const treadGeo = new THREE.BoxGeometry(treadLen, 0.03, widthM);
+      const tread = new THREE.Mesh(treadGeo, treadMat);
+      tread.position.set(stepX - treadLen / 2 + nosingM, stepY + riserM - 0.015, sideOffset);
+      group.add(tread);
+    }
+
+    root.add(group);
+  }
+
+  private buildStraightStairPlanSymbol(
+    root: THREE.Group,
+    stair: LayoutStair,
+    startM: THREE.Vector3,
+    angle: number,
+    stepCount: number,
+    stepRunM: number,
+    widthM: number,
+    isSelected: boolean,
+  ) {
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle;
+
+    const runLenM = Math.max(0.1, (stepCount - 1) * stepRunM);
+    const halfW = widthM / 2;
+    const cutStep = Math.max(1, Math.floor(stepCount * 0.55));
+    const cutXM = cutStep * stepRunM;
+
+    const solidMat = new THREE.LineBasicMaterial({
+      color: isSelected ? STAIR_SEL : 0x18181b,
+      depthTest: false,
+    });
+    const dashedMat = new THREE.LineDashedMaterial({
+      color: isSelected ? STAIR_SEL : 0x94a3b8,
+      dashSize: 0.12,
+      gapSize: 0.06,
+      depthTest: false,
+    });
+
+    const boundaryGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0.02, -halfW),
+      new THREE.Vector3(runLenM, 0.02, -halfW),
+      new THREE.Vector3(runLenM, 0.02, halfW),
+      new THREE.Vector3(0, 0.02, halfW),
+      new THREE.Vector3(0, 0.02, -halfW),
+    ]);
+    group.add(new THREE.Line(boundaryGeo, solidMat));
+
+    for (let i = 0; i < stepCount; i++) {
+      const x = i * stepRunM;
+      const isAboveCut = i > cutStep;
+      const stepGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, 0.02, -halfW),
+        new THREE.Vector3(x, 0.02, halfW),
+      ]);
+      const stepLine = new THREE.Line(stepGeo, isAboveCut ? dashedMat : solidMat);
+      if (isAboveCut) stepLine.computeLineDistances();
+      group.add(stepLine);
+    }
+
+    const breakOffset = 0.08;
+    for (const d of [-breakOffset, breakOffset]) {
+      const bx = cutXM + d;
+      const breakGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(bx - 0.15, 0.025, -halfW - 0.05),
+        new THREE.Vector3(bx + 0.15, 0.025, halfW + 0.05),
+      ]);
+      group.add(new THREE.Line(breakGeo, solidMat));
+    }
+
+    const dotGeo = new THREE.CircleGeometry(0.04, 16);
+    dotGeo.rotateX(-Math.PI / 2);
+    const dotMesh = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x2563eb, depthTest: false }));
+    dotMesh.position.set(0.08, 0.025, 0);
+    group.add(dotMesh);
+
+    const arrowEndXM = runLenM - 0.05;
+    const arrowLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0.08, 0.025, 0),
+      new THREE.Vector3(arrowEndXM, 0.025, 0),
+    ]);
+    group.add(new THREE.Line(arrowLineGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+
+    const headGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(arrowEndXM - 0.15, 0.025, -0.08),
+      new THREE.Vector3(arrowEndXM, 0.025, 0),
+      new THREE.Vector3(arrowEndXM - 0.15, 0.025, 0.08),
+    ]);
+    group.add(new THREE.Line(headGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+
+    root.add(group);
+  }
+
+  private buildRampGeometry(
+    root: THREE.Group,
+    ramp: LayoutRamp,
+    levels: LayoutLevel[],
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const baseLevel = levels.find((l) => l.id === ramp.levelId);
+    const baseElevMm = (baseLevel?.elevationMm ?? 0) + (ramp.baseOffsetMm || 0);
+    const totalRiseMm = deriveRiseMm(
+      levels,
+      ramp.levelId,
+      ramp.topLevelId,
+      ramp.baseOffsetMm,
+      ramp.topOffsetMm,
+    );
+    const dxMm = ramp.endXmm - ramp.startXmm;
+    const dzMm = ramp.endYmm - ramp.startYmm;
+    const runLengthMm = Math.hypot(dxMm, dzMm);
+
+    const widthMm = ramp.widthMm || 1200;
+    const thicknessMm = ramp.thicknessMm || 150;
+    const widthM = fromMm(widthMm);
+    const thickM = fromMm(thicknessMm);
+    const baseElevM = fromMm(baseElevMm);
+    const totalRiseM = fromMm(totalRiseMm);
+    const runLenM = fromMm(Math.max(100, runLengthMm));
+    const slopeLenM = Math.hypot(runLenM, totalRiseM);
+    const slopeAngle = Math.atan2(totalRiseM, runLenM);
+    const angle = Math.atan2(dzMm, dxMm);
+    const railHM = fromMm(ramp.railingHeightMm ?? 900);
+
+    const startM = new THREE.Vector3(fromMm(ramp.startXmm), baseElevM, fromMm(ramp.startYmm));
+    const group = new THREE.Group();
+    group.position.copy(startM);
+    group.rotation.y = -angle;
+
+    if (planMode) {
+      const lineMat = new THREE.LineBasicMaterial({ color: isSelected ? RAMP_SEL : 0x18181b, depthTest: false });
+      const halfW = widthM / 2;
+      const borderGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0.02, -halfW),
+        new THREE.Vector3(runLenM, 0.02, -halfW),
+        new THREE.Vector3(runLenM, 0.02, halfW),
+        new THREE.Vector3(0, 0.02, halfW),
+        new THREE.Vector3(0, 0.02, -halfW),
+      ]);
+      group.add(new THREE.Line(borderGeo, lineMat));
+
+      const arrowPts = [
+        new THREE.Vector3(0.1, 0.025, 0),
+        new THREE.Vector3(runLenM - 0.1, 0.025, 0),
+      ];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arrowPts), new THREE.LineBasicMaterial({ color: 0x0284c7, depthTest: false })));
+
+      const headPts = [
+        new THREE.Vector3(runLenM - 0.25, 0.025, -0.1),
+        new THREE.Vector3(runLenM - 0.1, 0.025, 0),
+        new THREE.Vector3(runLenM - 0.25, 0.025, 0.1),
+      ];
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(headPts), new THREE.LineBasicMaterial({ color: 0x0284c7, depthTest: false })));
+
+      root.add(group);
+      return;
+    }
+
+    // 3D Ramp Solid Sloped Slab
+    const rampMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? RAMP_SEL : (ramp.color ? parseInt(ramp.color.replace("#", ""), 16) : RAMP_COLOR),
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const railMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? RAMP_SEL : 0x334155,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+
+    const slabGeo = new THREE.BoxGeometry(slopeLenM, thickM, widthM);
+    const slabMesh = new THREE.Mesh(slabGeo, rampMat);
+    slabMesh.position.set(
+      runLenM / 2,
+      totalRiseM / 2 - thickM / 2,
+      0,
+    );
+    slabMesh.rotation.z = slopeAngle;
+    group.add(slabMesh);
+
+    // Curbs on left and right edge
+    const curbHeight = 0.06;
+    const curbThick = 0.05;
+    for (const side of [-1, 1]) {
+      const curbGeo = new THREE.BoxGeometry(slopeLenM, curbHeight, curbThick);
+      const curbMesh = new THREE.Mesh(curbGeo, rampMat);
+      curbMesh.position.set(
+        runLenM / 2,
+        totalRiseM / 2 + curbHeight / 2,
+        side * (widthM / 2 - curbThick / 2),
+      );
+      curbMesh.rotation.z = slopeAngle;
+      group.add(curbMesh);
+    }
+
+    // Railings
+    if (ramp.hasRailingLeft !== false || ramp.hasRailingRight !== false) {
+      for (const side of [-1, 1]) {
+        if (side === -1 && ramp.hasRailingLeft === false) continue;
+        if (side === 1 && ramp.hasRailingRight === false) continue;
+
+        const zOffset = side * (widthM / 2 - 0.03);
+
+        const topRailGeo = new THREE.CylinderGeometry(0.02, 0.02, slopeLenM, 12);
+        topRailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const topRail = new THREE.Mesh(topRailGeo, railMat);
+        topRail.position.set(runLenM / 2, totalRiseM / 2 + railHM, zOffset);
+        group.add(topRail);
+
+        const midRailGeo = new THREE.CylinderGeometry(0.015, 0.015, slopeLenM, 12);
+        midRailGeo.rotateZ(-Math.PI / 2 + slopeAngle);
+        const midRail = new THREE.Mesh(midRailGeo, railMat);
+        midRail.position.set(runLenM / 2, totalRiseM / 2 + railHM * 0.75, zOffset);
+        group.add(midRail);
+
+        const postCount = Math.max(3, Math.ceil(runLenM / 1.2));
+        for (let i = 0; i <= postCount; i++) {
+          const t = i / postCount;
+          const px = t * runLenM;
+          const py = t * totalRiseM;
+          const postGeo = new THREE.CylinderGeometry(0.015, 0.015, railHM, 8);
+          const post = new THREE.Mesh(postGeo, railMat);
+          post.position.set(px, py + railHM / 2, zOffset);
+          group.add(post);
+        }
+      }
+    }
+
+    const pickGeo = new THREE.BoxGeometry(runLenM + 0.1, totalRiseM + thickM + 0.2, widthM + 0.1);
+    const pickMesh = new THREE.Mesh(pickGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    pickMesh.position.set(runLenM / 2, totalRiseM / 2, 0);
+    pickMesh.userData.layoutRampId = ramp.id;
+    group.add(pickMesh);
+
+    root.add(group);
+  }
+
   pickLayout(
     raycaster: THREE.Raycaster,
   ):
@@ -1282,10 +2344,18 @@ export default class LayoutSceneLayer {
     | { kind: "beam"; id: string }
     | { kind: "grid"; id: string }
     | { kind: "sketch-line"; id: string }
+    | { kind: "stair"; id: string }
+    | { kind: "ramp"; id: string }
+    | { kind: "duct"; id: string }
+    | { kind: "pipe"; id: string }
+    | { kind: "cabletray"; id: string }
+    | { kind: "equipment"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
-    if (this.endpointGroup.visible) {
+    const isMepMode = useLayoutDrawingStore.getState().mepModeActive;
+
+    if (!isMepMode && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
         this.endpointGroup.children,
         false,
@@ -1317,29 +2387,46 @@ export default class LayoutSceneLayer {
       if (hidden) continue;
       o = h.object;
       while (o) {
-        if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
-          return {
-            kind: "wall-endpoint",
-            id: o.userData.layoutWallId as string,
-            end: o.userData.layoutWallEndpoint as "start" | "end",
-          };
+        if (o.userData.layoutDuctId)
+          return { kind: "duct", id: o.userData.layoutDuctId as string };
+        if (o.userData.layoutPipeId)
+          return { kind: "pipe", id: o.userData.layoutPipeId as string };
+        if (o.userData.layoutCableTrayId)
+          return { kind: "cabletray", id: o.userData.layoutCableTrayId as string };
+        if (o.userData.layoutEquipmentId)
+          return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
+
+        // If in MEP mode, architectural elements cannot be picked
+        if (!isMepMode) {
+          if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
+            return {
+              kind: "wall-endpoint",
+              id: o.userData.layoutWallId as string,
+              end: o.userData.layoutWallEndpoint as "start" | "end",
+            };
+          }
+          if (o.userData.layoutWallId)
+            return { kind: "wall", id: o.userData.layoutWallId as string };
+          if (o.userData.layoutDoorId)
+            return { kind: "door", id: o.userData.layoutDoorId as string };
+          if (o.userData.layoutWindowId)
+            return { kind: "window", id: o.userData.layoutWindowId as string };
+          if (o.userData.layoutSlabId)
+            return { kind: "slab", id: o.userData.layoutSlabId as string };
+          if (o.userData.layoutColumnId)
+            return { kind: "column", id: o.userData.layoutColumnId as string };
+          if (o.userData.layoutBeamId)
+            return { kind: "beam", id: o.userData.layoutBeamId as string };
+          if (o.userData.layoutGridId)
+            return { kind: "grid", id: o.userData.layoutGridId as string };
+          if (o.userData.layoutSketchLineId)
+            return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
+          if (o.userData.layoutStairId)
+            return { kind: "stair", id: o.userData.layoutStairId as string };
+          if (o.userData.layoutRampId)
+            return { kind: "ramp", id: o.userData.layoutRampId as string };
         }
-        if (o.userData.layoutWallId)
-          return { kind: "wall", id: o.userData.layoutWallId as string };
-        if (o.userData.layoutDoorId)
-          return { kind: "door", id: o.userData.layoutDoorId as string };
-        if (o.userData.layoutWindowId)
-          return { kind: "window", id: o.userData.layoutWindowId as string };
-        if (o.userData.layoutSlabId)
-          return { kind: "slab", id: o.userData.layoutSlabId as string };
-        if (o.userData.layoutColumnId)
-          return { kind: "column", id: o.userData.layoutColumnId as string };
-        if (o.userData.layoutBeamId)
-          return { kind: "beam", id: o.userData.layoutBeamId as string };
-        if (o.userData.layoutGridId)
-          return { kind: "grid", id: o.userData.layoutGridId as string };
-        if (o.userData.layoutSketchLineId)
-          return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
+
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {
             kind: "underlay",
@@ -1543,6 +2630,8 @@ export default class LayoutSceneLayer {
       (mesh.material as THREE.Material).dispose();
     }
     for (const grp of this.gridMeshes.values()) this.disposeGroup(grp);
+    for (const grp of this.stairMeshes.values()) this.disposeGroup(grp);
+    for (const grp of this.rampMeshes.values()) this.disposeGroup(grp);
     this.wallMeshes.clear();
     this.doorMeshes.clear();
     this.windowMeshes.clear();
@@ -1550,6 +2639,8 @@ export default class LayoutSceneLayer {
     this.columnMeshes.clear();
     this.beamMeshes.clear();
     this.gridMeshes.clear();
+    this.stairMeshes.clear();
+    this.rampMeshes.clear();
     for (const mesh of this.levelSlabs.values()) {
       this.group.remove(mesh);
       mesh.geometry.dispose();
@@ -1592,6 +2683,14 @@ export default class LayoutSceneLayer {
     if (this.slabPreview) {
       this.disposeGroup(this.slabPreview);
       this.slabPreview = null;
+    }
+    if (this.stairPreview) {
+      this.disposeGroup(this.stairPreview);
+      this.stairPreview = null;
+    }
+    if (this.rampPreview) {
+      this.disposeGroup(this.rampPreview);
+      this.rampPreview = null;
     }
     if (this.tracePreviewGroup) {
       this.disposeGroup(this.tracePreviewGroup);
@@ -2996,6 +4095,604 @@ export default class LayoutSceneLayer {
     pick.userData.layoutWindowId = win.id;
     g.add(pick);
     return g;
+  }
+
+  syncDucts(
+    ducts: LayoutDuct[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedDuctIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(ducts.map((d) => d.id));
+    for (const [id, mesh] of this.ductMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.ductMeshes.delete(id);
+      }
+    }
+
+    for (const duct of ducts) {
+      const isSelected = opts.selectedDuctIds.has(duct.id);
+      const level = levels.find((l) => l.id === duct.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = duct.elevationMm ?? duct.elevationOffsetMm ?? 2600;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(duct.endXmm - duct.startXmm);
+      const dz = fromMm(duct.endYmm - duct.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((duct.startXmm + duct.endXmm) / 2);
+      const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const hexColor = duct.color
+        ? parseInt(duct.color.replace("#", ""), 16)
+        : (MEP_SYSTEM_COLORS[duct.systemType] ? parseInt(MEP_SYSTEM_COLORS[duct.systemType].replace("#", ""), 16) : 0x06b6d4);
+
+      let mesh = this.ductMeshes.get(duct.id);
+      const isRound = duct.shape === "round";
+      const isOval = duct.shape === "oval";
+      const w = fromMm(duct.widthMm ?? 300);
+      const h = fromMm(duct.heightMm ?? 200);
+      const r = fromMm((duct.diameterMm ?? 200) / 2);
+
+      const geoKey = isRound
+        ? `round:${r}:${len}`
+        : isOval
+        ? `oval:${w}:${h}:${len}`
+        : `rect:${w}:${h}:${len}`;
+
+      const buildDuctGeo = () => {
+        if (isRound) {
+          const g = new THREE.CylinderGeometry(r, r, len, 16);
+          g.rotateZ(Math.PI / 2);
+          return g;
+        } else if (isOval) {
+          // Flat oval cross-section extruded along duct length
+          const sh = new THREE.Shape();
+          const rad = Math.min(h / 2, w / 2);
+          const straightW = Math.max(0.001, (w - 2 * rad) / 2);
+          sh.moveTo(-straightW, -rad);
+          sh.lineTo(straightW, -rad);
+          sh.absarc(straightW, 0, rad, -Math.PI / 2, Math.PI / 2, false);
+          sh.lineTo(-straightW, rad);
+          sh.absarc(-straightW, 0, rad, Math.PI / 2, (3 * Math.PI) / 2, false);
+          const g = new THREE.ExtrudeGeometry(sh, { depth: len, bevelEnabled: false });
+          g.translate(0, 0, -len / 2);
+          g.rotateY(Math.PI / 2);
+          return g;
+        } else {
+          return new THREE.BoxGeometry(len, h, w);
+        }
+      };
+
+      if (!mesh) {
+        const geo = buildDuctGeo();
+        const mat = new THREE.MeshStandardMaterial({
+          color: hexColor,
+          roughness: 0.35,
+          metalness: 0.5,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutDuctId = duct.id;
+        mesh.userData.kind = "duct";
+        mesh.userData.geometryKey = geoKey;
+        this.ductMeshes.set(duct.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        mesh.geometry = buildDuctGeo();
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        duct.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(hexColor);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncPipes(
+    pipes: LayoutPipe[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedPipeIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(pipes.map((p) => p.id));
+    for (const [id, mesh] of this.pipeMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.pipeMeshes.delete(id);
+      }
+    }
+
+    for (const pipe of pipes) {
+      const isSelected = opts.selectedPipeIds.has(pipe.id);
+      const level = levels.find((l) => l.id === pipe.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(pipe.endXmm - pipe.startXmm);
+      const dz = fromMm(pipe.endYmm - pipe.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((pipe.startXmm + pipe.endXmm) / 2);
+      const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const hexColor = pipe.color
+        ? parseInt(pipe.color.replace("#", ""), 16)
+        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : 0x3b82f6);
+
+      const r = fromMm((pipe.diameterMm ?? 28) / 2);
+      const geoKey = `pipe:${r}:${len}`;
+
+      let mesh = this.pipeMeshes.get(pipe.id);
+      if (!mesh) {
+        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        geo.rotateZ(Math.PI / 2);
+        const mat = new THREE.MeshStandardMaterial({
+          color: hexColor,
+          roughness: 0.25,
+          metalness: 0.8,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutPipeId = pipe.id;
+        mesh.userData.kind = "pipe";
+        mesh.userData.geometryKey = geoKey;
+        this.pipeMeshes.set(pipe.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        geo.rotateZ(Math.PI / 2);
+        mesh.geometry = geo;
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        pipe.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(hexColor);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncCableTrays(
+    cableTrays: LayoutCableTray[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedCableTrayIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(cableTrays.map((t) => t.id));
+    for (const [id, mesh] of this.cableTrayMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.cableTrayMeshes.delete(id);
+      }
+    }
+
+    for (const tray of cableTrays) {
+      const isSelected = opts.selectedCableTrayIds.has(tray.id);
+      const level = levels.find((l) => l.id === tray.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = tray.elevationMm ?? tray.elevationOffsetMm ?? 2800;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(tray.endXmm - tray.startXmm);
+      const dz = fromMm(tray.endYmm - tray.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((tray.startXmm + tray.endXmm) / 2);
+      const midZ = fromMm((tray.startYmm + tray.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const w = fromMm(tray.widthMm ?? 200);
+      const h = fromMm(tray.heightMm ?? 60);
+      const geoKey = `tray:${w}:${h}:${len}:${tray.trayType}`;
+
+      let mesh = this.cableTrayMeshes.get(tray.id);
+      if (!mesh) {
+        const geo = new THREE.BoxGeometry(len, h, w);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x94a3b8,
+          roughness: 0.4,
+          metalness: 0.7,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutCableTrayId = tray.id;
+        mesh.userData.kind = "cabletray";
+        mesh.userData.geometryKey = geoKey;
+        this.cableTrayMeshes.set(tray.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BoxGeometry(len, h, w);
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        tray.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(tray.trayType === "conduit" ? 0xd97706 : 0x94a3b8);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncMepEquipment(
+    equipment: LayoutMepEquipment[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedEquipmentIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(equipment.map((e) => e.id));
+    for (const [id, grp] of this.equipmentMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.equipmentMeshes.delete(id);
+      }
+    }
+
+    for (const item of equipment) {
+      const isSelected = opts.selectedEquipmentIds.has(item.id);
+      const level = levels.find((l) => l.id === item.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const centerY = fromMm(baseElev + (item.elevationMm ?? item.elevationOffsetMm ?? 0));
+
+      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400));
+      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400));
+      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400));
+
+      const geoKey = `${item.category}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
+
+      let grp = this.equipmentMeshes.get(item.id);
+      const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
+
+      if (!grp) {
+        grp = new THREE.Group();
+        grp.name = `equip-${item.id}`;
+        grp.userData.layoutEquipmentId = item.id;
+        grp.userData.kind = "equipment";
+        this.equipmentMeshes.set(item.id, grp);
+        this.group.add(grp);
+      }
+
+      if (needsRebuild) {
+        this.clearGroupContents(grp);
+        grp.userData.geometryKey = geoKey;
+
+        // Build procedural model per category
+        if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow") {
+          const isSupply = item.category === "diffuser_supply";
+          const isExtract = item.category === "diffuser_extract";
+          const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
+
+          const plateGeo = new THREE.BoxGeometry(w, 0.04, d);
+          const plateMat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.4, roughness: 0.3 });
+          const plate = new THREE.Mesh(plateGeo, plateMat);
+          plate.userData.layoutEquipmentId = item.id;
+          grp.add(plate);
+
+          // Core grille indicator
+          const coreGeo = new THREE.BoxGeometry(w * 0.65, 0.05, d * 0.65);
+          const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+          const core = new THREE.Mesh(coreGeo, coreMat);
+          core.userData.layoutEquipmentId = item.id;
+          grp.add(core);
+
+          // Top duct collar
+          const collarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 16);
+          const collarMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
+          const collar = new THREE.Mesh(collarGeo, collarMat);
+          collar.position.set(0, 0.06, 0);
+          collar.userData.layoutEquipmentId = item.id;
+          grp.add(collar);
+        } else if (item.category === "radiator") {
+          // Procedural Radiator with front casing, convection louvre, valve nubs, and pipe connectors
+          const radMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.25, roughness: 0.35 });
+          const radGeo = new THREE.BoxGeometry(w, h, d);
+          const body = new THREE.Mesh(radGeo, radMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Top convection grille
+          const grilleMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
+          const topGrille = new THREE.Mesh(new THREE.BoxGeometry(w * 0.94, 0.02, d * 0.85), grilleMat);
+          topGrille.position.set(0, h + 0.01, 0);
+          topGrille.userData.layoutEquipmentId = item.id;
+          grp.add(topGrille);
+
+          // Flow valve on top-left (Red)
+          const valveGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.06, 12);
+          valveGeo.rotateZ(Math.PI / 2);
+          const flowValve = new THREE.Mesh(valveGeo, new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.7 }));
+          flowValve.position.set(-w / 2 - 0.03, h - 0.08, 0);
+          flowValve.userData.layoutEquipmentId = item.id;
+          grp.add(flowValve);
+
+          // Return valve on bottom-right (Blue)
+          const retValve = new THREE.Mesh(valveGeo, new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.7 }));
+          retValve.position.set(w / 2 + 0.03, 0.08, 0);
+          retValve.userData.layoutEquipmentId = item.id;
+          grp.add(retValve);
+        } else if (item.category === "fan_coil" || item.category === "ac_unit") {
+          // Procedural Fan Coil / AC Indoor unit
+          const caseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.3, roughness: 0.4 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), caseMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Front supply air louvre
+          const louvreMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.2 });
+          const louvre = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, h * 0.35, d * 0.08), louvreMat);
+          louvre.position.set(0, h * 0.3, d / 2 + 0.02);
+          louvre.userData.layoutEquipmentId = item.id;
+          grp.add(louvre);
+
+          // Rear return duct collar
+          const collarMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.6 });
+          const returnCollar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.75, h * 0.6, 0.04), collarMat);
+          returnCollar.position.set(0, h / 2, -d / 2 - 0.02);
+          returnCollar.userData.layoutEquipmentId = item.id;
+          grp.add(returnCollar);
+
+          // Status LED indicator
+          const ledMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+          const led = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), ledMat);
+          led.position.set(w / 2 - 0.06, h * 0.8, d / 2 + 0.01);
+          grp.add(led);
+        } else if (item.category === "chiller" || item.category === "boiler" || item.category === "heat_pump") {
+          // Heavy mechanical plant unit
+          const plantMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.35 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), plantMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Fan grilles on top
+          const fanGeo = new THREE.CylinderGeometry(Math.min(w, d) * 0.35, Math.min(w, d) * 0.35, 0.05, 16);
+          const fanMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+          const fan1 = new THREE.Mesh(fanGeo, fanMat);
+          fan1.position.set(-w * 0.22, h + 0.025, 0);
+          grp.add(fan1);
+          const fan2 = new THREE.Mesh(fanGeo, fanMat);
+          fan2.position.set(w * 0.22, h + 0.025, 0);
+          grp.add(fan2);
+        } else if (item.category === "panel") {
+          const boxGeo = new THREE.BoxGeometry(w, h, d);
+          const boxMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
+          const box = new THREE.Mesh(boxGeo, boxMat);
+          box.position.set(0, h / 2, 0);
+          box.userData.layoutEquipmentId = item.id;
+          grp.add(box);
+        } else if (item.category === "light") {
+          const lightGeo = new THREE.CylinderGeometry(w / 2, w / 2, 0.05, 16);
+          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.4 });
+          const light = new THREE.Mesh(lightGeo, lightMat);
+          light.userData.layoutEquipmentId = item.id;
+          grp.add(light);
+        } else {
+          // Generic fixture box
+          const genGeo = new THREE.BoxGeometry(w, h, d);
+          const genMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5, roughness: 0.4 });
+          const gen = new THREE.Mesh(genGeo, genMat);
+          gen.position.set(0, h / 2, 0);
+          gen.userData.layoutEquipmentId = item.id;
+          grp.add(gen);
+        }
+
+        // Add visual connector markers if selected
+        if (isSelected) {
+          const connectors = getEquipmentConnectors(item);
+          for (const c of connectors) {
+            const isDuct = c.type === "duct";
+            const isElec = c.type === "electrical";
+            const cColor = isDuct
+              ? (c.systemType === "supply" ? 0x06b6d4 : 0xf59e0b)
+              : isElec
+              ? 0xeab308
+              : (c.systemType === "hydronic_supply" ? 0xef4444 : c.systemType === "hydronic_return" ? 0x3b82f6 : 0x10b981);
+
+            const markerGeo = new THREE.RingGeometry(0.02, 0.045, 16);
+            const markerMat = new THREE.MeshBasicMaterial({ color: cColor, side: THREE.DoubleSide });
+            const marker = new THREE.Mesh(markerGeo, markerMat);
+            marker.position.set(fromMm(c.relXmm), fromMm(c.relZmm), fromMm(c.relYmm));
+            marker.lookAt(
+              fromMm(c.relXmm + c.dir[0]),
+              fromMm(c.relZmm + c.dir[2]),
+              fromMm(c.relYmm + c.dir[1]),
+            );
+            grp.add(marker);
+          }
+        }
+      }
+
+      const rot = ((item.rotationDeg ?? 0) * Math.PI) / 180;
+      grp.position.set(fromMm(item.xMm), centerY, fromMm(item.yMm));
+      grp.rotation.y = rot;
+      grp.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        item.levelId === opts.activeLevelId;
+
+      // Selection outline for primary child
+      const primaryChild = grp.children[0] as THREE.Mesh | undefined;
+      if (primaryChild) {
+        this.setMeshSelectionOutline(primaryChild, isSelected);
+      }
+    }
+  }
+
+  setMepPreview(
+    tool: "duct" | "pipe" | "cabletray" | "equipment" | null,
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    params?: any,
+  ) {
+    this.clearGroupContents(this.mepPreview);
+    if (!tool || !cursor) return;
+
+    const baseElevMm = params?.baseElevMm ?? 0;
+
+    if (tool === "equipment") {
+      const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
+      const ghostGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+      const ghostMat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+      ghost.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
+      this.mepPreview.add(ghost);
+      return;
+    }
+
+    if (!start) return;
+
+    const dx = fromMm(cursor.xMm - start.xMm);
+    const dz = fromMm(cursor.yMm - start.yMm);
+    const len = Math.hypot(dx, dz);
+    if (len < 0.001) return;
+
+    const midX = fromMm((start.xMm + cursor.xMm) / 2);
+    const midZ = fromMm((start.yMm + cursor.yMm) / 2);
+    const angle = Math.atan2(dz, dx);
+    const elev = fromMm(baseElevMm + (params?.elevationMm ?? 2600));
+
+    if (tool === "duct") {
+      const isRound = params?.shape === "round";
+      const w = fromMm(params?.widthMm ?? 300);
+      const h = fromMm(params?.heightMm ?? 200);
+      const r = fromMm((params?.diameterMm ?? 200) / 2);
+
+      const geo = isRound
+        ? new THREE.CylinderGeometry(r, r, len, 16)
+        : new THREE.BoxGeometry(len, h, w);
+      if (isRound) geo.rotateZ(Math.PI / 2);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    } else if (tool === "pipe") {
+      const r = fromMm((params?.diameterMm ?? 28) / 2);
+      const geo = new THREE.CylinderGeometry(r, r, len, 12);
+      geo.rotateZ(Math.PI / 2);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x3b82f6,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    } else if (tool === "cabletray") {
+      const w = fromMm(params?.widthMm ?? 200);
+      const h = fromMm(params?.heightMm ?? 60);
+      const geo = new THREE.BoxGeometry(len, h, w);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    }
+  }
+
+  setMepModeDimming(dimmed: boolean) {
+    const opacity = dimmed ? 0.35 : 1.0;
+    const transparent = dimmed;
+
+    for (const mesh of this.wallMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.slabMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = dimmed ? 0.25 : 1.0;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.columnMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.beamMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
   }
 
   private disposeObject(root: THREE.Object3D) {

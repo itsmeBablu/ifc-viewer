@@ -85,6 +85,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
+  getEquipmentConnectors,
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
   snapPlanPointToWalls,
@@ -2441,6 +2442,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const selColIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
       const selBeamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
       const selGridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
+      const selStairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+      if (s.selectedStairId) selStairIds.add(s.selectedStairId);
+      const selRampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
+      if (s.selectedRampId) selRampIds.add(s.selectedRampId);
+      const selDuctIds = new Set(sel.filter((e) => e.kind === "duct").map((e) => e.id));
+      if (s.selectedDuctId) selDuctIds.add(s.selectedDuctId);
+      const selPipeIds = new Set(sel.filter((e) => e.kind === "pipe").map((e) => e.id));
+      if (s.selectedPipeId) selPipeIds.add(s.selectedPipeId);
+      const selTrayIds = new Set(sel.filter((e) => e.kind === "cabletray").map((e) => e.id));
+      if (s.selectedCableTrayId) selTrayIds.add(s.selectedCableTrayId);
+      const selEquipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
+      if (s.selectedEquipmentId) selEquipIds.add(s.selectedEquipmentId);
 
       layer.sync(s.levels, s.walls, s.doors, s.windows, s.slabs, {
         activeLevelId: markupFloor,
@@ -2471,6 +2484,43 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
+      layer.syncStairs(s.stairs || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedStairIds: selStairIds,
+        showAllLevels,
+        planMode: isPlanView,
+      });
+      layer.syncRamps(s.ramps || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedRampIds: selRampIds,
+        showAllLevels,
+        planMode: isPlanView,
+      });
+      layer.syncDucts(s.ducts || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedDuctIds: selDuctIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.syncPipes(s.pipes || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedPipeIds: selPipeIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.syncCableTrays(s.cableTrays || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedCableTrayIds: selTrayIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.syncMepEquipment(s.mepEquipment || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedEquipmentIds: selEquipIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.setMepModeDimming(s.mepModeActive);
       layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
         activeLevelId: markupFloor,
         showAllLevels,
@@ -2522,6 +2572,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         );
       } else {
         layer.setSlabPreview(null, null, 0, 200, "floor");
+      }
+      if (s.stairDraw?.start && s.stairDraw.cursor) {
+        const lvl =
+          s.levels.find((l) => l.id === s.stairDraw!.levelId) ?? activeLevel;
+        layer.setStairPreview(
+          s.stairDraw.start,
+          s.stairDraw.cursor,
+          lvl?.elevationMm ?? 0,
+          lvl?.heightMm ?? 3000,
+          s.draftStairWidthMm,
+          s.draftStairTargetRiserMm,
+          s.draftStairTreadDepthMm,
+          s.draftStairType,
+        );
+      } else {
+        layer.setStairPreview(null, null, 0, 3000, 1000, 175, 280, "straight");
+      }
+      if (s.rampDraw?.start && s.rampDraw.cursor) {
+        const lvl =
+          s.levels.find((l) => l.id === s.rampDraw!.levelId) ?? activeLevel;
+        layer.setRampPreview(
+          s.rampDraw.start,
+          s.rampDraw.cursor,
+          lvl?.elevationMm ?? 0,
+          lvl?.heightMm ?? 3000,
+          s.draftRampWidthMm,
+          s.draftRampThicknessMm,
+        );
+      } else {
+        layer.setRampPreview(null, null, 0, 3000, 1200, 150);
       }
       // Sync Lines sketch layer
       layer.syncSketch(
@@ -2648,6 +2728,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (layout.tracePreview) layout.clearTracePreview();
         if (layout.wallDraw) layout.finishWallDraw();
         else if (layout.slabDraw) layout.cancelSlabDraw();
+        else if (layout.stairDraw) layout.cancelStairDraw();
+        else if (layout.rampDraw) layout.cancelRampDraw();
         else layout.setArmedLayoutTool(null);
         layout.clearLayoutSelection();
       }
@@ -2676,6 +2758,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (layout.selectedSlabId) {
           e.preventDefault();
           void layout.deleteSlab(layout.selectedSlabId);
+          return;
+        }
+        if (layout.selectedStairId) {
+          e.preventDefault();
+          void layout.deleteStair(layout.selectedStairId);
+          return;
+        }
+        if (layout.selectedRampId) {
+          e.preventDefault();
+          void layout.deleteRamp(layout.selectedRampId);
           return;
         }
         if (layout.selectedElements.length) {
@@ -4552,6 +4644,128 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
 
+        if (
+          (layoutStore.armedLayoutTool === "duct" ||
+            layoutStore.armedLayoutTool === "pipe" ||
+            layoutStore.armedLayoutTool === "cabletray" ||
+            layoutStore.armedLayoutTool === "equipment") &&
+          cam &&
+          layoutLayer
+        ) {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          raycaster.current.setFromCamera(pointerNdc.current, camRay);
+          const hit = layoutLayer.pickLayout(raycaster.current);
+          let pt: THREE.Vector3 | null =
+            hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+          if (!pt) {
+            const roots: THREE.Object3D[] = [layoutLayer.group];
+            if (shellCloneRef.current) roots.push(shellCloneRef.current);
+            pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+          }
+          const ms = useToolMarkupStore.getState();
+          const level = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+          if (!pt) {
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+            const targetPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+          }
+          if (pt) {
+            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+            const cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+            const kind = layoutStore.armedLayoutTool;
+
+            if (kind === "duct") {
+              let snapHintText: string | null = null;
+              let effectiveCursor = cursor;
+              for (const eq of layoutStore.mepEquipment) {
+                const conns = getEquipmentConnectors(eq);
+                for (const c of conns) {
+                  if (c.type === "duct") {
+                    const dist = Math.hypot(cursor.xMm - c.worldXmm, cursor.yMm - c.worldYmm);
+                    if (dist <= 300) {
+                      effectiveCursor = { xMm: c.worldXmm, yMm: c.worldYmm };
+                      snapHintText = `Snap: ${c.name} (${eq.name || eq.category}) ✦`;
+                      break;
+                    }
+                  }
+                }
+                if (snapHintText) break;
+              }
+
+              const start = layoutStore.ductDraw?.startPointMm ?? null;
+              layoutLayer.setMepPreview("duct", start, effectiveCursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: layoutStore.draftDuctElevationMm,
+                shape: layoutStore.draftDuctShape,
+                widthMm: layoutStore.draftDuctWidthMm,
+                heightMm: layoutStore.draftDuctHeightMm,
+                diameterMm: layoutStore.draftDuctDiameterMm,
+              });
+              ms.setDragSnapHint({
+                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish duct` : "Click start point"),
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (kind === "pipe") {
+              let snapHintText: string | null = null;
+              let effectiveCursor = cursor;
+              for (const eq of layoutStore.mepEquipment) {
+                const conns = getEquipmentConnectors(eq);
+                for (const c of conns) {
+                  if (c.type === "pipe") {
+                    const dist = Math.hypot(cursor.xMm - c.worldXmm, cursor.yMm - c.worldYmm);
+                    if (dist <= 250) {
+                      effectiveCursor = { xMm: c.worldXmm, yMm: c.worldYmm };
+                      snapHintText = `Snap: ${c.name} (${eq.name || eq.category}) ✦`;
+                      break;
+                    }
+                  }
+                }
+                if (snapHintText) break;
+              }
+
+              const start = layoutStore.pipeDraw?.startPointMm ?? null;
+              layoutLayer.setMepPreview("pipe", start, effectiveCursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: layoutStore.draftPipeElevationMm,
+                diameterMm: layoutStore.draftPipeDiameterMm,
+              });
+              ms.setDragSnapHint({
+                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish pipe` : "Click start point"),
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (kind === "cabletray") {
+              const start = layoutStore.cableTrayDraw?.startPointMm ?? null;
+              layoutLayer.setMepPreview("cabletray", start, cursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: layoutStore.draftCableTrayElevationMm,
+                widthMm: layoutStore.draftCableTrayWidthMm,
+                heightMm: layoutStore.draftCableTrayHeightMm,
+              });
+              ms.setDragSnapHint({
+                text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish tray` : "Click start point",
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (kind === "equipment") {
+              layoutLayer.setMepPreview("equipment", null, cursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: layoutStore.draftEquipmentElevationMm,
+                category: layoutStore.draftEquipmentCategory,
+              });
+              ms.setDragSnapHint({
+                text: `Click to place ${layoutStore.draftEquipmentCategory}`,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            }
+          }
+          ms.setSceneHoverTip(null);
+          canvas.style.cursor = "crosshair";
+          return;
+        }
+
         // Tier 2: hover auto-trace preview for wall / door / window
         if (
           (layoutStore.armedLayoutTool === "wall" ||
@@ -4721,6 +4935,98 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             }
           }
           useToolMarkupStore.getState().setSceneHoverTip(null);
+          canvas.style.cursor = "crosshair";
+          setHoveredRoom(null);
+          return;
+        }
+
+        if (layoutStore.stairDraw || layoutStore.armedLayoutTool === "stair") {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          if (camRay && layoutLayer) {
+            raycaster.current.setFromCamera(pointerNdc.current, camRay);
+            const hit = layoutLayer.pickLayout(raycaster.current);
+            let pt: THREE.Vector3 | null = hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+            if (!pt) {
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+            }
+            if (!pt) {
+              const ms = useToolMarkupStore.getState();
+              const activeLvl = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+              const levelElevMm = activeLvl?.elevationMm ?? 0;
+              const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+              const targetPt = new THREE.Vector3();
+              if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+            }
+            if (pt) {
+              const ms = useToolMarkupStore.getState();
+              if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+              const plan = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+              if (layoutStore.stairDraw) {
+                layoutStore.updateStairDrawCursor(plan);
+                const sStart = layoutStore.stairDraw.start;
+                const d = Math.round(Math.hypot(plan.xMm - sStart.xMm, plan.yMm - sStart.yMm));
+                ms.setDragSnapHint({
+                  text: `Stair run: ${d}mm · click to finish`,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              } else {
+                ms.setDragSnapHint({
+                  text: "Click start point for stair",
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }
+            }
+          }
+          canvas.style.cursor = "crosshair";
+          setHoveredRoom(null);
+          return;
+        }
+
+        if (layoutStore.rampDraw || layoutStore.armedLayoutTool === "ramp") {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          if (camRay && layoutLayer) {
+            raycaster.current.setFromCamera(pointerNdc.current, camRay);
+            const hit = layoutLayer.pickLayout(raycaster.current);
+            let pt: THREE.Vector3 | null = hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+            if (!pt) {
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+            }
+            if (!pt) {
+              const ms = useToolMarkupStore.getState();
+              const activeLvl = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+              const levelElevMm = activeLvl?.elevationMm ?? 0;
+              const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+              const targetPt = new THREE.Vector3();
+              if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+            }
+            if (pt) {
+              const ms = useToolMarkupStore.getState();
+              if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+              const plan = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+              if (layoutStore.rampDraw) {
+                layoutStore.updateRampDrawCursor(plan);
+                const rStart = layoutStore.rampDraw.start;
+                const d = Math.round(Math.hypot(plan.xMm - rStart.xMm, plan.yMm - rStart.yMm));
+                ms.setDragSnapHint({
+                  text: `Ramp run: ${d}mm · click to finish`,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              } else {
+                ms.setDragSnapHint({
+                  text: "Click start point for ramp",
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }
+            }
+          }
           canvas.style.cursor = "crosshair";
           setHoveredRoom(null);
           return;
@@ -5412,6 +5718,206 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "stair") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!layoutStore.stairDraw) {
+                  layoutStore.startStairDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishStairDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "ramp") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  "default-level";
+                if (!layoutStore.rampDraw) {
+                  layoutStore.startRampDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishRampDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "duct") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                for (const eq of layoutStore.mepEquipment) {
+                  const conns = getEquipmentConnectors(eq);
+                  for (const c of conns) {
+                    if (c.type === "duct") {
+                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
+                      if (dist <= 300) {
+                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                if (!layoutStore.ductDraw) {
+                  layoutStore.startDuctDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishDuctDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "pipe") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                for (const eq of layoutStore.mepEquipment) {
+                  const conns = getEquipmentConnectors(eq);
+                  for (const c of conns) {
+                    if (c.type === "pipe") {
+                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
+                      if (dist <= 250) {
+                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                if (!layoutStore.pipeDraw) {
+                  layoutStore.startPipeDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishPipeDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "cabletray") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                if (!layoutStore.cableTrayDraw) {
+                  layoutStore.startCableTrayDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishCableTrayDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "equipment") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                void layoutStore.addEquipment({
+                  levelId,
+                  category: layoutStore.draftEquipmentCategory,
+                  name: layoutStore.draftEquipmentCategory,
+                  xMm: plan.xMm,
+                  yMm: plan.yMm,
+                  elevationMm: layoutStore.draftEquipmentElevationMm,
+                  flowM3h: layoutStore.draftEquipmentFlowM3h,
+                });
+                return;
+              }
+            }
+
             if (
               layoutStore.armedLayoutTool === "door" ||
               layoutStore.armedLayoutTool === "window"
@@ -5629,6 +6135,48 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (layoutHit.kind === "sketch-line") {
                 layoutStore.selectElement(
                   { kind: "line", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "stair") {
+                layoutStore.selectElement(
+                  { kind: "stair", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "ramp") {
+                layoutStore.selectElement(
+                  { kind: "ramp", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "duct") {
+                layoutStore.selectElement(
+                  { kind: "duct", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "pipe") {
+                layoutStore.selectElement(
+                  { kind: "pipe", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "cabletray") {
+                layoutStore.selectElement(
+                  { kind: "cabletray", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                return;
+              }
+              if (layoutHit.kind === "equipment") {
+                layoutStore.selectElement(
+                  { kind: "equipment", id: layoutHit.id },
                   e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
                 );
                 return;

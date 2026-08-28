@@ -8,11 +8,31 @@ import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
 export type ElementTypeDefinition = {
   id: string;
   name: string;
-  category: "Wall" | "Door" | "Window" | "Floor" | "Roof" | "Shape";
+  category:
+    | "Wall"
+    | "Door"
+    | "Window"
+    | "Floor"
+    | "Roof"
+    | "Shape"
+    | "Stair"
+    | "Ramp"
+    | "Duct"
+    | "Pipe"
+    | "CableTray"
+    | "Heater"
+    | "Cooling"
+    | "Equipment";
   thicknessMm?: number;
   widthMm?: number;
   heightMm?: number;
+  depthMm?: number;
+  diameterMm?: number;
   sillHeightMm?: number;
+  powerWatts?: number;
+  coolingWatts?: number;
+  airflowM3h?: number;
+  profile?: "rectangular" | "round" | "oval";
   material: string;
   functionType: "Interior" | "Exterior" | "Structural" | "Non-Bearing";
   thermalConductivity?: string;
@@ -157,6 +177,164 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     material: "Concrete + PIR Insulation",
     functionType: "Exterior",
     thermalConductivity: "0.15 W/m²K",
+  },
+
+  // Stair Types
+  "stair-straight-1000": {
+    id: "stair-straight-1000",
+    name: "Straight Run - 1000mm Width",
+    category: "Stair",
+    widthMm: 1000,
+    material: "Cast-in-Place Concrete",
+    functionType: "Interior",
+    fireRating: "REI 90",
+  },
+  "stair-lshape-1000": {
+    id: "stair-lshape-1000",
+    name: "L-Shape 90° - 1000mm Width",
+    category: "Stair",
+    widthMm: 1000,
+    material: "Precast Concrete with Timber Treads",
+    functionType: "Interior",
+    fireRating: "REI 90",
+  },
+  "stair-ushape-1200": {
+    id: "stair-ushape-1200",
+    name: "U-Shape Switchback - 1200mm Width",
+    category: "Stair",
+    widthMm: 1200,
+    material: "Cast-in-Place Concrete",
+    functionType: "Interior",
+    fireRating: "REI 120",
+  },
+  "stair-spiral-1600": {
+    id: "stair-spiral-1600",
+    name: "Spiral Helical - 1600mm Diameter",
+    category: "Stair",
+    widthMm: 800,
+    material: "Steel Spine & Hardwood Treads",
+    functionType: "Interior",
+    fireRating: "F30",
+  },
+
+  // Ramp Types
+  "ramp-ada-1200": {
+    id: "ramp-ada-1200",
+    name: "ADA Accessible Ramp (1:12 Max)",
+    category: "Ramp",
+    widthMm: 1200,
+    thicknessMm: 150,
+    material: "Broom Finish Concrete",
+    functionType: "Exterior",
+    fireRating: "REI 60",
+  },
+  "ramp-service-1500": {
+    id: "ramp-service-1500",
+    name: "Service & Delivery Ramp (1:8)",
+    category: "Ramp",
+    widthMm: 1500,
+    thicknessMm: 200,
+    material: "Reinforced Concrete C30/37",
+    functionType: "Exterior",
+    fireRating: "REI 120",
+  },
+
+  // MEP Heater / Radiator Types
+  "heater-panel-1000": {
+    id: "heater-panel-1000",
+    name: "Hydronic Radiator: 1000 x 600 x 100mm",
+    category: "Heater",
+    widthMm: 1000,
+    heightMm: 600,
+    depthMm: 100,
+    powerWatts: 1500,
+    material: "Enamel Coated Steel",
+    functionType: "Interior",
+  },
+  "heater-compact-800": {
+    id: "heater-compact-800",
+    name: "Compact Radiator: 800 x 600 x 80mm",
+    category: "Heater",
+    widthMm: 800,
+    heightMm: 600,
+    depthMm: 80,
+    powerWatts: 1100,
+    material: "Enamel Coated Steel",
+    functionType: "Interior",
+  },
+
+  // MEP Cooling Types
+  "cooling-fancoil-900": {
+    id: "cooling-fancoil-900",
+    name: "Fan Coil Unit (FCU): 900 x 250 x 600mm",
+    category: "Cooling",
+    widthMm: 900,
+    heightMm: 250,
+    depthMm: 600,
+    coolingWatts: 2500,
+    airflowM3h: 450,
+    material: "Galvanized Steel & Coil",
+    functionType: "Interior",
+  },
+  "cooling-ac-split-850": {
+    id: "cooling-ac-split-850",
+    name: "AC Wall Unit: 850 x 290 x 210mm",
+    category: "Cooling",
+    widthMm: 850,
+    heightMm: 290,
+    depthMm: 210,
+    coolingWatts: 3500,
+    material: "Molded Polymer & Coil",
+    functionType: "Interior",
+  },
+
+  // Duct Types
+  "duct-rect-400x200": {
+    id: "duct-rect-400x200",
+    name: "Rectangular Duct: 400 x 200mm",
+    category: "Duct",
+    widthMm: 400,
+    heightMm: 200,
+    profile: "rectangular",
+    material: "Galvanized Sheet Metal",
+    functionType: "Interior",
+  },
+  "duct-round-250": {
+    id: "duct-round-250",
+    name: "Spiral Round Duct: Ø250mm",
+    category: "Duct",
+    diameterMm: 250,
+    profile: "round",
+    material: "Galvanized Spiral Steel",
+    functionType: "Interior",
+  },
+  "duct-oval-450x200": {
+    id: "duct-oval-450x200",
+    name: "Flat Oval Duct: 450 x 200mm",
+    category: "Duct",
+    widthMm: 450,
+    heightMm: 200,
+    profile: "oval",
+    material: "Galvanized Sheet Metal",
+    functionType: "Interior",
+  },
+
+  // Pipe Types
+  "pipe-heating-28": {
+    id: "pipe-heating-28",
+    name: "Heating Pipe: Ø28mm Copper",
+    category: "Pipe",
+    diameterMm: 28,
+    material: "Copper DIN EN 1057",
+    functionType: "Interior",
+  },
+  "pipe-waste-110": {
+    id: "pipe-waste-110",
+    name: "Sanitary Waste Pipe: Ø110mm HT-PP",
+    category: "Pipe",
+    diameterMm: 110,
+    material: "Polypropylene HT-PP",
+    functionType: "Interior",
   },
 };
 
@@ -375,6 +553,21 @@ export default function EditTypeDialog({
             Dimensions
           </div>
 
+          {formData.profile !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Profile Shape:</span>
+              <select
+                value={formData.profile}
+                onChange={(e) => setFormData({ ...formData, profile: e.target.value as any })}
+                className="w-32 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-xs text-[var(--text-strong)]"
+              >
+                <option value="rectangular">Rectangular</option>
+                <option value="round">Round Spiral</option>
+                <option value="oval">Flat Oval</option>
+              </select>
+            </div>
+          )}
+
           {formData.thicknessMm !== undefined && (
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-[var(--text-body)]">Total Thickness:</span>
@@ -417,6 +610,81 @@ export default function EditTypeDialog({
                   className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
                 />
                 <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+              </div>
+            </div>
+          )}
+
+          {formData.depthMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Depth:</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={formData.depthMm}
+                  onChange={(e) => setFormData({ ...formData, depthMm: Number(e.target.value) })}
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+              </div>
+            </div>
+          )}
+
+          {formData.diameterMm !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Diameter:</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={formData.diameterMm}
+                  onChange={(e) => setFormData({ ...formData, diameterMm: Number(e.target.value) })}
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+              </div>
+            </div>
+          )}
+
+          {formData.powerWatts !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Heating Rating:</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={formData.powerWatts}
+                  onChange={(e) => setFormData({ ...formData, powerWatts: Number(e.target.value) })}
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">W</span>
+              </div>
+            </div>
+          )}
+
+          {formData.coolingWatts !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Cooling Capacity:</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={formData.coolingWatts}
+                  onChange={(e) => setFormData({ ...formData, coolingWatts: Number(e.target.value) })}
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">W</span>
+              </div>
+            </div>
+          )}
+
+          {formData.airflowM3h !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-body)]">Airflow Rate:</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={formData.airflowM3h}
+                  onChange={(e) => setFormData({ ...formData, airflowM3h: Number(e.target.value) })}
+                  className="w-20 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-1 text-right font-mono text-[11px] text-[var(--text-strong)]"
+                />
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">m³/h</span>
               </div>
             </div>
           )}

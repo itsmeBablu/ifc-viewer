@@ -214,8 +214,368 @@ export type LayoutGridLine = {
   createdAt: number;
 };
 
+export type StairShapeType = "straight" | "l-shape" | "u-shape" | "spiral";
+
+export type LayoutStair = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  /** Optional upper level constraint; rise is top level elevation minus base level. */
+  topLevelId?: string;
+  baseOffsetMm?: number;
+  topOffsetMm?: number;
+  stairType: StairShapeType;
+  stairTypeId?: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  /** Second point / landing point for L-shape (turn vertex) or U-shape */
+  landingXmm?: number;
+  landingYmm?: number;
+  turnDirection?: "left" | "right";
+  widthMm: number;
+  targetRiserHeightMm: number;
+  treadDepthMm: number;
+  nosingDepthMm?: number;
+  hasRailingLeft?: boolean;
+  hasRailingRight?: boolean;
+  railingHeightMm?: number;
+  railingStyle?: "standard" | "glass" | "pipe";
+  // Spiral stair specific
+  outerRadiusMm?: number;
+  innerRadiusMm?: number;
+  spiralAngleDeg?: number;
+  color?: string;
+  material?: string;
+  treadMaterial?: string;
+  stringerMaterial?: string;
+  createdAt: number;
+};
+
+export type LayoutRamp = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  topLevelId?: string;
+  baseOffsetMm?: number;
+  topOffsetMm?: number;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  landingXmm?: number;
+  landingYmm?: number;
+  widthMm: number;
+  thicknessMm: number;
+  hasRailingLeft?: boolean;
+  hasRailingRight?: boolean;
+  railingHeightMm?: number;
+  railingStyle?: "standard" | "glass" | "pipe";
+  maxSlopeRatio?: number; // e.g. 12 for 1:12
+  color?: string;
+  material?: string;
+  createdAt: number;
+};
+
+export type DuctShape = "rectangular" | "round" | "oval";
+export type DuctSystemType = "supply" | "extract" | "exhaust" | "outdoor";
+
+export interface MepConnector {
+  id: string;
+  name: string;
+  type: "duct" | "pipe" | "electrical";
+  systemType?: string;
+  relXmm: number; // offset relative to equipment center along width
+  relYmm: number; // offset relative to equipment center along depth
+  relZmm: number; // offset relative to equipment base elevation
+  dir: [number, number, number]; // normal vector [dx, dy, dz]
+  sizeMm?: number; // diameter for round pipe/duct
+  widthMm?: number; // width for rect/oval duct
+  heightMm?: number; // height for rect/oval duct
+}
+
+export type LayoutDuct = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  elevationMm?: number;
+  elevationOffsetMm?: number; // legacy alias
+  shape: DuctShape;
+  widthMm?: number; // for rectangular/oval
+  heightMm?: number; // for rectangular/oval
+  diameterMm?: number; // for round
+  systemType: DuctSystemType;
+  flowM3h?: number;
+  velocityMs?: number;
+  insulationThicknessMm?: number;
+  material?: string;
+  color?: string;
+  startConnectorId?: string;
+  endConnectorId?: string;
+  connectedStartEquipmentId?: string;
+  connectedEndEquipmentId?: string;
+  createdAt: number;
+};
+
+export type PipeSystemType =
+  | "hydronic_supply"
+  | "hydronic_return"
+  | "domestic_cold"
+  | "domestic_hot"
+  | "sanitary_waste"
+  | "gas";
+
+export type LayoutPipe = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  elevationMm?: number;
+  elevationOffsetMm?: number;
+  diameterMm: number; // outer diameter mm (e.g. 15, 22, 28, 35, 42, 54, 76, 108)
+  systemType: PipeSystemType;
+  slopePercent?: number; // for drainage / sanitary waste
+  insulationThicknessMm?: number;
+  material?: string;
+  color?: string;
+  startConnectorId?: string;
+  endConnectorId?: string;
+  connectedStartEquipmentId?: string;
+  connectedEndEquipmentId?: string;
+  createdAt: number;
+};
+
+export type CableTrayType = "ladder" | "perforated" | "wire_mesh" | "conduit";
+
+export type LayoutCableTray = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  elevationMm?: number;
+  elevationOffsetMm?: number;
+  widthMm: number; // e.g. 100, 150, 200, 300, 400
+  heightMm: number; // e.g. 50, 60, 100
+  trayType: CableTrayType;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type MepEquipmentCategory =
+  | "diffuser_supply"
+  | "diffuser_extract"
+  | "diffuser_overflow"
+  | "panel"
+  | "socket"
+  | "light"
+  | "radiator"
+  | "fan_coil"
+  | "ac_unit"
+  | "chiller"
+  | "boiler"
+  | "heat_pump"
+  | "sink"
+  | "toilet";
+
+export type LayoutMepEquipment = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  category: MepEquipmentCategory;
+  xMm: number;
+  yMm: number;
+  elevationMm?: number;
+  elevationOffsetMm?: number;
+  rotationDeg: number;
+  widthMm?: number;
+  depthMm?: number;
+  heightMm?: number;
+  flowM3h?: number;
+  airflowM3h?: number;
+  powerWatts?: number;
+  coolingWatts?: number;
+  connectedHostId?: string;
+  connectors?: MepConnector[];
+  name?: string;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+/**
+ * Returns list of world-coordinate connectors for equipment, rotating with rotationDeg.
+ */
+export function getEquipmentConnectors(
+  item: LayoutMepEquipment,
+): Array<MepConnector & { worldXmm: number; worldYmm: number; worldZmm: number }> {
+  const rad = ((item.rotationDeg ?? 0) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  const w = item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400);
+  const h = item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400);
+  const d = item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400);
+
+  const baseConnectors: MepConnector[] = item.connectors?.length
+    ? item.connectors
+    : item.category === "radiator"
+    ? [
+        {
+          id: `${item.id}-c-flow`,
+          name: "Heating Flow (Vorlauf)",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: -w / 2,
+          relYmm: 0,
+          relZmm: h - 80,
+          dir: [-1, 0, 0],
+          sizeMm: 15,
+        },
+        {
+          id: `${item.id}-c-ret`,
+          name: "Heating Return (Rücklauf)",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 80,
+          dir: [1, 0, 0],
+          sizeMm: 15,
+        },
+      ]
+    : item.category === "fan_coil" || item.category === "ac_unit"
+    ? [
+        {
+          id: `${item.id}-c-sa`,
+          name: "Supply Air (Zuluft)",
+          type: "duct",
+          systemType: "supply",
+          relXmm: 0,
+          relYmm: d / 2,
+          relZmm: h / 2,
+          dir: [0, 1, 0],
+          widthMm: Math.round(w * 0.7),
+          heightMm: Math.round(h * 0.6),
+        },
+        {
+          id: `${item.id}-c-ra`,
+          name: "Return Air (Abluft)",
+          type: "duct",
+          systemType: "extract",
+          relXmm: 0,
+          relYmm: -d / 2,
+          relZmm: h / 2,
+          dir: [0, -1, 0],
+          widthMm: Math.round(w * 0.7),
+          heightMm: Math.round(h * 0.6),
+        },
+        {
+          id: `${item.id}-c-cw-sup`,
+          name: "Chilled Water Supply",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 80,
+          dir: [1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-cw-ret`,
+          name: "Chilled Water Return",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 160,
+          dir: [1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-drain`,
+          name: "Condensate Drain",
+          type: "pipe",
+          systemType: "sanitary_waste",
+          relXmm: w / 2 - 30,
+          relYmm: 0,
+          relZmm: 0,
+          dir: [0, 0, -1],
+          sizeMm: 20,
+        },
+      ]
+    : item.category === "diffuser_supply" || item.category === "diffuser_extract"
+    ? [
+        {
+          id: `${item.id}-c-top`,
+          name: item.category === "diffuser_supply" ? "Supply Inlet" : "Extract Outlet",
+          type: "duct",
+          systemType: item.category === "diffuser_supply" ? "supply" : "extract",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: 100,
+          dir: [0, 0, 1],
+          sizeMm: 160,
+        },
+      ]
+    : [
+        {
+          id: `${item.id}-c-elec`,
+          name: "Power Connection",
+          type: "electrical",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: h / 2,
+          dir: [0, 0, 1],
+        },
+      ];
+
+  const baseElev = item.elevationMm ?? item.elevationOffsetMm ?? 0;
+
+  return baseConnectors.map((c) => {
+    // 2D rotation of (relXmm, relYmm) around item center
+    // Note: in 2D plan, X is horizontal, Y is vertical
+    const rotX = c.relXmm * cos - c.relYmm * sin;
+    const rotY = c.relXmm * sin + c.relYmm * cos;
+
+    return {
+      ...c,
+      worldXmm: item.xMm + rotX,
+      worldYmm: item.yMm + rotY,
+      worldZmm: baseElev + c.relZmm,
+    };
+  });
+}
+
 export type SelectedElementRef = {
-  kind: "wall" | "door" | "window" | "slab" | "placement" | "column" | "beam" | "line" | "grid" | "group";
+  kind:
+    | "wall"
+    | "door"
+    | "window"
+    | "slab"
+    | "placement"
+    | "column"
+    | "beam"
+    | "line"
+    | "grid"
+    | "group"
+    | "stair"
+    | "ramp"
+    | "duct"
+    | "pipe"
+    | "cabletray"
+    | "equipment";
   id: string;
 };
 
@@ -227,7 +587,160 @@ export type LayoutGroup = {
   createdAt: number;
 };
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "column" | "beam" | "grid" | "lines" | "trim";
+export type LayoutToolId =
+  | "wall"
+  | "door"
+  | "window"
+  | "floor"
+  | "roof"
+  | "column"
+  | "beam"
+  | "grid"
+  | "lines"
+  | "trim"
+  | "stair"
+  | "ramp"
+  | "duct"
+  | "pipe"
+  | "cabletray"
+  | "equipment";
+
+export const DEFAULT_STAIR_WIDTH_MM = 1000;
+export const DEFAULT_STAIR_RISER_MM = 175;
+export const DEFAULT_STAIR_TREAD_MM = 280;
+export const DEFAULT_STAIR_NOSING_MM = 25;
+export const DEFAULT_RAMP_WIDTH_MM = 1200;
+export const DEFAULT_RAMP_THICKNESS_MM = 150;
+export const DEFAULT_RAILING_HEIGHT_MM = 900;
+
+export const DEFAULT_DUCT_WIDTH_MM = 250;
+export const DEFAULT_DUCT_HEIGHT_MM = 150;
+export const DEFAULT_DUCT_DIAMETER_MM = 160;
+export const DEFAULT_DUCT_ELEVATION_MM = 2600;
+
+export const DEFAULT_PIPE_DIAMETER_MM = 32;
+export const DEFAULT_PIPE_ELEVATION_MM = 2700;
+
+export const DEFAULT_CABLE_TRAY_WIDTH_MM = 200;
+export const DEFAULT_CABLE_TRAY_HEIGHT_MM = 60;
+export const DEFAULT_CABLE_TRAY_ELEVATION_MM = 2800;
+
+export const MEP_SYSTEM_COLORS = {
+  duct_supply: "#06b6d4", // Cyan
+  duct_extract: "#eab308", // Yellow
+  duct_exhaust: "#ea580c", // Orange
+  duct_outdoor: "#10b981", // Emerald
+  pipe_hydronic_supply: "#ef4444", // Red
+  pipe_hydronic_return: "#3b82f6", // Blue
+  pipe_domestic_cold: "#0ea5e9", // Sky Blue
+  pipe_domestic_hot: "#f43f5e", // Rose
+  pipe_sanitary_waste: "#8b5cf6", // Purple
+  pipe_gas: "#eab308", // Amber
+  cabletray: "#64748b", // Slate
+  equipment_supply: "#06b6d4",
+  equipment_extract: "#eab308",
+  equipment_overflow: "#10b981",
+  equipment_electrical: "#f59e0b",
+  equipment_plumbing: "#3b82f6",
+} as const;
+
+/**
+ * Derive total rise (mm) from level elevation constraints + offsets.
+ */
+export function deriveRiseMm(
+  levels: LayoutLevel[],
+  baseLevelId: string,
+  topLevelId?: string,
+  baseOffsetMm = 0,
+  topOffsetMm = 0,
+  fallbackRiseMm = DEFAULT_LEVEL_HEIGHT_MM,
+): number {
+  const baseLevel = levels.find((l) => l.id === baseLevelId);
+  const baseElev = (baseLevel?.elevationMm ?? 0) + (baseOffsetMm || 0);
+
+  if (topLevelId) {
+    const topLevel = levels.find((l) => l.id === topLevelId);
+    if (topLevel) {
+      const topElev = topLevel.elevationMm + (topOffsetMm || 0);
+      const diff = topElev - baseElev;
+      if (Math.abs(diff) >= 100) return Math.abs(diff);
+    }
+  }
+
+  // If no top level specified, use base level height
+  const levelHeight = baseLevel?.heightMm ?? fallbackRiseMm;
+  return Math.max(100, levelHeight + (topOffsetMm || 0) - (baseOffsetMm || 0));
+}
+
+/**
+ * Calculate stair metrics (riser count, actual riser height, actual tread count, stride formula 2R + T).
+ */
+export function calculateStairMetrics(
+  totalRiseMm: number,
+  targetRiserMm = DEFAULT_STAIR_RISER_MM,
+  targetTreadMm = DEFAULT_STAIR_TREAD_MM,
+) {
+  const riserCount = Math.max(1, Math.round(totalRiseMm / Math.max(50, targetRiserMm)));
+  const actualRiserMm = totalRiseMm / riserCount;
+  const treadCount = Math.max(1, riserCount - 1);
+  const totalRunLengthMm = treadCount * targetTreadMm;
+  const strideValue = 2 * actualRiserMm + targetTreadMm; // 2R + T rule (ideal: 620-640mm)
+
+  const warnings: string[] = [];
+  if (actualRiserMm > 200) {
+    warnings.push(`Riser height (${Math.round(actualRiserMm)}mm) exceeds recommended max 200mm.`);
+  } else if (actualRiserMm < 140) {
+    warnings.push(`Riser height (${Math.round(actualRiserMm)}mm) is below standard min 140mm.`);
+  }
+
+  if (targetTreadMm < 250) {
+    warnings.push(`Tread depth (${Math.round(targetTreadMm)}mm) is below minimum 250mm.`);
+  }
+
+  if (strideValue < 600 || strideValue > 660) {
+    warnings.push(`2R + T (${Math.round(strideValue)}mm) is outside ideal comfort range (620–640mm).`);
+  }
+
+  return {
+    riserCount,
+    actualRiserMm,
+    treadCount,
+    totalRunLengthMm,
+    strideValue,
+    isComfortable: warnings.length === 0,
+    warnings,
+  };
+}
+
+/**
+ * Calculate ramp metrics (slope ratio 1:N, slope percentage, angle, ADA accessibility warning).
+ */
+export function calculateRampMetrics(
+  totalRiseMm: number,
+  runLengthMm: number,
+) {
+  const length = Math.max(10, runLengthMm);
+  const slope = totalRiseMm / length;
+  const slopeRatio = slope > 0 ? 1 / slope : Infinity;
+  const slopePercent = slope * 100;
+  const slopeAngleDeg = (Math.atan(slope) * 180) / Math.PI;
+
+  const warnings: string[] = [];
+  if (slopeRatio < 12) {
+    warnings.push(
+      `Slope 1:${slopeRatio.toFixed(1)} (${slopePercent.toFixed(1)}%) is steeper than recommended 1:12 (8.3%) max slope.`,
+    );
+  }
+
+  return {
+    slope,
+    slopeRatio,
+    slopePercent,
+    slopeAngleDeg,
+    exceedsMaxSlope: slopeRatio < 12,
+    warnings,
+  };
+}
 
 /**
  * Trim or extend two walls so they meet cleanly at their intersection point,
@@ -1287,6 +1800,16 @@ export function emptyProjectKey(name: string): string {
   return `${EMPTY_PROJECT_PREFIX}${safe}`;
 }
 
+export type LayoutRoomVentilation = {
+  abluftVolume: number; // Extract flow m³/h
+  zuluftVolume: number; // Supply flow m³/h
+  overflowVolume: number; // Überströmung m³/h
+  aldVolume: number; // Outdoor air inlet m³/h
+  roomArt: string; // DIN / SC RaumArt code (e.g. "204" Bad, "200" Wohnen)
+  flowRole: "supply" | "extract" | "overflow" | "neutral";
+  ventilationHeatLossWatts?: number;
+};
+
 export type LayoutRoom = {
   id: string;
   projectId: string;
@@ -1296,8 +1819,97 @@ export type LayoutRoom = {
   areaSqM: number;
   boundaryPoints: { xMm: number; yMm: number }[];
   tagPosMm: { xMm: number; yMm: number };
+  ventilation?: LayoutRoomVentilation;
   createdAt: number;
 };
+
+/**
+ * Propose recommended airflow (m³/h) and flow role based on room name or type
+ */
+export function estimateRoomVentilation(name: string, areaSqM: number): LayoutRoomVentilation {
+  const lower = name.toLowerCase();
+  const baseRatePerM2 = 1.2; // approx 1.2 m³/h per m²
+  if (lower.includes("bad") || lower.includes("wc") || lower.includes("toilet") || lower.includes("bath")) {
+    return {
+      abluftVolume: Math.max(40, Math.round(areaSqM * 10)),
+      zuluftVolume: 0,
+      overflowVolume: 0,
+      aldVolume: 0,
+      roomArt: "204",
+      flowRole: "extract",
+      ventilationHeatLossWatts: Math.round(areaSqM * 25),
+    };
+  }
+  if (lower.includes("küche") || lower.includes("kueche") || lower.includes("kitchen") || lower.includes("kochen")) {
+    return {
+      abluftVolume: Math.max(45, Math.round(areaSqM * 6)),
+      zuluftVolume: 0,
+      overflowVolume: 0,
+      aldVolume: 0,
+      roomArt: "205",
+      flowRole: "extract",
+      ventilationHeatLossWatts: Math.round(areaSqM * 20),
+    };
+  }
+  if (lower.includes("flur") || lower.includes("korridor") || lower.includes("diele") || lower.includes("hall") || lower.includes("gang")) {
+    return {
+      abluftVolume: 0,
+      zuluftVolume: 0,
+      overflowVolume: Math.max(20, Math.round(areaSqM * 3)),
+      aldVolume: 0,
+      roomArt: "201",
+      flowRole: "overflow",
+      ventilationHeatLossWatts: Math.round(areaSqM * 10),
+    };
+  }
+  // Living / bedroom / general supply
+  const flow = Math.max(30, Math.round(areaSqM * baseRatePerM2 * 2.5));
+  return {
+    abluftVolume: 0,
+    zuluftVolume: flow,
+    overflowVolume: 0,
+    aldVolume: 0,
+    roomArt: "200",
+    flowRole: "supply",
+    ventilationHeatLossWatts: Math.round(areaSqM * 18),
+  };
+}
+
+/**
+ * Standard duct sizing based on flow volume (m³/h) and recommended velocity (m/s)
+ * Q = A * v => A = Q / (3600 * v)
+ */
+export function calculateDuctSizing(flowM3h: number, velocityMs = 3.0): {
+  roundDiameterMm: number;
+  rectWidthMm: number;
+  rectHeightMm: number;
+  actualVelocityMs: number;
+} {
+  const safeFlow = Math.max(10, flowM3h);
+  const requiredAreaM2 = safeFlow / (3600 * Math.max(0.5, velocityMs));
+  // Round diameter D = sqrt(4 * A / PI)
+  const exactDiaMm = Math.sqrt((4 * requiredAreaM2) / Math.PI) * 1000;
+  const standardRound = [80, 100, 125, 150, 160, 200, 250, 315, 355, 400, 450, 500];
+  const roundDiameterMm = standardRound.find((d) => d >= exactDiaMm) ?? 500;
+
+  // Rectangular standard: aspect ratio ~ 1.5 - 2.0
+  const standardRectHeights = [100, 150, 200, 250, 300];
+  let rectHeightMm = 150;
+  let rectWidthMm = 200;
+  for (const h of standardRectHeights) {
+    const w = (requiredAreaM2 * 1e6) / h;
+    if (w >= h && w <= h * 3) {
+      rectHeightMm = h;
+      rectWidthMm = Math.ceil(w / 50) * 50; // round up to 50mm
+      break;
+    }
+  }
+  const rectAreaM2 = (rectWidthMm * rectHeightMm) * 1e-6;
+  const actualVelocityMs = Number((safeFlow / (3600 * rectAreaM2)).toFixed(2));
+
+  return { roundDiameterMm, rectWidthMm, rectHeightMm, actualVelocityMs };
+}
+
 
 /** Compute polygon area in m² from mm vertices using Shoelace formula */
 export function computePolygonAreaSqM(points: { xMm: number; yMm: number }[]): number {

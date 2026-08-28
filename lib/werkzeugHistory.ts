@@ -10,7 +10,9 @@ import type {
   LayoutGridLine,
   LayoutGroup,
   LayoutLevel,
+  LayoutRamp,
   LayoutSlab,
+  LayoutStair,
   LayoutWall,
   LayoutWindow,
 } from "@/lib/layoutDrawing";
@@ -23,7 +25,9 @@ import {
   idbDeleteGridLine,
   idbDeleteGroup,
   idbDeleteLevel,
+  idbDeleteRamp,
   idbDeleteSlab,
+  idbDeleteStair,
   idbDeleteUnderlay,
   idbDeleteWall,
   idbDeleteWindow,
@@ -33,7 +37,9 @@ import {
   idbPutGridLine,
   idbPutGroup,
   idbPutLevel,
+  idbPutRamp,
   idbPutSlab,
+  idbPutStair,
   idbPutUnderlay,
   idbPutWall,
   idbPutWindow,
@@ -60,6 +66,8 @@ export type WerkzeugSnapshot = {
   slabs: LayoutSlab[];
   columns?: LayoutColumn[];
   beams?: LayoutBeam[];
+  stairs?: LayoutStair[];
+  ramps?: LayoutRamp[];
   gridLines?: LayoutGridLine[];
   groups?: LayoutGroup[];
   underlays: ReferenceUnderlay[];
@@ -91,6 +99,8 @@ export function takeWerkzeugSnapshot(): WerkzeugSnapshot {
     slabs: cloneJson(l.slabs),
     columns: cloneJson(l.columns ?? []),
     beams: cloneJson(l.beams ?? []),
+    stairs: cloneJson(l.stairs ?? []),
+    ramps: cloneJson(l.ramps ?? []),
     gridLines: cloneJson(l.gridLines ?? []),
     groups: cloneJson(l.groups ?? []),
     underlays: cloneJson(l.underlays),
@@ -144,6 +154,8 @@ async function persistSnapshot(snap: WerkzeugSnapshot): Promise<void> {
     const keepS = new Set((snap.slabs ?? []).map((x) => x.id));
     const keepC = new Set((snap.columns ?? []).map((x) => x.id));
     const keepB = new Set((snap.beams ?? []).map((x) => x.id));
+    const keepSt = new Set((snap.stairs ?? []).map((x) => x.id));
+    const keepR = new Set((snap.ramps ?? []).map((x) => x.id));
     const keepG = new Set((snap.gridLines ?? []).map((x) => x.id));
     const keepGrp = new Set((snap.groups ?? []).map((x) => x.id));
     const keepU = new Set(snap.underlays.map((x) => x.id));
@@ -166,6 +178,12 @@ async function persistSnapshot(snap: WerkzeugSnapshot): Promise<void> {
     for (const b of l.beams ?? []) {
       if (!keepB.has(b.id)) await idbDeleteBeam(b.id);
     }
+    for (const st of l.stairs ?? []) {
+      if (!keepSt.has(st.id)) await idbDeleteStair(st.id);
+    }
+    for (const r of l.ramps ?? []) {
+      if (!keepR.has(r.id)) await idbDeleteRamp(r.id);
+    }
     for (const g of l.gridLines ?? []) {
       if (!keepG.has(g.id)) await idbDeleteGridLine(g.id);
     }
@@ -186,6 +204,8 @@ async function persistSnapshot(snap: WerkzeugSnapshot): Promise<void> {
     for (const s of snap.slabs ?? []) await idbPutSlab(s);
     for (const c of snap.columns ?? []) await idbPutColumn(c);
     for (const b of snap.beams ?? []) await idbPutBeam(b);
+    for (const st of snap.stairs ?? []) await idbPutStair(st);
+    for (const r of snap.ramps ?? []) await idbPutRamp(r);
     for (const g of snap.gridLines ?? []) await idbPutGridLine(g);
     for (const grp of snap.groups ?? []) await idbPutGroup(grp);
     for (const u of snap.underlays) await idbPutUnderlay(u);
@@ -214,6 +234,8 @@ async function applySnapshot(snap: WerkzeugSnapshot): Promise<void> {
       slabs: cloneJson(snap.slabs ?? []),
       columns: cloneJson(snap.columns ?? []),
       beams: cloneJson(snap.beams ?? []),
+      stairs: cloneJson(snap.stairs ?? []),
+      ramps: cloneJson(snap.ramps ?? []),
       gridLines: cloneJson(snap.gridLines ?? []),
       groups: cloneJson(snap.groups ?? []),
       underlays: cloneJson(snap.underlays ?? []),
@@ -225,6 +247,8 @@ async function applySnapshot(snap: WerkzeugSnapshot): Promise<void> {
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
       selectedUnderlayId: null,
       calibrateUnderlayId: null,
       calibratePoints: [],

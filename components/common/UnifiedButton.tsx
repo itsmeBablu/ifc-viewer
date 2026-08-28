@@ -5,7 +5,7 @@ import { motion } from "@/lib/designTokens";
 
 export interface UnifiedButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "v-blue" | "blue";
   size?: "xs" | "sm" | "md" | "lg";
   icon?: React.ReactNode;
   iconRight?: React.ReactNode;
@@ -40,6 +40,10 @@ export const UnifiedButton = forwardRef<HTMLButtonElement, UnifiedButtonProps>(
     const variantClasses = {
       primary:
         "btn-v-yellow btn-liquid-hover",
+      "v-blue":
+        "btn-v-blue btn-liquid-hover",
+      blue:
+        "btn-v-blue btn-liquid-hover",
       secondary:
         "btn-yellow-border-hover border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] font-semibold shadow-sm",
       danger:
