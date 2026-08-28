@@ -32,6 +32,7 @@ import {
   calculateRampMetrics,
   calculateStairMetrics,
   deriveRiseMm,
+  getEquipmentConnectors,
   MEP_SYSTEM_COLORS,
 } from "@/lib/layoutDrawing";
 import {
@@ -674,8 +675,7 @@ export default class LayoutSceneLayer {
 
       let grp = this.stairMeshes.get(stair.id);
       if (grp) {
-        this.disposeGroup(grp);
-        grp.clear();
+        this.clearGroupContents(grp);
       } else {
         grp = new THREE.Group();
         grp.name = `stair-${stair.id}`;
@@ -721,8 +721,7 @@ export default class LayoutSceneLayer {
 
       let grp = this.rampMeshes.get(ramp.id);
       if (grp) {
-        this.disposeGroup(grp);
-        grp.clear();
+        this.clearGroupContents(grp);
       } else {
         grp = new THREE.Group();
         grp.name = `ramp-${ramp.id}`;
@@ -4146,9 +4145,11 @@ export default class LayoutSceneLayer {
       const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
       const angle = Math.atan2(dz, dx);
 
+      const systemType = duct.systemType ?? (duct as LayoutDuct & { system?: LayoutDuct["systemType"] }).system ?? "supply";
+      const systemColor = MEP_SYSTEM_COLORS[`duct_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
       const hexColor = duct.color
         ? parseInt(duct.color.replace("#", ""), 16)
-        : (MEP_SYSTEM_COLORS[duct.systemType] ? parseInt(MEP_SYSTEM_COLORS[duct.systemType].replace("#", ""), 16) : 0x06b6d4);
+        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : 0x06b6d4;
 
       let mesh = this.ductMeshes.get(duct.id);
       const isFlex = Boolean(duct.isFlex);
@@ -4272,9 +4273,11 @@ export default class LayoutSceneLayer {
       const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
       const angle = Math.atan2(dz, dx);
 
+      const systemType = pipe.systemType ?? (pipe as LayoutPipe & { system?: LayoutPipe["systemType"] }).system ?? "hydronic_supply";
+      const systemColor = MEP_SYSTEM_COLORS[`pipe_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
       const hexColor = pipe.color
         ? parseInt(pipe.color.replace("#", ""), 16)
-        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : (pipe.systemType === "fire_protection" ? 0xef4444 : 0x3b82f6));
+        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : (systemType === "fire_protection" ? 0xef4444 : 0x3b82f6);
 
       const r = isPlaceholder ? 0.012 : fromMm((pipe.diameterMm ?? 28) / 2);
       const geoKey = `pipe:${isPlaceholder ? "ph" : r}:${len}`;

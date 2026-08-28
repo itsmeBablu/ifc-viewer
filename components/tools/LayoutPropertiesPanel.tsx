@@ -13,6 +13,7 @@ import {
   calculateStairMetrics,
   columnTranslated,
   deriveRiseMm,
+  getEquipmentConnectors,
   nearestParallelFaceGapMm,
   wallAngleDeg,
   wallFlipped,
@@ -973,9 +974,9 @@ export default function LayoutPropertiesPanel({
       )}
 
       {stair && (() => {
-        const riseMm = deriveRiseMm(stair.levelId, stair.topLevelId, stair.baseOffsetMm, stair.topOffsetMm, levels);
-        const metrics = calculateStairMetrics(riseMm, stair.targetRiserHeightMm, stair.treadDepthMm, stair.stairType);
-        const isComfortable = metrics.strideMm >= 600 && metrics.strideMm <= 650;
+        const riseMm = deriveRiseMm(levels, stair.levelId, stair.topLevelId, stair.baseOffsetMm, stair.topOffsetMm);
+        const metrics = calculateStairMetrics(riseMm, stair.targetRiserHeightMm, stair.treadDepthMm);
+        const isComfortable = metrics.strideValue >= 600 && metrics.strideValue <= 650;
         return (
           <>
             <div className="flex items-center justify-between gap-2">
@@ -1076,7 +1077,7 @@ export default function LayoutPropertiesPanel({
                 <div className="flex justify-between items-center pt-1 border-t border-[var(--panel-divider)]/60">
                   <span className="text-[var(--text-muted)]">2R + T Stride:</span>
                   <span className={`font-mono font-bold ${isComfortable ? "text-emerald-600" : "text-amber-600"}`}>
-                    {metrics.strideMm} mm
+                    {Math.round(metrics.strideValue)} mm
                   </span>
                 </div>
                 <div className={`mt-1 rounded-md px-2 py-1 text-[10px] font-medium leading-tight ${isComfortable ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>
@@ -1136,10 +1137,11 @@ export default function LayoutPropertiesPanel({
       })()}
 
       {ramp && (() => {
-        const riseMm = deriveRiseMm(ramp.levelId, ramp.topLevelId, ramp.baseOffsetMm, ramp.topOffsetMm, levels);
+        const riseMm = deriveRiseMm(levels, ramp.levelId, ramp.topLevelId, ramp.baseOffsetMm, ramp.topOffsetMm);
         const runLengthMm = Math.hypot(ramp.endXmm - ramp.startXmm, ramp.endYmm - ramp.startYmm);
         const metrics = calculateRampMetrics(riseMm, runLengthMm);
-        const isAdaCompliant = metrics.isAdaCompliant;
+        const isAdaCompliant = !metrics.exceedsMaxSlope;
+        const slopeRatioText = Number.isFinite(metrics.slopeRatio) ? `1:${metrics.slopeRatio.toFixed(1)}` : "Level";
         return (
           <>
             <div className="flex items-center justify-between gap-2">
@@ -1147,7 +1149,7 @@ export default function LayoutPropertiesPanel({
                 Ramp
               </p>
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAdaCompliant ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-                {metrics.slopeRatioText}
+                {slopeRatioText}
               </span>
             </div>
 
@@ -1206,7 +1208,7 @@ export default function LayoutPropertiesPanel({
               <div className="flex flex-col gap-1.5 text-[11px]">
                 <div className="flex justify-between">
                   <span className="text-[var(--text-muted)]">Slope Ratio:</span>
-                  <span className="font-bold">{metrics.slopeRatioText}</span>
+                  <span className="font-bold">{slopeRatioText}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[var(--text-muted)]">Slope Grade:</span>

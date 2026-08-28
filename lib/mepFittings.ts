@@ -45,6 +45,13 @@ export type MepPipeFitting = {
 };
 
 const JUNCTION_TOLERANCE_MM = 80;
+const ductElevationMm = (duct: LayoutDuct) => duct.elevationMm ?? duct.elevationOffsetMm ?? 0;
+const pipeElevationMm = (pipe: LayoutPipe) => pipe.elevationMm ?? pipe.elevationOffsetMm ?? 0;
+const ductWidthMm = (duct: LayoutDuct) => duct.widthMm ?? duct.diameterMm ?? 200;
+const ductHeightMm = (duct: LayoutDuct) => duct.heightMm ?? duct.diameterMm ?? 200;
+const ductDiameterMm = (duct: LayoutDuct) => duct.diameterMm ?? Math.min(ductWidthMm(duct), ductHeightMm(duct));
+const ductSystemType = (duct: LayoutDuct) => duct.systemType ?? (duct as LayoutDuct & { system?: DuctSystemType }).system ?? "supply";
+const pipeSystemType = (pipe: LayoutPipe) => pipe.systemType ?? (pipe as LayoutPipe & { system?: PipeSystemType }).system ?? "hydronic_supply";
 
 function distanceSq(p1: { xMm: number; yMm: number }, p2: { xMm: number; yMm: number }): number {
   const dx = p1.xMm - p2.xMm;
@@ -98,7 +105,7 @@ export function solveDuctFittings(ducts: LayoutDuct[]): MepDuctFitting[] {
     for (const other of endpoints) {
       if (visited.has(other)) continue;
       if (ep.ductId === other.ductId) continue;
-      if (Math.abs(ep.duct.elevationOffsetMm - other.duct.elevationOffsetMm) > 50) continue;
+      if (Math.abs(ductElevationMm(ep.duct) - ductElevationMm(other.duct)) > 50) continue;
       if (distanceSq(ep.pt, other.pt) <= JUNCTION_TOLERANCE_MM * JUNCTION_TOLERANCE_MM) {
         cluster.push(other);
         visited.add(other);
@@ -139,15 +146,15 @@ export function solveDuctFittings(ducts: LayoutDuct[]): MepDuctFitting[] {
         id: `fitting-duct-${cluster[0].ductId}-${cluster[1].ductId}`,
         fittingType: isReduc ? "reducer" : "elbow",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: baseDuct.elevationOffsetMm,
+        elevationOffsetMm: ductElevationMm(baseDuct),
         shape: baseDuct.shape,
-        system: baseDuct.system,
-        mainWidthMm: Math.max(e1.duct.widthMm, e2.duct.widthMm),
-        mainHeightMm: Math.max(e1.duct.heightMm, e2.duct.heightMm),
-        mainDiameterMm: Math.max(e1.duct.diameterMm, e2.duct.diameterMm),
-        branchWidthMm: Math.min(e1.duct.widthMm, e2.duct.widthMm),
-        branchHeightMm: Math.min(e1.duct.heightMm, e2.duct.heightMm),
-        branchDiameterMm: Math.min(e1.duct.diameterMm, e2.duct.diameterMm),
+        system: ductSystemType(baseDuct),
+        mainWidthMm: Math.max(ductWidthMm(e1.duct), ductWidthMm(e2.duct)),
+        mainHeightMm: Math.max(ductHeightMm(e1.duct), ductHeightMm(e2.duct)),
+        mainDiameterMm: Math.max(ductDiameterMm(e1.duct), ductDiameterMm(e2.duct)),
+        branchWidthMm: Math.min(ductWidthMm(e1.duct), ductWidthMm(e2.duct)),
+        branchHeightMm: Math.min(ductHeightMm(e1.duct), ductHeightMm(e2.duct)),
+        branchDiameterMm: Math.min(ductDiameterMm(e1.duct), ductDiameterMm(e2.duct)),
         angleDeg: Math.round(angleDiff),
         rotationDeg: Math.round(angle1 * (180 / Math.PI)),
         connectedDuctIds,
@@ -158,12 +165,12 @@ export function solveDuctFittings(ducts: LayoutDuct[]): MepDuctFitting[] {
         id: `fitting-duct-tee-${cluster.map((c) => c.ductId).join("-")}`,
         fittingType: "tee",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: baseDuct.elevationOffsetMm,
+        elevationOffsetMm: ductElevationMm(baseDuct),
         shape: baseDuct.shape,
-        system: baseDuct.system,
-        mainWidthMm: baseDuct.widthMm,
-        mainHeightMm: baseDuct.heightMm,
-        mainDiameterMm: baseDuct.diameterMm,
+        system: ductSystemType(baseDuct),
+        mainWidthMm: ductWidthMm(baseDuct),
+        mainHeightMm: ductHeightMm(baseDuct),
+        mainDiameterMm: ductDiameterMm(baseDuct),
         angleDeg: 90,
         rotationDeg: 0,
         connectedDuctIds,
@@ -174,12 +181,12 @@ export function solveDuctFittings(ducts: LayoutDuct[]): MepDuctFitting[] {
         id: `fitting-duct-cross-${cluster.map((c) => c.ductId).join("-")}`,
         fittingType: "cross",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: baseDuct.elevationOffsetMm,
+        elevationOffsetMm: ductElevationMm(baseDuct),
         shape: baseDuct.shape,
-        system: baseDuct.system,
-        mainWidthMm: baseDuct.widthMm,
-        mainHeightMm: baseDuct.heightMm,
-        mainDiameterMm: baseDuct.diameterMm,
+        system: ductSystemType(baseDuct),
+        mainWidthMm: ductWidthMm(baseDuct),
+        mainHeightMm: ductHeightMm(baseDuct),
+        mainDiameterMm: ductDiameterMm(baseDuct),
         angleDeg: 90,
         rotationDeg: 0,
         connectedDuctIds,
@@ -231,7 +238,7 @@ export function solvePipeFittings(pipes: LayoutPipe[]): MepPipeFitting[] {
     for (const other of endpoints) {
       if (visited.has(other)) continue;
       if (ep.pipeId === other.pipeId) continue;
-      if (Math.abs(ep.pipe.elevationOffsetMm - other.pipe.elevationOffsetMm) > 30) continue;
+      if (Math.abs(pipeElevationMm(ep.pipe) - pipeElevationMm(other.pipe)) > 30) continue;
       if (distanceSq(ep.pt, other.pt) <= JUNCTION_TOLERANCE_MM * JUNCTION_TOLERANCE_MM) {
         cluster.push(other);
         visited.add(other);
@@ -263,8 +270,8 @@ export function solvePipeFittings(pipes: LayoutPipe[]): MepPipeFitting[] {
         id: `fitting-pipe-${cluster[0].pipeId}-${cluster[1].pipeId}`,
         fittingType: "elbow",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: basePipe.elevationOffsetMm,
-        system: basePipe.system,
+        elevationOffsetMm: pipeElevationMm(basePipe),
+        system: pipeSystemType(basePipe),
         mainDiameterMm: Math.max(e1.pipe.diameterMm, e2.pipe.diameterMm),
         branchDiameterMm: Math.min(e1.pipe.diameterMm, e2.pipe.diameterMm),
         angleDeg: Math.round(angleDiff),
@@ -276,8 +283,8 @@ export function solvePipeFittings(pipes: LayoutPipe[]): MepPipeFitting[] {
         id: `fitting-pipe-tee-${cluster.map((c) => c.pipeId).join("-")}`,
         fittingType: "tee",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: basePipe.elevationOffsetMm,
-        system: basePipe.system,
+        elevationOffsetMm: pipeElevationMm(basePipe),
+        system: pipeSystemType(basePipe),
         mainDiameterMm: basePipe.diameterMm,
         angleDeg: 90,
         rotationDeg: 0,
@@ -288,8 +295,8 @@ export function solvePipeFittings(pipes: LayoutPipe[]): MepPipeFitting[] {
         id: `fitting-pipe-cross-${cluster.map((c) => c.pipeId).join("-")}`,
         fittingType: "cross",
         centerMm: { xMm: avgX, yMm: avgY },
-        elevationOffsetMm: basePipe.elevationOffsetMm,
-        system: basePipe.system,
+        elevationOffsetMm: pipeElevationMm(basePipe),
+        system: pipeSystemType(basePipe),
         mainDiameterMm: basePipe.diameterMm,
         angleDeg: 90,
         rotationDeg: 0,

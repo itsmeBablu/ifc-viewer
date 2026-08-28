@@ -4640,7 +4640,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       widthMm: dd.widthMm,
       heightMm: dd.heightMm,
       diameterMm: dd.diameterMm,
-      system: dd.system,
+      systemType: dd.system,
       flowM3h: s.draftDuctFlowM3h,
       createdAt: Date.now(),
     };
@@ -4778,7 +4778,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       endYmm: pd.cursor.yMm,
       elevationOffsetMm: pd.elevationOffsetMm,
       diameterMm: pd.diameterMm,
-      system: pd.system,
+      systemType: pd.system,
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
