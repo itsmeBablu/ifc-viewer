@@ -1518,6 +1518,20 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     padding: 1px !important;
     border: 0 !important;
   }
+  .werkzeug-discipline-toggle {
+    background: linear-gradient(135deg, rgba(255,255,255,.34), rgba(255,255,255,.08)) !important;
+    box-shadow: inset 0 1px rgba(255,255,255,.55), 0 3px 12px rgba(15,23,42,.16) !important;
+  }
+  .werkzeug-discipline-toggle[data-mode="arch"] .werkzeug-discipline-option.is-active {
+    color: #18181b !important;
+    background: linear-gradient(135deg, rgba(254,240,138,.9), rgba(250,204,21,.72)) !important;
+    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(250,204,21,.3) !important;
+  }
+  .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option.is-active {
+    color: #082f49 !important;
+    background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(56,189,248,.7)) !important;
+    box-shadow: inset 0 1px rgba(255,255,255,.72), 0 2px 8px rgba(56,189,248,.34) !important;
+  }
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="right"] .werkzeug-ipad-tool-ribbon,
   .werkzeug-ipad-ribbons[data-dock="left"] .werkzeug-ipad-action-ribbon,
@@ -2567,6 +2581,55 @@ body.werkzeug-active .werkzeug-snap-pill.is-active {
 body.werkzeug-active .werkzeug-snap-pill:hover :is(svg, span),
 body.werkzeug-active .werkzeug-snap-pill.is-active :is(svg, span) {
   color: #09090b !important;
+}
+
+/* MEP discipline: all interactive workspace accents become V-Blue liquid glass. */
+body.werkzeug-active.mep-mode-active :is(
+  .werkzeug-tool-button:hover,
+  .werkzeug-tool-button:active,
+  .werkzeug-tool-button.is-active,
+  .werkzeug-theme-knob:hover,
+  .werkzeug-render-trigger:hover,
+  .werkzeug-render-trigger[aria-expanded="true"],
+  .werkzeug-ipad-level-trigger:hover,
+  .werkzeug-ipad-level-trigger.is-active,
+  .werkzeug-snap-trigger:hover,
+  .werkzeug-snap-trigger.is-open,
+  .werkzeug-snap-pill:hover,
+  .werkzeug-snap-pill.is-active,
+  .werkzeug-ipad-popup button:hover,
+  .werkzeug-ipad-popup button.is-active
+) {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, rgba(186,230,253,.92), rgba(125,211,252,.82), rgba(56,189,248,.72)) !important;
+  color: #082f49 !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.78), 0 4px 14px rgba(56,189,248,.34) !important;
+}
+body.werkzeug-active.mep-mode-active :is(
+  .werkzeug-tool-button:hover,
+  .werkzeug-tool-button:active,
+  .werkzeug-tool-button.is-active,
+  .werkzeug-theme-knob:hover,
+  .werkzeug-render-trigger:hover,
+  .werkzeug-render-trigger[aria-expanded="true"],
+  .werkzeug-ipad-level-trigger:hover,
+  .werkzeug-ipad-level-trigger.is-active,
+  .werkzeug-snap-trigger:hover,
+  .werkzeug-snap-trigger.is-open,
+  .werkzeug-snap-pill:hover,
+  .werkzeug-snap-pill.is-active,
+  .werkzeug-ipad-popup button:hover,
+  .werkzeug-ipad-popup button.is-active
+) :is(svg, span, strong, small) {
+  color: #082f49 !important;
+}
+body.werkzeug-active.mep-mode-active :is(.werkzeug-ipad-tool-ribbon, .werkzeug-ipad-snap-ribbon, .werkzeug-ipad-context-surface, [data-popup-surface]) {
+  border-color: rgba(56,189,248,.28) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.32), 0 8px 26px rgba(14,165,233,.14) !important;
+}
+body.werkzeug-active.mep-mode-active :is(input, select, textarea):focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56,189,248,.18) !important;
 }
 
 /* Custom levels, floors, and action button hovers */
