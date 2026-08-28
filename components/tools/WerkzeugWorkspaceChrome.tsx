@@ -556,13 +556,13 @@ export default function WerkzeugWorkspaceChrome({
           aria-pressed={mepModeActive}
           aria-label={mepModeActive ? "Switch to Architecture mode" : "Switch to MEP mode"}
           title={mepModeActive ? "MEP mode active — switch to Architecture" : "Architecture mode active — switch to MEP"}
-          className={`group relative flex h-7 shrink-0 items-center gap-0.5 rounded-lg border p-0.5 transition-all ${mepModeActive ? "border-sky-400/70 bg-sky-400/15 shadow-[0_0_12px_rgba(56,189,248,.22)]" : "border-yellow-400/70 bg-yellow-400/15 shadow-[0_0_12px_rgba(250,204,21,.18)]"}`}
+          className={`group relative flex h-6 shrink-0 items-center gap-0 rounded-full border p-px transition-all ${mepModeActive ? "border-sky-400/70 bg-sky-400/15 shadow-[0_0_10px_rgba(56,189,248,.2)]" : "border-yellow-400/70 bg-yellow-400/15 shadow-[0_0_10px_rgba(250,204,21,.16)]"}`}
         >
-          <span className={`flex h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-bold transition-all ${!mepModeActive ? "bg-yellow-400 text-zinc-950" : "text-[var(--text-muted)]"}`}>
-            <LuBuilding2 className="h-3 w-3" /><span>Arch</span>
+          <span className={`flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-all ${!mepModeActive ? "bg-yellow-400 text-zinc-950" : "text-[var(--text-muted)]"}`}>
+            <LuBuilding2 className="h-2.5 w-2.5" /><span>Arch</span>
           </span>
-          <span className={`flex h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-bold transition-all ${mepModeActive ? "bg-sky-400 text-slate-950" : "text-[var(--text-muted)]"}`}>
-            <LuZap className="h-3 w-3" /><span>MEP</span>
+          <span className={`flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-all ${mepModeActive ? "bg-sky-400 text-slate-950" : "text-[var(--text-muted)]"}`}>
+            <LuZap className="h-2.5 w-2.5" /><span>MEP</span>
           </span>
         </button>
         <div className="relative shrink-0">
