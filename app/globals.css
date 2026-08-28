@@ -2591,7 +2591,7 @@ body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-c
   [aria-pressed="true"],
   [class*="bg-yellow-"],
   [class*="bg-amber-"]
-):not([class*="red"]) {
+):not(.werkzeug-discipline-toggle):not([class*="red"]) {
   border-color: rgba(125,211,252,.72) !important;
   background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(125,211,252,.8), rgba(56,189,248,.7)) !important;
   color: #082f49 !important;
