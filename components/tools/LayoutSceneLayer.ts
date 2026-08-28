@@ -4144,13 +4144,10 @@ export default class LayoutSceneLayer {
         : (MEP_SYSTEM_COLORS[duct.systemType] ? parseInt(MEP_SYSTEM_COLORS[duct.systemType].replace("#", ""), 16) : 0x06b6d4);
 
       let mesh = this.ductMeshes.get(duct.id);
-      const isRound = duct.shape === "round";
-      const isOval = duct.shape === "oval";
-      const w = fromMm(duct.widthMm ?? 300);
-      const isRound = duct.shape === "round" || duct.isFlex;
-      const isOval = duct.shape === "oval" && !duct.isFlex;
       const isFlex = Boolean(duct.isFlex);
       const isPlaceholder = Boolean(duct.isPlaceholder);
+      const isRound = (duct.shape === "round" || isFlex);
+      const isOval = duct.shape === "oval" && !isFlex;
       const w = fromMm(duct.widthMm ?? 300);
       const h = fromMm(duct.heightMm ?? 200);
       const r = fromMm((duct.diameterMm ?? 200) / 2);
