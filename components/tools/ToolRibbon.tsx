@@ -140,6 +140,7 @@ function RibbonBtn({
   const btnRef = useRef<HTMLButtonElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   const displayLabel = label;
 
@@ -147,9 +148,9 @@ function RibbonBtn({
     if (active) return;
     if (btnRef.current) {
       gsap.to(btnRef.current, {
-        backgroundColor: "rgba(250, 204, 21, 0.16)",
-        borderColor: "rgba(250, 204, 21, 0.4)",
-        boxShadow: "0 0 12px rgba(250, 204, 21, 0.22)",
+        backgroundColor: mepModeActive ? "rgba(56, 189, 248, 0.18)" : "rgba(250, 204, 21, 0.16)",
+        borderColor: mepModeActive ? "rgba(56, 189, 248, 0.45)" : "rgba(250, 204, 21, 0.4)",
+        boxShadow: mepModeActive ? "0 0 14px rgba(56, 189, 248, 0.28)" : "0 0 12px rgba(250, 204, 21, 0.22)",
         duration: 0.25,
         ease: "power2.out",
         overwrite: "auto",
@@ -195,11 +196,11 @@ function RibbonBtn({
     if (active && btnRef.current) {
       gsap.fromTo(
         btnRef.current,
-        { scale: 0.92, backgroundColor: "rgba(250, 204, 21, 0)" },
+        { scale: 0.92, backgroundColor: mepModeActive ? "rgba(56, 189, 248, 0)" : "rgba(250, 204, 21, 0)" },
         {
           scale: 1,
-          backgroundColor: "#facc15",
-          borderColor: "#fde047",
+          backgroundColor: mepModeActive ? "#38bdf8" : "#facc15",
+          borderColor: mepModeActive ? "#7dd3fc" : "#fde047",
           duration: 0.35,
           ease: "elastic.out(1, 0.5)",
           overwrite: "auto",
@@ -215,7 +216,7 @@ function RibbonBtn({
         overwrite: "auto",
       });
     }
-  }, [active]);
+  }, [active, mepModeActive]);
 
   const handlePointerDown = () => {
     longPressTimer.current = setTimeout(() => {
@@ -245,7 +246,11 @@ function RibbonBtn({
         danger
           ? "text-red-500 hover:bg-red-500/10"
           : active
-          ? "text-slate-950 font-bold shadow-md shadow-yellow-400/20"
+          ? mepModeActive
+            ? "text-[#082f49] font-bold shadow-md shadow-sky-400/25 btn-v-blue"
+            : "text-slate-950 font-bold shadow-md shadow-yellow-400/20 btn-v-yellow"
+          : mepModeActive
+          ? "text-[var(--text-body)] hover:text-sky-400"
           : "text-[var(--text-body)] hover:text-yellow-400"
       }`}
     >
@@ -273,6 +278,7 @@ function ToggleBtn({
   title?: string;
   children: React.ReactNode;
 }) {
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   return (
     <button
       type="button"
@@ -280,7 +286,9 @@ function ToggleBtn({
       title={title}
       className={`flex flex-col items-center justify-center gap-0.5 rounded-lg p-1 min-w-[38px] border transition-all ${
         active
-          ? "border-yellow-400 bg-yellow-400/20 text-yellow-500 dark:text-yellow-400 font-bold"
+          ? mepModeActive
+            ? "border-sky-400 bg-sky-400/20 text-sky-500 dark:text-sky-400 font-bold"
+            : "border-yellow-400 bg-yellow-400/20 text-yellow-500 dark:text-yellow-400 font-bold"
           : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
       }`}
     >
