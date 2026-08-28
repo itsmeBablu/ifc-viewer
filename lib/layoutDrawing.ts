@@ -278,8 +278,22 @@ export type LayoutRamp = {
   createdAt: number;
 };
 
-export type DuctShape = "rectangular" | "round";
+export type DuctShape = "rectangular" | "round" | "oval";
 export type DuctSystemType = "supply" | "extract" | "exhaust" | "outdoor";
+
+export interface MepConnector {
+  id: string;
+  name: string;
+  type: "duct" | "pipe" | "electrical";
+  systemType?: string;
+  relXmm: number; // offset relative to equipment center along width
+  relYmm: number; // offset relative to equipment center along depth
+  relZmm: number; // offset relative to equipment base elevation
+  dir: [number, number, number]; // normal vector [dx, dy, dz]
+  sizeMm?: number; // diameter for round pipe/duct
+  widthMm?: number; // width for rect/oval duct
+  heightMm?: number; // height for rect/oval duct
+}
 
 export type LayoutDuct = {
   id: string;
@@ -289,17 +303,22 @@ export type LayoutDuct = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
-  elevationOffsetMm: number; // Height above floor level (default: 2600mm)
+  elevationMm?: number;
+  elevationOffsetMm?: number; // legacy alias
   shape: DuctShape;
-  widthMm: number; // for rectangular
-  heightMm: number; // for rectangular
-  diameterMm: number; // for round
-  system: DuctSystemType;
+  widthMm?: number; // for rectangular/oval
+  heightMm?: number; // for rectangular/oval
+  diameterMm?: number; // for round
+  systemType: DuctSystemType;
   flowM3h?: number;
   velocityMs?: number;
   insulationThicknessMm?: number;
   material?: string;
   color?: string;
+  startConnectorId?: string;
+  endConnectorId?: string;
+  connectedStartEquipmentId?: string;
+  connectedEndEquipmentId?: string;
   createdAt: number;
 };
 
@@ -319,13 +338,18 @@ export type LayoutPipe = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
-  elevationOffsetMm: number; // default: 2700mm
+  elevationMm?: number;
+  elevationOffsetMm?: number;
   diameterMm: number; // outer diameter mm (e.g. 15, 22, 28, 35, 42, 54, 76, 108)
-  system: PipeSystemType;
+  systemType: PipeSystemType;
   slopePercent?: number; // for drainage / sanitary waste
   insulationThicknessMm?: number;
   material?: string;
   color?: string;
+  startConnectorId?: string;
+  endConnectorId?: string;
+  connectedStartEquipmentId?: string;
+  connectedEndEquipmentId?: string;
   createdAt: number;
 };
 
@@ -339,7 +363,8 @@ export type LayoutCableTray = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
-  elevationOffsetMm: number; // default: 2800mm
+  elevationMm?: number;
+  elevationOffsetMm?: number;
   widthMm: number; // e.g. 100, 150, 200, 300, 400
   heightMm: number; // e.g. 50, 60, 100
   trayType: CableTrayType;
@@ -356,6 +381,11 @@ export type MepEquipmentCategory =
   | "socket"
   | "light"
   | "radiator"
+  | "fan_coil"
+  | "ac_unit"
+  | "chiller"
+  | "boiler"
+  | "heat_pump"
   | "sink"
   | "toilet";
 
@@ -366,19 +396,167 @@ export type LayoutMepEquipment = {
   category: MepEquipmentCategory;
   xMm: number;
   yMm: number;
-  elevationOffsetMm: number; // e.g. 2600mm ceiling or 1000mm wall
+  elevationMm?: number;
+  elevationOffsetMm?: number;
   rotationDeg: number;
   widthMm?: number;
   depthMm?: number;
   heightMm?: number;
   flowM3h?: number;
+  airflowM3h?: number;
   powerWatts?: number;
-  connectedHostId?: string; // e.g. ductId, pipeId, or wallId
+  coolingWatts?: number;
+  connectedHostId?: string;
+  connectors?: MepConnector[];
   name?: string;
   material?: string;
   color?: string;
   createdAt: number;
 };
+
+/**
+ * Returns list of world-coordinate connectors for equipment, rotating with rotationDeg.
+ */
+export function getEquipmentConnectors(
+  item: LayoutMepEquipment,
+): Array<MepConnector & { worldXmm: number; worldYmm: number; worldZmm: number }> {
+  const rad = ((item.rotationDeg ?? 0) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  const w = item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400);
+  const h = item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400);
+  const d = item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400);
+
+  const baseConnectors: MepConnector[] = item.connectors?.length
+    ? item.connectors
+    : item.category === "radiator"
+    ? [
+        {
+          id: `${item.id}-c-flow`,
+          name: "Heating Flow (Vorlauf)",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: -w / 2,
+          relYmm: 0,
+          relZmm: h - 80,
+          dir: [-1, 0, 0],
+          sizeMm: 15,
+        },
+        {
+          id: `${item.id}-c-ret`,
+          name: "Heating Return (Rücklauf)",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 80,
+          dir: [1, 0, 0],
+          sizeMm: 15,
+        },
+      ]
+    : item.category === "fan_coil" || item.category === "ac_unit"
+    ? [
+        {
+          id: `${item.id}-c-sa`,
+          name: "Supply Air (Zuluft)",
+          type: "duct",
+          systemType: "supply",
+          relXmm: 0,
+          relYmm: d / 2,
+          relZmm: h / 2,
+          dir: [0, 1, 0],
+          widthMm: Math.round(w * 0.7),
+          heightMm: Math.round(h * 0.6),
+        },
+        {
+          id: `${item.id}-c-ra`,
+          name: "Return Air (Abluft)",
+          type: "duct",
+          systemType: "extract",
+          relXmm: 0,
+          relYmm: -d / 2,
+          relZmm: h / 2,
+          dir: [0, -1, 0],
+          widthMm: Math.round(w * 0.7),
+          heightMm: Math.round(h * 0.6),
+        },
+        {
+          id: `${item.id}-c-cw-sup`,
+          name: "Chilled Water Supply",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 80,
+          dir: [1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-cw-ret`,
+          name: "Chilled Water Return",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 160,
+          dir: [1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-drain`,
+          name: "Condensate Drain",
+          type: "pipe",
+          systemType: "sanitary_waste",
+          relXmm: w / 2 - 30,
+          relYmm: 0,
+          relZmm: 0,
+          dir: [0, 0, -1],
+          sizeMm: 20,
+        },
+      ]
+    : item.category === "diffuser_supply" || item.category === "diffuser_extract"
+    ? [
+        {
+          id: `${item.id}-c-top`,
+          name: item.category === "diffuser_supply" ? "Supply Inlet" : "Extract Outlet",
+          type: "duct",
+          systemType: item.category === "diffuser_supply" ? "supply" : "extract",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: 100,
+          dir: [0, 0, 1],
+          sizeMm: 160,
+        },
+      ]
+    : [
+        {
+          id: `${item.id}-c-elec`,
+          name: "Power Connection",
+          type: "electrical",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: h / 2,
+          dir: [0, 0, 1],
+        },
+      ];
+
+  const baseElev = item.elevationMm ?? item.elevationOffsetMm ?? 0;
+
+  return baseConnectors.map((c) => {
+    // 2D rotation of (relXmm, relYmm) around item center
+    // Note: in 2D plan, X is horizontal, Y is vertical
+    const rotX = c.relXmm * cos - c.relYmm * sin;
+    const rotY = c.relXmm * sin + c.relYmm * cos;
+
+    return {
+      ...c,
+      worldXmm: item.xMm + rotX,
+      worldYmm: item.yMm + rotY,
+      worldZmm: baseElev + c.relZmm,
+    };
+  });
+}
 
 export type SelectedElementRef = {
   kind:

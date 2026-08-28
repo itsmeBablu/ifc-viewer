@@ -1273,9 +1273,11 @@ export default function LayoutPropertiesPanel({
         const dx = duct.endXmm - duct.startXmm;
         const dy = duct.endYmm - duct.startYmm;
         const ductLen = Math.round(Math.hypot(dx, dy));
-        const areaSqM = duct.shape === "rectangular"
-          ? ((duct.widthMm ?? 300) * (duct.heightMm ?? 200)) / 1_000_000
-          : Math.PI * Math.pow((duct.diameterMm ?? 200) / 2000, 2);
+        const areaSqM = duct.shape === "round"
+          ? Math.PI * Math.pow((duct.diameterMm ?? 200) / 2000, 2)
+          : duct.shape === "oval"
+          ? (((duct.widthMm ?? 300) * (duct.heightMm ?? 200)) - (4 - Math.PI) * Math.pow((duct.heightMm ?? 200) / 2, 2)) / 1_000_000
+          : ((duct.widthMm ?? 300) * (duct.heightMm ?? 200)) / 1_000_000;
         const flow = duct.flowM3h ?? 250;
         const velocity = Math.round((flow / (3600 * Math.max(0.001, areaSqM))) * 10) / 10;
 
@@ -1290,10 +1292,10 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Duct Geometry">
+            <Section title="Duct Geometry & Profile">
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex flex-col gap-0.5">
-                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Shape</span>
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Profile</span>
                   <select
                     value={duct.shape}
                     onChange={(e) => void updateDuct(duct.id, { shape: e.target.value as any })}
@@ -1301,6 +1303,7 @@ export default function LayoutPropertiesPanel({
                   >
                     <option value="rectangular">Rectangular</option>
                     <option value="round">Round (Spiral)</option>
+                    <option value="oval">Flat Oval</option>
                   </select>
                 </label>
 
@@ -1320,7 +1323,7 @@ export default function LayoutPropertiesPanel({
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {duct.shape === "rectangular" ? (
+                {duct.shape !== "round" ? (
                   <>
                     <MmInput
                       label="Width"
@@ -1342,7 +1345,7 @@ export default function LayoutPropertiesPanel({
                 )}
                 <MmInput
                   label="Center Elev"
-                  value={duct.elevationMm ?? 2600}
+                  value={duct.elevationMm ?? duct.elevationOffsetMm ?? 2600}
                   onCommit={(v) => void updateDuct(duct.id, { elevationMm: v })}
                 />
               </div>
@@ -1444,7 +1447,7 @@ export default function LayoutPropertiesPanel({
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <MmInput
                   label="Elevation"
-                  value={pipe.elevationMm ?? 2700}
+                  value={pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700}
                   onCommit={(v) => void updatePipe(pipe.id, { elevationMm: v })}
                 />
                 <label className="flex flex-col gap-0.5">
@@ -1520,7 +1523,7 @@ export default function LayoutPropertiesPanel({
 
                 <MmInput
                   label="Elevation"
-                  value={tray.elevationMm ?? 2800}
+                  value={tray.elevationMm ?? tray.elevationOffsetMm ?? 2800}
                   onCommit={(v) => void updateCableTray(tray.id, { elevationMm: v })}
                 />
               </div>
@@ -1566,6 +1569,13 @@ export default function LayoutPropertiesPanel({
 
       {/* -- MEP EQUIPMENT INSPECTOR ------------------------------------------- */}
       {equip && (() => {
+        const connectors = getEquipmentConnectors(equip);
+        const isRadiator = equip.category === "radiator";
+        const isCooling = equip.category === "fan_coil" || equip.category === "ac_unit" || equip.category === "chiller";
+        const defW = isRadiator ? 1000 : equip.category === "fan_coil" ? 900 : equip.category === "ac_unit" ? 850 : equip.category === "chiller" ? 1600 : 400;
+        const defH = isRadiator ? 600 : equip.category === "fan_coil" ? 250 : equip.category === "ac_unit" ? 290 : equip.category === "chiller" ? 1200 : 400;
+        const defD = isRadiator ? 100 : equip.category === "fan_coil" ? 600 : equip.category === "ac_unit" ? 210 : equip.category === "chiller" ? 800 : 400;
+
         return (
           <>
             <div className="flex items-center justify-between gap-2">
@@ -1577,7 +1587,7 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Fixture Properties">
+            <Section title="Equipment Category">
               <div className="flex flex-col gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Category</span>
@@ -1586,48 +1596,135 @@ export default function LayoutPropertiesPanel({
                     onChange={(e) => void updateEquipment(equip.id, { category: e.target.value as any })}
                     className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none text-amber-500 font-semibold"
                   >
+                    <option value="radiator">Heating Radiator</option>
+                    <option value="fan_coil">Fan Coil Unit (FCU)</option>
+                    <option value="ac_unit">AC Indoor Split Unit</option>
+                    <option value="chiller">Chiller / Heat Pump Unit</option>
                     <option value="diffuser_supply">Supply Diffuser (Zuluft)</option>
                     <option value="diffuser_extract">Extract Diffuser (Abluft)</option>
                     <option value="diffuser_overflow">Overflow Grille (Überströmung)</option>
                     <option value="panel">Electrical Panel</option>
                     <option value="socket">Power Socket Outlet</option>
                     <option value="light">Light Fixture</option>
-                    <option value="radiator">Heating Radiator</option>
                     <option value="sink">Wash Basin / Sink</option>
                     <option value="toilet">Toilet (WC)</option>
                   </select>
                 </label>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <MmInput
-                    label="Elevation"
-                    value={equip.elevationMm ?? 0}
-                    onCommit={(v) => void updateEquipment(equip.id, { elevationMm: v })}
-                  />
-                  <label className="flex flex-col gap-0.5">
-                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Rotation (°)</span>
-                    <input
-                      type="number"
-                      defaultValue={equip.rotationDeg ?? 0}
-                      onBlur={(e) => void updateEquipment(equip.id, { rotationDeg: Number(e.target.value) })}
-                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
-                    />
-                  </label>
-                </div>
-
-                {equip.category.startsWith("diffuser") && (
-                  <label className="flex flex-col gap-0.5">
-                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Flow Rate (m³/h)</span>
-                    <input
-                      type="number"
-                      defaultValue={equip.flowM3h ?? 100}
-                      onBlur={(e) => void updateEquipment(equip.id, { flowM3h: Number(e.target.value) })}
-                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
-                    />
-                  </label>
-                )}
               </div>
             </Section>
+
+            {/* Procedural Dimensions (Live Dimension Editing) */}
+            <Section title="Procedural Dimensions">
+              <div className="grid grid-cols-3 gap-1.5">
+                <MmInput
+                  label="Width"
+                  value={equip.widthMm ?? defW}
+                  onCommit={(v) => void updateEquipment(equip.id, { widthMm: v })}
+                />
+                <MmInput
+                  label="Height"
+                  value={equip.heightMm ?? defH}
+                  onCommit={(v) => void updateEquipment(equip.id, { heightMm: v })}
+                />
+                <MmInput
+                  label="Depth"
+                  value={equip.depthMm ?? defD}
+                  onCommit={(v) => void updateEquipment(equip.id, { depthMm: v })}
+                />
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <MmInput
+                  label="Elevation"
+                  value={equip.elevationMm ?? equip.elevationOffsetMm ?? 0}
+                  onCommit={(v) => void updateEquipment(equip.id, { elevationMm: v })}
+                />
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Rotation (°)</span>
+                  <input
+                    type="number"
+                    defaultValue={equip.rotationDeg ?? 0}
+                    onBlur={(e) => void updateEquipment(equip.id, { rotationDeg: Number(e.target.value) })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                  />
+                </label>
+              </div>
+            </Section>
+
+            {/* Heating / Cooling / Airflow Capacity */}
+            {(isRadiator || isCooling || equip.category.startsWith("diffuser")) && (
+              <Section title="Thermal & Aerodynamic Capacity">
+                <div className="grid grid-cols-2 gap-2">
+                  {isRadiator && (
+                    <label className="flex flex-col gap-0.5 col-span-2">
+                      <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Heating Output (W)</span>
+                      <input
+                        type="number"
+                        defaultValue={equip.powerWatts ?? 1500}
+                        onBlur={(e) => void updateEquipment(equip.id, { powerWatts: Number(e.target.value) })}
+                        className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                      />
+                    </label>
+                  )}
+
+                  {isCooling && (
+                    <>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Cooling Output (W)</span>
+                        <input
+                          type="number"
+                          defaultValue={equip.coolingWatts ?? (equip.category === "chiller" ? 15000 : 2500)}
+                          onBlur={(e) => void updateEquipment(equip.id, { coolingWatts: Number(e.target.value) })}
+                          className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Airflow (m³/h)</span>
+                        <input
+                          type="number"
+                          defaultValue={equip.airflowM3h ?? 450}
+                          onBlur={(e) => void updateEquipment(equip.id, { airflowM3h: Number(e.target.value) })}
+                          className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  {equip.category.startsWith("diffuser") && (
+                    <label className="flex flex-col gap-0.5 col-span-2">
+                      <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Airflow Rate (m³/h)</span>
+                      <input
+                        type="number"
+                        defaultValue={equip.flowM3h ?? 100}
+                        onBlur={(e) => void updateEquipment(equip.id, { flowM3h: Number(e.target.value) })}
+                        className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                      />
+                    </label>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* Connectors List */}
+            {connectors.length > 0 && (
+              <Section title={`Connectors (${connectors.length})`}>
+                <div className="flex flex-col gap-1.5">
+                  {connectors.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between rounded-lg bg-[var(--surface-overlay)] p-1.5 text-[10px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className={`h-2 w-2 rounded-full ${
+                          c.type === "duct" ? "bg-cyan-400" : c.type === "pipe" ? (c.systemType === "hydronic_supply" ? "bg-red-500" : "bg-blue-500") : "bg-yellow-400"
+                        }`} />
+                        <span className="font-semibold text-[var(--text-strong)] truncate">{c.name}</span>
+                      </div>
+                      <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                        {c.sizeMm ? `Ø${c.sizeMm}mm` : c.widthMm ? `${c.widthMm}×${c.heightMm}mm` : "Elec"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             <div className="flex gap-1.5">
               <button

@@ -4121,7 +4121,7 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedDuctIds.has(duct.id);
       const level = levels.find((l) => l.id === duct.levelId);
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = duct.elevationMm ?? 2600;
+      const elevOffset = duct.elevationMm ?? duct.elevationOffsetMm ?? 2600;
       const centerY = fromMm(baseElev + elevOffset);
 
       const dx = fromMm(duct.endXmm - duct.startXmm);
@@ -4139,18 +4139,43 @@ export default class LayoutSceneLayer {
 
       let mesh = this.ductMeshes.get(duct.id);
       const isRound = duct.shape === "round";
+      const isOval = duct.shape === "oval";
       const w = fromMm(duct.widthMm ?? 300);
       const h = fromMm(duct.heightMm ?? 200);
       const r = fromMm((duct.diameterMm ?? 200) / 2);
 
-      const geoKey = isRound ? `round:${r}:${len}` : `rect:${w}:${h}:${len}`;
+      const geoKey = isRound
+        ? `round:${r}:${len}`
+        : isOval
+        ? `oval:${w}:${h}:${len}`
+        : `rect:${w}:${h}:${len}`;
+
+      const buildDuctGeo = () => {
+        if (isRound) {
+          const g = new THREE.CylinderGeometry(r, r, len, 16);
+          g.rotateZ(Math.PI / 2);
+          return g;
+        } else if (isOval) {
+          // Flat oval cross-section extruded along duct length
+          const sh = new THREE.Shape();
+          const rad = Math.min(h / 2, w / 2);
+          const straightW = Math.max(0.001, (w - 2 * rad) / 2);
+          sh.moveTo(-straightW, -rad);
+          sh.lineTo(straightW, -rad);
+          sh.absarc(straightW, 0, rad, -Math.PI / 2, Math.PI / 2, false);
+          sh.lineTo(-straightW, rad);
+          sh.absarc(-straightW, 0, rad, Math.PI / 2, (3 * Math.PI) / 2, false);
+          const g = new THREE.ExtrudeGeometry(sh, { depth: len, bevelEnabled: false });
+          g.translate(0, 0, -len / 2);
+          g.rotateY(Math.PI / 2);
+          return g;
+        } else {
+          return new THREE.BoxGeometry(len, h, w);
+        }
+      };
 
       if (!mesh) {
-        const geo = isRound
-          ? new THREE.CylinderGeometry(r, r, len, 16)
-          : new THREE.BoxGeometry(len, h, w);
-        if (isRound) geo.rotateZ(Math.PI / 2);
-
+        const geo = buildDuctGeo();
         const mat = new THREE.MeshStandardMaterial({
           color: hexColor,
           roughness: 0.35,
@@ -4164,11 +4189,7 @@ export default class LayoutSceneLayer {
         this.group.add(mesh);
       } else if (mesh.userData.geometryKey !== geoKey) {
         mesh.geometry.dispose();
-        const geo = isRound
-          ? new THREE.CylinderGeometry(r, r, len, 16)
-          : new THREE.BoxGeometry(len, h, w);
-        if (isRound) geo.rotateZ(Math.PI / 2);
-        mesh.geometry = geo;
+        mesh.geometry = buildDuctGeo();
         mesh.userData.geometryKey = geoKey;
       }
 
@@ -4209,7 +4230,7 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedPipeIds.has(pipe.id);
       const level = levels.find((l) => l.id === pipe.levelId);
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = pipe.elevationMm ?? 2700;
+      const elevOffset = pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700;
       const centerY = fromMm(baseElev + elevOffset);
 
       const dx = fromMm(pipe.endXmm - pipe.startXmm);
@@ -4288,7 +4309,7 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedCableTrayIds.has(tray.id);
       const level = levels.find((l) => l.id === tray.levelId);
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = tray.elevationMm ?? 2800;
+      const elevOffset = tray.elevationMm ?? tray.elevationOffsetMm ?? 2800;
       const centerY = fromMm(baseElev + elevOffset);
 
       const dx = fromMm(tray.endXmm - tray.startXmm);
@@ -4360,9 +4381,17 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedEquipmentIds.has(item.id);
       const level = levels.find((l) => l.id === item.levelId);
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const centerY = fromMm(baseElev + (item.elevationMm ?? 0));
+      const centerY = fromMm(baseElev + (item.elevationMm ?? item.elevationOffsetMm ?? 0));
+
+      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400));
+      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400));
+      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400));
+
+      const geoKey = `${item.category}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
 
       let grp = this.equipmentMeshes.get(item.id);
+      const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
+
       if (!grp) {
         grp = new THREE.Group();
         grp.name = `equip-${item.id}`;
@@ -4370,8 +4399,158 @@ export default class LayoutSceneLayer {
         grp.userData.kind = "equipment";
         this.equipmentMeshes.set(item.id, grp);
         this.group.add(grp);
-      } else {
+      }
+
+      if (needsRebuild) {
         this.clearGroupContents(grp);
+        grp.userData.geometryKey = geoKey;
+
+        // Build procedural model per category
+        if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow") {
+          const isSupply = item.category === "diffuser_supply";
+          const isExtract = item.category === "diffuser_extract";
+          const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
+
+          const plateGeo = new THREE.BoxGeometry(w, 0.04, d);
+          const plateMat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.4, roughness: 0.3 });
+          const plate = new THREE.Mesh(plateGeo, plateMat);
+          plate.userData.layoutEquipmentId = item.id;
+          grp.add(plate);
+
+          // Core grille indicator
+          const coreGeo = new THREE.BoxGeometry(w * 0.65, 0.05, d * 0.65);
+          const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+          const core = new THREE.Mesh(coreGeo, coreMat);
+          core.userData.layoutEquipmentId = item.id;
+          grp.add(core);
+
+          // Top duct collar
+          const collarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 16);
+          const collarMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
+          const collar = new THREE.Mesh(collarGeo, collarMat);
+          collar.position.set(0, 0.06, 0);
+          collar.userData.layoutEquipmentId = item.id;
+          grp.add(collar);
+        } else if (item.category === "radiator") {
+          // Procedural Radiator with front casing, convection louvre, valve nubs, and pipe connectors
+          const radMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.25, roughness: 0.35 });
+          const radGeo = new THREE.BoxGeometry(w, h, d);
+          const body = new THREE.Mesh(radGeo, radMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Top convection grille
+          const grilleMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
+          const topGrille = new THREE.Mesh(new THREE.BoxGeometry(w * 0.94, 0.02, d * 0.85), grilleMat);
+          topGrille.position.set(0, h + 0.01, 0);
+          topGrille.userData.layoutEquipmentId = item.id;
+          grp.add(topGrille);
+
+          // Flow valve on top-left (Red)
+          const valveGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.06, 12);
+          valveGeo.rotateZ(Math.PI / 2);
+          const flowValve = new THREE.Mesh(valveGeo, new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.7 }));
+          flowValve.position.set(-w / 2 - 0.03, h - 0.08, 0);
+          flowValve.userData.layoutEquipmentId = item.id;
+          grp.add(flowValve);
+
+          // Return valve on bottom-right (Blue)
+          const retValve = new THREE.Mesh(valveGeo, new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.7 }));
+          retValve.position.set(w / 2 + 0.03, 0.08, 0);
+          retValve.userData.layoutEquipmentId = item.id;
+          grp.add(retValve);
+        } else if (item.category === "fan_coil" || item.category === "ac_unit") {
+          // Procedural Fan Coil / AC Indoor unit
+          const caseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.3, roughness: 0.4 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), caseMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Front supply air louvre
+          const louvreMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.2 });
+          const louvre = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, h * 0.35, d * 0.08), louvreMat);
+          louvre.position.set(0, h * 0.3, d / 2 + 0.02);
+          louvre.userData.layoutEquipmentId = item.id;
+          grp.add(louvre);
+
+          // Rear return duct collar
+          const collarMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.6 });
+          const returnCollar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.75, h * 0.6, 0.04), collarMat);
+          returnCollar.position.set(0, h / 2, -d / 2 - 0.02);
+          returnCollar.userData.layoutEquipmentId = item.id;
+          grp.add(returnCollar);
+
+          // Status LED indicator
+          const ledMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+          const led = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), ledMat);
+          led.position.set(w / 2 - 0.06, h * 0.8, d / 2 + 0.01);
+          grp.add(led);
+        } else if (item.category === "chiller" || item.category === "boiler" || item.category === "heat_pump") {
+          // Heavy mechanical plant unit
+          const plantMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.35 });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), plantMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Fan grilles on top
+          const fanGeo = new THREE.CylinderGeometry(Math.min(w, d) * 0.35, Math.min(w, d) * 0.35, 0.05, 16);
+          const fanMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+          const fan1 = new THREE.Mesh(fanGeo, fanMat);
+          fan1.position.set(-w * 0.22, h + 0.025, 0);
+          grp.add(fan1);
+          const fan2 = new THREE.Mesh(fanGeo, fanMat);
+          fan2.position.set(w * 0.22, h + 0.025, 0);
+          grp.add(fan2);
+        } else if (item.category === "panel") {
+          const boxGeo = new THREE.BoxGeometry(w, h, d);
+          const boxMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
+          const box = new THREE.Mesh(boxGeo, boxMat);
+          box.position.set(0, h / 2, 0);
+          box.userData.layoutEquipmentId = item.id;
+          grp.add(box);
+        } else if (item.category === "light") {
+          const lightGeo = new THREE.CylinderGeometry(w / 2, w / 2, 0.05, 16);
+          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.4 });
+          const light = new THREE.Mesh(lightGeo, lightMat);
+          light.userData.layoutEquipmentId = item.id;
+          grp.add(light);
+        } else {
+          // Generic fixture box
+          const genGeo = new THREE.BoxGeometry(w, h, d);
+          const genMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5, roughness: 0.4 });
+          const gen = new THREE.Mesh(genGeo, genMat);
+          gen.position.set(0, h / 2, 0);
+          gen.userData.layoutEquipmentId = item.id;
+          grp.add(gen);
+        }
+
+        // Add visual connector markers if selected
+        if (isSelected) {
+          const connectors = getEquipmentConnectors(item);
+          for (const c of connectors) {
+            const isDuct = c.type === "duct";
+            const isElec = c.type === "electrical";
+            const cColor = isDuct
+              ? (c.systemType === "supply" ? 0x06b6d4 : 0xf59e0b)
+              : isElec
+              ? 0xeab308
+              : (c.systemType === "hydronic_supply" ? 0xef4444 : c.systemType === "hydronic_return" ? 0x3b82f6 : 0x10b981);
+
+            const markerGeo = new THREE.RingGeometry(0.02, 0.045, 16);
+            const markerMat = new THREE.MeshBasicMaterial({ color: cColor, side: THREE.DoubleSide });
+            const marker = new THREE.Mesh(markerGeo, markerMat);
+            marker.position.set(fromMm(c.relXmm), fromMm(c.relZmm), fromMm(c.relYmm));
+            marker.lookAt(
+              fromMm(c.relXmm + c.dir[0]),
+              fromMm(c.relZmm + c.dir[2]),
+              fromMm(c.relYmm + c.dir[1]),
+            );
+            grp.add(marker);
+          }
+        }
       }
 
       const rot = ((item.rotationDeg ?? 0) * Math.PI) / 180;
@@ -4381,51 +4560,6 @@ export default class LayoutSceneLayer {
         opts.showAllLevels ||
         opts.activeLevelId == null ||
         item.levelId === opts.activeLevelId;
-
-      // Build model per category
-      if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow") {
-        const isSupply = item.category === "diffuser_supply";
-        const isExtract = item.category === "diffuser_extract";
-        const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
-
-        const plateGeo = new THREE.BoxGeometry(0.4, 0.04, 0.4);
-        const plateMat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.4, roughness: 0.3 });
-        const plate = new THREE.Mesh(plateGeo, plateMat);
-        plate.userData.layoutEquipmentId = item.id;
-        grp.add(plate);
-
-        // Core grille indicator
-        const coreGeo = new THREE.BoxGeometry(0.25, 0.05, 0.25);
-        const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        core.userData.layoutEquipmentId = item.id;
-        grp.add(core);
-      } else if (item.category === "panel") {
-        const boxGeo = new THREE.BoxGeometry(0.4, 0.6, 0.15);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
-        const box = new THREE.Mesh(boxGeo, boxMat);
-        box.userData.layoutEquipmentId = item.id;
-        grp.add(box);
-      } else if (item.category === "light") {
-        const lightGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16);
-        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.4 });
-        const light = new THREE.Mesh(lightGeo, lightMat);
-        light.userData.layoutEquipmentId = item.id;
-        grp.add(light);
-      } else if (item.category === "radiator") {
-        const radGeo = new THREE.BoxGeometry(1.0, 0.6, 0.1);
-        const radMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.3, roughness: 0.4 });
-        const rad = new THREE.Mesh(radGeo, radMat);
-        rad.userData.layoutEquipmentId = item.id;
-        grp.add(rad);
-      } else {
-        // Generic fixture box
-        const genGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-        const genMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5, roughness: 0.4 });
-        const gen = new THREE.Mesh(genGeo, genMat);
-        gen.userData.layoutEquipmentId = item.id;
-        grp.add(gen);
-      }
 
       // Selection outline for primary child
       const primaryChild = grp.children[0] as THREE.Mesh | undefined;

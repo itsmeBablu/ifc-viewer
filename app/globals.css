@@ -2313,6 +2313,90 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   transform: scale(0.97) !important;
 }
 
+/* V-Blue: exact presentation mode button liquid glass cyan/sky blue treatment. */
+.btn-v-blue,
+.btn-liquid-blue {
+  border: 1px solid rgba(186, 230, 253, 0.7) !important;
+  background: linear-gradient(135deg, rgba(186, 230, 253, 0.95), rgba(125, 211, 252, 0.9), rgba(56, 189, 248, 0.85)) !important;
+  color: #082f49 !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(56, 189, 248, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-theme="dark"] .btn-v-blue,
+[data-theme="dark"] .btn-liquid-blue,
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-blue, .btn-liquid-blue) {
+  color: #082f49 !important;
+}
+
+.btn-v-blue :is(svg, span, strong, p),
+.btn-liquid-blue :is(svg, span, strong, p),
+[data-theme="dark"] .btn-v-blue :is(svg, span, strong, p),
+[data-theme="dark"] .btn-liquid-blue :is(svg, span, strong, p),
+:is(.tool-chrome, body.werkzeug-active) :is(.btn-v-blue, .btn-liquid-blue) :is(svg, span, strong, p) {
+  color: #082f49 !important;
+}
+
+.btn-v-blue:hover,
+.btn-liquid-blue:hover {
+  filter: brightness(1.04) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 14px rgba(56, 189, 248, 0.42) !important;
+  border-color: rgba(125, 211, 252, 0.9) !important;
+}
+
+.btn-v-blue:active,
+.btn-liquid-blue:active {
+  transform: scale(0.97) !important;
+}
+
+/* When MEP mode is active globally on the workspace / body */
+body.mep-mode-active .btn-v-yellow,
+body.mep-mode-active .btn-liquid-amber,
+body.mep-mode-active .werkzeug-tool-button.is-active,
+body.mep-mode-active .werkzeug-dock-button.is-active,
+body.mep-mode-active .werkzeug-control-button.is-active {
+  border: 1px solid rgba(186, 230, 253, 0.75) !important;
+  background: linear-gradient(135deg, rgba(186, 230, 253, 0.95), rgba(125, 211, 252, 0.9), rgba(56, 189, 248, 0.85)) !important;
+  color: #082f49 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(56, 189, 248, 0.35) !important;
+}
+
+body.mep-mode-active .btn-v-yellow :is(svg, span, strong, p),
+body.mep-mode-active .btn-liquid-amber :is(svg, span, strong, p),
+body.mep-mode-active .werkzeug-tool-button.is-active :is(svg, span, strong, p),
+body.mep-mode-active .werkzeug-dock-button.is-active :is(svg, span, strong, p),
+body.mep-mode-active .werkzeug-control-button.is-active :is(svg, span, strong, p) {
+  color: #082f49 !important;
+}
+
+body.mep-mode-active .btn-v-yellow:hover,
+body.mep-mode-active .btn-liquid-amber:hover,
+body.mep-mode-active .werkzeug-tool-button.is-active:hover {
+  filter: brightness(1.04) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 14px rgba(56, 189, 248, 0.42) !important;
+  border-color: rgba(125, 211, 252, 0.9) !important;
+}
+
+body.mep-mode-active .btn-white-to-v-yellow:hover,
+body.mep-mode-active .btn-yellow-border-hover:hover {
+  border-color: rgba(125, 211, 252, 0.9) !important;
+  background: linear-gradient(135deg, rgba(186, 230, 253, 0.95), rgba(125, 211, 252, 0.9), rgba(56, 189, 248, 0.85)) !important;
+  color: #082f49 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 14px rgba(56, 189, 248, 0.35) !important;
+}
+
+body.mep-mode-active .v-yellow-slider {
+  accent-color: #38bdf8 !important;
+}
+body.mep-mode-active .v-yellow-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, #7dd3fc, #0284c7) !important;
+}
+body.mep-mode-active .v-yellow-slider::-webkit-slider-thumb {
+  background: #0284c7 !important;
+  box-shadow: 0 2px 7px rgba(2, 132, 199, 0.38) !important;
+}
+
 /* Simple liquid-glass hover without changing the resting style. */
 .btn-liquid-hover {
   transition: filter 160ms ease, border-color 160ms ease, box-shadow 160ms ease;

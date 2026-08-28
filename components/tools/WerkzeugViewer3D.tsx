@@ -85,6 +85,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
+  getEquipmentConnectors,
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
   snapPlanPointToWalls,
@@ -4674,8 +4675,25 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const kind = layoutStore.armedLayoutTool;
 
             if (kind === "duct") {
+              let snapHintText: string | null = null;
+              let effectiveCursor = cursor;
+              for (const eq of layoutStore.mepEquipment) {
+                const conns = getEquipmentConnectors(eq);
+                for (const c of conns) {
+                  if (c.type === "duct") {
+                    const dist = Math.hypot(cursor.xMm - c.worldXmm, cursor.yMm - c.worldYmm);
+                    if (dist <= 300) {
+                      effectiveCursor = { xMm: c.worldXmm, yMm: c.worldYmm };
+                      snapHintText = `Snap: ${c.name} (${eq.name || eq.category}) ✦`;
+                      break;
+                    }
+                  }
+                }
+                if (snapHintText) break;
+              }
+
               const start = layoutStore.ductDraw?.startPointMm ?? null;
-              layoutLayer.setMepPreview("duct", start, cursor, {
+              layoutLayer.setMepPreview("duct", start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftDuctElevationMm,
                 shape: layoutStore.draftDuctShape,
@@ -4684,19 +4702,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 diameterMm: layoutStore.draftDuctDiameterMm,
               });
               ms.setDragSnapHint({
-                text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish duct` : "Click start point",
+                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish duct` : "Click start point"),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
             } else if (kind === "pipe") {
+              let snapHintText: string | null = null;
+              let effectiveCursor = cursor;
+              for (const eq of layoutStore.mepEquipment) {
+                const conns = getEquipmentConnectors(eq);
+                for (const c of conns) {
+                  if (c.type === "pipe") {
+                    const dist = Math.hypot(cursor.xMm - c.worldXmm, cursor.yMm - c.worldYmm);
+                    if (dist <= 250) {
+                      effectiveCursor = { xMm: c.worldXmm, yMm: c.worldYmm };
+                      snapHintText = `Snap: ${c.name} (${eq.name || eq.category}) ✦`;
+                      break;
+                    }
+                  }
+                }
+                if (snapHintText) break;
+              }
+
               const start = layoutStore.pipeDraw?.startPointMm ?? null;
-              layoutLayer.setMepPreview("pipe", start, cursor, {
+              layoutLayer.setMepPreview("pipe", start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftPipeElevationMm,
                 diameterMm: layoutStore.draftPipeDiameterMm,
               });
               ms.setDragSnapHint({
-                text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish pipe` : "Click start point",
+                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish pipe` : "Click start point"),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -5768,6 +5803,19 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
+                for (const eq of layoutStore.mepEquipment) {
+                  const conns = getEquipmentConnectors(eq);
+                  for (const c of conns) {
+                    if (c.type === "duct") {
+                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
+                      if (dist <= 300) {
+                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
+                        break;
+                      }
+                    }
+                  }
+                }
+
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.ductDraw) {
                   layoutStore.startDuctDraw(levelId, plan);
@@ -5793,6 +5841,19 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
+                for (const eq of layoutStore.mepEquipment) {
+                  const conns = getEquipmentConnectors(eq);
+                  for (const c of conns) {
+                    if (c.type === "pipe") {
+                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
+                      if (dist <= 250) {
+                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
+                        break;
+                      }
+                    }
+                  }
+                }
+
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.pipeDraw) {
                   layoutStore.startPipeDraw(levelId, plan);

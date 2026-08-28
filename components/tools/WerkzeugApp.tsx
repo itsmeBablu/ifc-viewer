@@ -153,6 +153,7 @@ export default function WerkzeugApp() {
   // Layout Tool Store
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
   const projectId = useLayoutDrawingStore((s) => s.projectId);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   // Markup Tool Store
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
@@ -167,6 +168,11 @@ export default function WerkzeugApp() {
     document.body.classList.toggle("pdf-capturing", pdfCaptureActive);
     return () => document.body.classList.remove("pdf-capturing");
   }, [pdfCaptureActive]);
+
+  useEffect(() => {
+    document.body.classList.toggle("mep-mode-active", mepModeActive);
+    return () => document.body.classList.remove("mep-mode-active");
+  }, [mepModeActive]);
 
   useEffect(() => {
     if (!activeModelId) return;
