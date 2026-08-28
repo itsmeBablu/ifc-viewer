@@ -2,10 +2,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import Image from "next/image";
 import gsap from "gsap";
 import {
   LuAlignCenterHorizontal, LuBox, LuChevronDown, LuChevronLeft, LuCopy, LuDoorOpen, LuEye, LuFlipHorizontal2, LuFolderOpen, LuLayers3,
-  LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2,
+  LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2, LuZap,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -37,6 +38,15 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
+];
+
+const MEP_TOOL_ITEMS: Array<{ id: LayoutToolId; label: string; icon: React.ReactNode }> = [
+  { id: "duct", label: "Duct", icon: <span className="font-bold text-sky-400">▭</span> },
+  { id: "pipe", label: "Pipe", icon: <span className="font-bold text-blue-400">○</span> },
+  { id: "cabletray", label: "Tray", icon: <span className="font-bold text-slate-400">≋</span> },
+  { id: "wire", label: "Wire", icon: <LuZap /> },
+  { id: "equipment", label: "Equipment", icon: <LuBox /> },
+  { id: "workplane", label: "Work Plane", icon: <LuGrid2X2 /> },
 ];
 
 const RENDER_MODES: Array<{ id: RenderMode; label: string; icon: React.ReactNode }> = [
@@ -108,6 +118,8 @@ export default function WerkzeugWorkspaceChrome({
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+  const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
   const walls = useLayoutDrawingStore((s) => s.walls);
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
@@ -508,7 +520,7 @@ export default function WerkzeugWorkspaceChrome({
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button></div>
           <button type="button" onClick={() => attachRef.current?.click()} className="werkzeug-tool-button"><LuPaperclip /><span className="werkzeug-tool-label">Attach</span></button>
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("elements", event.currentTarget)} className={`werkzeug-tool-button ${armed === "column" || armed === "beam" ? "is-active btn-v-yellow" : ""}`}><LuBox /><span className="werkzeug-tool-label">Elements</span><LuChevronDown /></button></div>
-          {TOOL_ITEMS.filter((item) => item.id !== "levels").map((item) => {
+          {(mepModeActive ? MEP_TOOL_ITEMS : TOOL_ITEMS.filter((item) => item.id !== "levels")).map((item) => {
             const active = (!panelHidden && panelKey === item.id) || armed === item.id;
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
@@ -528,6 +540,31 @@ export default function WerkzeugWorkspaceChrome({
         </div>}
         <div className="werkzeug-ipad-snap-ribbon"><button type="button" onClick={(event) => toggleAux("levels", event.currentTarget)} className={`werkzeug-ipad-level-trigger ${auxOpen === "levels" ? "is-active btn-v-yellow" : ""}`} title="Levels and active view"><LuLayers3 /><span><strong>{activeLevel?.name ?? "Levels"}</strong><small>{activeViewLabel}</small></span><LuChevronDown /></button></div>
         <div className="werkzeug-ipad-action-ribbon">
+        <div className="flex h-7 shrink-0 items-center rounded-lg border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2" title="IBV Viewer">
+          <Image src="/ibv_logo.svg" alt="IBV" width={64} height={20} className="h-4 w-auto object-contain" priority />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const nextMepMode = !mepModeActive;
+            useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+            useToolMarkupStore.getState().setArmedTool(null);
+            setPanelKey(null);
+            setPanelHidden(true);
+            setMepModeActive(nextMepMode);
+          }}
+          aria-pressed={mepModeActive}
+          aria-label={mepModeActive ? "Switch to Architecture mode" : "Switch to MEP mode"}
+          title={mepModeActive ? "MEP mode active — switch to Architecture" : "Architecture mode active — switch to MEP"}
+          className={`group relative flex h-7 shrink-0 items-center gap-0.5 rounded-lg border p-0.5 transition-all ${mepModeActive ? "border-sky-400/70 bg-sky-400/15 shadow-[0_0_12px_rgba(56,189,248,.22)]" : "border-yellow-400/70 bg-yellow-400/15 shadow-[0_0_12px_rgba(250,204,21,.18)]"}`}
+        >
+          <span className={`flex h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-bold transition-all ${!mepModeActive ? "bg-yellow-400 text-zinc-950" : "text-[var(--text-muted)]"}`}>
+            <LuBuilding2 className="h-3 w-3" /><span>Arch</span>
+          </span>
+          <span className={`flex h-5 items-center gap-1 rounded-md px-1.5 text-[9px] font-bold transition-all ${mepModeActive ? "bg-sky-400 text-slate-950" : "text-[var(--text-muted)]"}`}>
+            <LuZap className="h-3 w-3" /><span>MEP</span>
+          </span>
+        </button>
         <div className="relative shrink-0">
           <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((open) => !open); }} aria-expanded={renderOpen} aria-haspopup="menu" className={`btn-yellow-border-hover flex h-11 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] font-semibold ${renderOpen ? "btn-v-yellow" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"}`}><span className="text-base">{activeRenderMode.icon}</span><span>{activeRenderMode.label}</span><LuChevronDown /></button>
           <GsapPopMenu show={renderOpen} className="absolute right-0 top-[calc(100%+.4rem)] z-[125]"><div role="menu" className="grid w-52 grid-cols-2 gap-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-xl backdrop-blur-xl">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div></GsapPopMenu>
@@ -550,7 +587,7 @@ export default function WerkzeugWorkspaceChrome({
         <GlassPanel variant="panel" zIndex={68} fill preferCss wrapperClassName="werkzeug-ipad-context-surface h-full overflow-hidden rounded-xl">
           <div className="werkzeug-ipad-drawer-body flex h-full min-h-0 flex-col">
             <div onPointerDown={portrait ? beginDrag : undefined} className={`flex h-10 shrink-0 touch-none items-center justify-between border-b border-[var(--panel-divider)] px-2.5 ${portrait ? "cursor-move" : ""}`}>
-              <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{TOOL_ITEMS.find((item) => item.id === panelKey)?.label ?? panelKey} options</span>
+              <span className="text-[11px] font-semibold capitalize text-[var(--text-strong)]">{[...TOOL_ITEMS, ...MEP_TOOL_ITEMS].find((item) => item.id === panelKey)?.label ?? panelKey} options</span>
               <div className="flex items-center gap-1">
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
