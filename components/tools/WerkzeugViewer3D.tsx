@@ -2454,6 +2454,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (s.selectedCableTrayId) selTrayIds.add(s.selectedCableTrayId);
       const selEquipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
       if (s.selectedEquipmentId) selEquipIds.add(s.selectedEquipmentId);
+      const selWireIds = new Set(sel.filter((e) => (e as any).kind === "wire").map((e) => e.id));
+      if (s.selectedWireId) selWireIds.add(s.selectedWireId);
 
       layer.sync(s.levels, s.walls, s.doors, s.windows, s.slabs, {
         activeLevelId: markupFloor,
@@ -2520,6 +2522,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
+      layer.syncWires(s.wires || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedWireIds: selWireIds,
+        showAllLevels,
+        fallbackElevMm: activeLevel?.elevationMm ?? 0,
+      });
+      layer.syncWorkPlane(s.activeWorkPlane, activeLevel?.elevationMm ?? 0);
       layer.setMepModeDimming(s.mepModeActive);
       layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
         activeLevelId: markupFloor,
@@ -4674,7 +4683,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
             const kind = layoutStore.armedLayoutTool;
 
-            if (kind === "duct") {
+            if (kind === "duct" || kind === "flex_duct" || kind === "mep_placeholder") {
               let snapHintText: string | null = null;
               let effectiveCursor = cursor;
               for (const eq of layoutStore.mepEquipment) {
@@ -4693,7 +4702,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
 
               const start = layoutStore.ductDraw?.startPointMm ?? null;
-              layoutLayer.setMepPreview("duct", start, effectiveCursor, {
+              layoutLayer.setMepPreview(kind, start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
                 elevationMm: layoutStore.draftDuctElevationMm,
                 shape: layoutStore.draftDuctShape,
@@ -4702,7 +4711,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 diameterMm: layoutStore.draftDuctDiameterMm,
               });
               ms.setDragSnapHint({
-                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish duct` : "Click start point"),
+                text: snapHintText ?? (start ? `${Math.round(Math.hypot(effectiveCursor.xMm - start.xMm, effectiveCursor.yMm - start.yMm))} mm · click to finish ${kind === "flex_duct" ? "flex duct" : kind === "mep_placeholder" ? "placeholder" : "duct"}` : `Click start point for ${kind === "flex_duct" ? "flex duct" : kind === "mep_placeholder" ? "placeholder" : "duct"}`),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -4745,6 +4754,27 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               });
               ms.setDragSnapHint({
                 text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish tray` : "Click start point",
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (kind === "wire") {
+              const start = layoutStore.wireDraw?.start ?? null;
+              layoutLayer.setMepPreview("wire", start, cursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: 2800,
+              });
+              ms.setDragSnapHint({
+                text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish wire` : "Click start point for wire",
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            } else if (kind === "workplane") {
+              layoutLayer.setMepPreview("workplane", null, cursor, {
+                baseElevMm: level?.elevationMm ?? 0,
+                elevationMm: layoutStore.draftEquipmentElevationMm,
+              });
+              ms.setDragSnapHint({
+                text: "Click to define Work Plane origin",
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -5788,7 +5818,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
-            if (layoutStore.armedLayoutTool === "duct") {
+            if (
+              layoutStore.armedLayoutTool === "duct" ||
+              layoutStore.armedLayoutTool === "flex_duct" ||
+              layoutStore.armedLayoutTool === "mep_placeholder"
+            ) {
+              const toolKind = layoutStore.armedLayoutTool;
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
                 const roots: THREE.Object3D[] = [layoutLayer.group];
@@ -5820,7 +5855,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (!layoutStore.ductDraw) {
                   layoutStore.startDuctDraw(levelId, plan);
                 } else {
-                  void layoutStore.finishDuctDraw();
+                  void layoutStore.finishDuctDraw().then((duct) => {
+                    if (duct && (toolKind === "flex_duct" || toolKind === "mep_placeholder")) {
+                      void layoutStore.updateDuct(duct.id, {
+                        isFlex: toolKind === "flex_duct",
+                        isPlaceholder: toolKind === "mep_placeholder",
+                      });
+                    }
+                  });
                 }
                 return;
               }
@@ -5889,6 +5931,58 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "wire") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                if (!layoutStore.wireDraw) {
+                  layoutStore.startWireDraw(levelId, plan);
+                } else {
+                  void layoutStore.finishWireDraw();
+                }
+                return;
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "workplane") {
+              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (plan) {
+                layoutStore.setActiveWorkPlane({
+                  id: "wp-active",
+                  name: "Reference Work Plane",
+                  originXmm: plan.xMm,
+                  originYmm: plan.yMm,
+                  elevationMm: layoutStore.draftEquipmentElevationMm,
+                  isActive: true,
+                });
+                return;
+              }
+            }
+
             if (layoutStore.armedLayoutTool === "equipment") {
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
@@ -5905,14 +5999,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
               if (plan) {
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
-                void layoutStore.addEquipment({
+                void layoutStore.placeEquipment({
                   levelId,
                   category: layoutStore.draftEquipmentCategory,
                   name: layoutStore.draftEquipmentCategory,
                   xMm: plan.xMm,
                   yMm: plan.yMm,
+                  rotationDeg: layoutStore.draftEquipmentRotationDeg ?? 0,
                   elevationMm: layoutStore.draftEquipmentElevationMm,
                   flowM3h: layoutStore.draftEquipmentFlowM3h,
+                  airflowM3h: layoutStore.draftEquipmentFlowM3h,
+                  powerWatts: layoutStore.draftEquipmentHeatingWatts,
+                  coolingWatts: layoutStore.draftEquipmentCoolingWatts,
                 });
                 return;
               }

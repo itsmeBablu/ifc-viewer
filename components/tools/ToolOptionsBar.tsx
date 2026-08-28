@@ -89,6 +89,10 @@ export default function ToolOptionsBar() {
   const setDraftEquipmentElevationMm = useLayoutDrawingStore((s) => s.setDraftEquipmentElevationMm);
   const draftEquipmentFlowM3h = useLayoutDrawingStore((s) => s.draftEquipmentFlowM3h);
   const setDraftEquipmentFlowM3h = useLayoutDrawingStore((s) => s.setDraftEquipmentFlowM3h);
+  const draftWireGauge = useLayoutDrawingStore((s) => s.draftWireGauge);
+  const setDraftWireGauge = useLayoutDrawingStore((s) => s.setDraftWireGauge);
+  const draftWireSystem = useLayoutDrawingStore((s) => s.draftWireSystem);
+  const setDraftWireSystem = useLayoutDrawingStore((s) => s.setDraftWireSystem);
 
   // Selection
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
@@ -680,6 +684,131 @@ export default function ToolOptionsBar() {
           </div>
         )}
 
+        {/* FLEX DUCT TOOL OPTIONS */}
+        {armedLayoutTool === "flex_duct" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-cyan-300 flex items-center gap-1">
+              <span>Flex Duct:</span>
+            </span>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">⌀ Dia:</span>
+              {[100, 125, 160, 200, 250].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDraftDuctSize(d, d, d)}
+                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold border ${
+                    draftDuctDiameterMm === d
+                      ? "border-cyan-400 bg-cyan-400/20 text-cyan-300"
+                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-body)]"
+                  }`}
+                >
+                  {d}mm
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Elev:</span>
+              <input
+                type="number"
+                value={draftDuctElevationMm}
+                onChange={(e) => setDraftDuctElevationMm(Number(e.target.value))}
+                className="w-16 rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right font-mono text-[11px]"
+              />
+              <span className="text-[10px] text-[var(--text-muted)]">mm</span>
+            </div>
+
+            <span className="text-[10px] text-cyan-300 font-medium italic">Flexible connection run</span>
+          </div>
+        )}
+
+        {/* MEP PLACEHOLDER OPTIONS */}
+        {armedLayoutTool === "mep_placeholder" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-sky-400 flex items-center gap-1">
+              <span>MEP Placeholder:</span>
+            </span>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Elev:</span>
+              <input
+                type="number"
+                value={draftDuctElevationMm}
+                onChange={(e) => setDraftDuctElevationMm(Number(e.target.value))}
+                className="w-16 rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right font-mono text-[11px]"
+              />
+              <span className="text-[10px] text-[var(--text-muted)]">mm</span>
+            </div>
+
+            <span className="text-[10px] text-sky-400 font-medium italic">Early schematic route (convertible to sized duct/pipe)</span>
+          </div>
+        )}
+
+        {/* WIRE TOOL OPTIONS */}
+        {armedLayoutTool === "wire" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-yellow-400 flex items-center gap-1">
+              <span>Wire / Cable:</span>
+            </span>
+
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">System:</span>
+              <select
+                value={draftWireSystem}
+                onChange={(e) => setDraftWireSystem(e.target.value as any)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] font-semibold text-yellow-400"
+              >
+                <option value="power">Power (230V/400V)</option>
+                <option value="lighting">Lighting Circuit</option>
+                <option value="data">Data / Network (CAT 7)</option>
+                <option value="control">BMS / Control Bus (KNX/BACnet)</option>
+              </select>
+            </label>
+
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Gauge:</span>
+              <select
+                value={draftWireGauge}
+                onChange={(e) => setDraftWireGauge(e.target.value)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] font-semibold"
+              >
+                <option value="3x1.5mm²">3x1.5 mm²</option>
+                <option value="3x2.5mm²">3x2.5 mm²</option>
+                <option value="5x2.5mm²">5x2.5 mm²</option>
+                <option value="5x6mm²">5x6 mm²</option>
+                <option value="CAT7">CAT 7 S/FTP</option>
+                <option value="KNX-EIB">KNX 2x2x0.8</option>
+              </select>
+            </label>
+
+            <span className="text-[10px] text-yellow-400 font-medium italic">Click start point, then endpoint</span>
+          </div>
+        )}
+
+        {/* WORK PLANE OPTIONS */}
+        {armedLayoutTool === "workplane" && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-cyan-400 flex items-center gap-1">
+              <span>Work Plane (Festlegen):</span>
+            </span>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Elev:</span>
+              <input
+                type="number"
+                value={draftEquipmentElevationMm}
+                onChange={(e) => setDraftEquipmentElevationMm(Number(e.target.value))}
+                className="w-16 rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-right font-mono text-[11px]"
+              />
+              <span className="text-[10px] text-[var(--text-muted)]">mm</span>
+            </div>
+
+            <span className="text-[10px] text-cyan-400 font-medium italic">Click in 3D to set active reference plane</span>
+          </div>
+        )}
+
         {/* MEP EQUIPMENT OPTIONS */}
         {armedLayoutTool === "equipment" && (
           <div className="flex items-center gap-3">
@@ -695,20 +824,27 @@ export default function ToolOptionsBar() {
                 onChange={(e) => setDraftEquipmentCategory(e.target.value as any)}
                 className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] font-semibold text-amber-400"
               >
+                <option value="air_terminal">Air Terminal / Diffuser (Luftdurchlass)</option>
                 <option value="diffuser_supply">Supply Diffuser (Zuluft)</option>
                 <option value="diffuser_extract">Extract Diffuser (Abluft)</option>
-                <option value="diffuser_overflow">Overflow Grille (Überströmung)</option>
+                <option value="lighting_fixture">Lighting Fixture (Leuchte)</option>
+                <option value="sprinkler">Fire Sprinkler Head</option>
+                <option value="generic_component">Generic MEP Component</option>
+                <option value="fan_coil">Fan Coil Unit (FCU)</option>
+                <option value="ac_unit">AC Split Unit (Klimagerät)</option>
+                <option value="radiator">Heating Radiator (Heizkörper)</option>
+                <option value="chiller">Water Chiller / Heat Pump</option>
+                <option value="boiler">Central Heating Boiler</option>
                 <option value="panel">Electrical Distribution Panel</option>
                 <option value="socket">Power Socket Outlet</option>
                 <option value="light">Ceiling Light Fixture</option>
-                <option value="radiator">Heating Radiator</option>
                 <option value="sink">Hand Wash Basin / Sink</option>
                 <option value="toilet">Wall-Hung Toilet (WC)</option>
               </select>
             </label>
 
             {/* Flow or Elevation */}
-            {draftEquipmentCategory.startsWith("diffuser") && (
+            {(draftEquipmentCategory === "air_terminal" || draftEquipmentCategory.startsWith("diffuser")) && (
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-[var(--text-muted)]">Flow:</span>
                 <input

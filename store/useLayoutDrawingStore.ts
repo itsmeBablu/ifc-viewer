@@ -58,6 +58,8 @@ import {
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
+  type LayoutWire,
+  type LayoutWorkPlane,
   type MepEquipmentCategory,
   type PipeSystemType,
   type PlanSnapModes,
@@ -88,6 +90,7 @@ import {
   idbDeleteWall,
   idbDeleteWallType,
   idbDeleteWindow,
+  idbDeleteWire,
   idbGetPresets,
   idbListBeams,
   idbListCableTrays,
@@ -107,6 +110,7 @@ import {
   idbListWalls,
   idbListWallTypes,
   idbListWindows,
+  idbListWires,
   idbPutBeam,
   idbPutCableTray,
   idbPutColumn,
@@ -125,6 +129,7 @@ import {
   idbPutWall,
   idbPutWallType,
   idbPutWindow,
+  idbPutWire,
 } from "@/lib/layoutDrawingDb";
 import {
   calibrateUnderlayFromWorldPoints,
@@ -226,6 +231,15 @@ export type CableTrayDrawState = {
   heightMm: number;
   trayType: CableTrayType;
   elevationOffsetMm: number;
+} | null;
+
+export type WireDrawState = {
+  levelId: string;
+  start: { xMm: number; yMm: number } | null;
+  cursor: { xMm: number; yMm: number } | null;
+  wireGauge?: string;
+  systemType?: "power" | "lighting" | "data" | "control";
+  elevationOffsetMm?: number;
 } | null;
 
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
@@ -336,15 +350,19 @@ type LayoutDrawingState = {
   pipes: LayoutPipe[];
   cableTrays: LayoutCableTray[];
   mepEquipment: LayoutMepEquipment[];
+  wires: LayoutWire[];
+  activeWorkPlane: LayoutWorkPlane | null;
   mepModeActive: boolean;
   setMepModeActive: (active: boolean) => void;
   ductDraw: DuctDrawState;
   pipeDraw: PipeDrawState;
   cableTrayDraw: CableTrayDrawState;
+  wireDraw: WireDrawState;
   selectedDuctId: string | null;
   selectedPipeId: string | null;
   selectedCableTrayId: string | null;
   selectedEquipmentId: string | null;
+  selectedWireId: string | null;
 
   draftDuctShape: DuctShape;
   draftDuctWidthMm: number;
@@ -364,6 +382,11 @@ type LayoutDrawingState = {
   draftEquipmentElevationMm: number;
   draftEquipmentRotationDeg: number;
   draftEquipmentFlowM3h: number;
+  draftEquipmentHeatingWatts: number;
+  draftEquipmentCoolingWatts: number;
+  draftWireGauge: string;
+  draftWireVoltage: number;
+  draftWireSystem: "power" | "lighting" | "data" | "control";
 
   setDraftDuctShape: (shape: DuctShape) => void;
   setDraftDuctSize: (widthMm: number, heightMm: number, diameterMm: number) => void;
@@ -380,6 +403,10 @@ type LayoutDrawingState = {
   setDraftEquipmentElevationMm: (elevationMm: number) => void;
   setDraftEquipmentRotationDeg: (deg: number) => void;
   setDraftEquipmentFlowM3h: (flowM3h: number) => void;
+  setDraftEquipmentHeatingWatts: (watts: number) => void;
+  setDraftEquipmentCoolingWatts: (watts: number) => void;
+  setDraftWireGauge: (gauge: string) => void;
+  setDraftWireSystem: (system: "power" | "lighting" | "data" | "control") => void;
 
   browserSearch: string;
   setBrowserSearch: (val: string) => void;
@@ -731,6 +758,20 @@ type LayoutDrawingState = {
   deleteEquipment: (id: string) => Promise<void>;
   selectEquipment: (id: string | null) => void;
   duplicateEquipment: (id: string) => Promise<LayoutMepEquipment | null>;
+
+  startWireDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateWireDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishWireDraw: () => Promise<LayoutWire | null>;
+  cancelWireDraw: () => void;
+  addWire: (data: Omit<LayoutWire, "id" | "projectId" | "createdAt">) => Promise<LayoutWire | null>;
+  updateWire: (id: string, patch: Partial<LayoutWire>) => Promise<void>;
+  deleteWire: (id: string) => Promise<void>;
+  selectWire: (id: string | null) => void;
+  duplicateWire: (id: string) => Promise<LayoutWire | null>;
+
+  convertPlaceholderToDuct: (id: string) => Promise<void>;
+  convertPlaceholderToPipe: (id: string) => Promise<void>;
+  setActiveWorkPlane: (plane: LayoutWorkPlane | null) => void;
 };
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
@@ -796,15 +837,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   pipes: [],
   cableTrays: [],
   mepEquipment: [],
+  wires: [],
+  activeWorkPlane: null,
   mepModeActive: false,
   setMepModeActive: (active) => set({ mepModeActive: active }),
   ductDraw: null,
   pipeDraw: null,
   cableTrayDraw: null,
+  wireDraw: null,
   selectedDuctId: null,
   selectedPipeId: null,
   selectedCableTrayId: null,
   selectedEquipmentId: null,
+  selectedWireId: null,
   gridLines: [],
   groups: [],
   wallTypes: [],
@@ -885,10 +930,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftCableTrayHeightMm: DEFAULT_CABLE_TRAY_HEIGHT_MM,
   draftCableTrayType: "ladder",
   draftCableTrayElevationMm: DEFAULT_CABLE_TRAY_ELEVATION_MM,
-  draftEquipmentCategory: "diffuser_supply",
+  draftEquipmentCategory: "air_terminal",
   draftEquipmentElevationMm: 2600,
   draftEquipmentRotationDeg: 0,
   draftEquipmentFlowM3h: 100,
+  draftEquipmentHeatingWatts: 1500,
+  draftEquipmentCoolingWatts: 2000,
+  draftWireGauge: "3x1.5mm²",
+  draftWireVoltage: 230,
+  draftWireSystem: "power",
 
   setDraftDuctShape: (shape) => set({ draftDuctShape: shape }),
   setDraftDuctSize: (w, h, dia) =>
@@ -914,6 +964,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setDraftEquipmentElevationMm: (elev) => set({ draftEquipmentElevationMm: Math.round(elev) }),
   setDraftEquipmentRotationDeg: (deg) => set({ draftEquipmentRotationDeg: Math.round(deg) }),
   setDraftEquipmentFlowM3h: (flow) => set({ draftEquipmentFlowM3h: Math.max(0, Math.round(flow)) }),
+  setDraftEquipmentHeatingWatts: (watts) => set({ draftEquipmentHeatingWatts: Math.round(watts) }),
+  setDraftEquipmentCoolingWatts: (watts) => set({ draftEquipmentCoolingWatts: Math.round(watts) }),
+  setDraftWireGauge: (gauge) => set({ draftWireGauge: gauge }),
+  setDraftWireSystem: (sys) => set({ draftWireSystem: sys }),
 
   browserSearch: "",
   setBrowserSearch: (val) => set({ browserSearch: val }),
@@ -990,6 +1044,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       pipes,
       cableTrays,
       mepEquipment,
+      wires,
       rooms,
       gridLines,
       groups,
@@ -1010,6 +1065,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbListPipes(projectId),
       idbListCableTrays(projectId),
       idbListMepEquipment(projectId),
+      idbListWires(projectId),
       idbListRooms(projectId),
       idbListGridLines(projectId),
       idbListGroups(projectId),
@@ -1065,6 +1121,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       pipes,
       cableTrays,
       mepEquipment,
+      wires,
+      activeWorkPlane: null,
+      wireDraw: null,
       layoutRooms: rooms,
       gridLines,
       groups,
@@ -1077,6 +1136,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedPipeId: null,
       selectedCableTrayId: null,
       selectedEquipmentId: null,
+      selectedWireId: null,
       marqueeBox: null,
       underlays,
       presets,
@@ -1304,7 +1364,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setArmedLayoutTool: (tool) => {
     const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
-    const isMepTool = tool === "duct" || tool === "pipe" || tool === "equipment" || tool === "cable_tray";
+    const isMepTool =
+      tool === "duct" ||
+      tool === "flex_duct" ||
+      tool === "mep_placeholder" ||
+      tool === "pipe" ||
+      tool === "cabletray" ||
+      tool === "wire" ||
+      tool === "equipment" ||
+      tool === "workplane";
     set((s) => ({
       armedLayoutTool: boundaryKind ? "lines" : tool,
       sketchTargetKind: boundaryKind,
@@ -4981,4 +5049,171 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
     return clone;
   },
+
+  startWireDraw: (levelId, start) => {
+    const s = get();
+    set({
+      wireDraw: {
+        levelId,
+        start,
+        cursor: null,
+        wireGauge: s.draftWireGauge,
+        systemType: s.draftWireSystem,
+        elevationOffsetMm: 2800,
+      },
+    });
+  },
+
+  updateWireDrawCursor: (cursor) => {
+    const wd = get().wireDraw;
+    if (!wd) return;
+    set({ wireDraw: { ...wd, cursor } });
+  },
+
+  finishWireDraw: async () => {
+    const s = get();
+    const wd = s.wireDraw;
+    if (!wd?.start || !wd.cursor) {
+      set({ wireDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) {
+      set({ wireDraw: null });
+      return null;
+    }
+
+    const wire: LayoutWire = {
+      id: newLayoutId("wire"),
+      projectId,
+      levelId: wd.levelId,
+      startXmm: wd.start.xMm,
+      startYmm: wd.start.yMm,
+      endXmm: wd.cursor.xMm,
+      endYmm: wd.cursor.yMm,
+      elevationMm: wd.elevationOffsetMm ?? 2800,
+      wireGauge: wd.wireGauge ?? "3x1.5mm²",
+      voltage: s.draftWireVoltage ?? 230,
+      systemType: wd.systemType ?? "power",
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutWire(wire);
+    set((prev) => ({
+      wires: [...prev.wires, wire],
+      wireDraw: null,
+      selectedWireId: wire.id,
+      selectedElements: [{ kind: "wire" as any, id: wire.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return wire;
+  },
+
+  cancelWireDraw: () => set({ wireDraw: null }),
+
+  addWire: async (data) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+    const wire: LayoutWire = {
+      ...data,
+      id: newLayoutId("wire"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutWire(wire);
+    set((s) => ({
+      wires: [...s.wires, wire],
+      selectedElements: [{ kind: "wire" as any, id: wire.id }],
+      selectedWireId: wire.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return wire;
+  },
+
+  updateWire: async (id, patch) => {
+    const prev = get().wires.find((w) => w.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutWire = { ...prev, ...patch };
+    await idbPutWire(updated);
+    set((s) => ({
+      wires: s.wires.map((w) => (w.id === id ? updated : w)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteWire: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteWire(id);
+    set((s) => ({
+      wires: s.wires.filter((w) => w.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.id === id)),
+      selectedWireId: s.selectedWireId === id ? null : s.selectedWireId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectWire: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => (e as any).kind !== "wire"),
+        selectedWireId: null,
+      });
+      return;
+    }
+    set({
+      selectedElements: [{ kind: "wire" as any, id }],
+      selectedWireId: id,
+    });
+  },
+
+  duplicateWire: async (id) => {
+    const w = get().wires.find((item) => item.id === id);
+    if (!w) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutWire = {
+      ...w,
+      id: newLayoutId("wire"),
+      startXmm: w.startXmm + 400,
+      startYmm: w.startYmm + 400,
+      endXmm: w.endXmm + 400,
+      endYmm: w.endYmm + 400,
+      createdAt: Date.now(),
+    };
+    await idbPutWire(clone);
+    set({
+      wires: [...get().wires, clone],
+      selectedElements: [{ kind: "wire" as any, id: clone.id }],
+      selectedWireId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  convertPlaceholderToDuct: async (id) => {
+    const duct = get().ducts.find((d) => d.id === id);
+    if (!duct) return;
+    const s = get();
+    await s.updateDuct(id, {
+      isPlaceholder: false,
+      shape: s.draftDuctShape,
+      widthMm: s.draftDuctWidthMm,
+      heightMm: s.draftDuctHeightMm,
+      diameterMm: s.draftDuctDiameterMm,
+    });
+  },
+
+  convertPlaceholderToPipe: async (id) => {
+    const pipe = get().pipes.find((p) => p.id === id);
+    if (!pipe) return;
+    const s = get();
+    await s.updatePipe(id, {
+      isPlaceholder: false,
+      diameterMm: s.draftPipeDiameterMm,
+      systemType: s.draftPipeSystem,
+    });
+  },
+
+  setActiveWorkPlane: (plane) => set({ activeWorkPlane: plane }),
 }));

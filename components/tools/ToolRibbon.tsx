@@ -393,6 +393,10 @@ export default function ToolRibbon({
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
+  const setDraftDuctShape = useLayoutDrawingStore((s) => s.setDraftDuctShape);
+  const setDraftPipeSystem = useLayoutDrawingStore((s) => s.setDraftPipeSystem);
+  const setDraftCableTrayType = useLayoutDrawingStore((s) => s.setDraftCableTrayType);
+  const setDraftEquipmentCategory = useLayoutDrawingStore((s) => s.setDraftEquipmentCategory);
   const [sketchError, setSketchError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<RibbonTab>(mepModeActive ? "mep" : "vstudio");
@@ -1122,6 +1126,52 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
+        active={armedLayoutTool === "duct" && useLayoutDrawingStore.getState().draftDuctShape === "oval"}
+        onClick={() => {
+          setDraftDuctShape("oval");
+          handleSelectLayoutTool("duct");
+        }}
+        title="Flat Oval Air Duct"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-400">⬭</span>
+        <span className="text-[9px]">Oval Duct</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "flex_duct"}
+        onClick={() => {
+          handleSelectLayoutTool("flex_duct");
+        }}
+        title="Flexible Duct Connection (Flexkanal)"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-300">〰</span>
+        <span className="text-[9px]">Flex Duct</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "mep_placeholder"}
+        onClick={() => {
+          handleSelectLayoutTool("mep_placeholder");
+        }}
+        title="Duct / Pipe Route Placeholder (Platzhalter)"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-sky-400">⋯</span>
+        <span className="text-[9px]">Placeholder</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "air_terminal"}
+        onClick={() => {
+          setDraftEquipmentCategory("air_terminal");
+          handleSelectLayoutTool("equipment");
+        }}
+        title="Air Terminal / Diffuser (Luftdurchlass)"
+      >
+        <LuFan className="h-4 w-4 text-cyan-400" />
+        <span className="text-[9px]">Terminal</span>
+      </RibbonBtn>
+
+      <RibbonBtn
         active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "diffuser_supply"}
         onClick={() => {
           setDraftEquipmentCategory("diffuser_supply");
@@ -1129,7 +1179,7 @@ export default function ToolRibbon({
         }}
         title="Supply Air Diffuser (Zuluft)"
       >
-        <LuFan className="h-4 w-4 text-cyan-400" />
+        <LuFan className="h-4 w-4 text-sky-400" />
         <span className="text-[9px]">Supply</span>
       </RibbonBtn>
 
@@ -1144,23 +1194,11 @@ export default function ToolRibbon({
         <LuFan className="h-4 w-4 text-amber-400" />
         <span className="text-[9px]">Extract</span>
       </RibbonBtn>
-
-      <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "diffuser_overflow"}
-        onClick={() => {
-          setDraftEquipmentCategory("diffuser_overflow");
-          handleSelectLayoutTool("equipment");
-        }}
-        title="Overflow Air Grille (Überströmung)"
-      >
-        <LuWaves className="h-4 w-4 text-emerald-400" />
-        <span className="text-[9px]">Overflow</span>
-      </RibbonBtn>
     </Cluster>
   );
 
   const mepPipingCluster = (
-    <Cluster label="Piping">
+    <Cluster label="Piping & Fire">
       <RibbonBtn
         active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "hydronic_supply"}
         onClick={() => {
@@ -1198,18 +1236,6 @@ export default function ToolRibbon({
       </RibbonBtn>
 
       <RibbonBtn
-        active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "domestic_hot"}
-        onClick={() => {
-          setDraftPipeSystem("domestic_hot");
-          handleSelectLayoutTool("pipe");
-        }}
-        title="Domestic Hot Water Pipe"
-      >
-        <LuFlame className="h-4 w-4 text-orange-400" />
-        <span className="text-[9px]">Hot W</span>
-      </RibbonBtn>
-
-      <RibbonBtn
         active={armedLayoutTool === "pipe" && useLayoutDrawingStore.getState().draftPipeSystem === "sanitary_waste"}
         onClick={() => {
           setDraftPipeSystem("sanitary_waste");
@@ -1219,6 +1245,18 @@ export default function ToolRibbon({
       >
         <span className="flex h-4 w-4 items-center justify-center font-bold text-purple-400">⤓</span>
         <span className="text-[9px]">Drain</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "sprinkler"}
+        onClick={() => {
+          setDraftEquipmentCategory("sprinkler");
+          handleSelectLayoutTool("equipment");
+        }}
+        title="Fire Suppression Sprinkler Head"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-red-500">🚿</span>
+        <span className="text-[9px]">Sprinkler</span>
       </RibbonBtn>
     </Cluster>
   );
@@ -1235,6 +1273,29 @@ export default function ToolRibbon({
       >
         <span className="flex h-4 w-4 items-center justify-center font-bold text-slate-300">🪜</span>
         <span className="text-[9px]">Tray</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "wire"}
+        onClick={() => {
+          handleSelectLayoutTool("wire");
+        }}
+        title="Electrical Wire / Conductor Run (Leitung)"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-yellow-400">〰</span>
+        <span className="text-[9px]">Wire</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "lighting_fixture"}
+        onClick={() => {
+          setDraftEquipmentCategory("lighting_fixture");
+          handleSelectLayoutTool("equipment");
+        }}
+        title="Lighting Fixture (Leuchte)"
+      >
+        <LuSun className="h-4 w-4 text-yellow-300" />
+        <span className="text-[9px]">Lighting</span>
       </RibbonBtn>
 
       <RibbonBtn
@@ -1260,17 +1321,32 @@ export default function ToolRibbon({
         <span className="flex h-4 w-4 items-center justify-center font-bold text-amber-400">🔌</span>
         <span className="text-[9px]">Socket</span>
       </RibbonBtn>
+    </Cluster>
+  );
 
+  const mepModelCluster = (
+    <Cluster label="Model & Reference">
       <RibbonBtn
-        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "light"}
+        active={armedLayoutTool === "equipment" && useLayoutDrawingStore.getState().draftEquipmentCategory === "generic_component"}
         onClick={() => {
-          setDraftEquipmentCategory("light");
+          setDraftEquipmentCategory("generic_component");
           handleSelectLayoutTool("equipment");
         }}
-        title="Light Fixture"
+        title="Generic MEP Model Component"
       >
-        <LuSun className="h-4 w-4 text-yellow-300" />
-        <span className="text-[9px]">Light</span>
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-slate-300">📦</span>
+        <span className="text-[9px]">Component</span>
+      </RibbonBtn>
+
+      <RibbonBtn
+        active={armedLayoutTool === "workplane"}
+        onClick={() => {
+          handleSelectLayoutTool("workplane");
+        }}
+        title="Set Reference Work Plane (Festlegen / Arbeitsebene)"
+      >
+        <span className="flex h-4 w-4 items-center justify-center font-bold text-cyan-400">▱</span>
+        <span className="text-[9px]">Work Plane</span>
       </RibbonBtn>
     </Cluster>
   );
@@ -1305,6 +1381,7 @@ export default function ToolRibbon({
     { key: "hvac", node: mepHvacCluster },
     { key: "piping", node: mepPipingCluster },
     { key: "electrical", node: mepElectricalCluster },
+    { key: "model", node: mepModelCluster },
     { key: "analysis", node: mepCalculationsCluster },
   ];
 

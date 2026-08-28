@@ -17,12 +17,13 @@ import type {
   LayoutStair,
   LayoutWall,
   LayoutWindow,
+  LayoutWire,
   WallType,
 } from "./layoutDrawing";
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const LEVELS = "levels";
 const WALLS = "walls";
 const DOORS = "doors";
@@ -41,6 +42,7 @@ const DUCTS = "ducts";
 const PIPES = "pipes";
 const CABLE_TRAYS = "cableTrays";
 const MEP_EQUIPMENT = "mepEquipment";
+const WIRES = "wires";
 const ROOMS = "rooms";
 const PROJECTS = "projects";
 
@@ -81,6 +83,7 @@ function openDb(): Promise<IDBDatabase> {
         PIPES,
         CABLE_TRAYS,
         MEP_EQUIPMENT,
+        WIRES,
         ROOMS,
       ]) {
         if (!db.objectStoreNames.contains(name)) {
@@ -271,6 +274,11 @@ export const idbListMepEquipment = (projectId: string) =>
   listByProject<LayoutMepEquipment>(MEP_EQUIPMENT, projectId);
 export const idbPutMepEquipment = (row: LayoutMepEquipment) => putRow(MEP_EQUIPMENT, row);
 export const idbDeleteMepEquipment = (id: string) => deleteRow(MEP_EQUIPMENT, id);
+
+export const idbListWires = (projectId: string) =>
+  listByProject<LayoutWire>(WIRES, projectId);
+export const idbPutWire = (row: LayoutWire) => putRow(WIRES, row);
+export const idbDeleteWire = (id: string) => deleteRow(WIRES, id);
 
 export const idbListRooms = (projectId: string) =>
   listByProject<LayoutRoom>(ROOMS, projectId);
