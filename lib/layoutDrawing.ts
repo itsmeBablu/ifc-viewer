@@ -214,8 +214,72 @@ export type LayoutGridLine = {
   createdAt: number;
 };
 
+export type StairShapeType = "straight" | "l-shape" | "u-shape" | "spiral";
+
+export type LayoutStair = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  /** Optional upper level constraint; rise is top level elevation minus base level. */
+  topLevelId?: string;
+  baseOffsetMm?: number;
+  topOffsetMm?: number;
+  stairType: StairShapeType;
+  stairTypeId?: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  /** Second point / landing point for L-shape (turn vertex) or U-shape */
+  landingXmm?: number;
+  landingYmm?: number;
+  turnDirection?: "left" | "right";
+  widthMm: number;
+  targetRiserHeightMm: number;
+  treadDepthMm: number;
+  nosingDepthMm?: number;
+  hasRailingLeft?: boolean;
+  hasRailingRight?: boolean;
+  railingHeightMm?: number;
+  railingStyle?: "standard" | "glass" | "pipe";
+  // Spiral stair specific
+  outerRadiusMm?: number;
+  innerRadiusMm?: number;
+  spiralAngleDeg?: number;
+  color?: string;
+  material?: string;
+  treadMaterial?: string;
+  stringerMaterial?: string;
+  createdAt: number;
+};
+
+export type LayoutRamp = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  topLevelId?: string;
+  baseOffsetMm?: number;
+  topOffsetMm?: number;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  landingXmm?: number;
+  landingYmm?: number;
+  widthMm: number;
+  thicknessMm: number;
+  hasRailingLeft?: boolean;
+  hasRailingRight?: boolean;
+  railingHeightMm?: number;
+  railingStyle?: "standard" | "glass" | "pipe";
+  maxSlopeRatio?: number; // e.g. 12 for 1:12
+  color?: string;
+  material?: string;
+  createdAt: number;
+};
+
 export type SelectedElementRef = {
-  kind: "wall" | "door" | "window" | "slab" | "placement" | "column" | "beam" | "line" | "grid" | "group";
+  kind: "wall" | "door" | "window" | "slab" | "placement" | "column" | "beam" | "line" | "grid" | "group" | "stair" | "ramp";
   id: string;
 };
 
@@ -227,7 +291,113 @@ export type LayoutGroup = {
   createdAt: number;
 };
 
-export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "column" | "beam" | "grid" | "lines" | "trim";
+export type LayoutToolId = "wall" | "door" | "window" | "floor" | "roof" | "column" | "beam" | "grid" | "lines" | "trim" | "stair" | "ramp";
+
+export const DEFAULT_STAIR_WIDTH_MM = 1000;
+export const DEFAULT_STAIR_RISER_MM = 175;
+export const DEFAULT_STAIR_TREAD_MM = 280;
+export const DEFAULT_STAIR_NOSING_MM = 25;
+export const DEFAULT_RAMP_WIDTH_MM = 1200;
+export const DEFAULT_RAMP_THICKNESS_MM = 150;
+export const DEFAULT_RAILING_HEIGHT_MM = 900;
+
+/**
+ * Derive total rise (mm) from level elevation constraints + offsets.
+ */
+export function deriveRiseMm(
+  levels: LayoutLevel[],
+  baseLevelId: string,
+  topLevelId?: string,
+  baseOffsetMm = 0,
+  topOffsetMm = 0,
+  fallbackRiseMm = DEFAULT_LEVEL_HEIGHT_MM,
+): number {
+  const baseLevel = levels.find((l) => l.id === baseLevelId);
+  const baseElev = (baseLevel?.elevationMm ?? 0) + (baseOffsetMm || 0);
+
+  if (topLevelId) {
+    const topLevel = levels.find((l) => l.id === topLevelId);
+    if (topLevel) {
+      const topElev = topLevel.elevationMm + (topOffsetMm || 0);
+      const diff = topElev - baseElev;
+      if (Math.abs(diff) >= 100) return Math.abs(diff);
+    }
+  }
+
+  // If no top level specified, use base level height
+  const levelHeight = baseLevel?.heightMm ?? fallbackRiseMm;
+  return Math.max(100, levelHeight + (topOffsetMm || 0) - (baseOffsetMm || 0));
+}
+
+/**
+ * Calculate stair metrics (riser count, actual riser height, actual tread count, stride formula 2R + T).
+ */
+export function calculateStairMetrics(
+  totalRiseMm: number,
+  targetRiserMm = DEFAULT_STAIR_RISER_MM,
+  targetTreadMm = DEFAULT_STAIR_TREAD_MM,
+) {
+  const riserCount = Math.max(1, Math.round(totalRiseMm / Math.max(50, targetRiserMm)));
+  const actualRiserMm = totalRiseMm / riserCount;
+  const treadCount = Math.max(1, riserCount - 1);
+  const totalRunLengthMm = treadCount * targetTreadMm;
+  const strideValue = 2 * actualRiserMm + targetTreadMm; // 2R + T rule (ideal: 620-640mm)
+
+  const warnings: string[] = [];
+  if (actualRiserMm > 200) {
+    warnings.push(`Riser height (${Math.round(actualRiserMm)}mm) exceeds recommended max 200mm.`);
+  } else if (actualRiserMm < 140) {
+    warnings.push(`Riser height (${Math.round(actualRiserMm)}mm) is below standard min 140mm.`);
+  }
+
+  if (targetTreadMm < 250) {
+    warnings.push(`Tread depth (${Math.round(targetTreadMm)}mm) is below minimum 250mm.`);
+  }
+
+  if (strideValue < 600 || strideValue > 660) {
+    warnings.push(`2R + T (${Math.round(strideValue)}mm) is outside ideal comfort range (620–640mm).`);
+  }
+
+  return {
+    riserCount,
+    actualRiserMm,
+    treadCount,
+    totalRunLengthMm,
+    strideValue,
+    isComfortable: warnings.length === 0,
+    warnings,
+  };
+}
+
+/**
+ * Calculate ramp metrics (slope ratio 1:N, slope percentage, angle, ADA accessibility warning).
+ */
+export function calculateRampMetrics(
+  totalRiseMm: number,
+  runLengthMm: number,
+) {
+  const length = Math.max(10, runLengthMm);
+  const slope = totalRiseMm / length;
+  const slopeRatio = slope > 0 ? 1 / slope : Infinity;
+  const slopePercent = slope * 100;
+  const slopeAngleDeg = (Math.atan(slope) * 180) / Math.PI;
+
+  const warnings: string[] = [];
+  if (slopeRatio < 12) {
+    warnings.push(
+      `Slope 1:${slopeRatio.toFixed(1)} (${slopePercent.toFixed(1)}%) is steeper than recommended 1:12 (8.3%) max slope.`,
+    );
+  }
+
+  return {
+    slope,
+    slopeRatio,
+    slopePercent,
+    slopeAngleDeg,
+    exceedsMaxSlope: slopeRatio < 12,
+    warnings,
+  };
+}
 
 /**
  * Trim or extend two walls so they meet cleanly at their intersection point,

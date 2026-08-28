@@ -10,6 +10,13 @@ import {
   DEFAULT_WINDOW_HEIGHT_MM,
   DEFAULT_WINDOW_SILL_MM,
   DEFAULT_WINDOW_WIDTH_MM,
+  DEFAULT_STAIR_WIDTH_MM,
+  DEFAULT_STAIR_RISER_MM,
+  DEFAULT_STAIR_TREAD_MM,
+  DEFAULT_STAIR_NOSING_MM,
+  DEFAULT_RAMP_WIDTH_MM,
+  DEFAULT_RAMP_THICKNESS_MM,
+  DEFAULT_RAILING_HEIGHT_MM,
   DEFAULT_PLAN_SNAP_MODES,
   EMPTY_LAYOUT_PRESETS,
   emptyProjectKey,
@@ -18,6 +25,9 @@ import {
   rememberDoorSize,
   rememberNumber,
   rememberWindowSize,
+  deriveRiseMm,
+  calculateStairMetrics,
+  calculateRampMetrics,
   snapPlanPointToWalls,
   snapWallEndpointMm,
   trimWallPair,
@@ -28,15 +38,18 @@ import {
   type LayoutGroup,
   type LayoutLevel,
   type LayoutPresets,
+  type LayoutRamp,
   type LayoutRoom,
   type LayoutSlab,
   type LayoutSketchLine,
+  type LayoutStair,
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
   type PlanSnapModes,
   type PlanSnapType,
   type SelectedElementRef,
+  type StairShapeType,
   type WallType,
 } from "@/lib/layoutDrawing";
 import {
@@ -50,7 +63,9 @@ import {
   idbDeleteGridLine,
   idbDeleteGroup,
   idbDeleteLevel,
+  idbDeleteRamp,
   idbDeleteSlab,
+  idbDeleteStair,
   idbDeleteUnderlay,
   idbDeleteWall,
   idbDeleteWallType,
@@ -62,7 +77,9 @@ import {
   idbListGridLines,
   idbListGroups,
   idbListLevels,
+  idbListRamps,
   idbListSlabs,
+  idbListStairs,
   idbListUnderlays,
   idbListWalls,
   idbListWallTypes,
@@ -74,7 +91,9 @@ import {
   idbPutGroup,
   idbPutLevel,
   idbPutPresets,
+  idbPutRamp,
   idbPutSlab,
+  idbPutStair,
   idbPutUnderlay,
   idbPutWall,
   idbPutWallType,
@@ -131,6 +150,36 @@ export type SlabDrawState = {
   replaceSlabId?: string;
 } | null;
 
+export type StairDrawState = {
+  levelId: string;
+  stairType: StairShapeType;
+  points: { xMm: number; yMm: number }[];
+  cursor: { xMm: number; yMm: number } | null;
+  lengthMm: number | null;
+  angleDeg: number | null;
+  angleSnapped: boolean;
+  totalRiseMm: number;
+  riserCount: number;
+  actualRiserMm: number;
+  treadCount: number;
+  targetTreadMm: number;
+  widthMm: number;
+} | null;
+
+export type RampDrawState = {
+  levelId: string;
+  points: { xMm: number; yMm: number }[];
+  cursor: { xMm: number; yMm: number } | null;
+  lengthMm: number | null;
+  angleDeg: number | null;
+  angleSnapped: boolean;
+  totalRiseMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  slopeRatio: number;
+  slopePercent: number;
+} | null;
+
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
 export type TracePreviewState = {
   levelId: string;
@@ -153,6 +202,8 @@ type LayoutDrawingState = {
   slabs: LayoutSlab[];
   columns: LayoutColumn[];
   beams: LayoutBeam[];
+  stairs: LayoutStair[];
+  ramps: LayoutRamp[];
   gridLines: LayoutGridLine[];
   groups: LayoutGroup[];
   wallTypes: WallType[];
@@ -169,6 +220,8 @@ type LayoutDrawingState = {
   presets: LayoutPresets;
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
+  stairDraw: StairDrawState;
+  rampDraw: RampDrawState;
   planSnapModes: PlanSnapModes;
   slabDraw: SlabDrawState;
   tracePreview: TracePreviewState;
@@ -184,6 +237,8 @@ type LayoutDrawingState = {
   selectedDoorId: string | null;
   selectedWindowId: string | null;
   selectedSlabId: string | null;
+  selectedStairId: string | null;
+  selectedRampId: string | null;
   slabBoundaryEdit: {
     slabId: string;
     phase: "selected" | "editing";
@@ -210,6 +265,21 @@ type LayoutDrawingState = {
   draftColumnDepthMm: number;
   draftBeamWidthMm: number;
   draftBeamDepthMm: number;
+  draftStairWidthMm: number;
+  draftStairRiserMm: number;
+  draftStairTreadMm: number;
+  draftStairNosingMm: number;
+  draftStairType: StairShapeType;
+  draftStairBaseLevelId: string | null;
+  draftStairTopLevelId: string | null;
+  draftStairRailingLeft: boolean;
+  draftStairRailingRight: boolean;
+  draftRampWidthMm: number;
+  draftRampThicknessMm: number;
+  draftRampBaseLevelId: string | null;
+  draftRampTopLevelId: string | null;
+  draftRampRailingLeft: boolean;
+  draftRampRailingRight: boolean;
 
   browserSearch: string;
   setBrowserSearch: (val: string) => void;
@@ -547,6 +617,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   wallTypes: [],
   activeGroupId: null,
   selectedElements: [],
+  slabs: [],
+  columns: [],
+  beams: [],
+  stairs: [],
+  ramps: [],
+  gridLines: [],
+  groups: [],
+  wallTypes: [],
+  activeGroupId: null,
+  selectedElements: [],
+  selectedStairId: null,
+  selectedRampId: null,
   marqueeBox: null,
   layoutRooms: [],
   sketchLines: [],
@@ -561,6 +643,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   presets: { ...EMPTY_LAYOUT_PRESETS },
   armedLayoutTool: null,
   wallDraw: null,
+  stairDraw: null,
+  rampDraw: null,
   planSnapModes: { ...DEFAULT_PLAN_SNAP_MODES },
   slabDraw: null,
   tracePreview: null,
@@ -588,6 +672,21 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftColumnDepthMm: 300,
   draftBeamWidthMm: 200,
   draftBeamDepthMm: 400,
+  draftStairWidthMm: DEFAULT_STAIR_WIDTH_MM,
+  draftStairRiserMm: DEFAULT_STAIR_RISER_MM,
+  draftStairTreadMm: DEFAULT_STAIR_TREAD_MM,
+  draftStairNosingMm: DEFAULT_STAIR_NOSING_MM,
+  draftStairType: "straight",
+  draftStairBaseLevelId: null,
+  draftStairTopLevelId: null,
+  draftStairRailingLeft: true,
+  draftStairRailingRight: true,
+  draftRampWidthMm: DEFAULT_RAMP_WIDTH_MM,
+  draftRampThicknessMm: DEFAULT_RAMP_THICKNESS_MM,
+  draftRampBaseLevelId: null,
+  draftRampTopLevelId: null,
+  draftRampRailingLeft: true,
+  draftRampRailingRight: true,
 
   browserSearch: "",
   setBrowserSearch: (val) => set({ browserSearch: val }),
@@ -609,6 +708,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         slabs: [],
         columns: [],
         beams: [],
+        stairs: [],
+        ramps: [],
         gridLines: [],
         groups: [],
         wallTypes: [],
@@ -621,12 +722,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         presets: { ...EMPTY_LAYOUT_PRESETS },
         armedLayoutTool: null,
         wallDraw: null,
+        stairDraw: null,
+        rampDraw: null,
         slabDraw: null,
         tracePreview: null,
         selectedWallId: null,
         selectedDoorId: null,
         selectedWindowId: null,
         selectedSlabId: null,
+        selectedStairId: null,
+        selectedRampId: null,
         selectedUnderlayId: null,
         calibrateUnderlayId: null,
         calibratePoints: [],
@@ -641,6 +746,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs,
       columns,
       beams,
+      stairs,
+      ramps,
       gridLines,
       groups,
       wallTypes,
@@ -654,6 +761,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbListSlabs(projectId),
       idbListColumns(projectId),
       idbListBeams(projectId),
+      idbListStairs(projectId),
+      idbListRamps(projectId),
       idbListGridLines(projectId),
       idbListGroups(projectId),
       idbListWallTypes(projectId),
@@ -702,16 +811,22 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs,
       columns,
       beams,
+      stairs,
+      ramps,
       gridLines,
       groups,
       wallTypes,
       activeGroupId: null,
       selectedElements: [],
+      selectedStairId: null,
+      selectedRampId: null,
       marqueeBox: null,
       underlays,
       presets,
       armedLayoutTool: null,
       wallDraw: null,
+      stairDraw: null,
+      rampDraw: null,
       slabDraw: null,
       tracePreview: null,
       selectedWallId: null,
@@ -2602,6 +2717,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedStairId: primary?.kind === "stair" ? primary.id : null,
+      selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       selectedUnderlayId: null,
     });
@@ -2625,6 +2742,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedStairId: primary?.kind === "stair" ? primary.id : null,
+      selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       selectedUnderlayId: null,
     });
@@ -2637,6 +2756,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
       selectedSketchLineId: null,
       selectedUnderlayId: null,
     });
@@ -2656,6 +2777,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
     const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
     const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
 
@@ -2673,6 +2796,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const id of slabIds) await idbDeleteSlab(id);
     for (const id of colIds) await idbDeleteColumn(id);
     for (const id of beamIds) await idbDeleteBeam(id);
+    for (const id of stairIds) await idbDeleteStair(id);
+    for (const id of rampIds) await idbDeleteRamp(id);
     for (const id of gridIds) await idbDeleteGridLine(id);
 
     set((s) => ({
@@ -2682,6 +2807,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: s.slabs.filter((sl) => !slabIds.has(sl.id)),
       columns: s.columns.filter((c) => !colIds.has(c.id)),
       beams: s.beams.filter((b) => !beamIds.has(b.id)),
+      stairs: s.stairs.filter((st) => !stairIds.has(st.id)),
+      ramps: s.ramps.filter((r) => !rampIds.has(r.id)),
       gridLines: s.gridLines.filter((g) => !gridIds.has(g.id)),
       sketchLines: s.sketchLines.filter((l) => !lineIds.has(l.id)),
       selectedElements: [],
@@ -2689,6 +2816,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
       selectedSketchLineId: null,
       lastMutatedAt: Date.now(),
     }));
@@ -2704,6 +2833,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
     const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
     const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
 
@@ -2749,6 +2880,32 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       };
     });
 
+    const nextStairs = get().stairs.map((st) => {
+      if (!stairIds.has(st.id)) return st;
+      return {
+        ...st,
+        startXmm: st.startXmm + deltaXmm,
+        startYmm: st.startYmm + deltaYmm,
+        endXmm: st.endXmm + deltaXmm,
+        endYmm: st.endYmm + deltaYmm,
+        landingXmm: st.landingXmm != null ? st.landingXmm + deltaXmm : undefined,
+        landingYmm: st.landingYmm != null ? st.landingYmm + deltaYmm : undefined,
+      };
+    });
+
+    const nextRamps = get().ramps.map((r) => {
+      if (!rampIds.has(r.id)) return r;
+      return {
+        ...r,
+        startXmm: r.startXmm + deltaXmm,
+        startYmm: r.startYmm + deltaYmm,
+        endXmm: r.endXmm + deltaXmm,
+        endYmm: r.endYmm + deltaYmm,
+        landingXmm: r.landingXmm != null ? r.landingXmm + deltaXmm : undefined,
+        landingYmm: r.landingYmm != null ? r.landingYmm + deltaYmm : undefined,
+      };
+    });
+
     const nextGrids = get().gridLines.map((g) => {
       if (!gridIds.has(g.id)) return g;
       return {
@@ -2775,6 +2932,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
     for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
     for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
+    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
     for (const g of nextGrids) if (gridIds.has(g.id)) await idbPutGridLine(g);
 
     set({
@@ -2782,6 +2941,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: nextSlabs,
       columns: nextCols,
       beams: nextBeams,
+      stairs: nextStairs,
+      ramps: nextRamps,
       gridLines: nextGrids,
       sketchLines: nextLines,
       lastMutatedAt: Date.now(),
@@ -3000,6 +3161,48 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       await idbPutBeam(copy);
     }
 
+    const newStairs: LayoutStair[] = [];
+    for (const st of get().stairs) {
+      if (!sel.some((e) => e.kind === "stair" && e.id === st.id)) continue;
+      const copyId = newLayoutId("stair");
+      const copy: LayoutStair = {
+        ...st,
+        id: copyId,
+        levelId: targetLevelId ?? st.levelId,
+        startXmm: st.startXmm + deltaXmm,
+        startYmm: st.startYmm + deltaYmm,
+        endXmm: st.endXmm + deltaXmm,
+        endYmm: st.endYmm + deltaYmm,
+        landingXmm: st.landingXmm != null ? st.landingXmm + deltaXmm : undefined,
+        landingYmm: st.landingYmm != null ? st.landingYmm + deltaYmm : undefined,
+        createdAt: Date.now(),
+      };
+      newStairs.push(copy);
+      newRefs.push({ kind: "stair", id: copyId });
+      await idbPutStair(copy);
+    }
+
+    const newRamps: LayoutRamp[] = [];
+    for (const r of get().ramps) {
+      if (!sel.some((e) => e.kind === "ramp" && e.id === r.id)) continue;
+      const copyId = newLayoutId("ramp");
+      const copy: LayoutRamp = {
+        ...r,
+        id: copyId,
+        levelId: targetLevelId ?? r.levelId,
+        startXmm: r.startXmm + deltaXmm,
+        startYmm: r.startYmm + deltaYmm,
+        endXmm: r.endXmm + deltaXmm,
+        endYmm: r.endYmm + deltaYmm,
+        landingXmm: r.landingXmm != null ? r.landingXmm + deltaXmm : undefined,
+        landingYmm: r.landingYmm != null ? r.landingYmm + deltaYmm : undefined,
+        createdAt: Date.now(),
+      };
+      newRamps.push(copy);
+      newRefs.push({ kind: "ramp", id: copyId });
+      await idbPutRamp(copy);
+    }
+
     for (const g of get().gridLines) {
       if (!gridIds.has(g.id)) continue;
       const copyId = newLayoutId("grid");
@@ -3043,6 +3246,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: [...s.slabs, ...newSlabs],
       columns: [...s.columns, ...newCols],
       beams: [...s.beams, ...newBeams],
+      stairs: [...s.stairs, ...newStairs],
+      ramps: [...s.ramps, ...newRamps],
       gridLines: [...s.gridLines, ...newGrids],
       sketchLines: [...s.sketchLines, ...newLines],
       selectedElements: newRefs,
@@ -3050,6 +3255,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedStairId: primary?.kind === "stair" ? primary.id : null,
+      selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       lastMutatedAt: Date.now(),
     }));
@@ -3078,6 +3285,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
     const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
 
     const nextWalls = get().walls.map((w) => {
@@ -3098,6 +3307,38 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       const p1 = mirrorPoint(b.startXmm, b.startYmm);
       const p2 = mirrorPoint(b.endXmm, b.endYmm);
       return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
+    });
+
+    const nextStairs = get().stairs.map((st) => {
+      if (!stairIds.has(st.id)) return st;
+      const p1 = mirrorPoint(st.startXmm, st.startYmm);
+      const p2 = mirrorPoint(st.endXmm, st.endYmm);
+      const lp = st.landingXmm != null && st.landingYmm != null ? mirrorPoint(st.landingXmm, st.landingYmm) : undefined;
+      return {
+        ...st,
+        startXmm: Math.round(p1.x),
+        startYmm: Math.round(p1.y),
+        endXmm: Math.round(p2.x),
+        endYmm: Math.round(p2.y),
+        landingXmm: lp ? Math.round(lp.x) : undefined,
+        landingYmm: lp ? Math.round(lp.y) : undefined,
+      };
+    });
+
+    const nextRamps = get().ramps.map((r) => {
+      if (!rampIds.has(r.id)) return r;
+      const p1 = mirrorPoint(r.startXmm, r.startYmm);
+      const p2 = mirrorPoint(r.endXmm, r.endYmm);
+      const lp = r.landingXmm != null && r.landingYmm != null ? mirrorPoint(r.landingXmm, r.landingYmm) : undefined;
+      return {
+        ...r,
+        startXmm: Math.round(p1.x),
+        startYmm: Math.round(p1.y),
+        endXmm: Math.round(p2.x),
+        endYmm: Math.round(p2.y),
+        landingXmm: lp ? Math.round(lp.x) : undefined,
+        landingYmm: lp ? Math.round(lp.y) : undefined,
+      };
     });
 
     const nextSlabs = get().slabs.map((sl) => {
@@ -3127,12 +3368,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
     for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
     for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
+    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
     for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
 
     set({
       walls: nextWalls,
       columns: nextCols,
       beams: nextBeams,
+      stairs: nextStairs,
+      ramps: nextRamps,
       slabs: nextSlabs,
       sketchLines: nextLines,
       lastMutatedAt: Date.now(),
@@ -3161,6 +3406,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
     const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
+    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
+    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
 
     const nextWalls = get().walls.map((w) => {
       if (!wallIds.has(w.id)) return w;
@@ -3182,14 +3429,50 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
     });
 
+    const nextStairs = get().stairs.map((st) => {
+      if (!stairIds.has(st.id)) return st;
+      const p1 = rotatePoint(st.startXmm, st.startYmm);
+      const p2 = rotatePoint(st.endXmm, st.endYmm);
+      const lp = st.landingXmm != null && st.landingYmm != null ? rotatePoint(st.landingXmm, st.landingYmm) : undefined;
+      return {
+        ...st,
+        startXmm: Math.round(p1.x),
+        startYmm: Math.round(p1.y),
+        endXmm: Math.round(p2.x),
+        endYmm: Math.round(p2.y),
+        landingXmm: lp ? Math.round(lp.x) : undefined,
+        landingYmm: lp ? Math.round(lp.y) : undefined,
+      };
+    });
+
+    const nextRamps = get().ramps.map((r) => {
+      if (!rampIds.has(r.id)) return r;
+      const p1 = rotatePoint(r.startXmm, r.startYmm);
+      const p2 = rotatePoint(r.endXmm, r.endYmm);
+      const lp = r.landingXmm != null && r.landingYmm != null ? rotatePoint(r.landingXmm, r.landingYmm) : undefined;
+      return {
+        ...r,
+        startXmm: Math.round(p1.x),
+        startYmm: Math.round(p1.y),
+        endXmm: Math.round(p2.x),
+        endYmm: Math.round(p2.y),
+        landingXmm: lp ? Math.round(lp.x) : undefined,
+        landingYmm: lp ? Math.round(lp.y) : undefined,
+      };
+    });
+
     for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
     for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
     for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
+    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
+    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
 
     set({
       walls: nextWalls,
       columns: nextCols,
       beams: nextBeams,
+      stairs: nextStairs,
+      ramps: nextRamps,
       lastMutatedAt: Date.now(),
     });
   },
@@ -3539,5 +3822,166 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
     get().selectElement({ kind: "grid", id });
+  },
+
+  // -- Section 1-5: Stairs & Ramps Actions ---------------------------------
+  addStair: async (stairData) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+
+    const stair: LayoutStair = {
+      ...stairData,
+      id: newLayoutId("stair"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutStair(stair);
+    set((s) => ({
+      stairs: [...s.stairs, stair],
+      selectedElements: [{ kind: "stair", id: stair.id }],
+      selectedStairId: stair.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return stair;
+  },
+
+  updateStair: async (id, patch) => {
+    const prev = get().stairs.find((st) => st.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutStair = { ...prev, ...patch };
+    await idbPutStair(updated);
+    set((s) => ({
+      stairs: s.stairs.map((st) => (st.id === id ? updated : st)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteStair: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteStair(id);
+    set((s) => ({
+      stairs: s.stairs.filter((st) => st.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "stair" && e.id === id)),
+      selectedStairId: s.selectedStairId === id ? null : s.selectedStairId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectStair: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "stair"),
+        selectedStairId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "stair", id });
+  },
+
+  duplicateStair: async (id) => {
+    const st = get().stairs.find((s) => s.id === id);
+    if (!st) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutStair = {
+      ...st,
+      id: newLayoutId("stair"),
+      startXmm: st.startXmm + 1000,
+      startYmm: st.startYmm + 1000,
+      endXmm: st.endXmm + 1000,
+      endYmm: st.endYmm + 1000,
+      landingXmm: st.landingXmm != null ? st.landingXmm + 1000 : undefined,
+      landingYmm: st.landingYmm != null ? st.landingYmm + 1000 : undefined,
+      createdAt: Date.now(),
+    };
+    await idbPutStair(clone);
+    set({
+      stairs: [...get().stairs, clone],
+      selectedElements: [{ kind: "stair", id: clone.id }],
+      selectedStairId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  addRamp: async (rampData) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+
+    const ramp: LayoutRamp = {
+      ...rampData,
+      id: newLayoutId("ramp"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutRamp(ramp);
+    set((s) => ({
+      ramps: [...s.ramps, ramp],
+      selectedElements: [{ kind: "ramp", id: ramp.id }],
+      selectedRampId: ramp.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return ramp;
+  },
+
+  updateRamp: async (id, patch) => {
+    const prev = get().ramps.find((r) => r.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutRamp = { ...prev, ...patch };
+    await idbPutRamp(updated);
+    set((s) => ({
+      ramps: s.ramps.map((r) => (r.id === id ? updated : r)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteRamp: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteRamp(id);
+    set((s) => ({
+      ramps: s.ramps.filter((r) => r.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "ramp" && e.id === id)),
+      selectedRampId: s.selectedRampId === id ? null : s.selectedRampId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectRamp: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "ramp"),
+        selectedRampId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "ramp", id });
+  },
+
+  duplicateRamp: async (id) => {
+    const r = get().ramps.find((item) => item.id === id);
+    if (!r) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutRamp = {
+      ...r,
+      id: newLayoutId("ramp"),
+      startXmm: r.startXmm + 1000,
+      startYmm: r.startYmm + 1000,
+      endXmm: r.endXmm + 1000,
+      endYmm: r.endYmm + 1000,
+      landingXmm: r.landingXmm != null ? r.landingXmm + 1000 : undefined,
+      landingYmm: r.landingYmm != null ? r.landingYmm + 1000 : undefined,
+      createdAt: Date.now(),
+    };
+    await idbPutRamp(clone);
+    set({
+      ramps: [...get().ramps, clone],
+      selectedElements: [{ kind: "ramp", id: clone.id }],
+      selectedRampId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
   },
 }));

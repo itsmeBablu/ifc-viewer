@@ -7,7 +7,9 @@ import type {
   LayoutGroup,
   LayoutLevel,
   LayoutPresets,
+  LayoutRamp,
   LayoutSlab,
+  LayoutStair,
   LayoutWall,
   LayoutWindow,
   WallType,
@@ -15,7 +17,7 @@ import type {
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const LEVELS = "levels";
 const WALLS = "walls";
 const DOORS = "doors";
@@ -28,6 +30,8 @@ const BEAMS = "beams";
 const GRID_LINES = "gridLines";
 const GROUPS = "groups";
 const WALL_TYPES = "wallTypes";
+const STAIRS = "stairs";
+const RAMPS = "ramps";
 const PROJECTS = "projects";
 
 export type StoredLayoutProject = {
@@ -61,6 +65,8 @@ function openDb(): Promise<IDBDatabase> {
         GRID_LINES,
         GROUPS,
         WALL_TYPES,
+        STAIRS,
+        RAMPS,
       ]) {
         if (!db.objectStoreNames.contains(name)) {
           const store = db.createObjectStore(name, { keyPath: "id" });
@@ -221,6 +227,16 @@ export const idbListWallTypes = (projectId: string) =>
 export const idbPutWallType = (row: WallType) => putRow(WALL_TYPES, row);
 export const idbDeleteWallType = (id: string) => deleteRow(WALL_TYPES, id);
 
+export const idbListStairs = (projectId: string) =>
+  listByProject<LayoutStair>(STAIRS, projectId);
+export const idbPutStair = (row: LayoutStair) => putRow(STAIRS, row);
+export const idbDeleteStair = (id: string) => deleteRow(STAIRS, id);
+
+export const idbListRamps = (projectId: string) =>
+  listByProject<LayoutRamp>(RAMPS, projectId);
+export const idbPutRamp = (row: LayoutRamp) => putRow(RAMPS, row);
+export const idbDeleteRamp = (id: string) => deleteRow(RAMPS, id);
+
 export async function idbGetPresets(projectId: string): Promise<LayoutPresets> {
   const db = await openDb();
   try {
@@ -256,7 +272,7 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
   try {
     const detailStores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS,
     ];
     const tx = db.transaction([PROJECTS, ...detailStores], "readonly");
     const [rows, ...storeRows] = await Promise.all([
@@ -276,7 +292,7 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
           return { name: underlay.sourceName, type } as const;
         });
         const serialized = JSON.stringify([row, ...projectRows.flat()]);
-        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS];
+        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS, STAIRS, RAMPS];
         const elementCount = elementStores.reduce(
           (total, storeName) => total + projectRows[detailStores.indexOf(storeName)].length,
           0,
@@ -302,7 +318,7 @@ export async function idbExportProject(projectId: string): Promise<Record<string
   try {
     const stores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, PRESETS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS,
     ];
     const tx = db.transaction([PROJECTS, ...stores], "readonly");
     const projectRequest = reqToPromise(tx.objectStore(PROJECTS).get(projectId));
@@ -333,7 +349,7 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
   try {
     const stores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, PRESETS, PROJECTS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS, PROJECTS,
     ];
     const tx = db.transaction(stores, "readwrite");
     for (const storeName of stores) {
