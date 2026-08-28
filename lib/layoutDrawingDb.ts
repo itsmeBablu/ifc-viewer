@@ -1,13 +1,18 @@
 import type { ReferenceUnderlay } from "./referenceUnderlay";
 import type {
   LayoutBeam,
+  LayoutCableTray,
   LayoutColumn,
   LayoutDoor,
+  LayoutDuct,
   LayoutGridLine,
   LayoutGroup,
   LayoutLevel,
+  LayoutMepEquipment,
+  LayoutPipe,
   LayoutPresets,
   LayoutRamp,
+  LayoutRoom,
   LayoutSlab,
   LayoutStair,
   LayoutWall,
@@ -17,7 +22,7 @@ import type {
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const LEVELS = "levels";
 const WALLS = "walls";
 const DOORS = "doors";
@@ -32,6 +37,11 @@ const GROUPS = "groups";
 const WALL_TYPES = "wallTypes";
 const STAIRS = "stairs";
 const RAMPS = "ramps";
+const DUCTS = "ducts";
+const PIPES = "pipes";
+const CABLE_TRAYS = "cableTrays";
+const MEP_EQUIPMENT = "mepEquipment";
+const ROOMS = "rooms";
 const PROJECTS = "projects";
 
 export type StoredLayoutProject = {
@@ -67,6 +77,11 @@ function openDb(): Promise<IDBDatabase> {
         WALL_TYPES,
         STAIRS,
         RAMPS,
+        DUCTS,
+        PIPES,
+        CABLE_TRAYS,
+        MEP_EQUIPMENT,
+        ROOMS,
       ]) {
         if (!db.objectStoreNames.contains(name)) {
           const store = db.createObjectStore(name, { keyPath: "id" });
@@ -237,6 +252,31 @@ export const idbListRamps = (projectId: string) =>
 export const idbPutRamp = (row: LayoutRamp) => putRow(RAMPS, row);
 export const idbDeleteRamp = (id: string) => deleteRow(RAMPS, id);
 
+export const idbListDucts = (projectId: string) =>
+  listByProject<LayoutDuct>(DUCTS, projectId);
+export const idbPutDuct = (row: LayoutDuct) => putRow(DUCTS, row);
+export const idbDeleteDuct = (id: string) => deleteRow(DUCTS, id);
+
+export const idbListPipes = (projectId: string) =>
+  listByProject<LayoutPipe>(PIPES, projectId);
+export const idbPutPipe = (row: LayoutPipe) => putRow(PIPES, row);
+export const idbDeletePipe = (id: string) => deleteRow(PIPES, id);
+
+export const idbListCableTrays = (projectId: string) =>
+  listByProject<LayoutCableTray>(CABLE_TRAYS, projectId);
+export const idbPutCableTray = (row: LayoutCableTray) => putRow(CABLE_TRAYS, row);
+export const idbDeleteCableTray = (id: string) => deleteRow(CABLE_TRAYS, id);
+
+export const idbListMepEquipment = (projectId: string) =>
+  listByProject<LayoutMepEquipment>(MEP_EQUIPMENT, projectId);
+export const idbPutMepEquipment = (row: LayoutMepEquipment) => putRow(MEP_EQUIPMENT, row);
+export const idbDeleteMepEquipment = (id: string) => deleteRow(MEP_EQUIPMENT, id);
+
+export const idbListRooms = (projectId: string) =>
+  listByProject<LayoutRoom>(ROOMS, projectId);
+export const idbPutRoom = (row: LayoutRoom) => putRow(ROOMS, row);
+export const idbDeleteRoom = (id: string) => deleteRow(ROOMS, id);
+
 export async function idbGetPresets(projectId: string): Promise<LayoutPresets> {
   const db = await openDb();
   try {
@@ -272,7 +312,7 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
   try {
     const detailStores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, PRESETS,
     ];
     const tx = db.transaction([PROJECTS, ...detailStores], "readonly");
     const [rows, ...storeRows] = await Promise.all([
@@ -292,7 +332,7 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
           return { name: underlay.sourceName, type } as const;
         });
         const serialized = JSON.stringify([row, ...projectRows.flat()]);
-        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS, STAIRS, RAMPS];
+        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS];
         const elementCount = elementStores.reduce(
           (total, storeName) => total + projectRows[detailStores.indexOf(storeName)].length,
           0,
@@ -318,7 +358,7 @@ export async function idbExportProject(projectId: string): Promise<Record<string
   try {
     const stores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, PRESETS,
     ];
     const tx = db.transaction([PROJECTS, ...stores], "readonly");
     const projectRequest = reqToPromise(tx.objectStore(PROJECTS).get(projectId));
@@ -349,7 +389,7 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
   try {
     const stores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, PRESETS, PROJECTS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, PRESETS, PROJECTS,
     ];
     const tx = db.transaction(stores, "readwrite");
     for (const storeName of stores) {
@@ -368,3 +408,4 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
     db.close();
   }
 }
+

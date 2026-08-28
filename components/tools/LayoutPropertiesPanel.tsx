@@ -52,6 +52,10 @@ export default function LayoutPropertiesPanel({
   const beams = useLayoutDrawingStore((s) => s.beams);
   const stairs = useLayoutDrawingStore((s) => s.stairs);
   const ramps = useLayoutDrawingStore((s) => s.ramps);
+  const ducts = useLayoutDrawingStore((s) => s.ducts);
+  const pipes = useLayoutDrawingStore((s) => s.pipes);
+  const cableTrays = useLayoutDrawingStore((s) => s.cableTrays);
+  const mepEquipment = useLayoutDrawingStore((s) => s.mepEquipment);
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
@@ -67,6 +71,10 @@ export default function LayoutPropertiesPanel({
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
   const updateStair = useLayoutDrawingStore((s) => s.updateStair);
   const updateRamp = useLayoutDrawingStore((s) => s.updateRamp);
+  const updateDuct = useLayoutDrawingStore((s) => s.updateDuct);
+  const updatePipe = useLayoutDrawingStore((s) => s.updatePipe);
+  const updateCableTray = useLayoutDrawingStore((s) => s.updateCableTray);
+  const updateEquipment = useLayoutDrawingStore((s) => s.updateEquipment);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
   const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
   const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
@@ -75,6 +83,10 @@ export default function LayoutPropertiesPanel({
   const deleteBeam = useLayoutDrawingStore((s) => s.deleteBeam);
   const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
   const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
+  const deleteDuct = useLayoutDrawingStore((s) => s.deleteDuct);
+  const deletePipe = useLayoutDrawingStore((s) => s.deletePipe);
+  const deleteCableTray = useLayoutDrawingStore((s) => s.deleteCableTray);
+  const deleteEquipment = useLayoutDrawingStore((s) => s.deleteEquipment);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
   const duplicateDoor = useLayoutDrawingStore((s) => s.duplicateDoor);
   const duplicateWindow = useLayoutDrawingStore((s) => s.duplicateWindow);
@@ -83,6 +95,10 @@ export default function LayoutPropertiesPanel({
   const duplicateBeam = useLayoutDrawingStore((s) => s.duplicateBeam);
   const duplicateStair = useLayoutDrawingStore((s) => s.duplicateStair);
   const duplicateRamp = useLayoutDrawingStore((s) => s.duplicateRamp);
+  const duplicateDuct = useLayoutDrawingStore((s) => s.duplicateDuct);
+  const duplicatePipe = useLayoutDrawingStore((s) => s.duplicatePipe);
+  const duplicateCableTray = useLayoutDrawingStore((s) => s.duplicateCableTray);
+  const duplicateEquipment = useLayoutDrawingStore((s) => s.duplicateEquipment);
 
   const wall = walls.find((w) => w.id === selectedWallId) ?? null;
   const door = doors.find((d) => d.id === selectedDoorId) ?? null;
@@ -90,15 +106,22 @@ export default function LayoutPropertiesPanel({
   const slab = slabs.find((s) => s.id === selectedSlabId) ?? null;
   const stair = stairs.find((st) => st.id === (selectedStairId ?? selectedElements.find((e) => e.kind === "stair")?.id)) ?? null;
   const ramp = ramps.find((rp) => rp.id === (selectedRampId ?? selectedElements.find((e) => e.kind === "ramp")?.id)) ?? null;
-  // Columns/beams have no dedicated single-id field — read from multi-selection.
-  const selectedColumnId =
-    selectedElements.find((e) => e.kind === "column")?.id ?? null;
-  const selectedBeamId =
-    selectedElements.find((e) => e.kind === "beam")?.id ?? null;
+
+  const selectedColumnId = selectedElements.find((e) => e.kind === "column")?.id ?? null;
+  const selectedBeamId = selectedElements.find((e) => e.kind === "beam")?.id ?? null;
+  const selectedDuctId = useLayoutDrawingStore((s) => s.selectedDuctId) ?? selectedElements.find((e) => e.kind === "duct")?.id ?? null;
+  const selectedPipeId = useLayoutDrawingStore((s) => s.selectedPipeId) ?? selectedElements.find((e) => e.kind === "pipe")?.id ?? null;
+  const selectedCableTrayId = useLayoutDrawingStore((s) => s.selectedCableTrayId) ?? selectedElements.find((e) => e.kind === "cabletray")?.id ?? null;
+  const selectedEquipmentId = useLayoutDrawingStore((s) => s.selectedEquipmentId) ?? selectedElements.find((e) => e.kind === "equipment")?.id ?? null;
+
   const column = columns.find((c) => c.id === selectedColumnId) ?? null;
   const beam = beams.find((b) => b.id === selectedBeamId) ?? null;
+  const duct = ducts.find((d) => d.id === selectedDuctId) ?? null;
+  const pipe = pipes.find((p) => p.id === selectedPipeId) ?? null;
+  const tray = cableTrays.find((t) => t.id === selectedCableTrayId) ?? null;
+  const equip = mepEquipment.find((eq) => eq.id === selectedEquipmentId) ?? null;
 
-  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp) return null;
+  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip) return null;
 
   const len = wall ? Math.round(wallLengthMm(wall)) : 0;
   const ang = wall ? Math.round(wallAngleDeg(wall) * 10) / 10 : 0;
@@ -1236,6 +1259,387 @@ export default function LayoutPropertiesPanel({
               <button
                 type="button"
                 onClick={() => void deleteRamp(ramp.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* -- DUCT INSPECTOR ---------------------------------------------------- */}
+      {duct && (() => {
+        const dx = duct.endXmm - duct.startXmm;
+        const dy = duct.endYmm - duct.startYmm;
+        const ductLen = Math.round(Math.hypot(dx, dy));
+        const areaSqM = duct.shape === "rectangular"
+          ? ((duct.widthMm ?? 300) * (duct.heightMm ?? 200)) / 1_000_000
+          : Math.PI * Math.pow((duct.diameterMm ?? 200) / 2000, 2);
+        const flow = duct.flowM3h ?? 250;
+        const velocity = Math.round((flow / (3600 * Math.max(0.001, areaSqM))) * 10) / 10;
+
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-cyan-400 uppercase">
+                Air Duct ({duct.shape})
+              </p>
+              <span className="rounded-md bg-cyan-500/20 px-1.5 py-0.5 text-[9px] font-bold text-cyan-400 uppercase">
+                {duct.systemType}
+              </span>
+            </div>
+
+            <Section title="Duct Geometry">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Shape</span>
+                  <select
+                    value={duct.shape}
+                    onChange={(e) => void updateDuct(duct.id, { shape: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none"
+                  >
+                    <option value="rectangular">Rectangular</option>
+                    <option value="round">Round (Spiral)</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">System</span>
+                  <select
+                    value={duct.systemType}
+                    onChange={(e) => void updateDuct(duct.id, { systemType: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-semibold text-cyan-500"
+                  >
+                    <option value="supply">Supply (Zuluft)</option>
+                    <option value="extract">Extract (Abluft)</option>
+                    <option value="exhaust">Exhaust (Fortluft)</option>
+                    <option value="outdoor">Outside (Außenluft)</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {duct.shape === "rectangular" ? (
+                  <>
+                    <MmInput
+                      label="Width"
+                      value={duct.widthMm ?? 300}
+                      onCommit={(v) => void updateDuct(duct.id, { widthMm: v })}
+                    />
+                    <MmInput
+                      label="Height"
+                      value={duct.heightMm ?? 200}
+                      onCommit={(v) => void updateDuct(duct.id, { heightMm: v })}
+                    />
+                  </>
+                ) : (
+                  <MmInput
+                    label="Diameter"
+                    value={duct.diameterMm ?? 200}
+                    onCommit={(v) => void updateDuct(duct.id, { diameterMm: v })}
+                  />
+                )}
+                <MmInput
+                  label="Center Elev"
+                  value={duct.elevationMm ?? 2600}
+                  onCommit={(v) => void updateDuct(duct.id, { elevationMm: v })}
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                <span>Run Length:</span>
+                <span className="font-mono font-bold text-[var(--text-strong)]">{ductLen} mm</span>
+              </div>
+            </Section>
+
+            <Section title="Airflow & Aerodynamics">
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Design Flow (m³/h)</span>
+                  <input
+                    type="number"
+                    defaultValue={duct.flowM3h ?? 250}
+                    onBlur={(e) => void updateDuct(duct.id, { flowM3h: Number(e.target.value) })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                  />
+                </label>
+
+                <div className="flex items-center justify-between rounded-lg bg-[var(--surface-overlay)] p-2 text-xs">
+                  <div>
+                    <div className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Velocity (v)</div>
+                    <div className="font-mono font-bold text-sm text-[var(--text-strong)]">{velocity} m/s</div>
+                  </div>
+                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${
+                    velocity <= 3.5 ? "bg-emerald-500/20 text-emerald-500" : velocity <= 5.0 ? "bg-amber-500/20 text-amber-500" : "bg-rose-500/20 text-rose-500"
+                  }`}>
+                    {velocity <= 3.5 ? "Quiet (Comfort)" : velocity <= 5.0 ? "Standard" : "High Noise Risk"}
+                  </span>
+                </div>
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateDuct(duct.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteDuct(duct.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* -- PIPE INSPECTOR ---------------------------------------------------- */}
+      {pipe && (() => {
+        const dx = pipe.endXmm - pipe.startXmm;
+        const dy = pipe.endYmm - pipe.startYmm;
+        const pipeLen = Math.round(Math.hypot(dx, dy));
+
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-blue-400 uppercase">
+                Pipe Run (DN{pipe.diameterMm})
+              </p>
+              <span className="rounded-md bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-blue-400 uppercase">
+                {pipe.systemType}
+              </span>
+            </div>
+
+            <Section title="Pipe Properties">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">System</span>
+                  <select
+                    value={pipe.systemType}
+                    onChange={(e) => void updatePipe(pipe.id, { systemType: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-semibold text-blue-500"
+                  >
+                    <option value="hydronic_supply">Heating Supply</option>
+                    <option value="hydronic_return">Heating Return</option>
+                    <option value="domestic_cold">Cold Water</option>
+                    <option value="domestic_hot">Hot Water</option>
+                    <option value="sanitary_waste">Sanitary Waste</option>
+                    <option value="gas">Gas Pipe</option>
+                  </select>
+                </label>
+
+                <MmInput
+                  label="Outer Diameter"
+                  value={pipe.diameterMm}
+                  onCommit={(v) => void updatePipe(pipe.id, { diameterMm: v })}
+                />
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <MmInput
+                  label="Elevation"
+                  value={pipe.elevationMm ?? 2700}
+                  onCommit={(v) => void updatePipe(pipe.id, { elevationMm: v })}
+                />
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Slope (%)</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    defaultValue={pipe.slopePercent ?? 0}
+                    onBlur={(e) => void updatePipe(pipe.id, { slopePercent: Number(e.target.value) })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                <span>Run Length:</span>
+                <span className="font-mono font-bold text-[var(--text-strong)]">{pipeLen} mm</span>
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicatePipe(pipe.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deletePipe(pipe.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* -- CABLE TRAY INSPECTOR ---------------------------------------------- */}
+      {tray && (() => {
+        const dx = tray.endXmm - tray.startXmm;
+        const dy = tray.endYmm - tray.startYmm;
+        const trayLen = Math.round(Math.hypot(dx, dy));
+
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-slate-300 uppercase">
+                Cable Tray ({tray.trayType})
+              </p>
+              <span className="rounded-md bg-slate-500/20 px-1.5 py-0.5 text-[9px] font-bold text-slate-300 uppercase">
+                {tray.widthMm}×{tray.heightMm}
+              </span>
+            </div>
+
+            <Section title="Tray Properties">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Tray Type</span>
+                  <select
+                    value={tray.trayType}
+                    onChange={(e) => void updateCableTray(tray.id, { trayType: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none"
+                  >
+                    <option value="ladder">Ladder</option>
+                    <option value="perforated">Perforated</option>
+                    <option value="wire_mesh">Wire Mesh</option>
+                    <option value="conduit">Conduit</option>
+                  </select>
+                </label>
+
+                <MmInput
+                  label="Elevation"
+                  value={tray.elevationMm ?? 2800}
+                  onCommit={(v) => void updateCableTray(tray.id, { elevationMm: v })}
+                />
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <MmInput
+                  label="Width"
+                  value={tray.widthMm}
+                  onCommit={(v) => void updateCableTray(tray.id, { widthMm: v })}
+                />
+                <MmInput
+                  label="Height"
+                  value={tray.heightMm}
+                  onCommit={(v) => void updateCableTray(tray.id, { heightMm: v })}
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                <span>Tray Length:</span>
+                <span className="font-mono font-bold text-[var(--text-strong)]">{trayLen} mm</span>
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateCableTray(tray.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteCableTray(tray.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* -- MEP EQUIPMENT INSPECTOR ------------------------------------------- */}
+      {equip && (() => {
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold tracking-wide text-amber-400 uppercase">
+                {equip.name || "MEP Equipment"}
+              </p>
+              <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
+                {equip.category}
+              </span>
+            </div>
+
+            <Section title="Fixture Properties">
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Category</span>
+                  <select
+                    value={equip.category}
+                    onChange={(e) => void updateEquipment(equip.id, { category: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none text-amber-500 font-semibold"
+                  >
+                    <option value="diffuser_supply">Supply Diffuser (Zuluft)</option>
+                    <option value="diffuser_extract">Extract Diffuser (Abluft)</option>
+                    <option value="diffuser_overflow">Overflow Grille (Überströmung)</option>
+                    <option value="panel">Electrical Panel</option>
+                    <option value="socket">Power Socket Outlet</option>
+                    <option value="light">Light Fixture</option>
+                    <option value="radiator">Heating Radiator</option>
+                    <option value="sink">Wash Basin / Sink</option>
+                    <option value="toilet">Toilet (WC)</option>
+                  </select>
+                </label>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <MmInput
+                    label="Elevation"
+                    value={equip.elevationMm ?? 0}
+                    onCommit={(v) => void updateEquipment(equip.id, { elevationMm: v })}
+                  />
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Rotation (°)</span>
+                    <input
+                      type="number"
+                      defaultValue={equip.rotationDeg ?? 0}
+                      onBlur={(e) => void updateEquipment(equip.id, { rotationDeg: Number(e.target.value) })}
+                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                    />
+                  </label>
+                </div>
+
+                {equip.category.startsWith("diffuser") && (
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Flow Rate (m³/h)</span>
+                    <input
+                      type="number"
+                      defaultValue={equip.flowM3h ?? 100}
+                      onBlur={(e) => void updateEquipment(equip.id, { flowM3h: Number(e.target.value) })}
+                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono"
+                    />
+                  </label>
+                )}
+              </div>
+            </Section>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void duplicateEquipment(equip.id)}
+                className="flex-1 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-muted)]/60 px-2 py-1.5 text-[11px] font-semibold hover:bg-sky-50"
+              >
+                {t(uiLanguage, "layoutDuplicate")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteEquipment(equip.id)}
                 className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
               >
                 {t(uiLanguage, "markupDelete")}

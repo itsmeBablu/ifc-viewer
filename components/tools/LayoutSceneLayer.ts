@@ -21,11 +21,16 @@ import {
   type LayoutStair,
   type LayoutWall,
   type LayoutWindow,
+  type LayoutDuct,
+  type LayoutPipe,
+  type LayoutCableTray,
+  type LayoutMepEquipment,
   type WallCenterlineMm,
   type WallMiterOffsets,
   calculateRampMetrics,
   calculateStairMetrics,
   deriveRiseMm,
+  MEP_SYSTEM_COLORS,
 } from "@/lib/layoutDrawing";
 import {
   underlayHeightMm,
@@ -64,6 +69,10 @@ export default class LayoutSceneLayer {
   private gridMeshes = new Map<string, THREE.Group>();
   private stairMeshes = new Map<string, THREE.Group>();
   private rampMeshes = new Map<string, THREE.Group>();
+  private ductMeshes = new Map<string, THREE.Mesh>();
+  private pipeMeshes = new Map<string, THREE.Mesh>();
+  private cableTrayMeshes = new Map<string, THREE.Mesh>();
+  private equipmentMeshes = new Map<string, THREE.Group>();
   private previewLine: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
   private stairPreview: THREE.Group | null = null;
@@ -79,6 +88,7 @@ export default class LayoutSceneLayer {
   private endpointEnd: THREE.Mesh | null = null;
   private sketchGroup = new THREE.Group();
   private structuralPreview = new THREE.Group();
+  private mepPreview = new THREE.Group();
 
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
@@ -89,9 +99,11 @@ export default class LayoutSceneLayer {
     this.endpointGroup.name = "layout-wall-endpoints";
     this.sketchGroup.name = "layout-sketch-lines";
     this.structuralPreview.name = "layout-structural-preview";
+    this.mepPreview.name = "layout-mep-preview";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
     this.group.add(this.structuralPreview);
+    this.group.add(this.mepPreview);
   }
 
   setStructuralPreview(
@@ -2334,10 +2346,16 @@ export default class LayoutSceneLayer {
     | { kind: "sketch-line"; id: string }
     | { kind: "stair"; id: string }
     | { kind: "ramp"; id: string }
+    | { kind: "duct"; id: string }
+    | { kind: "pipe"; id: string }
+    | { kind: "cabletray"; id: string }
+    | { kind: "equipment"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
-    if (this.endpointGroup.visible) {
+    const isMepMode = useLayoutDrawingStore.getState().mepModeActive;
+
+    if (!isMepMode && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
         this.endpointGroup.children,
         false,
@@ -2369,33 +2387,46 @@ export default class LayoutSceneLayer {
       if (hidden) continue;
       o = h.object;
       while (o) {
-        if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
-          return {
-            kind: "wall-endpoint",
-            id: o.userData.layoutWallId as string,
-            end: o.userData.layoutWallEndpoint as "start" | "end",
-          };
+        if (o.userData.layoutDuctId)
+          return { kind: "duct", id: o.userData.layoutDuctId as string };
+        if (o.userData.layoutPipeId)
+          return { kind: "pipe", id: o.userData.layoutPipeId as string };
+        if (o.userData.layoutCableTrayId)
+          return { kind: "cabletray", id: o.userData.layoutCableTrayId as string };
+        if (o.userData.layoutEquipmentId)
+          return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
+
+        // If in MEP mode, architectural elements cannot be picked
+        if (!isMepMode) {
+          if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
+            return {
+              kind: "wall-endpoint",
+              id: o.userData.layoutWallId as string,
+              end: o.userData.layoutWallEndpoint as "start" | "end",
+            };
+          }
+          if (o.userData.layoutWallId)
+            return { kind: "wall", id: o.userData.layoutWallId as string };
+          if (o.userData.layoutDoorId)
+            return { kind: "door", id: o.userData.layoutDoorId as string };
+          if (o.userData.layoutWindowId)
+            return { kind: "window", id: o.userData.layoutWindowId as string };
+          if (o.userData.layoutSlabId)
+            return { kind: "slab", id: o.userData.layoutSlabId as string };
+          if (o.userData.layoutColumnId)
+            return { kind: "column", id: o.userData.layoutColumnId as string };
+          if (o.userData.layoutBeamId)
+            return { kind: "beam", id: o.userData.layoutBeamId as string };
+          if (o.userData.layoutGridId)
+            return { kind: "grid", id: o.userData.layoutGridId as string };
+          if (o.userData.layoutSketchLineId)
+            return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
+          if (o.userData.layoutStairId)
+            return { kind: "stair", id: o.userData.layoutStairId as string };
+          if (o.userData.layoutRampId)
+            return { kind: "ramp", id: o.userData.layoutRampId as string };
         }
-        if (o.userData.layoutWallId)
-          return { kind: "wall", id: o.userData.layoutWallId as string };
-        if (o.userData.layoutDoorId)
-          return { kind: "door", id: o.userData.layoutDoorId as string };
-        if (o.userData.layoutWindowId)
-          return { kind: "window", id: o.userData.layoutWindowId as string };
-        if (o.userData.layoutSlabId)
-          return { kind: "slab", id: o.userData.layoutSlabId as string };
-        if (o.userData.layoutColumnId)
-          return { kind: "column", id: o.userData.layoutColumnId as string };
-        if (o.userData.layoutBeamId)
-          return { kind: "beam", id: o.userData.layoutBeamId as string };
-        if (o.userData.layoutGridId)
-          return { kind: "grid", id: o.userData.layoutGridId as string };
-        if (o.userData.layoutSketchLineId)
-          return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
-        if (o.userData.layoutStairId)
-          return { kind: "stair", id: o.userData.layoutStairId as string };
-        if (o.userData.layoutRampId)
-          return { kind: "ramp", id: o.userData.layoutRampId as string };
+
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {
             kind: "underlay",
@@ -4064,6 +4095,470 @@ export default class LayoutSceneLayer {
     pick.userData.layoutWindowId = win.id;
     g.add(pick);
     return g;
+  }
+
+  syncDucts(
+    ducts: LayoutDuct[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedDuctIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(ducts.map((d) => d.id));
+    for (const [id, mesh] of this.ductMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.ductMeshes.delete(id);
+      }
+    }
+
+    for (const duct of ducts) {
+      const isSelected = opts.selectedDuctIds.has(duct.id);
+      const level = levels.find((l) => l.id === duct.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = duct.elevationMm ?? 2600;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(duct.endXmm - duct.startXmm);
+      const dz = fromMm(duct.endYmm - duct.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((duct.startXmm + duct.endXmm) / 2);
+      const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const hexColor = duct.color
+        ? parseInt(duct.color.replace("#", ""), 16)
+        : (MEP_SYSTEM_COLORS[duct.systemType] ? parseInt(MEP_SYSTEM_COLORS[duct.systemType].replace("#", ""), 16) : 0x06b6d4);
+
+      let mesh = this.ductMeshes.get(duct.id);
+      const isRound = duct.shape === "round";
+      const w = fromMm(duct.widthMm ?? 300);
+      const h = fromMm(duct.heightMm ?? 200);
+      const r = fromMm((duct.diameterMm ?? 200) / 2);
+
+      const geoKey = isRound ? `round:${r}:${len}` : `rect:${w}:${h}:${len}`;
+
+      if (!mesh) {
+        const geo = isRound
+          ? new THREE.CylinderGeometry(r, r, len, 16)
+          : new THREE.BoxGeometry(len, h, w);
+        if (isRound) geo.rotateZ(Math.PI / 2);
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: hexColor,
+          roughness: 0.35,
+          metalness: 0.5,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutDuctId = duct.id;
+        mesh.userData.kind = "duct";
+        mesh.userData.geometryKey = geoKey;
+        this.ductMeshes.set(duct.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        const geo = isRound
+          ? new THREE.CylinderGeometry(r, r, len, 16)
+          : new THREE.BoxGeometry(len, h, w);
+        if (isRound) geo.rotateZ(Math.PI / 2);
+        mesh.geometry = geo;
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        duct.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(hexColor);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncPipes(
+    pipes: LayoutPipe[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedPipeIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(pipes.map((p) => p.id));
+    for (const [id, mesh] of this.pipeMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.pipeMeshes.delete(id);
+      }
+    }
+
+    for (const pipe of pipes) {
+      const isSelected = opts.selectedPipeIds.has(pipe.id);
+      const level = levels.find((l) => l.id === pipe.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = pipe.elevationMm ?? 2700;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(pipe.endXmm - pipe.startXmm);
+      const dz = fromMm(pipe.endYmm - pipe.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((pipe.startXmm + pipe.endXmm) / 2);
+      const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const hexColor = pipe.color
+        ? parseInt(pipe.color.replace("#", ""), 16)
+        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : 0x3b82f6);
+
+      const r = fromMm((pipe.diameterMm ?? 28) / 2);
+      const geoKey = `pipe:${r}:${len}`;
+
+      let mesh = this.pipeMeshes.get(pipe.id);
+      if (!mesh) {
+        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        geo.rotateZ(Math.PI / 2);
+        const mat = new THREE.MeshStandardMaterial({
+          color: hexColor,
+          roughness: 0.25,
+          metalness: 0.8,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutPipeId = pipe.id;
+        mesh.userData.kind = "pipe";
+        mesh.userData.geometryKey = geoKey;
+        this.pipeMeshes.set(pipe.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        geo.rotateZ(Math.PI / 2);
+        mesh.geometry = geo;
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        pipe.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(hexColor);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncCableTrays(
+    cableTrays: LayoutCableTray[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedCableTrayIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(cableTrays.map((t) => t.id));
+    for (const [id, mesh] of this.cableTrayMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.cableTrayMeshes.delete(id);
+      }
+    }
+
+    for (const tray of cableTrays) {
+      const isSelected = opts.selectedCableTrayIds.has(tray.id);
+      const level = levels.find((l) => l.id === tray.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = tray.elevationMm ?? 2800;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(tray.endXmm - tray.startXmm);
+      const dz = fromMm(tray.endYmm - tray.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((tray.startXmm + tray.endXmm) / 2);
+      const midZ = fromMm((tray.startYmm + tray.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const w = fromMm(tray.widthMm ?? 200);
+      const h = fromMm(tray.heightMm ?? 60);
+      const geoKey = `tray:${w}:${h}:${len}:${tray.trayType}`;
+
+      let mesh = this.cableTrayMeshes.get(tray.id);
+      if (!mesh) {
+        const geo = new THREE.BoxGeometry(len, h, w);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x94a3b8,
+          roughness: 0.4,
+          metalness: 0.7,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutCableTrayId = tray.id;
+        mesh.userData.kind = "cabletray";
+        mesh.userData.geometryKey = geoKey;
+        this.cableTrayMeshes.set(tray.id, mesh);
+        this.group.add(mesh);
+      } else if (mesh.userData.geometryKey !== geoKey) {
+        mesh.geometry.dispose();
+        mesh.geometry = new THREE.BoxGeometry(len, h, w);
+        mesh.userData.geometryKey = geoKey;
+      }
+
+      mesh.position.set(midX, centerY, midZ);
+      mesh.rotation.y = -angle;
+      mesh.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        tray.levelId === opts.activeLevelId;
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.color.setHex(tray.trayType === "conduit" ? 0xd97706 : 0x94a3b8);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncMepEquipment(
+    equipment: LayoutMepEquipment[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedEquipmentIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(equipment.map((e) => e.id));
+    for (const [id, grp] of this.equipmentMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.equipmentMeshes.delete(id);
+      }
+    }
+
+    for (const item of equipment) {
+      const isSelected = opts.selectedEquipmentIds.has(item.id);
+      const level = levels.find((l) => l.id === item.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const centerY = fromMm(baseElev + (item.elevationMm ?? 0));
+
+      let grp = this.equipmentMeshes.get(item.id);
+      if (!grp) {
+        grp = new THREE.Group();
+        grp.name = `equip-${item.id}`;
+        grp.userData.layoutEquipmentId = item.id;
+        grp.userData.kind = "equipment";
+        this.equipmentMeshes.set(item.id, grp);
+        this.group.add(grp);
+      } else {
+        this.clearGroupContents(grp);
+      }
+
+      const rot = ((item.rotationDeg ?? 0) * Math.PI) / 180;
+      grp.position.set(fromMm(item.xMm), centerY, fromMm(item.yMm));
+      grp.rotation.y = rot;
+      grp.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        item.levelId === opts.activeLevelId;
+
+      // Build model per category
+      if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow") {
+        const isSupply = item.category === "diffuser_supply";
+        const isExtract = item.category === "diffuser_extract";
+        const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
+
+        const plateGeo = new THREE.BoxGeometry(0.4, 0.04, 0.4);
+        const plateMat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.4, roughness: 0.3 });
+        const plate = new THREE.Mesh(plateGeo, plateMat);
+        plate.userData.layoutEquipmentId = item.id;
+        grp.add(plate);
+
+        // Core grille indicator
+        const coreGeo = new THREE.BoxGeometry(0.25, 0.05, 0.25);
+        const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.userData.layoutEquipmentId = item.id;
+        grp.add(core);
+      } else if (item.category === "panel") {
+        const boxGeo = new THREE.BoxGeometry(0.4, 0.6, 0.15);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
+        const box = new THREE.Mesh(boxGeo, boxMat);
+        box.userData.layoutEquipmentId = item.id;
+        grp.add(box);
+      } else if (item.category === "light") {
+        const lightGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16);
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.4 });
+        const light = new THREE.Mesh(lightGeo, lightMat);
+        light.userData.layoutEquipmentId = item.id;
+        grp.add(light);
+      } else if (item.category === "radiator") {
+        const radGeo = new THREE.BoxGeometry(1.0, 0.6, 0.1);
+        const radMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.3, roughness: 0.4 });
+        const rad = new THREE.Mesh(radGeo, radMat);
+        rad.userData.layoutEquipmentId = item.id;
+        grp.add(rad);
+      } else {
+        // Generic fixture box
+        const genGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+        const genMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.5, roughness: 0.4 });
+        const gen = new THREE.Mesh(genGeo, genMat);
+        gen.userData.layoutEquipmentId = item.id;
+        grp.add(gen);
+      }
+
+      // Selection outline for primary child
+      const primaryChild = grp.children[0] as THREE.Mesh | undefined;
+      if (primaryChild) {
+        this.setMeshSelectionOutline(primaryChild, isSelected);
+      }
+    }
+  }
+
+  setMepPreview(
+    tool: "duct" | "pipe" | "cabletray" | "equipment" | null,
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    params?: any,
+  ) {
+    this.clearGroupContents(this.mepPreview);
+    if (!tool || !cursor) return;
+
+    const baseElevMm = params?.baseElevMm ?? 0;
+
+    if (tool === "equipment") {
+      const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
+      const ghostGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+      const ghostMat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+      ghost.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
+      this.mepPreview.add(ghost);
+      return;
+    }
+
+    if (!start) return;
+
+    const dx = fromMm(cursor.xMm - start.xMm);
+    const dz = fromMm(cursor.yMm - start.yMm);
+    const len = Math.hypot(dx, dz);
+    if (len < 0.001) return;
+
+    const midX = fromMm((start.xMm + cursor.xMm) / 2);
+    const midZ = fromMm((start.yMm + cursor.yMm) / 2);
+    const angle = Math.atan2(dz, dx);
+    const elev = fromMm(baseElevMm + (params?.elevationMm ?? 2600));
+
+    if (tool === "duct") {
+      const isRound = params?.shape === "round";
+      const w = fromMm(params?.widthMm ?? 300);
+      const h = fromMm(params?.heightMm ?? 200);
+      const r = fromMm((params?.diameterMm ?? 200) / 2);
+
+      const geo = isRound
+        ? new THREE.CylinderGeometry(r, r, len, 16)
+        : new THREE.BoxGeometry(len, h, w);
+      if (isRound) geo.rotateZ(Math.PI / 2);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    } else if (tool === "pipe") {
+      const r = fromMm((params?.diameterMm ?? 28) / 2);
+      const geo = new THREE.CylinderGeometry(r, r, len, 12);
+      geo.rotateZ(Math.PI / 2);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x3b82f6,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    } else if (tool === "cabletray") {
+      const w = fromMm(params?.widthMm ?? 200);
+      const h = fromMm(params?.heightMm ?? 60);
+      const geo = new THREE.BoxGeometry(len, h, w);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    }
+  }
+
+  setMepModeDimming(dimmed: boolean) {
+    const opacity = dimmed ? 0.35 : 1.0;
+    const transparent = dimmed;
+
+    for (const mesh of this.wallMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.slabMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = dimmed ? 0.25 : 1.0;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.columnMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
+    for (const mesh of this.beamMeshes.values()) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat) {
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.needsUpdate = true;
+      }
+    }
   }
 
   private disposeObject(root: THREE.Object3D) {

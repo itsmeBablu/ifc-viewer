@@ -16,7 +16,15 @@ import {
   DEFAULT_STAIR_NOSING_MM,
   DEFAULT_RAMP_WIDTH_MM,
   DEFAULT_RAMP_THICKNESS_MM,
-  DEFAULT_RAILING_HEIGHT_MM,
+  DEFAULT_DUCT_WIDTH_MM,
+  DEFAULT_DUCT_HEIGHT_MM,
+  DEFAULT_DUCT_DIAMETER_MM,
+  DEFAULT_DUCT_ELEVATION_MM,
+  DEFAULT_PIPE_DIAMETER_MM,
+  DEFAULT_PIPE_ELEVATION_MM,
+  DEFAULT_CABLE_TRAY_WIDTH_MM,
+  DEFAULT_CABLE_TRAY_HEIGHT_MM,
+  DEFAULT_CABLE_TRAY_ELEVATION_MM,
   DEFAULT_PLAN_SNAP_MODES,
   EMPTY_LAYOUT_PRESETS,
   emptyProjectKey,
@@ -25,18 +33,22 @@ import {
   rememberDoorSize,
   rememberNumber,
   rememberWindowSize,
-  deriveRiseMm,
-  calculateStairMetrics,
-  calculateRampMetrics,
   snapPlanPointToWalls,
   snapWallEndpointMm,
   trimWallPair,
+  type CableTrayType,
+  type DuctShape,
+  type DuctSystemType,
   type LayoutBeam,
+  type LayoutCableTray,
   type LayoutColumn,
   type LayoutDoor,
+  type LayoutDuct,
   type LayoutGridLine,
   type LayoutGroup,
   type LayoutLevel,
+  type LayoutMepEquipment,
+  type LayoutPipe,
   type LayoutPresets,
   type LayoutRamp,
   type LayoutRoom,
@@ -46,6 +58,8 @@ import {
   type LayoutToolId,
   type LayoutWall,
   type LayoutWindow,
+  type MepEquipmentCategory,
+  type PipeSystemType,
   type PlanSnapModes,
   type PlanSnapType,
   type SelectedElementRef,
@@ -58,11 +72,15 @@ import {
 } from "@/lib/linesLoopDetector";
 import {
   idbDeleteBeam,
+  idbDeleteCableTray,
   idbDeleteColumn,
   idbDeleteDoor,
+  idbDeleteDuct,
   idbDeleteGridLine,
   idbDeleteGroup,
   idbDeleteLevel,
+  idbDeleteMepEquipment,
+  idbDeletePipe,
   idbDeleteRamp,
   idbDeleteSlab,
   idbDeleteStair,
@@ -72,12 +90,17 @@ import {
   idbDeleteWindow,
   idbGetPresets,
   idbListBeams,
+  idbListCableTrays,
   idbListColumns,
   idbListDoors,
+  idbListDucts,
   idbListGridLines,
   idbListGroups,
   idbListLevels,
+  idbListMepEquipment,
+  idbListPipes,
   idbListRamps,
+  idbListRooms,
   idbListSlabs,
   idbListStairs,
   idbListUnderlays,
@@ -85,11 +108,15 @@ import {
   idbListWallTypes,
   idbListWindows,
   idbPutBeam,
+  idbPutCableTray,
   idbPutColumn,
   idbPutDoor,
+  idbPutDuct,
   idbPutGridLine,
   idbPutGroup,
   idbPutLevel,
+  idbPutMepEquipment,
+  idbPutPipe,
   idbPutPresets,
   idbPutRamp,
   idbPutSlab,
@@ -168,6 +195,37 @@ export type RampDrawState = {
   cursor: { xMm: number; yMm: number } | null;
   widthMm: number;
   thicknessMm: number;
+} | null;
+
+export type DuctDrawState = {
+  levelId: string;
+  start: { xMm: number; yMm: number } | null;
+  cursor: { xMm: number; yMm: number } | null;
+  shape: DuctShape;
+  widthMm: number;
+  heightMm: number;
+  diameterMm: number;
+  system: DuctSystemType;
+  elevationOffsetMm: number;
+} | null;
+
+export type PipeDrawState = {
+  levelId: string;
+  start: { xMm: number; yMm: number } | null;
+  cursor: { xMm: number; yMm: number } | null;
+  diameterMm: number;
+  system: PipeSystemType;
+  elevationOffsetMm: number;
+} | null;
+
+export type CableTrayDrawState = {
+  levelId: string;
+  start: { xMm: number; yMm: number } | null;
+  cursor: { xMm: number; yMm: number } | null;
+  widthMm: number;
+  heightMm: number;
+  trayType: CableTrayType;
+  elevationOffsetMm: number;
 } | null;
 
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
@@ -272,6 +330,56 @@ type LayoutDrawingState = {
   draftRampTopLevelId: string | null;
   draftRampRailingLeft: boolean;
   draftRampRailingRight: boolean;
+
+  // MEP State
+  ducts: LayoutDuct[];
+  pipes: LayoutPipe[];
+  cableTrays: LayoutCableTray[];
+  mepEquipment: LayoutMepEquipment[];
+  mepModeActive: boolean;
+  setMepModeActive: (active: boolean) => void;
+  ductDraw: DuctDrawState;
+  pipeDraw: PipeDrawState;
+  cableTrayDraw: CableTrayDrawState;
+  selectedDuctId: string | null;
+  selectedPipeId: string | null;
+  selectedCableTrayId: string | null;
+  selectedEquipmentId: string | null;
+
+  draftDuctShape: DuctShape;
+  draftDuctWidthMm: number;
+  draftDuctHeightMm: number;
+  draftDuctDiameterMm: number;
+  draftDuctSystem: DuctSystemType;
+  draftDuctElevationMm: number;
+  draftDuctFlowM3h: number;
+  draftPipeDiameterMm: number;
+  draftPipeSystem: PipeSystemType;
+  draftPipeElevationMm: number;
+  draftCableTrayWidthMm: number;
+  draftCableTrayHeightMm: number;
+  draftCableTrayType: CableTrayType;
+  draftCableTrayElevationMm: number;
+  draftEquipmentCategory: MepEquipmentCategory;
+  draftEquipmentElevationMm: number;
+  draftEquipmentRotationDeg: number;
+  draftEquipmentFlowM3h: number;
+
+  setDraftDuctShape: (shape: DuctShape) => void;
+  setDraftDuctSize: (widthMm: number, heightMm: number, diameterMm: number) => void;
+  setDraftDuctSystem: (system: DuctSystemType) => void;
+  setDraftDuctElevationMm: (elevationMm: number) => void;
+  setDraftDuctFlowM3h: (flowM3h: number) => void;
+  setDraftPipeDiameterMm: (diameterMm: number) => void;
+  setDraftPipeSystem: (system: PipeSystemType) => void;
+  setDraftPipeElevationMm: (elevationMm: number) => void;
+  setDraftCableTraySize: (widthMm: number, heightMm: number) => void;
+  setDraftCableTrayType: (type: CableTrayType) => void;
+  setDraftCableTrayElevationMm: (elevationMm: number) => void;
+  setDraftEquipmentCategory: (cat: MepEquipmentCategory) => void;
+  setDraftEquipmentElevationMm: (elevationMm: number) => void;
+  setDraftEquipmentRotationDeg: (deg: number) => void;
+  setDraftEquipmentFlowM3h: (flowM3h: number) => void;
 
   browserSearch: string;
   setBrowserSearch: (val: string) => void;
@@ -586,6 +694,43 @@ type LayoutDrawingState = {
   deleteRamp: (id: string) => Promise<void>;
   selectRamp: (id: string | null) => void;
   duplicateRamp: (id: string) => Promise<LayoutRamp | null>;
+
+  // -- MEP: Ducts, Pipes, Cable Trays, Equipment ----------------------------
+  startDuctDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateDuctDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishDuctDraw: () => Promise<LayoutDuct | null>;
+  cancelDuctDraw: () => void;
+  addDuct: (data: Omit<LayoutDuct, "id" | "projectId" | "createdAt">) => Promise<LayoutDuct | null>;
+  updateDuct: (id: string, patch: Partial<LayoutDuct>) => Promise<void>;
+  deleteDuct: (id: string) => Promise<void>;
+  selectDuct: (id: string | null) => void;
+  duplicateDuct: (id: string) => Promise<LayoutDuct | null>;
+
+  startPipeDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updatePipeDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishPipeDraw: () => Promise<LayoutPipe | null>;
+  cancelPipeDraw: () => void;
+  addPipe: (data: Omit<LayoutPipe, "id" | "projectId" | "createdAt">) => Promise<LayoutPipe | null>;
+  updatePipe: (id: string, patch: Partial<LayoutPipe>) => Promise<void>;
+  deletePipe: (id: string) => Promise<void>;
+  selectPipe: (id: string | null) => void;
+  duplicatePipe: (id: string) => Promise<LayoutPipe | null>;
+
+  startCableTrayDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateCableTrayDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishCableTrayDraw: () => Promise<LayoutCableTray | null>;
+  cancelCableTrayDraw: () => void;
+  addCableTray: (data: Omit<LayoutCableTray, "id" | "projectId" | "createdAt">) => Promise<LayoutCableTray | null>;
+  updateCableTray: (id: string, patch: Partial<LayoutCableTray>) => Promise<void>;
+  deleteCableTray: (id: string) => Promise<void>;
+  selectCableTray: (id: string | null) => void;
+  duplicateCableTray: (id: string) => Promise<LayoutCableTray | null>;
+
+  placeEquipment: (data: Omit<LayoutMepEquipment, "id" | "projectId" | "createdAt">) => Promise<LayoutMepEquipment | null>;
+  updateEquipment: (id: string, patch: Partial<LayoutMepEquipment>) => Promise<void>;
+  deleteEquipment: (id: string) => Promise<void>;
+  selectEquipment: (id: string | null) => void;
+  duplicateEquipment: (id: string) => Promise<LayoutMepEquipment | null>;
 };
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
@@ -645,16 +790,21 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   slabs: [],
   columns: [],
   beams: [],
-  gridLines: [],
-  groups: [],
-  wallTypes: [],
-  activeGroupId: null,
-  selectedElements: [],
-  slabs: [],
-  columns: [],
-  beams: [],
   stairs: [],
   ramps: [],
+  ducts: [],
+  pipes: [],
+  cableTrays: [],
+  mepEquipment: [],
+  mepModeActive: false,
+  setMepModeActive: (active) => set({ mepModeActive: active }),
+  ductDraw: null,
+  pipeDraw: null,
+  cableTrayDraw: null,
+  selectedDuctId: null,
+  selectedPipeId: null,
+  selectedCableTrayId: null,
+  selectedEquipmentId: null,
   gridLines: [],
   groups: [],
   wallTypes: [],
@@ -721,6 +871,50 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftRampRailingLeft: true,
   draftRampRailingRight: true,
 
+  draftDuctShape: "rectangular",
+  draftDuctWidthMm: DEFAULT_DUCT_WIDTH_MM,
+  draftDuctHeightMm: DEFAULT_DUCT_HEIGHT_MM,
+  draftDuctDiameterMm: DEFAULT_DUCT_DIAMETER_MM,
+  draftDuctSystem: "supply",
+  draftDuctElevationMm: DEFAULT_DUCT_ELEVATION_MM,
+  draftDuctFlowM3h: 150,
+  draftPipeDiameterMm: DEFAULT_PIPE_DIAMETER_MM,
+  draftPipeSystem: "hydronic_supply",
+  draftPipeElevationMm: DEFAULT_PIPE_ELEVATION_MM,
+  draftCableTrayWidthMm: DEFAULT_CABLE_TRAY_WIDTH_MM,
+  draftCableTrayHeightMm: DEFAULT_CABLE_TRAY_HEIGHT_MM,
+  draftCableTrayType: "ladder",
+  draftCableTrayElevationMm: DEFAULT_CABLE_TRAY_ELEVATION_MM,
+  draftEquipmentCategory: "diffuser_supply",
+  draftEquipmentElevationMm: 2600,
+  draftEquipmentRotationDeg: 0,
+  draftEquipmentFlowM3h: 100,
+
+  setDraftDuctShape: (shape) => set({ draftDuctShape: shape }),
+  setDraftDuctSize: (w, h, dia) =>
+    set({
+      draftDuctWidthMm: Math.max(50, Math.round(w)),
+      draftDuctHeightMm: Math.max(50, Math.round(h)),
+      draftDuctDiameterMm: Math.max(50, Math.round(dia)),
+    }),
+  setDraftDuctSystem: (sys) => set({ draftDuctSystem: sys }),
+  setDraftDuctElevationMm: (elev) => set({ draftDuctElevationMm: Math.round(elev) }),
+  setDraftDuctFlowM3h: (flow) => set({ draftDuctFlowM3h: Math.max(0, Math.round(flow)) }),
+  setDraftPipeDiameterMm: (dia) => set({ draftPipeDiameterMm: Math.max(10, Math.round(dia)) }),
+  setDraftPipeSystem: (sys) => set({ draftPipeSystem: sys }),
+  setDraftPipeElevationMm: (elev) => set({ draftPipeElevationMm: Math.round(elev) }),
+  setDraftCableTraySize: (w, h) =>
+    set({
+      draftCableTrayWidthMm: Math.max(50, Math.round(w)),
+      draftCableTrayHeightMm: Math.max(25, Math.round(h)),
+    }),
+  setDraftCableTrayType: (type) => set({ draftCableTrayType: type }),
+  setDraftCableTrayElevationMm: (elev) => set({ draftCableTrayElevationMm: Math.round(elev) }),
+  setDraftEquipmentCategory: (cat) => set({ draftEquipmentCategory: cat }),
+  setDraftEquipmentElevationMm: (elev) => set({ draftEquipmentElevationMm: Math.round(elev) }),
+  setDraftEquipmentRotationDeg: (deg) => set({ draftEquipmentRotationDeg: Math.round(deg) }),
+  setDraftEquipmentFlowM3h: (flow) => set({ draftEquipmentFlowM3h: Math.max(0, Math.round(flow)) }),
+
   browserSearch: "",
   setBrowserSearch: (val) => set({ browserSearch: val }),
   elementsCategoryFilter: "all",
@@ -743,6 +937,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         beams: [],
         stairs: [],
         ramps: [],
+        ducts: [],
+        pipes: [],
+        cableTrays: [],
+        mepEquipment: [],
         gridLines: [],
         groups: [],
         wallTypes: [],
@@ -757,6 +955,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         wallDraw: null,
         stairDraw: null,
         rampDraw: null,
+        ductDraw: null,
+        pipeDraw: null,
+        cableTrayDraw: null,
         slabDraw: null,
         tracePreview: null,
         selectedWallId: null,
@@ -765,6 +966,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         selectedSlabId: null,
         selectedStairId: null,
         selectedRampId: null,
+        selectedDuctId: null,
+        selectedPipeId: null,
+        selectedCableTrayId: null,
+        selectedEquipmentId: null,
         selectedUnderlayId: null,
         calibrateUnderlayId: null,
         calibratePoints: [],
@@ -781,6 +986,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       beams,
       stairs,
       ramps,
+      ducts,
+      pipes,
+      cableTrays,
+      mepEquipment,
+      rooms,
       gridLines,
       groups,
       wallTypes,
@@ -796,6 +1006,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbListBeams(projectId),
       idbListStairs(projectId),
       idbListRamps(projectId),
+      idbListDucts(projectId),
+      idbListPipes(projectId),
+      idbListCableTrays(projectId),
+      idbListMepEquipment(projectId),
+      idbListRooms(projectId),
       idbListGridLines(projectId),
       idbListGroups(projectId),
       idbListWallTypes(projectId),
@@ -846,6 +1061,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       beams,
       stairs,
       ramps,
+      ducts,
+      pipes,
+      cableTrays,
+      mepEquipment,
+      layoutRooms: rooms,
       gridLines,
       groups,
       wallTypes,
@@ -853,6 +1073,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedElements: [],
       selectedStairId: null,
       selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
       marqueeBox: null,
       underlays,
       presets,
@@ -860,6 +1084,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       wallDraw: null,
       stairDraw: null,
       rampDraw: null,
+      ductDraw: null,
+      pipeDraw: null,
+      cableTrayDraw: null,
       slabDraw: null,
       tracePreview: null,
       selectedWallId: null,
@@ -2770,6 +2997,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
       selectedStairId: primary?.kind === "stair" ? primary.id : null,
       selectedRampId: primary?.kind === "ramp" ? primary.id : null,
+      selectedDuctId: primary?.kind === "duct" ? primary.id : null,
+      selectedPipeId: primary?.kind === "pipe" ? primary.id : null,
+      selectedCableTrayId: primary?.kind === "cabletray" ? primary.id : null,
+      selectedEquipmentId: primary?.kind === "equipment" ? primary.id : null,
       selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       selectedUnderlayId: null,
     });
@@ -2795,6 +3026,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
       selectedStairId: primary?.kind === "stair" ? primary.id : null,
       selectedRampId: primary?.kind === "ramp" ? primary.id : null,
+      selectedDuctId: primary?.kind === "duct" ? primary.id : null,
+      selectedPipeId: primary?.kind === "pipe" ? primary.id : null,
+      selectedCableTrayId: primary?.kind === "cabletray" ? primary.id : null,
+      selectedEquipmentId: primary?.kind === "equipment" ? primary.id : null,
       selectedSketchLineId: primary?.kind === "line" ? primary.id : null,
       selectedUnderlayId: null,
     });
@@ -2809,6 +3044,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: null,
       selectedStairId: null,
       selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
       selectedSketchLineId: null,
       selectedUnderlayId: null,
     });
@@ -2830,6 +3069,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
     const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
     const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
+    const ductIds = new Set(sel.filter((e) => e.kind === "duct").map((e) => e.id));
+    const pipeIds = new Set(sel.filter((e) => e.kind === "pipe").map((e) => e.id));
+    const trayIds = new Set(sel.filter((e) => e.kind === "cabletray").map((e) => e.id));
+    const equipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
     const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
 
@@ -2849,6 +3092,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const id of beamIds) await idbDeleteBeam(id);
     for (const id of stairIds) await idbDeleteStair(id);
     for (const id of rampIds) await idbDeleteRamp(id);
+    for (const id of ductIds) await idbDeleteDuct(id);
+    for (const id of pipeIds) await idbDeletePipe(id);
+    for (const id of trayIds) await idbDeleteCableTray(id);
+    for (const id of equipIds) await idbDeleteMepEquipment(id);
     for (const id of gridIds) await idbDeleteGridLine(id);
 
     set((s) => ({
@@ -2860,6 +3107,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       beams: s.beams.filter((b) => !beamIds.has(b.id)),
       stairs: s.stairs.filter((st) => !stairIds.has(st.id)),
       ramps: s.ramps.filter((r) => !rampIds.has(r.id)),
+      ducts: s.ducts.filter((d) => !ductIds.has(d.id)),
+      pipes: s.pipes.filter((p) => !pipeIds.has(p.id)),
+      cableTrays: s.cableTrays.filter((t) => !trayIds.has(t.id)),
+      mepEquipment: s.mepEquipment.filter((eq) => !equipIds.has(eq.id)),
       gridLines: s.gridLines.filter((g) => !gridIds.has(g.id)),
       sketchLines: s.sketchLines.filter((l) => !lineIds.has(l.id)),
       selectedElements: [],
@@ -2869,6 +3120,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: null,
       selectedStairId: null,
       selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
       selectedSketchLineId: null,
       lastMutatedAt: Date.now(),
     }));
@@ -2886,6 +3141,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
     const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
     const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
+    const ductIds = new Set(sel.filter((e) => e.kind === "duct").map((e) => e.id));
+    const pipeIds = new Set(sel.filter((e) => e.kind === "pipe").map((e) => e.id));
+    const trayIds = new Set(sel.filter((e) => e.kind === "cabletray").map((e) => e.id));
+    const equipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
     const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
 
@@ -2957,6 +3216,48 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       };
     });
 
+    const nextDucts = get().ducts.map((d) => {
+      if (!ductIds.has(d.id)) return d;
+      return {
+        ...d,
+        startXmm: d.startXmm + deltaXmm,
+        startYmm: d.startYmm + deltaYmm,
+        endXmm: d.endXmm + deltaXmm,
+        endYmm: d.endYmm + deltaYmm,
+      };
+    });
+
+    const nextPipes = get().pipes.map((p) => {
+      if (!pipeIds.has(p.id)) return p;
+      return {
+        ...p,
+        startXmm: p.startXmm + deltaXmm,
+        startYmm: p.startYmm + deltaYmm,
+        endXmm: p.endXmm + deltaXmm,
+        endYmm: p.endYmm + deltaYmm,
+      };
+    });
+
+    const nextTrays = get().cableTrays.map((t) => {
+      if (!trayIds.has(t.id)) return t;
+      return {
+        ...t,
+        startXmm: t.startXmm + deltaXmm,
+        startYmm: t.startYmm + deltaYmm,
+        endXmm: t.endXmm + deltaXmm,
+        endYmm: t.endYmm + deltaYmm,
+      };
+    });
+
+    const nextEquip = get().mepEquipment.map((eq) => {
+      if (!equipIds.has(eq.id)) return eq;
+      return {
+        ...eq,
+        xMm: eq.xMm + deltaXmm,
+        yMm: eq.yMm + deltaYmm,
+      };
+    });
+
     const nextGrids = get().gridLines.map((g) => {
       if (!gridIds.has(g.id)) return g;
       return {
@@ -2985,6 +3286,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
     for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
     for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
+    for (const d of nextDucts) if (ductIds.has(d.id)) await idbPutDuct(d);
+    for (const p of nextPipes) if (pipeIds.has(p.id)) await idbPutPipe(p);
+    for (const t of nextTrays) if (trayIds.has(t.id)) await idbPutCableTray(t);
+    for (const eq of nextEquip) if (equipIds.has(eq.id)) await idbPutMepEquipment(eq);
     for (const g of nextGrids) if (gridIds.has(g.id)) await idbPutGridLine(g);
 
     set({
@@ -2994,6 +3299,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       beams: nextBeams,
       stairs: nextStairs,
       ramps: nextRamps,
+      ducts: nextDucts,
+      pipes: nextPipes,
+      cableTrays: nextTrays,
+      mepEquipment: nextEquip,
       gridLines: nextGrids,
       sketchLines: nextLines,
       lastMutatedAt: Date.now(),
@@ -4169,6 +4478,503 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       ramps: [...get().ramps, clone],
       selectedElements: [{ kind: "ramp", id: clone.id }],
       selectedRampId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  // -- Section: MEP Ducts, Pipes, Cable Trays & Equipment -------------------
+
+  startDuctDraw: (levelId, start) => {
+    const s = get();
+    set({
+      ductDraw: {
+        levelId,
+        start,
+        cursor: null,
+        shape: s.draftDuctShape,
+        widthMm: s.draftDuctWidthMm,
+        heightMm: s.draftDuctHeightMm,
+        diameterMm: s.draftDuctDiameterMm,
+        system: s.draftDuctSystem,
+        elevationOffsetMm: s.draftDuctElevationMm,
+      },
+    });
+  },
+
+  updateDuctDrawCursor: (cursor) => {
+    const dd = get().ductDraw;
+    if (!dd) return;
+    set({ ductDraw: { ...dd, cursor } });
+  },
+
+  finishDuctDraw: async () => {
+    const s = get();
+    const dd = s.ductDraw;
+    if (!dd?.start || !dd.cursor) {
+      set({ ductDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) {
+      set({ ductDraw: null });
+      return null;
+    }
+
+    const duct: LayoutDuct = {
+      id: newLayoutId("duct"),
+      projectId,
+      levelId: dd.levelId,
+      startXmm: dd.start.xMm,
+      startYmm: dd.start.yMm,
+      endXmm: dd.cursor.xMm,
+      endYmm: dd.cursor.yMm,
+      elevationOffsetMm: dd.elevationOffsetMm,
+      shape: dd.shape,
+      widthMm: dd.widthMm,
+      heightMm: dd.heightMm,
+      diameterMm: dd.diameterMm,
+      system: dd.system,
+      flowM3h: s.draftDuctFlowM3h,
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutDuct(duct);
+    set((prev) => ({
+      ducts: [...prev.ducts, duct],
+      ductDraw: null,
+      selectedDuctId: duct.id,
+      selectedElements: [{ kind: "duct", id: duct.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return duct;
+  },
+
+  cancelDuctDraw: () => set({ ductDraw: null }),
+
+  addDuct: async (data) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+    const duct: LayoutDuct = {
+      ...data,
+      id: newLayoutId("duct"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutDuct(duct);
+    set((s) => ({
+      ducts: [...s.ducts, duct],
+      selectedElements: [{ kind: "duct", id: duct.id }],
+      selectedDuctId: duct.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return duct;
+  },
+
+  updateDuct: async (id, patch) => {
+    const prev = get().ducts.find((d) => d.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutDuct = { ...prev, ...patch };
+    await idbPutDuct(updated);
+    set((s) => ({
+      ducts: s.ducts.map((d) => (d.id === id ? updated : d)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteDuct: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteDuct(id);
+    set((s) => ({
+      ducts: s.ducts.filter((d) => d.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "duct" && e.id === id)),
+      selectedDuctId: s.selectedDuctId === id ? null : s.selectedDuctId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectDuct: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "duct"),
+        selectedDuctId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "duct", id });
+  },
+
+  duplicateDuct: async (id) => {
+    const d = get().ducts.find((item) => item.id === id);
+    if (!d) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutDuct = {
+      ...d,
+      id: newLayoutId("duct"),
+      startXmm: d.startXmm + 500,
+      startYmm: d.startYmm + 500,
+      endXmm: d.endXmm + 500,
+      endYmm: d.endYmm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutDuct(clone);
+    set({
+      ducts: [...get().ducts, clone],
+      selectedElements: [{ kind: "duct", id: clone.id }],
+      selectedDuctId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  startPipeDraw: (levelId, start) => {
+    const s = get();
+    set({
+      pipeDraw: {
+        levelId,
+        start,
+        cursor: null,
+        diameterMm: s.draftPipeDiameterMm,
+        system: s.draftPipeSystem,
+        elevationOffsetMm: s.draftPipeElevationMm,
+      },
+    });
+  },
+
+  updatePipeDrawCursor: (cursor) => {
+    const pd = get().pipeDraw;
+    if (!pd) return;
+    set({ pipeDraw: { ...pd, cursor } });
+  },
+
+  finishPipeDraw: async () => {
+    const s = get();
+    const pd = s.pipeDraw;
+    if (!pd?.start || !pd.cursor) {
+      set({ pipeDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) {
+      set({ pipeDraw: null });
+      return null;
+    }
+
+    const pipe: LayoutPipe = {
+      id: newLayoutId("pipe"),
+      projectId,
+      levelId: pd.levelId,
+      startXmm: pd.start.xMm,
+      startYmm: pd.start.yMm,
+      endXmm: pd.cursor.xMm,
+      endYmm: pd.cursor.yMm,
+      elevationOffsetMm: pd.elevationOffsetMm,
+      diameterMm: pd.diameterMm,
+      system: pd.system,
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutPipe(pipe);
+    set((prev) => ({
+      pipes: [...prev.pipes, pipe],
+      pipeDraw: null,
+      selectedPipeId: pipe.id,
+      selectedElements: [{ kind: "pipe", id: pipe.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return pipe;
+  },
+
+  cancelPipeDraw: () => set({ pipeDraw: null }),
+
+  addPipe: async (data) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+    const pipe: LayoutPipe = {
+      ...data,
+      id: newLayoutId("pipe"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutPipe(pipe);
+    set((s) => ({
+      pipes: [...s.pipes, pipe],
+      selectedElements: [{ kind: "pipe", id: pipe.id }],
+      selectedPipeId: pipe.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return pipe;
+  },
+
+  updatePipe: async (id, patch) => {
+    const prev = get().pipes.find((p) => p.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutPipe = { ...prev, ...patch };
+    await idbPutPipe(updated);
+    set((s) => ({
+      pipes: s.pipes.map((p) => (p.id === id ? updated : p)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deletePipe: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeletePipe(id);
+    set((s) => ({
+      pipes: s.pipes.filter((p) => p.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "pipe" && e.id === id)),
+      selectedPipeId: s.selectedPipeId === id ? null : s.selectedPipeId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectPipe: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "pipe"),
+        selectedPipeId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "pipe", id });
+  },
+
+  duplicatePipe: async (id) => {
+    const p = get().pipes.find((item) => item.id === id);
+    if (!p) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutPipe = {
+      ...p,
+      id: newLayoutId("pipe"),
+      startXmm: p.startXmm + 500,
+      startYmm: p.startYmm + 500,
+      endXmm: p.endXmm + 500,
+      endYmm: p.endYmm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutPipe(clone);
+    set({
+      pipes: [...get().pipes, clone],
+      selectedElements: [{ kind: "pipe", id: clone.id }],
+      selectedPipeId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  startCableTrayDraw: (levelId, start) => {
+    const s = get();
+    set({
+      cableTrayDraw: {
+        levelId,
+        start,
+        cursor: null,
+        widthMm: s.draftCableTrayWidthMm,
+        heightMm: s.draftCableTrayHeightMm,
+        trayType: s.draftCableTrayType,
+        elevationOffsetMm: s.draftCableTrayElevationMm,
+      },
+    });
+  },
+
+  updateCableTrayDrawCursor: (cursor) => {
+    const cd = get().cableTrayDraw;
+    if (!cd) return;
+    set({ cableTrayDraw: { ...cd, cursor } });
+  },
+
+  finishCableTrayDraw: async () => {
+    const s = get();
+    const cd = s.cableTrayDraw;
+    if (!cd?.start || !cd.cursor) {
+      set({ cableTrayDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) {
+      set({ cableTrayDraw: null });
+      return null;
+    }
+
+    const tray: LayoutCableTray = {
+      id: newLayoutId("tray"),
+      projectId,
+      levelId: cd.levelId,
+      startXmm: cd.start.xMm,
+      startYmm: cd.start.yMm,
+      endXmm: cd.cursor.xMm,
+      endYmm: cd.cursor.yMm,
+      elevationOffsetMm: cd.elevationOffsetMm,
+      widthMm: cd.widthMm,
+      heightMm: cd.heightMm,
+      trayType: cd.trayType,
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutCableTray(tray);
+    set((prev) => ({
+      cableTrays: [...prev.cableTrays, tray],
+      cableTrayDraw: null,
+      selectedCableTrayId: tray.id,
+      selectedElements: [{ kind: "cabletray", id: tray.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return tray;
+  },
+
+  cancelCableTrayDraw: () => set({ cableTrayDraw: null }),
+
+  addCableTray: async (data) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+    const tray: LayoutCableTray = {
+      ...data,
+      id: newLayoutId("tray"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutCableTray(tray);
+    set((s) => ({
+      cableTrays: [...s.cableTrays, tray],
+      selectedElements: [{ kind: "cabletray", id: tray.id }],
+      selectedCableTrayId: tray.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return tray;
+  },
+
+  updateCableTray: async (id, patch) => {
+    const prev = get().cableTrays.find((t) => t.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutCableTray = { ...prev, ...patch };
+    await idbPutCableTray(updated);
+    set((s) => ({
+      cableTrays: s.cableTrays.map((t) => (t.id === id ? updated : t)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteCableTray: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteCableTray(id);
+    set((s) => ({
+      cableTrays: s.cableTrays.filter((t) => t.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "cabletray" && e.id === id)),
+      selectedCableTrayId: s.selectedCableTrayId === id ? null : s.selectedCableTrayId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectCableTray: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "cabletray"),
+        selectedCableTrayId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "cabletray", id });
+  },
+
+  duplicateCableTray: async (id) => {
+    const t = get().cableTrays.find((item) => item.id === id);
+    if (!t) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutCableTray = {
+      ...t,
+      id: newLayoutId("tray"),
+      startXmm: t.startXmm + 500,
+      startYmm: t.startYmm + 500,
+      endXmm: t.endXmm + 500,
+      endYmm: t.endYmm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutCableTray(clone);
+    set({
+      cableTrays: [...get().cableTrays, clone],
+      selectedElements: [{ kind: "cabletray", id: clone.id }],
+      selectedCableTrayId: clone.id,
+      lastMutatedAt: Date.now(),
+    });
+    return clone;
+  },
+
+  placeEquipment: async (data) => {
+    const projectId = get().projectId;
+    if (!projectId) return null;
+    pushWerkzeugHistory();
+    const equip: LayoutMepEquipment = {
+      ...data,
+      id: newLayoutId("equip"),
+      projectId,
+      createdAt: Date.now(),
+    };
+    await idbPutMepEquipment(equip);
+    set((s) => ({
+      mepEquipment: [...s.mepEquipment, equip],
+      selectedElements: [{ kind: "equipment", id: equip.id }],
+      selectedEquipmentId: equip.id,
+      lastMutatedAt: Date.now(),
+    }));
+    return equip;
+  },
+
+  updateEquipment: async (id, patch) => {
+    const prev = get().mepEquipment.find((e) => e.id === id);
+    if (!prev) return;
+    pushWerkzeugHistory();
+    const updated: LayoutMepEquipment = { ...prev, ...patch };
+    await idbPutMepEquipment(updated);
+    set((s) => ({
+      mepEquipment: s.mepEquipment.map((e) => (e.id === id ? updated : e)),
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  deleteEquipment: async (id) => {
+    pushWerkzeugHistory();
+    await idbDeleteMepEquipment(id);
+    set((s) => ({
+      mepEquipment: s.mepEquipment.filter((e) => e.id !== id),
+      selectedElements: s.selectedElements.filter((e) => !(e.kind === "equipment" && e.id === id)),
+      selectedEquipmentId: s.selectedEquipmentId === id ? null : s.selectedEquipmentId,
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
+  selectEquipment: (id) => {
+    if (!id) {
+      set({
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "equipment"),
+        selectedEquipmentId: null,
+      });
+      return;
+    }
+    get().selectElement({ kind: "equipment", id });
+  },
+
+  duplicateEquipment: async (id) => {
+    const eq = get().mepEquipment.find((item) => item.id === id);
+    if (!eq) return null;
+    pushWerkzeugHistory();
+    const clone: LayoutMepEquipment = {
+      ...eq,
+      id: newLayoutId("equip"),
+      xMm: eq.xMm + 500,
+      yMm: eq.yMm + 500,
+      createdAt: Date.now(),
+    };
+    await idbPutMepEquipment(clone);
+    set({
+      mepEquipment: [...get().mepEquipment, clone],
+      selectedElements: [{ kind: "equipment", id: clone.id }],
+      selectedEquipmentId: clone.id,
       lastMutatedAt: Date.now(),
     });
     return clone;
