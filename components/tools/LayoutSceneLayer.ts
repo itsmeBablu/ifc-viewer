@@ -25,6 +25,8 @@ import {
   type LayoutPipe,
   type LayoutCableTray,
   type LayoutMepEquipment,
+  type LayoutWire,
+  type LayoutWorkPlane,
   type WallCenterlineMm,
   type WallMiterOffsets,
   calculateRampMetrics,
@@ -73,6 +75,8 @@ export default class LayoutSceneLayer {
   private pipeMeshes = new Map<string, THREE.Mesh>();
   private cableTrayMeshes = new Map<string, THREE.Mesh>();
   private equipmentMeshes = new Map<string, THREE.Group>();
+  private wireMeshes = new Map<string, THREE.Group>();
+  private workPlaneGroup = new THREE.Group();
   private previewLine: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
   private stairPreview: THREE.Group | null = null;
@@ -100,10 +104,12 @@ export default class LayoutSceneLayer {
     this.sketchGroup.name = "layout-sketch-lines";
     this.structuralPreview.name = "layout-structural-preview";
     this.mepPreview.name = "layout-mep-preview";
+    this.workPlaneGroup.name = "layout-workplane-group";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
     this.group.add(this.structuralPreview);
     this.group.add(this.mepPreview);
+    this.group.add(this.workPlaneGroup);
   }
 
   setStructuralPreview(
@@ -4141,17 +4147,34 @@ export default class LayoutSceneLayer {
       const isRound = duct.shape === "round";
       const isOval = duct.shape === "oval";
       const w = fromMm(duct.widthMm ?? 300);
+      const isRound = duct.shape === "round" || duct.isFlex;
+      const isOval = duct.shape === "oval" && !duct.isFlex;
+      const isFlex = Boolean(duct.isFlex);
+      const isPlaceholder = Boolean(duct.isPlaceholder);
+      const w = fromMm(duct.widthMm ?? 300);
       const h = fromMm(duct.heightMm ?? 200);
       const r = fromMm((duct.diameterMm ?? 200) / 2);
 
-      const geoKey = isRound
+      const geoKey = isPlaceholder
+        ? `placeholder:${len}`
+        : isFlex
+        ? `flex:${r}:${len}`
+        : isRound
         ? `round:${r}:${len}`
         : isOval
         ? `oval:${w}:${h}:${len}`
         : `rect:${w}:${h}:${len}`;
 
       const buildDuctGeo = () => {
-        if (isRound) {
+        if (isPlaceholder) {
+          const g = new THREE.CylinderGeometry(0.015, 0.015, len, 8);
+          g.rotateZ(Math.PI / 2);
+          return g;
+        } else if (isFlex) {
+          const g = new THREE.CylinderGeometry(r, r, len, 16, Math.max(6, Math.round(len * 15)));
+          g.rotateZ(Math.PI / 2);
+          return g;
+        } else if (isRound) {
           const g = new THREE.CylinderGeometry(r, r, len, 16);
           g.rotateZ(Math.PI / 2);
           return g;
@@ -4177,9 +4200,10 @@ export default class LayoutSceneLayer {
       if (!mesh) {
         const geo = buildDuctGeo();
         const mat = new THREE.MeshStandardMaterial({
-          color: hexColor,
-          roughness: 0.35,
-          metalness: 0.5,
+          color: isPlaceholder ? 0x38bdf8 : hexColor,
+          roughness: isFlex ? 0.5 : 0.35,
+          metalness: isFlex ? 0.6 : 0.5,
+          wireframe: isPlaceholder,
         });
         mesh = new THREE.Mesh(geo, mat);
         mesh.userData.layoutDuctId = duct.id;
@@ -4201,7 +4225,8 @@ export default class LayoutSceneLayer {
         duct.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.setHex(hexColor);
+      mat.color.setHex(isPlaceholder ? 0x38bdf8 : hexColor);
+      mat.wireframe = isPlaceholder;
       this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
@@ -4228,6 +4253,7 @@ export default class LayoutSceneLayer {
 
     for (const pipe of pipes) {
       const isSelected = opts.selectedPipeIds.has(pipe.id);
+      const isPlaceholder = Boolean(pipe.isPlaceholder);
       const level = levels.find((l) => l.id === pipe.levelId);
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
       const elevOffset = pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700;
@@ -4244,19 +4270,20 @@ export default class LayoutSceneLayer {
 
       const hexColor = pipe.color
         ? parseInt(pipe.color.replace("#", ""), 16)
-        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : 0x3b82f6);
+        : (MEP_SYSTEM_COLORS[pipe.systemType] ? parseInt(MEP_SYSTEM_COLORS[pipe.systemType].replace("#", ""), 16) : (pipe.systemType === "fire_protection" ? 0xef4444 : 0x3b82f6));
 
-      const r = fromMm((pipe.diameterMm ?? 28) / 2);
-      const geoKey = `pipe:${r}:${len}`;
+      const r = isPlaceholder ? 0.012 : fromMm((pipe.diameterMm ?? 28) / 2);
+      const geoKey = `pipe:${isPlaceholder ? "ph" : r}:${len}`;
 
       let mesh = this.pipeMeshes.get(pipe.id);
       if (!mesh) {
-        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        const geo = new THREE.CylinderGeometry(r, r, len, isPlaceholder ? 8 : 12);
         geo.rotateZ(Math.PI / 2);
         const mat = new THREE.MeshStandardMaterial({
           color: hexColor,
           roughness: 0.25,
           metalness: 0.8,
+          wireframe: isPlaceholder,
         });
         mesh = new THREE.Mesh(geo, mat);
         mesh.userData.layoutPipeId = pipe.id;
@@ -4266,7 +4293,7 @@ export default class LayoutSceneLayer {
         this.group.add(mesh);
       } else if (mesh.userData.geometryKey !== geoKey) {
         mesh.geometry.dispose();
-        const geo = new THREE.CylinderGeometry(r, r, len, 12);
+        const geo = new THREE.CylinderGeometry(r, r, len, isPlaceholder ? 8 : 12);
         geo.rotateZ(Math.PI / 2);
         mesh.geometry = geo;
         mesh.userData.geometryKey = geoKey;
@@ -4281,8 +4308,119 @@ export default class LayoutSceneLayer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.color.setHex(hexColor);
+      mat.wireframe = isPlaceholder;
       this.setMeshSelectionOutline(mesh, isSelected);
     }
+  }
+
+  syncWires(
+    wires: LayoutWire[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedWireIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(wires.map((w) => w.id));
+    for (const [id, grp] of this.wireMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.wireMeshes.delete(id);
+      }
+    }
+
+    for (const wire of wires) {
+      const isSelected = opts.selectedWireIds.has(wire.id);
+      const level = levels.find((l) => l.id === wire.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const elevOffset = wire.elevationMm ?? 2800;
+      const centerY = fromMm(baseElev + elevOffset);
+
+      const dx = fromMm(wire.endXmm - wire.startXmm);
+      const dz = fromMm(wire.endYmm - wire.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) continue;
+
+      const midX = fromMm((wire.startXmm + wire.endXmm) / 2);
+      const midZ = fromMm((wire.startYmm + wire.endYmm) / 2);
+      const angle = Math.atan2(dz, dx);
+
+      const col = wire.systemType === "lighting" ? 0xfacc15 : wire.systemType === "data" ? 0x06b6d4 : wire.systemType === "control" ? 0xa855f7 : 0xeab308;
+
+      let grp = this.wireMeshes.get(wire.id);
+      if (!grp) {
+        grp = new THREE.Group();
+        grp.name = `wire-${wire.id}`;
+        grp.userData.layoutWireId = wire.id;
+        grp.userData.kind = "wire";
+        this.wireMeshes.set(wire.id, grp);
+        this.group.add(grp);
+
+        const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, len, 8);
+        wireGeo.rotateZ(Math.PI / 2);
+        const wireMat = new THREE.MeshStandardMaterial({
+          color: col,
+          roughness: 0.3,
+          metalness: 0.6,
+        });
+        const mesh = new THREE.Mesh(wireGeo, wireMat);
+        mesh.userData.layoutWireId = wire.id;
+        grp.add(mesh);
+
+        // Terminal beads
+        const termGeo = new THREE.SphereGeometry(0.016, 8, 8);
+        const termMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9 });
+        const term1 = new THREE.Mesh(termGeo, termMat);
+        term1.position.set(-len / 2, 0, 0);
+        grp.add(term1);
+        const term2 = new THREE.Mesh(termGeo, termMat);
+        term2.position.set(len / 2, 0, 0);
+        grp.add(term2);
+      }
+
+      grp.position.set(midX, centerY, midZ);
+      grp.rotation.y = -angle;
+      grp.visible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        wire.levelId === opts.activeLevelId;
+    }
+  }
+
+  syncWorkPlane(workPlane: LayoutWorkPlane | null, activeLevelElevMm: number) {
+    this.clearGroupContents(this.workPlaneGroup);
+    if (!workPlane || !workPlane.isActive) return;
+
+    const elev = fromMm(activeLevelElevMm + workPlane.elevationMm);
+    const size = 12; // 12m grid
+    const grid = new THREE.GridHelper(size, 24, 0x38bdf8, 0x0284c7);
+    grid.position.set(fromMm(workPlane.originXmm), elev, fromMm(workPlane.originYmm));
+    if (workPlane.slopeDeg) {
+      grid.rotation.z = (workPlane.slopeDeg * Math.PI) / 180;
+    }
+    if (workPlane.rotationDeg) {
+      grid.rotation.y = (workPlane.rotationDeg * Math.PI) / 180;
+    }
+
+    // Translucent glass plane
+    const planeGeo = new THREE.PlaneGeometry(size, size);
+    planeGeo.rotateX(-Math.PI / 2);
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+    planeMesh.position.copy(grid.position);
+    planeMesh.rotation.copy(grid.rotation);
+
+    this.workPlaneGroup.add(grid);
+    this.workPlaneGroup.add(planeMesh);
   }
 
   syncCableTrays(
@@ -4383,9 +4521,9 @@ export default class LayoutSceneLayer {
       const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
       const centerY = fromMm(baseElev + (item.elevationMm ?? item.elevationOffsetMm ?? 0));
 
-      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400));
-      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400));
-      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400));
+      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
+      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400));
+      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
 
       const geoKey = `${item.category}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
 
@@ -4406,8 +4544,8 @@ export default class LayoutSceneLayer {
         grp.userData.geometryKey = geoKey;
 
         // Build procedural model per category
-        if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow") {
-          const isSupply = item.category === "diffuser_supply";
+        if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow" || item.category === "air_terminal") {
+          const isSupply = item.category === "diffuser_supply" || item.category === "air_terminal";
           const isExtract = item.category === "diffuser_extract";
           const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
 
@@ -4431,6 +4569,63 @@ export default class LayoutSceneLayer {
           collar.position.set(0, 0.06, 0);
           collar.userData.layoutEquipmentId = item.id;
           grp.add(collar);
+        } else if (item.category === "lighting_fixture" || item.category === "light") {
+          // Luminaire fixture
+          const frameGeo = new THREE.BoxGeometry(w, h * 0.4, d);
+          const frameMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7, roughness: 0.2 });
+          const frame = new THREE.Mesh(frameGeo, frameMat);
+          frame.position.set(0, h * 0.2, 0);
+          frame.userData.layoutEquipmentId = item.id;
+          grp.add(frame);
+
+          // Light emitter panel
+          const emitGeo = new THREE.BoxGeometry(w * 0.88, 0.02, d * 0.88);
+          const emitMat = new THREE.MeshStandardMaterial({
+            color: 0xfef08a,
+            emissive: 0xfef08a,
+            emissiveIntensity: 0.6,
+            roughness: 0.1,
+          });
+          const emit = new THREE.Mesh(emitGeo, emitMat);
+          emit.position.set(0, 0.01, 0);
+          emit.userData.layoutEquipmentId = item.id;
+          grp.add(emit);
+        } else if (item.category === "sprinkler") {
+          // Fire suppression sprinkler head
+          const collarGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.04, 12);
+          const brassMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 });
+          const sprCollar = new THREE.Mesh(collarGeo, brassMat);
+          sprCollar.position.set(0, 0.06, 0);
+          sprCollar.userData.layoutEquipmentId = item.id;
+          grp.add(sprCollar);
+
+          // Glass thermal bulb (Red)
+          const bulbGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.03, 8);
+          const bulbMat = new THREE.MeshPhysicalMaterial({ color: 0xef4444, transparent: true, opacity: 0.85, roughness: 0.1 });
+          const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+          bulb.position.set(0, 0.03, 0);
+          grp.add(bulb);
+
+          // Deflector plate disc
+          const deflGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.006, 16);
+          const defl = new THREE.Mesh(deflGeo, brassMat);
+          defl.position.set(0, 0.005, 0);
+          defl.userData.layoutEquipmentId = item.id;
+          grp.add(defl);
+        } else if (item.category === "generic_component") {
+          // Generic MEP component with brushed metallic body and accent notch
+          const genGeo = new THREE.BoxGeometry(w, h, d);
+          const genMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.5, roughness: 0.35 });
+          const gen = new THREE.Mesh(genGeo, genMat);
+          gen.position.set(0, h / 2, 0);
+          gen.userData.layoutEquipmentId = item.id;
+          grp.add(gen);
+
+          const notchGeo = new THREE.BoxGeometry(w * 0.9, 0.02, 0.04);
+          const notchMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+          const notch = new THREE.Mesh(notchGeo, notchMat);
+          notch.position.set(0, h + 0.01, d / 2 - 0.03);
+          grp.add(notch);
         } else if (item.category === "radiator") {
           // Procedural Radiator with front casing, convection louvre, valve nubs, and pipe connectors
           const radMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.25, roughness: 0.35 });
@@ -4511,12 +4706,6 @@ export default class LayoutSceneLayer {
           box.position.set(0, h / 2, 0);
           box.userData.layoutEquipmentId = item.id;
           grp.add(box);
-        } else if (item.category === "light") {
-          const lightGeo = new THREE.CylinderGeometry(w / 2, w / 2, 0.05, 16);
-          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xfef08a, emissiveIntensity: 0.4 });
-          const light = new THREE.Mesh(lightGeo, lightMat);
-          light.userData.layoutEquipmentId = item.id;
-          grp.add(light);
         } else {
           // Generic fixture box
           const genGeo = new THREE.BoxGeometry(w, h, d);
@@ -4570,7 +4759,7 @@ export default class LayoutSceneLayer {
   }
 
   setMepPreview(
-    tool: "duct" | "pipe" | "cabletray" | "equipment" | null,
+    tool: "duct" | "flex_duct" | "mep_placeholder" | "pipe" | "cabletray" | "wire" | "equipment" | "workplane" | null,
     start: { xMm: number; yMm: number } | null,
     cursor: { xMm: number; yMm: number } | null,
     params?: any,
@@ -4582,15 +4771,29 @@ export default class LayoutSceneLayer {
 
     if (tool === "equipment") {
       const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
-      const ghostGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+      const cat = params?.category ?? "generic_component";
+      const w = fromMm(cat === "radiator" ? 1000 : cat === "fan_coil" ? 900 : cat === "ac_unit" ? 850 : cat === "chiller" ? 1600 : cat === "air_terminal" ? 600 : cat === "lighting_fixture" ? 600 : cat === "sprinkler" ? 80 : 400);
+      const h = fromMm(cat === "radiator" ? 600 : cat === "fan_coil" ? 250 : cat === "ac_unit" ? 290 : cat === "chiller" ? 1200 : cat === "air_terminal" ? 120 : cat === "lighting_fixture" ? 80 : cat === "sprinkler" ? 100 : 400);
+      const d = fromMm(cat === "radiator" ? 100 : cat === "fan_coil" ? 600 : cat === "ac_unit" ? 210 : cat === "chiller" ? 800 : cat === "air_terminal" ? 600 : cat === "lighting_fixture" ? 600 : cat === "sprinkler" ? 80 : 400);
+
+      const ghostGeo = new THREE.BoxGeometry(w, h, d);
+      const col = cat === "sprinkler" ? 0xef4444 : cat === "lighting_fixture" || cat === "light" ? 0xfacc15 : 0x38bdf8;
       const ghostMat = new THREE.MeshStandardMaterial({
-        color: 0x06b6d4,
+        color: col,
         transparent: true,
         opacity: 0.65,
       });
       const ghost = new THREE.Mesh(ghostGeo, ghostMat);
-      ghost.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
+      ghost.position.set(fromMm(cursor.xMm), elev + h / 2, fromMm(cursor.yMm));
       this.mepPreview.add(ghost);
+      return;
+    }
+
+    if (tool === "workplane") {
+      const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
+      const grid = new THREE.GridHelper(6, 12, 0x38bdf8, 0x0284c7);
+      grid.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
+      this.mepPreview.add(grid);
       return;
     }
 
@@ -4606,21 +4809,26 @@ export default class LayoutSceneLayer {
     const angle = Math.atan2(dz, dx);
     const elev = fromMm(baseElevMm + (params?.elevationMm ?? 2600));
 
-    if (tool === "duct") {
-      const isRound = params?.shape === "round";
+    if (tool === "duct" || tool === "flex_duct" || tool === "mep_placeholder") {
+      const isPlaceholder = tool === "mep_placeholder";
+      const isFlex = tool === "flex_duct";
+      const isRound = params?.shape === "round" || isFlex;
       const w = fromMm(params?.widthMm ?? 300);
       const h = fromMm(params?.heightMm ?? 200);
-      const r = fromMm((params?.diameterMm ?? 200) / 2);
+      const r = isPlaceholder ? 0.015 : fromMm((params?.diameterMm ?? 200) / 2);
 
-      const geo = isRound
+      const geo = isPlaceholder
+        ? new THREE.CylinderGeometry(r, r, len, 8)
+        : isRound
         ? new THREE.CylinderGeometry(r, r, len, 16)
         : new THREE.BoxGeometry(len, h, w);
-      if (isRound) geo.rotateZ(Math.PI / 2);
+      if (isPlaceholder || isRound) geo.rotateZ(Math.PI / 2);
 
       const mat = new THREE.MeshStandardMaterial({
-        color: 0x06b6d4,
+        color: isPlaceholder ? 0x38bdf8 : 0x06b6d4,
         transparent: true,
         opacity: 0.65,
+        wireframe: isPlaceholder,
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(midX, elev, midZ);
@@ -4635,6 +4843,18 @@ export default class LayoutSceneLayer {
         color: 0x3b82f6,
         transparent: true,
         opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      this.mepPreview.add(mesh);
+    } else if (tool === "wire") {
+      const geo = new THREE.CylinderGeometry(0.008, 0.008, len, 8);
+      geo.rotateZ(Math.PI / 2);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xfacc15,
+        transparent: true,
+        opacity: 0.75,
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(midX, elev, midZ);

@@ -313,6 +313,8 @@ export type LayoutDuct = {
   flowM3h?: number;
   velocityMs?: number;
   insulationThicknessMm?: number;
+  isFlex?: boolean;
+  isPlaceholder?: boolean;
   material?: string;
   color?: string;
   startConnectorId?: string;
@@ -328,6 +330,7 @@ export type PipeSystemType =
   | "domestic_cold"
   | "domestic_hot"
   | "sanitary_waste"
+  | "fire_protection"
   | "gas";
 
 export type LayoutPipe = {
@@ -344,6 +347,7 @@ export type LayoutPipe = {
   systemType: PipeSystemType;
   slopePercent?: number; // for drainage / sanitary waste
   insulationThicknessMm?: number;
+  isPlaceholder?: boolean;
   material?: string;
   color?: string;
   startConnectorId?: string;
@@ -373,13 +377,45 @@ export type LayoutCableTray = {
   createdAt: number;
 };
 
+export type LayoutWire = {
+  id: string;
+  projectId: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  elevationMm?: number;
+  wireGauge?: string; // e.g. "3x1.5mm²", "5x2.5mm²"
+  voltage?: number; // e.g. 230, 400
+  systemType?: "power" | "lighting" | "data" | "control";
+  circuitId?: string;
+  material?: string;
+  color?: string;
+  createdAt: number;
+};
+
+export type LayoutWorkPlane = {
+  id: string;
+  name: string;
+  originXmm: number;
+  originYmm: number;
+  elevationMm: number;
+  slopeDeg?: number;
+  rotationDeg?: number;
+  isActive: boolean;
+};
+
 export type MepEquipmentCategory =
   | "diffuser_supply"
   | "diffuser_extract"
   | "diffuser_overflow"
+  | "air_terminal"
   | "panel"
   | "socket"
   | "light"
+  | "lighting_fixture"
+  | "sprinkler"
   | "radiator"
   | "fan_coil"
   | "ac_unit"
@@ -387,7 +423,8 @@ export type MepEquipmentCategory =
   | "boiler"
   | "heat_pump"
   | "sink"
-  | "toilet";
+  | "toilet"
+  | "generic_component";
 
 export type LayoutMepEquipment = {
   id: string;
@@ -424,9 +461,9 @@ export function getEquipmentConnectors(
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
 
-  const w = item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : 400);
-  const h = item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : 400);
-  const d = item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : 400);
+  const w = item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400);
+  const h = item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400);
+  const d = item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400);
 
   const baseConnectors: MepConnector[] = item.connectors?.length
     ? item.connectors
@@ -601,9 +638,13 @@ export type LayoutToolId =
   | "stair"
   | "ramp"
   | "duct"
+  | "flex_duct"
+  | "mep_placeholder"
   | "pipe"
   | "cabletray"
-  | "equipment";
+  | "wire"
+  | "equipment"
+  | "workplane";
 
 export const DEFAULT_STAIR_WIDTH_MM = 1000;
 export const DEFAULT_STAIR_RISER_MM = 175;
