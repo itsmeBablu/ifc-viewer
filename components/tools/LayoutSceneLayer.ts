@@ -2363,9 +2363,10 @@ export default class LayoutSceneLayer {
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
-    const isMepMode = useLayoutDrawingStore.getState().mepModeActive;
+    const layoutState = useLayoutDrawingStore.getState();
+    const architectureLocked = layoutState.mepModeActive && layoutState.mepArchitectureLocked;
 
-    if (!isMepMode && this.endpointGroup.visible) {
+    if (!architectureLocked && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
         this.endpointGroup.children,
         false,
@@ -2406,8 +2407,9 @@ export default class LayoutSceneLayer {
         if (o.userData.layoutEquipmentId)
           return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
 
-        // If in MEP mode, architectural elements cannot be picked
-        if (!isMepMode) {
+        // Architecture is reference-only by default in MEP mode. The toolbar
+        // override restores normal picking without affecting MEP selection.
+        if (!architectureLocked) {
           if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
             return {
               kind: "wall-endpoint",
@@ -2427,15 +2429,16 @@ export default class LayoutSceneLayer {
             return { kind: "column", id: o.userData.layoutColumnId as string };
           if (o.userData.layoutBeamId)
             return { kind: "beam", id: o.userData.layoutBeamId as string };
-          if (o.userData.layoutGridId)
-            return { kind: "grid", id: o.userData.layoutGridId as string };
-          if (o.userData.layoutSketchLineId)
-            return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
           if (o.userData.layoutStairId)
             return { kind: "stair", id: o.userData.layoutStairId as string };
           if (o.userData.layoutRampId)
             return { kind: "ramp", id: o.userData.layoutRampId as string };
         }
+
+        if (o.userData.layoutGridId)
+          return { kind: "grid", id: o.userData.layoutGridId as string };
+        if (o.userData.layoutSketchLineId)
+          return { kind: "sketch-line", id: o.userData.layoutSketchLineId as string };
 
         if (o.userData.isLayoutUnderlay && o.userData.layoutUnderlayId) {
           return {

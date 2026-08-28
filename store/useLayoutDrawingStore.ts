@@ -354,6 +354,8 @@ type LayoutDrawingState = {
   activeWorkPlane: LayoutWorkPlane | null;
   mepModeActive: boolean;
   setMepModeActive: (active: boolean) => void;
+  mepArchitectureLocked: boolean;
+  setMepArchitectureLocked: (locked: boolean) => void;
   ductDraw: DuctDrawState;
   pipeDraw: PipeDrawState;
   cableTrayDraw: CableTrayDrawState;
@@ -840,7 +842,35 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   wires: [],
   activeWorkPlane: null,
   mepModeActive: false,
-  setMepModeActive: (active) => set({ mepModeActive: active }),
+  mepArchitectureLocked: true,
+  setMepModeActive: (active) => set((state) => {
+    if (!active || !state.mepArchitectureLocked) return { mepModeActive: active };
+    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    return {
+      mepModeActive: true,
+      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
+    };
+  }),
+  setMepArchitectureLocked: (locked) => set((state) => {
+    if (!locked || !state.mepModeActive) return { mepArchitectureLocked: locked };
+    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    return {
+      mepArchitectureLocked: true,
+      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
+    };
+  }),
   ductDraw: null,
   pipeDraw: null,
   cableTrayDraw: null,
@@ -3027,6 +3057,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().clearSelection();
       return;
     }
+    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    if (get().mepModeActive && get().mepArchitectureLocked && architectureKinds.has(ref.kind)) return;
     // If element belongs to a group and not currently editing inside that group:
     const group = get().groups.find((g) =>
       g.elementRefs.some((r) => r.kind === ref.kind && r.id === ref.id),
@@ -3077,13 +3109,17 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   selectMultiple: (refs, mode = "replace") => {
+    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    const selectableRefs = get().mepModeActive && get().mepArchitectureLocked
+      ? refs.filter((ref) => !architectureKinds.has(ref.kind))
+      : refs;
     let next: SelectedElementRef[] = [];
     if (mode === "replace") {
-      next = [...refs];
+      next = [...selectableRefs];
     } else {
       const existing = new Set(get().selectedElements.map((e) => `${e.kind}:${e.id}`));
       next = [...get().selectedElements];
-      for (const r of refs) {
+      for (const r of selectableRefs) {
         if (!existing.has(`${r.kind}:${r.id}`)) next.push(r);
       }
     }

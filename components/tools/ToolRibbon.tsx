@@ -45,6 +45,8 @@ import {
   LuDroplets,
   LuActivity,
   LuShieldAlert,
+  LuLock,
+  LuLockOpen,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -427,6 +429,8 @@ export default function ToolRibbon({
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
+  const mepArchitectureLocked = useLayoutDrawingStore((s) => s.mepArchitectureLocked);
+  const setMepArchitectureLocked = useLayoutDrawingStore((s) => s.setMepArchitectureLocked);
   const setDraftDuctShape = useLayoutDrawingStore((s) => s.setDraftDuctShape);
   const setDraftPipeSystem = useLayoutDrawingStore((s) => s.setDraftPipeSystem);
   const setDraftCableTrayType = useLayoutDrawingStore((s) => s.setDraftCableTrayType);
@@ -1861,6 +1865,22 @@ export default function ToolRibbon({
                 <span>MEP</span>
               </span>
             </UnifiedButton>
+
+            {activeTab === "mep" && (
+              <UnifiedButton
+                size="xs"
+                variant={mepArchitectureLocked ? "v-blue" : "secondary"}
+                onClick={() => setMepArchitectureLocked(!mepArchitectureLocked)}
+                title={mepArchitectureLocked
+                  ? "Architecture is reference-only. Click to allow architecture selection."
+                  : "Architecture selection is enabled. Click to lock architecture."}
+              >
+                <span className="flex items-center gap-1">
+                  {mepArchitectureLocked ? <LuLock className="h-3.5 w-3.5" /> : <LuLockOpen className="h-3.5 w-3.5" />}
+                  <span>{mepArchitectureLocked ? "Arch Locked" : "Arch Select"}</span>
+                </span>
+              </UnifiedButton>
+            )}
 
             {/* Modify (Contextual) */}
             {hasSelection && (
