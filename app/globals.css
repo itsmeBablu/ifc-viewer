@@ -2673,6 +2673,16 @@ body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"
 body.werkzeug-active.mep-mode-active .werkzeug-discipline-toggle[data-mode="mep"] .werkzeug-discipline-option:not(.is-active) :is(svg, span) {
   color: var(--text-muted) !important;
 }
+body.werkzeug-active:not(.mep-mode-active) .werkzeug-discipline-toggle[data-mode="arch"] .werkzeug-discipline-option:not(.is-active),
+body.werkzeug-active:not(.mep-mode-active) .werkzeug-discipline-toggle[data-mode="arch"]:hover .werkzeug-discipline-option:not(.is-active) {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+}
+body.werkzeug-active:not(.mep-mode-active) .werkzeug-discipline-toggle[data-mode="arch"] .werkzeug-discipline-option:not(.is-active) :is(svg, span) {
+  color: var(--text-muted) !important;
+}
 
 /* MEP discipline: all interactive workspace accents become V-Blue liquid glass. */
 body.werkzeug-active.mep-mode-active :is(
