@@ -540,6 +540,7 @@ export default function WerkzeugWorkspaceChrome({
         </div>}
         <div className="werkzeug-ipad-snap-ribbon"><button type="button" onClick={(event) => toggleAux("levels", event.currentTarget)} className={`werkzeug-ipad-level-trigger ${auxOpen === "levels" ? "is-active btn-v-yellow" : ""}`} title="Levels and active view"><LuLayers3 /><span><strong>{activeLevel?.name ?? "Levels"}</strong><small>{activeViewLabel}</small></span><LuChevronDown /></button></div>
         <div className="werkzeug-ipad-action-ribbon">
+        <div className="flex shrink-0 items-center gap-1">
         <div className="flex h-7 shrink-0 items-center pr-1" title="IBV Viewer">
           <Image src="/ibv_logo.svg" alt="IBV" width={72} height={22} className="h-5 w-auto object-contain" priority />
         </div>
@@ -556,7 +557,7 @@ export default function WerkzeugWorkspaceChrome({
           aria-pressed={mepModeActive}
           aria-label={mepModeActive ? "Switch to Architecture mode" : "Switch to MEP mode"}
           title={mepModeActive ? "MEP mode active — switch to Architecture" : "Architecture mode active — switch to MEP"}
-          className={`group relative flex h-6 shrink-0 items-center gap-0 rounded-full border p-px transition-all ${mepModeActive ? "border-sky-400/70 bg-sky-400/15 shadow-[0_0_10px_rgba(56,189,248,.2)]" : "border-yellow-400/70 bg-yellow-400/15 shadow-[0_0_10px_rgba(250,204,21,.16)]"}`}
+          className={`werkzeug-discipline-toggle group relative flex h-6 shrink-0 items-center gap-0 rounded-full border-0 p-px transition-all ${mepModeActive ? "bg-sky-400/15 shadow-[0_0_10px_rgba(56,189,248,.2)]" : "bg-yellow-400/15 shadow-[0_0_10px_rgba(250,204,21,.16)]"}`}
         >
           <span className={`flex h-5 items-center gap-0.5 rounded-full px-1 text-[8px] font-bold leading-none transition-all ${!mepModeActive ? "bg-yellow-400 text-zinc-950" : "text-[var(--text-muted)]"}`}>
             <LuBuilding2 className="h-2.5 w-2.5" /><span>Arch</span>
@@ -565,6 +566,8 @@ export default function WerkzeugWorkspaceChrome({
             <LuZap className="h-2.5 w-2.5" /><span>MEP</span>
           </span>
         </button>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
         <div className="relative shrink-0">
           <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((open) => !open); }} aria-expanded={renderOpen} aria-haspopup="menu" aria-label={`Render style: ${activeRenderMode.label}`} title={`Render style: ${activeRenderMode.label}`} className={`werkzeug-render-trigger btn-yellow-border-hover flex h-11 items-center gap-1 rounded-xl border px-2 text-[10px] font-semibold ${renderOpen ? "btn-v-yellow" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-body)]"}`}><span className="text-base">{activeRenderMode.icon}</span><LuChevronDown className="h-3 w-3" /></button>
           <GsapPopMenu show={renderOpen} className="absolute left-0 top-[calc(100%+.4rem)] z-[125]"><div role="menu" className="flex max-h-64 w-40 flex-col gap-1 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-xl backdrop-blur-xl thin-scroll">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-10 items-center gap-2 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow border-transparent" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div></GsapPopMenu>
@@ -575,6 +578,7 @@ export default function WerkzeugWorkspaceChrome({
           <button type="button" onClick={() => void undoWerkzeug()} className="btn-yellow-border-hover werkzeug-icon-action" title="Undo"><LuUndo2 /><span>Undo</span></button>
           <button type="button" onClick={() => void redoWerkzeug()} className="btn-yellow-border-hover werkzeug-icon-action" title="Redo"><LuRedo2 /><span>Redo</span></button>
           <button type="button" onClick={() => useAppStore.getState().setColorTheme(colorTheme === "dark" ? "light" : "dark")} className="werkzeug-theme-knob" title="Change theme">{colorTheme === "dark" ? <LuMoon /> : <LuSun />}</button>
+        </div>
         </div>
         </div>
       </div>
