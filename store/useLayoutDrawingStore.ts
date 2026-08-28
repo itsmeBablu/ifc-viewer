@@ -153,31 +153,21 @@ export type SlabDrawState = {
 export type StairDrawState = {
   levelId: string;
   stairType: StairShapeType;
-  points: { xMm: number; yMm: number }[];
+  /** First click point — null until first click */
+  start: { xMm: number; yMm: number } | null;
   cursor: { xMm: number; yMm: number } | null;
-  lengthMm: number | null;
-  angleDeg: number | null;
-  angleSnapped: boolean;
-  totalRiseMm: number;
-  riserCount: number;
-  actualRiserMm: number;
-  treadCount: number;
-  targetTreadMm: number;
   widthMm: number;
+  targetRiserMm: number;
+  treadDepthMm: number;
 } | null;
 
 export type RampDrawState = {
   levelId: string;
-  points: { xMm: number; yMm: number }[];
+  /** First click point — null until first click */
+  start: { xMm: number; yMm: number } | null;
   cursor: { xMm: number; yMm: number } | null;
-  lengthMm: number | null;
-  angleDeg: number | null;
-  angleSnapped: boolean;
-  totalRiseMm: number;
   widthMm: number;
   thicknessMm: number;
-  slopeRatio: number;
-  slopePercent: number;
 } | null;
 
 /** Tier 2 hover auto-trace preview (Tab cycles candidates). */
@@ -266,8 +256,10 @@ type LayoutDrawingState = {
   draftBeamWidthMm: number;
   draftBeamDepthMm: number;
   draftStairWidthMm: number;
-  draftStairRiserMm: number;
-  draftStairTreadMm: number;
+  /** Canonical alias used by WerkzeugViewer3D */
+  draftStairTargetRiserMm: number;
+  /** Canonical alias used by WerkzeugViewer3D */
+  draftStairTreadDepthMm: number;
   draftStairNosingMm: number;
   draftStairType: StairShapeType;
   draftStairBaseLevelId: string | null;
@@ -317,6 +309,24 @@ type LayoutDrawingState = {
     heightMm: number,
     sillHeightMm: number,
   ) => void;
+
+  // Stair draft setters
+  setDraftStairWidthMm: (mm: number) => void;
+  setDraftStairTargetRiserMm: (mm: number) => void;
+  setDraftStairTreadDepthMm: (mm: number) => void;
+  setDraftStairType: (type: StairShapeType) => void;
+  setDraftStairBaseLevelId: (id: string | null) => void;
+  setDraftStairTopLevelId: (id: string | null) => void;
+  setDraftStairRailingLeft: (on: boolean) => void;
+  setDraftStairRailingRight: (on: boolean) => void;
+
+  // Ramp draft setters
+  setDraftRampWidthMm: (mm: number) => void;
+  setDraftRampThicknessMm: (mm: number) => void;
+  setDraftRampBaseLevelId: (id: string | null) => void;
+  setDraftRampTopLevelId: (id: string | null) => void;
+  setDraftRampRailingLeft: (on: boolean) => void;
+  setDraftRampRailingRight: (on: boolean) => void;
 
   beginWallDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
   updateWallCursor: (cursor: { xMm: number; yMm: number } | null) => void;
@@ -553,6 +563,29 @@ type LayoutDrawingState = {
   updateGridLine: (id: string, patch: Partial<LayoutGridLine>) => Promise<void>;
   deleteGridLine: (id: string) => Promise<void>;
   selectGridLine: (id: string | null) => void;
+
+  // -- Stairs & Ramps: Draw state machine ----------------------------------
+  startStairDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateStairDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishStairDraw: () => Promise<LayoutStair | null>;
+  cancelStairDraw: () => void;
+
+  startRampDraw: (levelId: string, start: { xMm: number; yMm: number }) => void;
+  updateRampDrawCursor: (cursor: { xMm: number; yMm: number } | null) => void;
+  finishRampDraw: () => Promise<LayoutRamp | null>;
+  cancelRampDraw: () => void;
+
+  addStair: (data: Omit<LayoutStair, "id" | "projectId" | "createdAt">) => Promise<LayoutStair | null>;
+  updateStair: (id: string, patch: Partial<LayoutStair>) => Promise<void>;
+  deleteStair: (id: string) => Promise<void>;
+  selectStair: (id: string | null) => void;
+  duplicateStair: (id: string) => Promise<LayoutStair | null>;
+
+  addRamp: (data: Omit<LayoutRamp, "id" | "projectId" | "createdAt">) => Promise<LayoutRamp | null>;
+  updateRamp: (id: string, patch: Partial<LayoutRamp>) => Promise<void>;
+  deleteRamp: (id: string) => Promise<void>;
+  selectRamp: (id: string | null) => void;
+  duplicateRamp: (id: string) => Promise<LayoutRamp | null>;
 };
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
@@ -673,8 +706,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftBeamWidthMm: 200,
   draftBeamDepthMm: 400,
   draftStairWidthMm: DEFAULT_STAIR_WIDTH_MM,
-  draftStairRiserMm: DEFAULT_STAIR_RISER_MM,
-  draftStairTreadMm: DEFAULT_STAIR_TREAD_MM,
+  draftStairTargetRiserMm: DEFAULT_STAIR_RISER_MM,
+  draftStairTreadDepthMm: DEFAULT_STAIR_TREAD_MM,
   draftStairNosingMm: DEFAULT_STAIR_NOSING_MM,
   draftStairType: "straight",
   draftStairBaseLevelId: null,
@@ -1089,6 +1122,24 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setDraftSlabThicknessMm: (mm) =>
     set({ draftSlabThicknessMm: Math.max(50, Math.round(mm)) }),
+
+  // Stair draft setters
+  setDraftStairWidthMm: (mm) => set({ draftStairWidthMm: Math.max(500, Math.round(mm)) }),
+  setDraftStairTargetRiserMm: (mm) => set({ draftStairTargetRiserMm: Math.max(100, Math.min(220, Math.round(mm))) }),
+  setDraftStairTreadDepthMm: (mm) => set({ draftStairTreadDepthMm: Math.max(200, Math.min(450, Math.round(mm))) }),
+  setDraftStairType: (type) => set({ draftStairType: type }),
+  setDraftStairBaseLevelId: (id) => set({ draftStairBaseLevelId: id }),
+  setDraftStairTopLevelId: (id) => set({ draftStairTopLevelId: id }),
+  setDraftStairRailingLeft: (on) => set({ draftStairRailingLeft: on }),
+  setDraftStairRailingRight: (on) => set({ draftStairRailingRight: on }),
+
+  // Ramp draft setters
+  setDraftRampWidthMm: (mm) => set({ draftRampWidthMm: Math.max(900, Math.round(mm)) }),
+  setDraftRampThicknessMm: (mm) => set({ draftRampThicknessMm: Math.max(100, Math.round(mm)) }),
+  setDraftRampBaseLevelId: (id) => set({ draftRampBaseLevelId: id }),
+  setDraftRampTopLevelId: (id) => set({ draftRampTopLevelId: id }),
+  setDraftRampRailingLeft: (on) => set({ draftRampRailingLeft: on }),
+  setDraftRampRailingRight: (on) => set({ draftRampRailingRight: on }),
 
   refreshTracePreview: async (levelId, tool, cursor, underlayId) => {
     if (get().wallDraw || get().slabDraw) {
@@ -3824,7 +3875,145 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     get().selectElement({ kind: "grid", id });
   },
 
+  // -- Stairs & Ramps: Draw state machine ----------------------------------
+
+  startStairDraw: (levelId, start) => {
+    const s = get();
+    set({
+      stairDraw: {
+        levelId,
+        stairType: s.draftStairType,
+        start,
+        cursor: null,
+        widthMm: s.draftStairWidthMm,
+        targetRiserMm: s.draftStairTargetRiserMm,
+        treadDepthMm: s.draftStairTreadDepthMm,
+      },
+    });
+  },
+
+  updateStairDrawCursor: (cursor) => {
+    const sd = get().stairDraw;
+    if (!sd) return;
+    set({ stairDraw: { ...sd, cursor } });
+  },
+
+  finishStairDraw: async () => {
+    const s = get();
+    const sd = s.stairDraw;
+    if (!sd?.start || !sd.cursor) {
+      set({ stairDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) { set({ stairDraw: null }); return null; }
+
+    const baseLevelId = s.draftStairBaseLevelId ?? sd.levelId;
+    const baseLevel = s.levels.find((l) => l.id === baseLevelId);
+    const topLevelId = s.draftStairTopLevelId ?? s.levels.find((l) => l.elevationMm > (baseLevel?.elevationMm ?? 0))?.id ?? baseLevelId;
+
+    const stair: LayoutStair = {
+      id: newLayoutId("stair"),
+      projectId,
+      levelId: baseLevelId,
+      topLevelId,
+      baseOffsetMm: 0,
+      topOffsetMm: 0,
+      startXmm: sd.start.xMm,
+      startYmm: sd.start.yMm,
+      endXmm: sd.cursor.xMm,
+      endYmm: sd.cursor.yMm,
+      widthMm: sd.widthMm,
+      targetRiserHeightMm: sd.targetRiserMm,
+      treadDepthMm: sd.treadDepthMm,
+      nosingDepthMm: s.draftStairNosingMm,
+      stairType: sd.stairType,
+      hasRailingLeft: s.draftStairRailingLeft,
+      hasRailingRight: s.draftStairRailingRight,
+      railingHeightMm: 1000,
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutStair(stair);
+    set((prev) => ({
+      stairs: [...prev.stairs, stair],
+      stairDraw: null,
+      selectedStairId: stair.id,
+      selectedElements: [{ kind: "stair", id: stair.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return stair;
+  },
+
+  cancelStairDraw: () => set({ stairDraw: null }),
+
+  startRampDraw: (levelId, start) => {
+    const s = get();
+    set({
+      rampDraw: {
+        levelId,
+        start,
+        cursor: null,
+        widthMm: s.draftRampWidthMm,
+        thicknessMm: s.draftRampThicknessMm,
+      },
+    });
+  },
+
+  updateRampDrawCursor: (cursor) => {
+    const rd = get().rampDraw;
+    if (!rd) return;
+    set({ rampDraw: { ...rd, cursor } });
+  },
+
+  finishRampDraw: async () => {
+    const s = get();
+    const rd = s.rampDraw;
+    if (!rd?.start || !rd.cursor) {
+      set({ rampDraw: null });
+      return null;
+    }
+    const projectId = s.projectId;
+    if (!projectId) { set({ rampDraw: null }); return null; }
+
+    const baseLevelId = s.draftRampBaseLevelId ?? rd.levelId;
+    const baseLevel = s.levels.find((l) => l.id === baseLevelId);
+    const topLevelId = s.draftRampTopLevelId ?? s.levels.find((l) => l.elevationMm > (baseLevel?.elevationMm ?? 0))?.id ?? baseLevelId;
+
+    const ramp: LayoutRamp = {
+      id: newLayoutId("ramp"),
+      projectId,
+      levelId: baseLevelId,
+      topLevelId,
+      baseOffsetMm: 0,
+      topOffsetMm: 0,
+      startXmm: rd.start.xMm,
+      startYmm: rd.start.yMm,
+      endXmm: rd.cursor.xMm,
+      endYmm: rd.cursor.yMm,
+      widthMm: rd.widthMm,
+      thicknessMm: rd.thicknessMm,
+      hasRailingLeft: s.draftRampRailingLeft,
+      hasRailingRight: s.draftRampRailingRight,
+      railingHeightMm: 1000,
+      createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutRamp(ramp);
+    set((prev) => ({
+      ramps: [...prev.ramps, ramp],
+      rampDraw: null,
+      selectedRampId: ramp.id,
+      selectedElements: [{ kind: "ramp", id: ramp.id }],
+      lastMutatedAt: Date.now(),
+    }));
+    return ramp;
+  },
+
+  cancelRampDraw: () => set({ rampDraw: null }),
+
   // -- Section 1-5: Stairs & Ramps Actions ---------------------------------
+
   addStair: async (stairData) => {
     const projectId = get().projectId;
     if (!projectId) return null;

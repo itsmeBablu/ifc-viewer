@@ -1029,8 +1029,8 @@ export default function LayoutPropertiesPanel({
                   />
                   <MmInput
                     label="Nosing"
-                    value={stair.nosingMm ?? 25}
-                    onCommit={(v) => void updateStair(stair.id, { nosingMm: v })}
+                    value={stair.nosingDepthMm ?? 25}
+                    onCommit={(v) => void updateStair(stair.id, { nosingDepthMm: v })}
                   />
                 </div>
               </div>
