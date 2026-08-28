@@ -132,6 +132,10 @@ export default function ToolRightPanel({
   const gridLines = useLayoutDrawingStore((s) => s.gridLines);
   const stairs = useLayoutDrawingStore((s) => s.stairs);
   const ramps = useLayoutDrawingStore((s) => s.ramps);
+  const ducts = useLayoutDrawingStore((s) => s.ducts);
+  const pipes = useLayoutDrawingStore((s) => s.pipes);
+  const cableTrays = useLayoutDrawingStore((s) => s.cableTrays);
+  const mepEquipment = useLayoutDrawingStore((s) => s.mepEquipment);
   const groups = useLayoutDrawingStore((s) => s.groups);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
@@ -150,6 +154,10 @@ export default function ToolRightPanel({
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
+  const selectedDuctId = useLayoutDrawingStore((s) => s.selectedDuctId);
+  const selectedPipeId = useLayoutDrawingStore((s) => s.selectedPipeId);
+  const selectedCableTrayId = useLayoutDrawingStore((s) => s.selectedCableTrayId);
+  const selectedEquipmentId = useLayoutDrawingStore((s) => s.selectedEquipmentId);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
@@ -195,6 +203,10 @@ export default function ToolRightPanel({
   const selectedSlab = slabs.find((s) => s.id === selectedSlabId);
   const selectedStair = stairs.find((st) => st.id === (selectedStairId ?? selectedElements.find((e) => e.kind === "stair")?.id));
   const selectedRamp = ramps.find((rp) => rp.id === (selectedRampId ?? selectedElements.find((e) => e.kind === "ramp")?.id));
+  const selectedDuct = ducts.find((item) => item.id === (selectedDuctId ?? selectedElements.find((e) => e.kind === "duct")?.id));
+  const selectedPipe = pipes.find((item) => item.id === (selectedPipeId ?? selectedElements.find((e) => e.kind === "pipe")?.id));
+  const selectedCableTray = cableTrays.find((item) => item.id === (selectedCableTrayId ?? selectedElements.find((e) => e.kind === "cabletray")?.id));
+  const selectedEquipment = mepEquipment.find((item) => item.id === (selectedEquipmentId ?? selectedElements.find((e) => e.kind === "equipment")?.id));
   const selectedColumn = columns.find((item) => selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id));
   const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id));
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
@@ -202,7 +214,7 @@ export default function ToolRightPanel({
 
   const hasLineSelection = Boolean(selectedSketchLine || sketchLines.length > 0);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || hasLineSelection || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasLineSelection || selectedPlacement
   );
 
   const propertiesTitle = selectedWall
@@ -223,6 +235,14 @@ export default function ToolRightPanel({
     ? "Column Properties"
     : selectedBeam
     ? "Beam Properties"
+    : selectedDuct
+    ? "Duct Properties"
+    : selectedPipe
+    ? "Pipe Properties"
+    : selectedCableTray
+    ? "Cable Tray Properties"
+    : selectedEquipment
+    ? "Equipment Properties"
     : selectedSketchLine
     ? "Line Properties"
     : sketchLines.length > 0
@@ -448,7 +468,7 @@ export default function ToolRightPanel({
               <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />
-                ) : selectedColumn || selectedBeam ? (
+                ) : selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment ? (
                   <LayoutPropertiesPanel />
                 ) : selectedSketchLine ? (
                   <div className="space-y-2">

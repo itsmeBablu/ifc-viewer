@@ -898,6 +898,14 @@ export default function ToolRibbon({
     <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
       {/* Universal Modify Tools */}
       <Cluster label="Modify Tools">
+        <RibbonBtn
+          active={rightPanelOpen}
+          onClick={() => setRightPanelOpen(true)}
+          title="Edit all properties for the selected element"
+        >
+          <LuSlidersHorizontal className="h-4 w-4 text-amber-500" />
+          <span className="text-[9px]">Edit Properties</span>
+        </RibbonBtn>
         <div className="relative">
           <RibbonBtn active={selectionFilterOpen} onClick={() => setSelectionFilterOpen((open) => !open)} title="Selection Filter / Select Similar">
             <LuFilter className="h-4 w-4" />

@@ -917,9 +917,9 @@ export default function ToolOptionsBar() {
         )}
       </div>
 
-      {/* Right Side: Quick Selection Actions */}
+      {/* Selected elements are edited in the contextual Modify ribbon and Properties panel. */}
       {hasSelection && (
-        <div className="flex items-center gap-1.5 pl-3 border-l border-[var(--panel-divider)]">
+        <div className="hidden">
           <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider">Selection:</span>
 
           {selectedWallId && (
