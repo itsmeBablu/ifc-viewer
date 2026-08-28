@@ -2453,6 +2453,10 @@ body.mep-mode-active :is(.shadow-yellow-400\/20, .shadow-yellow-400\/30) {
 body.mep-mode-active :is(.accent-yellow-400) {
   accent-color: #38bdf8 !important;
 }
+body.mep-mode-active .btn-liquid-hover:hover {
+  border-color: rgba(125, 211, 252, 0.9) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 14px rgba(56, 189, 248, 0.38) !important;
+}
 
 /* Simple liquid-glass hover without changing the resting style. */
 .btn-liquid-hover {

@@ -1304,7 +1304,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setArmedLayoutTool: (tool) => {
     const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
-    set({
+    const isMepTool = tool === "duct" || tool === "pipe" || tool === "equipment" || tool === "cable_tray";
+    set((s) => ({
       armedLayoutTool: boundaryKind ? "lines" : tool,
       sketchTargetKind: boundaryKind,
       wallDraw: null,
@@ -1315,7 +1316,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedWindowId: null,
       selectedSlabId: null,
       selectedUnderlayId: null,
-    });
+      mepModeActive: isMepTool ? true : s.mepModeActive,
+    }));
     if (
       (tool === "wall" || tool === "door" || tool === "window") &&
       typeof window !== "undefined"

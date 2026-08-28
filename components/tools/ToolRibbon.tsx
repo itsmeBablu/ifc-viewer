@@ -391,9 +391,11 @@ export default function ToolRibbon({
   const gapHighlightPoints = useLayoutDrawingStore((s) => s.gapHighlightPoints);
   const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
   const clearSketchLines = useLayoutDrawingStore((s) => s.clearSketchLines);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+  const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
   const [sketchError, setSketchError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<RibbonTab>("vstudio");
+  const [activeTab, setActiveTab] = useState<RibbonTab>(mepModeActive ? "mep" : "vstudio");
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
   const [previousTab, setPreviousTab] = useState<RibbonTab>("vstudio");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -403,6 +405,17 @@ export default function ToolRibbon({
   const [activeDropdown, setActiveDropdown] = useState<"build" | "shapes" | "rooms" | "annotate" | "snaps" | null>(null);
   const [selectionFilterOpen, setSelectionFilterOpen] = useState(false);
   const [copyToLevelOpen, setCopyToLevelOpen] = useState(false);
+
+  useEffect(() => {
+    if (mepModeActive && activeTab !== "mep" && activeTab !== "modify") {
+      setActiveTab("mep");
+    }
+  }, [mepModeActive, activeTab]);
+
+  useEffect(() => {
+    document.body.classList.toggle("mep-mode-active", Boolean(mepModeActive || activeTab === "mep"));
+    return () => document.body.classList.remove("mep-mode-active");
+  }, [mepModeActive, activeTab]);
 
   useEffect(() => {
     const dismiss = () => {
@@ -1644,7 +1657,7 @@ export default function ToolRibbon({
             {/* MEP Mode Tab */}
             <UnifiedButton
               size="xs"
-              variant={activeTab === "mep" ? "primary" : "secondary"}
+              variant={activeTab === "mep" ? "v-blue" : "secondary"}
               onClick={() => {
                 setActiveTab("mep");
                 setMepModeActive(true);
