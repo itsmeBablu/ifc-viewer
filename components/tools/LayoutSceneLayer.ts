@@ -87,6 +87,10 @@ export default class LayoutSceneLayer {
   private underlayMeshes = new Map<string, THREE.Mesh>();
   private underlayTextures = new Map<string, THREE.Texture>();
   private underlayEdges = new Map<string, THREE.LineSegments>();
+  private mepDimmingMaterialState = new WeakMap<
+    THREE.Material,
+    { opacity: number; transparent: boolean; depthWrite: boolean }
+  >();
   private endpointGroup = new THREE.Group();
   private endpointStart: THREE.Mesh | null = null;
   private endpointEnd: THREE.Mesh | null = null;
@@ -4875,40 +4879,50 @@ export default class LayoutSceneLayer {
   }
 
   setMepModeDimming(dimmed: boolean) {
-    const opacity = dimmed ? 0.35 : 1.0;
-    const transparent = dimmed;
+    const dimObject = (root: THREE.Object3D, opacityFactor: number) => {
+      root.traverse((object) => {
+        if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line)) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!material) continue;
+          if (dimmed) {
+            if (!this.mepDimmingMaterialState.has(material)) {
+              this.mepDimmingMaterialState.set(material, {
+                opacity: material.opacity,
+                transparent: material.transparent,
+                depthWrite: material.depthWrite,
+              });
+            }
+            const original = this.mepDimmingMaterialState.get(material)!;
+            material.transparent = true;
+            material.opacity = original.opacity * opacityFactor;
+            material.depthWrite = false;
+          } else {
+            const original = this.mepDimmingMaterialState.get(material);
+            if (!original) continue;
+            material.opacity = original.opacity;
+            material.transparent = original.transparent;
+            material.depthWrite = original.depthWrite;
+            this.mepDimmingMaterialState.delete(material);
+          }
+          material.needsUpdate = true;
+        }
+      });
+    };
 
-    for (const mesh of this.wallMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.slabMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = dimmed ? 0.25 : 1.0;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.columnMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
-    }
-    for (const mesh of this.beamMeshes.values()) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.transparent = transparent;
-        mat.opacity = opacity;
-        mat.needsUpdate = true;
-      }
+    const architectureCollections: Iterable<THREE.Object3D>[] = [
+      this.wallMeshes.values(),
+      this.doorMeshes.values(),
+      this.windowMeshes.values(),
+      this.slabMeshes.values(),
+      this.columnMeshes.values(),
+      this.beamMeshes.values(),
+      this.stairMeshes.values(),
+      this.rampMeshes.values(),
+    ];
+
+    for (const collection of architectureCollections) {
+      for (const object of collection) dimObject(object, 0.35);
     }
   }
 
