@@ -129,7 +129,7 @@ export default function ToolOptionsBar() {
   );
 
   return (
-    <div className="relative flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
+    <div className="werkzeug-options-bar relative flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
       {/* Active Tool Options */}
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
         {/* WALL TOOL OPTIONS */}

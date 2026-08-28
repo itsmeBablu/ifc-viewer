@@ -2583,6 +2583,52 @@ body.werkzeug-active .werkzeug-snap-pill.is-active :is(svg, span) {
   color: #09090b !important;
 }
 
+/* Final discipline authority: options bars and touch controls stay V-Blue in MEP mode. */
+body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-context, .werkzeug-ipad-ribbons) :is(
+  .btn-v-yellow,
+  .btn-liquid-amber,
+  .is-active,
+  [aria-pressed="true"],
+  [class*="bg-yellow-"],
+  [class*="bg-amber-"]
+):not([class*="red"]) {
+  border-color: rgba(125,211,252,.72) !important;
+  background: linear-gradient(135deg, rgba(186,230,253,.9), rgba(125,211,252,.8), rgba(56,189,248,.7)) !important;
+  color: #082f49 !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.76), 0 3px 11px rgba(56,189,248,.28) !important;
+}
+body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-context, .werkzeug-ipad-ribbons) :is(
+  button:hover,
+  [role="button"]:hover
+):not(.is-danger):not([class*="red"]) {
+  border-color: rgba(125,211,252,.78) !important;
+  background: linear-gradient(135deg, rgba(186,230,253,.92), rgba(125,211,252,.84), rgba(56,189,248,.74)) !important;
+  color: #082f49 !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.8), 0 3px 12px rgba(56,189,248,.3) !important;
+}
+body.werkzeug-active.mep-mode-active :is(.werkzeug-options-bar, .werkzeug-ipad-context, .werkzeug-ipad-ribbons) :is(
+  .btn-v-yellow,
+  .btn-liquid-amber,
+  .is-active,
+  [aria-pressed="true"],
+  button:hover,
+  [role="button"]:hover
+):not(.is-danger):not([class*="red"]) :is(svg, span, strong, small, p) {
+  color: #082f49 !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-options-bar :is(
+  [class*="text-yellow-"],
+  [class*="text-amber-"]
+) {
+  color: #38bdf8 !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-options-bar :is(
+  [class*="border-yellow-"],
+  [class*="border-amber-"]
+) {
+  border-color: rgba(56,189,248,.55) !important;
+}
+
 /* MEP discipline: all interactive workspace accents become V-Blue liquid glass. */
 body.werkzeug-active.mep-mode-active :is(
   .werkzeug-tool-button:hover,
