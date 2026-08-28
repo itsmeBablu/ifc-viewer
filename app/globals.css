@@ -2635,6 +2635,14 @@ body.werkzeug-active.mep-mode-active :is(input, select, textarea):focus {
   border-color: #38bdf8 !important;
   box-shadow: 0 0 0 2px rgba(56,189,248,.18) !important;
 }
+body.werkzeug-active.mep-mode-active .werkzeug-ipad-context-surface {
+  background: linear-gradient(145deg, rgba(14,165,233,.12), rgba(255,255,255,.08)) !important;
+  backdrop-filter: blur(20px) saturate(155%) !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-ipad-drawer-body > div:first-child {
+  border-bottom-color: rgba(56,189,248,.24) !important;
+  background: linear-gradient(90deg, rgba(56,189,248,.13), transparent) !important;
+}
 
 /* Custom levels, floors, and action button hovers */
 body.werkzeug-active :is(.werkzeug-ipad-levels, .werkzeug-levels-list) :is(.bg-sky-100, .bg-amber-100, [data-underlay-chip].bg-amber-400, [data-underlay-chip].bg-amber-100) {
