@@ -47,10 +47,6 @@ import {
   LuShieldAlert,
   LuLock,
   LuLockOpen,
-  LuLayers3,
-  LuBox,
-  LuPanelTop,
-  LuGrid2X2,
 } from "react-icons/lu";
 import {
   MdZoomInMap,
@@ -407,10 +403,6 @@ export default function ToolRibbon({
   const transformMode = useToolMarkupStore((s) => s.transformMode);
   const setTransformMode = useToolMarkupStore((s) => s.setTransformMode);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
-  const quadView = useToolMarkupStore((s) => s.quadView);
-  const setQuadView = useToolMarkupStore((s) => s.setQuadView);
-  const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
-  const setMarkupFloorId = useToolMarkupStore((s) => s.setMarkupFloorId);
   const measurements = useToolMarkupStore((s) => s.measurements);
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
@@ -448,9 +440,6 @@ export default function ToolRibbon({
   const draftEquipmentCategory = useLayoutDrawingStore((s) => s.draftEquipmentCategory);
   const [sketchError, setSketchError] = useState<string | null>(null);
 
-  const activeLevel = levels.find((l) => l.id === (markupFloorId ?? selectedFloor)) ?? levels[0];
-  const isElevation = ["north", "south", "east", "west"].includes(viewPreset) && !quadView;
-
   const [activeTab, setActiveTab] = useState<RibbonTab>(mepModeActive ? "mep" : "vstudio");
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
   const [previousTab, setPreviousTab] = useState<RibbonTab>("vstudio");
@@ -459,8 +448,6 @@ export default function ToolRibbon({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [isTouchMode, setIsTouchMode] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<
-    | "view-level"
-    | "view-elev"
     | "build"
     | "shapes"
     | "rooms"
@@ -698,116 +685,6 @@ export default function ToolRibbon({
   }, [overflowOpen]);
 
   // -- V Studio tab content clusters ------------------------------------------
-  const viewCluster = (
-    <Cluster label="View / Ebene">
-      <div className="relative">
-        <RibbonBtn
-          active={!quadView && viewPreset === "top"}
-          onClick={() => setActiveDropdown(activeDropdown === "view-level" ? null : "view-level")}
-          title={`2D Floor Plan (Ebene) · ${activeLevel ? activeLevel.name : "Level"}`}
-        >
-          <LuLayers3 className="h-4 w-4 text-sky-400" />
-          <span className="text-[10px] font-semibold max-w-[84px] truncate">
-            {activeLevel ? `2D · ${activeLevel.name}` : "2D Plan"}
-          </span>
-          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
-        </RibbonBtn>
-        {activeDropdown === "view-level" && (
-          <div className="absolute top-full left-0 mt-1 flex flex-col gap-1 w-52 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 max-h-64 overflow-y-auto thin-scroll">
-            <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--panel-divider)]">
-              Storey Levels (Ebenen)
-            </div>
-            {levels.map((lvl) => {
-              const isCurrent = (markupFloorId ?? selectedFloor) === lvl.id && !quadView && viewPreset === "top";
-              return (
-                <button
-                  key={lvl.id}
-                  type="button"
-                  className={`flex items-center justify-between p-1.5 rounded-lg text-left text-xs transition ${
-                    isCurrent
-                      ? "bg-amber-500/20 text-amber-400 font-bold"
-                      : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                  }`}
-                  onClick={() => {
-                    setMarkupFloorId(lvl.id);
-                    setQuadView(false);
-                    setViewPreset("top");
-                    setActiveDropdown(null);
-                  }}
-                >
-                  <span>{lvl.name}</span>
-                  <span className="font-mono text-[9px] text-[var(--text-muted)]">{lvl.elevationMm} mm</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <RibbonBtn
-        active={!quadView && viewPreset === "free"}
-        onClick={() => {
-          setQuadView(false);
-          setViewPreset("free");
-        }}
-        title="Open 3D Model View (3D-Ansicht)"
-      >
-        <LuBox className="h-4 w-4 text-amber-400" />
-        <span className="text-[10px]">3D View</span>
-      </RibbonBtn>
-
-      <div className="relative">
-        <RibbonBtn
-          active={isElevation}
-          onClick={() => setActiveDropdown(activeDropdown === "view-elev" ? null : "view-elev")}
-          title="Architectural Elevations (Ansichten)"
-        >
-          <LuPanelTop className="h-4 w-4 text-emerald-400" />
-          <span className="text-[10px]">
-            {isElevation ? `${viewPreset[0].toUpperCase()}${viewPreset.slice(1)}` : "Elevations"}
-          </span>
-          <LuChevronDown className="h-2.5 w-2.5 opacity-60 ml-0.5" />
-        </RibbonBtn>
-        {activeDropdown === "view-elev" && (
-          <div className="absolute top-full left-0 mt-1 grid grid-cols-2 gap-1 w-44 bg-[var(--popover-bg)] border border-[var(--panel-divider)] rounded-xl p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
-            {[
-              { id: "north" as const, label: "North" },
-              { id: "south" as const, label: "South" },
-              { id: "east" as const, label: "East" },
-              { id: "west" as const, label: "West" },
-            ].map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
-                  viewPreset === v.id && !quadView
-                    ? "bg-amber-500/20 text-amber-400 font-bold"
-                    : "hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
-                }`}
-                onClick={() => {
-                  setQuadView(false);
-                  setViewPreset(v.id);
-                  setActiveDropdown(null);
-                }}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <RibbonBtn
-        active={quadView}
-        onClick={() => setQuadView(!quadView)}
-        title="2D + 3D Quad View (4 verknüpfte Ansichtsfenster)"
-      >
-        <LuGrid2X2 className="h-4 w-4 text-purple-400" />
-        <span className="text-[10px]">2D + 3D</span>
-      </RibbonBtn>
-    </Cluster>
-  );
-
   const buildCluster = (
     <Cluster label="Build">
       <div className="relative">
@@ -1338,7 +1215,6 @@ export default function ToolRibbon({
 
   // -- All V Studio clusters in order -----------------------------------------
   const vstudioClusters = [
-    { key: "view", node: viewCluster },
     { key: "build", node: buildCluster },
     { key: "rooms", node: roomsCluster },
     { key: "shapes", node: shapesCluster },
