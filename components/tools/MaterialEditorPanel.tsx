@@ -17,18 +17,23 @@ const HATCHES: { id: HatchStyle; label: string; glyph: string }[] = [
   ["concrete", "Concrete aggregate", "∴"], ["dots", "Regular dots", "⠿"], ["sand", "Sand", "⠂"],
   ["earth", "Earth / fill", "≋"], ["steel", "Steel section", "╳"], ["zigzag", "Insulation", "〽"], ["wood", "Wood grain", "≋"],
 ].map(([id, label, glyph]) => ({ id: id as HatchStyle, label, glyph }));
-const CATEGORIES = ["All", "Masonry", "Concrete", "Wood", "Glass", "Metal", "Finishes", "Custom"] as const;
+const CATEGORIES = ["All", "Masonry", "Concrete", "Wood", "Glass", "Metal", "Roofing", "Flooring", "Plastics", "Fabrics", "Finishes", "MEP", "Custom"] as const;
 const SHAPES: { id: MaterialPreviewShape; label: string; icon: React.ReactNode }[] = [
   { id: "sphere", label: "Sphere", icon: <LuCircle /> }, { id: "cube", label: "Box", icon: <LuBox /> },
   { id: "cylinder", label: "Cylinder", icon: <LuCylinder /> }, { id: "fabric", label: "Fabric", icon: <LuLayers /> },
 ];
 const CLASS_DEFAULTS: Record<MaterialDefinition["category"], Partial<MaterialDefinition>> = {
-  Masonry: { color: "#a0522d", roughness: .88, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.52, bumpScale: .45, hatchStyle: "brick", hatchScaleMm: 250, tilingScale: 1 },
-  Concrete: { color: "#878683", roughness: .86, metalness: .02, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .4, ior: 1.5, bumpScale: .35, hatchStyle: "concrete", hatchScaleMm: 200, tilingScale: 1 },
-  Wood: { color: "#8b5a2b", roughness: .62, metalness: 0, opacity: 1, transmission: 0, clearcoat: .12, clearcoatRoughness: .35, ior: 1.5, bumpScale: .3, hatchStyle: "wood", hatchScaleMm: 180, tilingScale: 1 },
-  Glass: { color: "#bae6fd", roughness: .06, metalness: 0, opacity: .38, transmission: .92, clearcoat: .25, clearcoatRoughness: .05, ior: 1.52, bumpScale: 0, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
-  Metal: { color: "#94a3b8", roughness: .24, metalness: .92, opacity: 1, transmission: 0, clearcoat: .18, clearcoatRoughness: .12, ior: 1.5, bumpScale: .12, hatchStyle: "steel", hatchScaleMm: 150, tilingScale: 1 },
-  Finishes: { color: "#f4f4f5", roughness: .78, metalness: 0, opacity: 1, transmission: 0, clearcoat: .08, clearcoatRoughness: .3, ior: 1.5, bumpScale: .12, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+  Masonry: { color: "#9f4325", roughness: .88, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.52, bumpScale: .45, hatchStyle: "brick", hatchScaleMm: 250, tilingScale: 1 },
+  Concrete: { color: "#8e9196", roughness: .85, metalness: .02, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .4, ior: 1.5, bumpScale: .35, hatchStyle: "concrete", hatchScaleMm: 200, tilingScale: 1 },
+  Wood: { color: "#b4824d", roughness: .62, metalness: 0, opacity: 1, transmission: 0, clearcoat: .12, clearcoatRoughness: .35, ior: 1.5, bumpScale: .3, hatchStyle: "wood", hatchScaleMm: 180, tilingScale: 1 },
+  Glass: { color: "#c8e8f5", roughness: .03, metalness: 0, opacity: .35, transmission: .95, clearcoat: 1, clearcoatRoughness: .05, ior: 1.52, bumpScale: 0, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+  Metal: { color: "#c2c7cf", roughness: .25, metalness: .9, opacity: 1, transmission: 0, clearcoat: .18, clearcoatRoughness: .12, ior: 1.5, bumpScale: .12, hatchStyle: "solid", hatchScaleMm: 150, tilingScale: 1 },
+  Roofing: { color: "#c2410c", roughness: .82, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.5, bumpScale: .45, hatchStyle: "zigzag", hatchScaleMm: 150, tilingScale: 1 },
+  Flooring: { color: "#e2e8f0", roughness: .25, metalness: .05, opacity: 1, transmission: 0, clearcoat: .4, clearcoatRoughness: .1, ior: 1.5, bumpScale: .15, hatchStyle: "tile", hatchScaleMm: 200, tilingScale: 1 },
+  Plastics: { color: "#475569", roughness: .65, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .2, ior: 1.5, bumpScale: .1, hatchStyle: "solid", hatchScaleMm: 100, tilingScale: 1 },
+  Fabrics: { color: "#d6d3d1", roughness: .95, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.5, bumpScale: .35, hatchStyle: "cross", hatchScaleMm: 60, tilingScale: 1 },
+  Finishes: { color: "#f8fafc", roughness: .95, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .3, ior: 1.5, bumpScale: .12, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
+  MEP: { color: "#94a3b8", roughness: .28, metalness: .85, opacity: 1, transmission: 0, clearcoat: .2, clearcoatRoughness: .1, ior: 1.5, bumpScale: .15, hatchStyle: "solid", hatchScaleMm: 100, tilingScale: 1 },
   Custom: { roughness: .5, metalness: 0, opacity: 1, transmission: 0, clearcoat: 0, clearcoatRoughness: .1, ior: 1.5, bumpScale: .2, hatchStyle: "solid", hatchScaleMm: 200, tilingScale: 1 },
 };
 const field = "h-8 w-full rounded-xl border border-zinc-200 bg-white px-2 text-[11px] text-zinc-900 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_2px_8px_rgba(15,23,42,.05)] outline-none backdrop-blur-xl focus:border-zinc-400";
