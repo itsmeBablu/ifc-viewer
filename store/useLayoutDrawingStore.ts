@@ -35,8 +35,8 @@ import {
   rememberWindowSize,
   snapPlanPointToWalls,
   snapWallEndpointMm,
-  computeArcFromThreePoints,
   trimWallPair,
+  getEquipmentConnectors,
   type CableTrayType,
   type DuctShape,
   type DuctSystemType,
@@ -4839,14 +4839,59 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return null;
     }
 
+    let startX = dd.start.xMm;
+    let startY = dd.start.yMm;
+    let endX = dd.cursor.xMm;
+    let endY = dd.cursor.yMm;
+    let startConnectorId: string | undefined;
+    let connectedStartEquipmentId: string | undefined;
+    let endConnectorId: string | undefined;
+    let connectedEndEquipmentId: string | undefined;
+
+    // Check equipment connector snap for start
+    for (const eq of s.mepEquipment) {
+      const conns = getEquipmentConnectors(eq);
+      for (const c of conns) {
+        if (c.type === "duct") {
+          const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
+          if (dStart <= 350) {
+            startX = Math.round(c.worldXmm);
+            startY = Math.round(c.worldYmm);
+            startConnectorId = c.id;
+            connectedStartEquipmentId = eq.id;
+            break;
+          }
+        }
+      }
+      if (connectedStartEquipmentId) break;
+    }
+
+    // Check equipment connector snap for end
+    for (const eq of s.mepEquipment) {
+      const conns = getEquipmentConnectors(eq);
+      for (const c of conns) {
+        if (c.type === "duct") {
+          const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
+          if (dEnd <= 350) {
+            endX = Math.round(c.worldXmm);
+            endY = Math.round(c.worldYmm);
+            endConnectorId = c.id;
+            connectedEndEquipmentId = eq.id;
+            break;
+          }
+        }
+      }
+      if (connectedEndEquipmentId) break;
+    }
+
     const duct: LayoutDuct = {
       id: newLayoutId("duct"),
       projectId,
       levelId: dd.levelId,
-      startXmm: dd.start.xMm,
-      startYmm: dd.start.yMm,
-      endXmm: dd.cursor.xMm,
-      endYmm: dd.cursor.yMm,
+      startXmm: startX,
+      startYmm: startY,
+      endXmm: endX,
+      endYmm: endY,
       elevationOffsetMm: dd.elevationOffsetMm,
       shape: dd.shape,
       widthMm: dd.widthMm,
@@ -4854,6 +4899,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       diameterMm: dd.diameterMm,
       systemType: dd.system,
       flowM3h: s.draftDuctFlowM3h,
+      startConnectorId,
+      connectedStartEquipmentId,
+      endConnectorId,
+      connectedEndEquipmentId,
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
@@ -4980,17 +5029,66 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return null;
     }
 
+    let startX = pd.start.xMm;
+    let startY = pd.start.yMm;
+    let endX = pd.cursor.xMm;
+    let endY = pd.cursor.yMm;
+    let startConnectorId: string | undefined;
+    let connectedStartEquipmentId: string | undefined;
+    let endConnectorId: string | undefined;
+    let connectedEndEquipmentId: string | undefined;
+
+    // Check equipment connector snap for start
+    for (const eq of s.mepEquipment) {
+      const conns = getEquipmentConnectors(eq);
+      for (const c of conns) {
+        if (c.type === "pipe") {
+          const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
+          if (dStart <= 350) {
+            startX = Math.round(c.worldXmm);
+            startY = Math.round(c.worldYmm);
+            startConnectorId = c.id;
+            connectedStartEquipmentId = eq.id;
+            break;
+          }
+        }
+      }
+      if (connectedStartEquipmentId) break;
+    }
+
+    // Check equipment connector snap for end
+    for (const eq of s.mepEquipment) {
+      const conns = getEquipmentConnectors(eq);
+      for (const c of conns) {
+        if (c.type === "pipe") {
+          const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
+          if (dEnd <= 350) {
+            endX = Math.round(c.worldXmm);
+            endY = Math.round(c.worldYmm);
+            endConnectorId = c.id;
+            connectedEndEquipmentId = eq.id;
+            break;
+          }
+        }
+      }
+      if (connectedEndEquipmentId) break;
+    }
+
     const pipe: LayoutPipe = {
       id: newLayoutId("pipe"),
       projectId,
       levelId: pd.levelId,
-      startXmm: pd.start.xMm,
-      startYmm: pd.start.yMm,
-      endXmm: pd.cursor.xMm,
-      endYmm: pd.cursor.yMm,
+      startXmm: startX,
+      startYmm: startY,
+      endXmm: endX,
+      endYmm: endY,
       elevationOffsetMm: pd.elevationOffsetMm,
       diameterMm: pd.diameterMm,
       systemType: pd.system,
+      startConnectorId,
+      connectedStartEquipmentId,
+      endConnectorId,
+      connectedEndEquipmentId,
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
@@ -5224,18 +5322,97 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   placeEquipment: async (data) => {
-    const projectId = get().projectId;
+    const s = get();
+    const projectId = s.projectId;
     if (!projectId) return null;
     pushWerkzeugHistory();
+
+    let posX = data.xMm;
+    let posY = data.yMm;
+
+    // Temporary item to compute connectors
     const equip: LayoutMepEquipment = {
       ...data,
       id: newLayoutId("equip"),
       projectId,
+      xMm: posX,
+      yMm: posY,
       createdAt: Date.now(),
     };
+
+    // Auto-connect to nearby open duct or pipe endpoints
+    const conns = getEquipmentConnectors(equip);
+    let matched = false;
+
+    for (const c of conns) {
+      if (c.type === "pipe") {
+        for (const pipe of s.pipes) {
+          const dStart = Math.hypot(c.worldXmm - pipe.startXmm, c.worldYmm - pipe.startYmm);
+          if (dStart <= 350) {
+            const dx = pipe.startXmm - c.worldXmm;
+            const dy = pipe.startYmm - c.worldYmm;
+            posX += dx;
+            posY += dy;
+            matched = true;
+            void s.updatePipe(pipe.id, {
+              startConnectorId: c.id,
+              connectedStartEquipmentId: equip.id,
+            });
+            break;
+          }
+          const dEnd = Math.hypot(c.worldXmm - pipe.endXmm, c.worldYmm - pipe.endYmm);
+          if (dEnd <= 350) {
+            const dx = pipe.endXmm - c.worldXmm;
+            const dy = pipe.endYmm - c.worldYmm;
+            posX += dx;
+            posY += dy;
+            matched = true;
+            void s.updatePipe(pipe.id, {
+              endConnectorId: c.id,
+              connectedEndEquipmentId: equip.id,
+            });
+            break;
+          }
+        }
+      } else if (c.type === "duct") {
+        for (const duct of s.ducts) {
+          const dStart = Math.hypot(c.worldXmm - duct.startXmm, c.worldYmm - duct.startYmm);
+          if (dStart <= 350) {
+            const dx = duct.startXmm - c.worldXmm;
+            const dy = duct.startYmm - c.worldYmm;
+            posX += dx;
+            posY += dy;
+            matched = true;
+            void s.updateDuct(duct.id, {
+              startConnectorId: c.id,
+              connectedStartEquipmentId: equip.id,
+            });
+            break;
+          }
+          const dEnd = Math.hypot(c.worldXmm - duct.endXmm, c.worldYmm - duct.endYmm);
+          if (dEnd <= 350) {
+            const dx = duct.endXmm - c.worldXmm;
+            const dy = duct.endYmm - c.worldYmm;
+            posX += dx;
+            posY += dy;
+            matched = true;
+            void s.updateDuct(duct.id, {
+              endConnectorId: c.id,
+              connectedEndEquipmentId: equip.id,
+            });
+            break;
+          }
+        }
+      }
+      if (matched) break;
+    }
+
+    equip.xMm = Math.round(posX);
+    equip.yMm = Math.round(posY);
+
     await idbPutMepEquipment(equip);
-    set((s) => ({
-      mepEquipment: [...s.mepEquipment, equip],
+    set((state) => ({
+      mepEquipment: [...state.mepEquipment, equip],
       selectedElements: [{ kind: "equipment", id: equip.id }],
       selectedEquipmentId: equip.id,
       lastMutatedAt: Date.now(),

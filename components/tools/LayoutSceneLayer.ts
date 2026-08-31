@@ -47,7 +47,7 @@ import { useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import type { RenderMode } from "@/lib/types";
 
-const WALL_COLOR = 0xd6d3d1;
+const WALL_COLOR = 0xcfd4dc;
 const WALL_SEL = 0xfacc15;
 const DOOR_COLOR = 0x78716c;
 const WINDOW_COLOR = 0x38bdf8;
@@ -3095,13 +3095,18 @@ export default class LayoutSceneLayer {
         mat.thickness = (customMat.transmission ?? 0) > 0 ? 0.12 : 0;
       }
 
-      const effectiveColor = customMat.color || colorStr || "#d6d3d1";
+      const effectiveColor = customMat.color || colorStr || "#cfd4dc";
       mat.color.setStyle(effectiveColor);
 
-      if (customMat.hatchStyle && customMat.hatchStyle !== "solid") {
+      const hatchStyle = customMat.hatchStyle && customMat.hatchStyle !== "solid"
+        ? customMat.hatchStyle
+        : (this.currentRenderMode === "realistic" ? "concrete" : null);
+
+      if (hatchStyle) {
+        const strokeColor = "#374151";
         const tex = getHatchCanvasTexture(
-          customMat.hatchStyle,
-          "#27272a",
+          hatchStyle,
+          strokeColor,
           effectiveColor,
           customMat.hatchScaleMm || 200,
         );
@@ -3120,10 +3125,10 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    let baseColor = 0xd6d3d1; // default plain gray wall
+    let baseColor = 0xcfd4dc; // default crisp architectural gray wall
     if (matType === "concrete") {
-      baseColor = 0x878683;
-      mat.roughness = 0.8;
+      baseColor = 0x9ca3af;
+      mat.roughness = 0.85;
     } else if (matType === "brick") {
       baseColor = 0xa0522d;
       mat.roughness = 0.9;
@@ -3149,6 +3154,21 @@ export default class LayoutSceneLayer {
       mat.color.setStyle(colorStr);
     } else {
       mat.color.setHex(baseColor);
+    }
+
+    if (this.currentRenderMode === "realistic" && matType !== "glass") {
+      const hatchType = matType === "brick" ? "brick" : matType === "wood" ? "diagonal" : "concrete";
+      const hexStr = "#" + (colorStr ? colorStr.replace("#", "") : baseColor.toString(16).padStart(6, "0"));
+      const tex = getHatchCanvasTexture(hatchType, "#374151", hexStr, 200);
+      if (tex) {
+        const materialTexture = tex.clone();
+        materialTexture.wrapS = THREE.RepeatWrapping;
+        materialTexture.wrapT = THREE.RepeatWrapping;
+        materialTexture.repeat.set(5, 5);
+        materialTexture.userData.vstudioMaterialClone = true;
+        materialTexture.needsUpdate = true;
+        mat.map = materialTexture;
+      }
     }
   }
 
@@ -4575,8 +4595,234 @@ export default class LayoutSceneLayer {
         this.clearGroupContents(grp);
         grp.userData.geometryKey = geoKey;
 
-        // Build procedural model per category
-        if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow" || item.category === "air_terminal") {
+        // Build procedural 3D model per category
+        if (item.category === "toilet") {
+          // Porcelain Toilet (WC): bowl, tank/cistern, seat, flush plate, drain
+          const porcelainMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.12,
+            metalness: 0.05,
+          });
+          const seatMat = new THREE.MeshStandardMaterial({
+            color: 0xf8fafc,
+            roughness: 0.2,
+            metalness: 0.02,
+          });
+          const chromeMat = new THREE.MeshStandardMaterial({
+            color: 0xe2e8f0,
+            metalness: 0.95,
+            roughness: 0.1,
+          });
+
+          // 1. Plinth / Base
+          const baseGeo = new THREE.CylinderGeometry(w * 0.35, w * 0.42, h * 0.35, 20);
+          const baseMesh = new THREE.Mesh(baseGeo, porcelainMat);
+          baseMesh.position.set(0, h * 0.175, d * 0.05);
+          baseMesh.userData.layoutEquipmentId = item.id;
+          grp.add(baseMesh);
+
+          // 2. Sculpted Bowl
+          const bowlGeo = new THREE.CylinderGeometry(w * 0.48, w * 0.36, h * 0.25, 24);
+          const bowlMesh = new THREE.Mesh(bowlGeo, porcelainMat);
+          bowlMesh.position.set(0, h * 0.42, d * 0.08);
+          bowlMesh.userData.layoutEquipmentId = item.id;
+          grp.add(bowlMesh);
+
+          // 3. Inner Bowl Recess / Cavity
+          const innerBowlGeo = new THREE.CylinderGeometry(w * 0.38, w * 0.22, h * 0.18, 20);
+          const innerBowlMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, transparent: true, opacity: 0.7 });
+          const innerBowl = new THREE.Mesh(innerBowlGeo, innerBowlMat);
+          innerBowl.position.set(0, h * 0.46, d * 0.08);
+          grp.add(innerBowl);
+
+          // 4. Toilet Seat & Lid
+          const seatGeo = new THREE.CylinderGeometry(w * 0.49, w * 0.49, 0.02, 24);
+          const seatMesh = new THREE.Mesh(seatGeo, seatMat);
+          seatMesh.position.set(0, h * 0.55, d * 0.08);
+          seatMesh.userData.layoutEquipmentId = item.id;
+          grp.add(seatMesh);
+
+          // 5. Water Cistern / Tank (rear)
+          const tankGeo = new THREE.BoxGeometry(w * 0.95, h * 0.45, d * 0.32);
+          const tankMesh = new THREE.Mesh(tankGeo, porcelainMat);
+          tankMesh.position.set(0, h * 0.65, -d * 0.32);
+          tankMesh.userData.layoutEquipmentId = item.id;
+          grp.add(tankMesh);
+
+          // 6. Dual Flush Button on Tank Top
+          const btnGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.008, 16);
+          const btn = new THREE.Mesh(btnGeo, chromeMat);
+          btn.position.set(0, h * 0.88, -d * 0.32);
+          grp.add(btn);
+        } else if (item.category === "sink") {
+          // Porcelain Washbasin / Sink: basin, counter, mixer faucet, drain siphon
+          const porcelainMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.12,
+            metalness: 0.05,
+          });
+          const chromeMat = new THREE.MeshStandardMaterial({
+            color: 0xe2e8f0,
+            metalness: 0.95,
+            roughness: 0.08,
+          });
+
+          // 1. Basin Body with rim
+          const basinGeo = new THREE.BoxGeometry(w, h * 0.22, d);
+          const basin = new THREE.Mesh(basinGeo, porcelainMat);
+          basin.position.set(0, h - (h * 0.11), 0);
+          basin.userData.layoutEquipmentId = item.id;
+          grp.add(basin);
+
+          // 2. Recessed Inner Bowl Cavity
+          const cavityGeo = new THREE.CylinderGeometry(Math.min(w, d) * 0.38, Math.min(w, d) * 0.26, h * 0.18, 24);
+          const cavityMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.15, transparent: true, opacity: 0.6 });
+          const cavity = new THREE.Mesh(cavityGeo, cavityMat);
+          cavity.position.set(0, h - 0.06, 0.02);
+          grp.add(cavity);
+
+          // 3. Chrome Mixer Faucet Tap
+          const tapBodyGeo = new THREE.CylinderGeometry(0.018, 0.022, 0.14, 16);
+          const tapBody = new THREE.Mesh(tapBodyGeo, chromeMat);
+          tapBody.position.set(0, h + 0.07, -d * 0.32);
+          grp.add(tapBody);
+
+          // Faucet arched spout
+          const spoutGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.12, 12);
+          spoutGeo.rotateX(Math.PI / 4);
+          const spout = new THREE.Mesh(spoutGeo, chromeMat);
+          spout.position.set(0, h + 0.13, -d * 0.32 + 0.05);
+          grp.add(spout);
+
+          // Faucet mixer handle
+          const handleGeo = new THREE.BoxGeometry(0.016, 0.01, 0.06);
+          const handle = new THREE.Mesh(handleGeo, chromeMat);
+          handle.position.set(0, h + 0.14, -d * 0.32);
+          grp.add(handle);
+
+          // 4. Chrome Bottle Siphon P-Trap
+          const trapGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.15, 12);
+          const trap = new THREE.Mesh(trapGeo, chromeMat);
+          trap.position.set(0, h - 0.3, 0);
+          grp.add(trap);
+
+          const wastePipeGeo = new THREE.CylinderGeometry(0.016, 0.016, d * 0.5, 12);
+          wastePipeGeo.rotateX(Math.PI / 2);
+          const wastePipe = new THREE.Mesh(wastePipeGeo, chromeMat);
+          wastePipe.position.set(0, h - 0.28, -d * 0.25);
+          grp.add(wastePipe);
+        } else if (item.category === "boiler") {
+          // Insulated Cylindrical Boiler / Water Heater
+          const tankMat = new THREE.MeshStandardMaterial({
+            color: 0x475569,
+            metalness: 0.65,
+            roughness: 0.3,
+          });
+          const brassMat = new THREE.MeshStandardMaterial({
+            color: 0xd97706,
+            metalness: 0.85,
+            roughness: 0.2,
+          });
+
+          // 1. Cylindrical Tank
+          const tankGeo = new THREE.CylinderGeometry(w / 2, w / 2, h * 0.85, 32);
+          const tank = new THREE.Mesh(tankGeo, tankMat);
+          tank.position.set(0, h / 2, 0);
+          tank.userData.layoutEquipmentId = item.id;
+          grp.add(tank);
+
+          // 2. Hemispherical Top & Bottom Caps
+          const topDomeGeo = new THREE.SphereGeometry(w / 2, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+          const topDome = new THREE.Mesh(topDomeGeo, tankMat);
+          topDome.position.set(0, h * 0.925, 0);
+          grp.add(topDome);
+
+          // 3. Pressure Gauge Dial (Front)
+          const gaugeGeo = new THREE.CircleGeometry(0.045, 20);
+          const gaugeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const gauge = new THREE.Mesh(gaugeGeo, gaugeMat);
+          gauge.position.set(0, h * 0.65, w / 2 + 0.005);
+          grp.add(gauge);
+
+          // 4. Digital readout panel
+          const panelGeo = new THREE.BoxGeometry(0.12, 0.06, 0.015);
+          const panelMat = new THREE.MeshBasicMaterial({ color: 0x0284c7 });
+          const display = new THREE.Mesh(panelGeo, panelMat);
+          display.position.set(0, h * 0.52, w / 2 + 0.008);
+          grp.add(display);
+
+          // 5. Pipe connection stubs
+          const hotNipple = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.7 }));
+          hotNipple.rotateZ(Math.PI / 2);
+          hotNipple.position.set(w / 2 + 0.04, h * 0.85, 0);
+          grp.add(hotNipple);
+
+          const coldNipple = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.7 }));
+          coldNipple.rotateZ(Math.PI / 2);
+          coldNipple.position.set(-w / 2 - 0.04, h * 0.15, 0);
+          grp.add(coldNipple);
+        } else if (item.category === "panel") {
+          // Electrical Distribution Panel Enclosure
+          const panelMat = new THREE.MeshStandardMaterial({
+            color: 0xd1d5db,
+            metalness: 0.7,
+            roughness: 0.35,
+          });
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), panelMat);
+          body.position.set(0, h / 2, 0);
+          body.userData.layoutEquipmentId = item.id;
+          grp.add(body);
+
+          // Inspection Window
+          const winGeo = new THREE.BoxGeometry(w * 0.75, h * 0.6, 0.01);
+          const winMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.4, roughness: 0.2 });
+          const win = new THREE.Mesh(winGeo, winMat);
+          win.position.set(0, h * 0.55, d / 2 + 0.006);
+          grp.add(win);
+
+          // Breaker rows (MCBs)
+          for (let row = 0; row < 3; row++) {
+            const rowY = h * 0.4 + row * 0.12;
+            const rowGeo = new THREE.BoxGeometry(w * 0.65, 0.05, 0.015);
+            const rowMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc });
+            const rowMesh = new THREE.Mesh(rowGeo, rowMat);
+            rowMesh.position.set(0, rowY, d / 2 + 0.012);
+            grp.add(rowMesh);
+
+            // Colored switches
+            for (let s = -2; s <= 2; s++) {
+              const swGeo = new THREE.BoxGeometry(0.015, 0.025, 0.01);
+              const swMat = new THREE.MeshBasicMaterial({ color: s === 0 ? 0xef4444 : 0x10b981 });
+              const sw = new THREE.Mesh(swGeo, swMat);
+              sw.position.set(s * 0.05, rowY, d / 2 + 0.02);
+              grp.add(sw);
+            }
+          }
+
+          // Yellow Warning Triangle
+          const warnGeo = new THREE.CircleGeometry(0.035, 3);
+          warnGeo.rotateZ(Math.PI / 2);
+          const warnMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+          const warn = new THREE.Mesh(warnGeo, warnMat);
+          warn.position.set(0, h * 0.18, d / 2 + 0.008);
+          grp.add(warn);
+        } else if (item.category === "socket") {
+          // Electrical Flush Socket Outlet
+          const plateMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+          const plate = new THREE.Mesh(new THREE.BoxGeometry(w, h, d * 0.4), plateMat);
+          plate.position.set(0, h / 2, 0);
+          plate.userData.layoutEquipmentId = item.id;
+          grp.add(plate);
+
+          // Twin socket holes
+          for (const sx of [-w * 0.2, w * 0.2]) {
+            const socketGeo = new THREE.CircleGeometry(w * 0.15, 16);
+            const socketMat = new THREE.MeshBasicMaterial({ color: 0x334155 });
+            const sMesh = new THREE.Mesh(socketGeo, socketMat);
+            sMesh.position.set(sx, h / 2, d * 0.2 + 0.002);
+            grp.add(sMesh);
+          }
+        } else if (item.category === "diffuser_supply" || item.category === "diffuser_extract" || item.category === "diffuser_overflow" || item.category === "air_terminal") {
           const isSupply = item.category === "diffuser_supply" || item.category === "air_terminal";
           const isExtract = item.category === "diffuser_extract";
           const col = isSupply ? 0x06b6d4 : isExtract ? 0xf59e0b : 0x10b981;
@@ -4587,12 +4833,16 @@ export default class LayoutSceneLayer {
           plate.userData.layoutEquipmentId = item.id;
           grp.add(plate);
 
-          // Core grille indicator
-          const coreGeo = new THREE.BoxGeometry(w * 0.65, 0.05, d * 0.65);
-          const coreMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-          const core = new THREE.Mesh(coreGeo, coreMat);
-          core.userData.layoutEquipmentId = item.id;
-          grp.add(core);
+          // Concentric louvre vanes
+          for (let step = 1; step <= 3; step++) {
+            const factor = 1 - step * 0.22;
+            const coreGeo = new THREE.BoxGeometry(w * factor, 0.045, d * factor);
+            const coreMat = new THREE.MeshStandardMaterial({ color: step % 2 === 0 ? 0x1e293b : col, metalness: 0.3 });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            core.position.set(0, 0.002, 0);
+            core.userData.layoutEquipmentId = item.id;
+            grp.add(core);
+          }
 
           // Top duct collar
           const collarGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 16);
@@ -4659,13 +4909,24 @@ export default class LayoutSceneLayer {
           notch.position.set(0, h + 0.01, d / 2 - 0.03);
           grp.add(notch);
         } else if (item.category === "radiator") {
-          // Procedural Radiator with front casing, convection louvre, valve nubs, and pipe connectors
+          // Procedural Radiator with front casing, convective flutes, valve nubs, and pipe connectors
           const radMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.25, roughness: 0.35 });
           const radGeo = new THREE.BoxGeometry(w, h, d);
           const body = new THREE.Mesh(radGeo, radMat);
           body.position.set(0, h / 2, 0);
           body.userData.layoutEquipmentId = item.id;
           grp.add(body);
+
+          // Front convective ribs/flutes
+          const ribCount = Math.max(3, Math.floor(w / 0.08));
+          for (let r = 0; r < ribCount; r++) {
+            const rx = -w / 2 + (r + 0.5) * (w / ribCount);
+            const ribGeo = new THREE.BoxGeometry(0.015, h * 0.85, 0.008);
+            const ribMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4 });
+            const rib = new THREE.Mesh(ribGeo, ribMat);
+            rib.position.set(rx, h / 2, d / 2 + 0.005);
+            grp.add(rib);
+          }
 
           // Top convection grille
           const grilleMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
@@ -4714,30 +4975,30 @@ export default class LayoutSceneLayer {
           const led = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), ledMat);
           led.position.set(w / 2 - 0.06, h * 0.8, d / 2 + 0.01);
           grp.add(led);
-        } else if (item.category === "chiller" || item.category === "boiler" || item.category === "heat_pump") {
-          // Heavy mechanical plant unit
-          const plantMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.35 });
+        } else if (item.category === "chiller" || item.category === "heat_pump") {
+          // Heavy mechanical plant unit (Chiller / Heat Pump)
+          const plantMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.65, roughness: 0.35 });
           const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), plantMat);
           body.position.set(0, h / 2, 0);
           body.userData.layoutEquipmentId = item.id;
           grp.add(body);
 
+          // Side air intake louvers
+          for (let lv = 0; lv < 5; lv++) {
+            const luvMesh = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.015, 0.02), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+            luvMesh.position.set(0, h * 0.2 + lv * 0.12, d / 2 + 0.005);
+            grp.add(luvMesh);
+          }
+
           // Fan grilles on top
-          const fanGeo = new THREE.CylinderGeometry(Math.min(w, d) * 0.35, Math.min(w, d) * 0.35, 0.05, 16);
-          const fanMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+          const fanGeo = new THREE.CylinderGeometry(Math.min(w, d) * 0.35, Math.min(w, d) * 0.35, 0.05, 20);
+          const fanMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8 });
           const fan1 = new THREE.Mesh(fanGeo, fanMat);
           fan1.position.set(-w * 0.22, h + 0.025, 0);
           grp.add(fan1);
           const fan2 = new THREE.Mesh(fanGeo, fanMat);
           fan2.position.set(w * 0.22, h + 0.025, 0);
           grp.add(fan2);
-        } else if (item.category === "panel") {
-          const boxGeo = new THREE.BoxGeometry(w, h, d);
-          const boxMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.6, roughness: 0.3 });
-          const box = new THREE.Mesh(boxGeo, boxMat);
-          box.position.set(0, h / 2, 0);
-          box.userData.layoutEquipmentId = item.id;
-          grp.add(box);
         } else {
           // Generic fixture box
           const genGeo = new THREE.BoxGeometry(w, h, d);

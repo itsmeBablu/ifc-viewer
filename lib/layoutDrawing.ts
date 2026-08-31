@@ -467,12 +467,217 @@ export function getEquipmentConnectors(
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
 
-  const w = item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400);
-  const h = item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400);
-  const d = item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400);
+  const w = item.widthMm ?? (
+    item.category === "radiator" ? 1000 :
+    item.category === "fan_coil" ? 900 :
+    item.category === "ac_unit" ? 850 :
+    item.category === "chiller" || item.category === "heat_pump" ? 1400 :
+    item.category === "boiler" ? 650 :
+    item.category === "toilet" ? 380 :
+    item.category === "sink" ? 600 :
+    item.category === "panel" ? 550 :
+    item.category === "socket" ? 80 :
+    item.category === "air_terminal" || item.category === "diffuser_supply" || item.category === "diffuser_extract" ? 600 :
+    item.category === "lighting_fixture" || item.category === "light" ? 600 :
+    item.category === "sprinkler" ? 80 : 400
+  );
+  const h = item.heightMm ?? (
+    item.category === "radiator" ? 600 :
+    item.category === "fan_coil" ? 250 :
+    item.category === "ac_unit" ? 290 :
+    item.category === "chiller" || item.category === "heat_pump" ? 1100 :
+    item.category === "boiler" ? 1400 :
+    item.category === "toilet" ? 780 :
+    item.category === "sink" ? 850 :
+    item.category === "panel" ? 800 :
+    item.category === "socket" ? 80 :
+    item.category === "air_terminal" || item.category === "diffuser_supply" || item.category === "diffuser_extract" ? 120 :
+    item.category === "lighting_fixture" || item.category === "light" ? 80 :
+    item.category === "sprinkler" ? 100 : 400
+  );
+  const d = item.depthMm ?? (
+    item.category === "radiator" ? 100 :
+    item.category === "fan_coil" ? 600 :
+    item.category === "ac_unit" ? 210 :
+    item.category === "chiller" || item.category === "heat_pump" ? 700 :
+    item.category === "boiler" ? 650 :
+    item.category === "toilet" ? 650 :
+    item.category === "sink" ? 480 :
+    item.category === "panel" ? 220 :
+    item.category === "socket" ? 45 :
+    item.category === "air_terminal" || item.category === "diffuser_supply" || item.category === "diffuser_extract" ? 600 :
+    item.category === "lighting_fixture" || item.category === "light" ? 600 :
+    item.category === "sprinkler" ? 80 : 400
+  );
 
   const baseConnectors: MepConnector[] = item.connectors?.length
     ? item.connectors
+    : item.category === "toilet"
+    ? [
+        {
+          id: `${item.id}-c-cold`,
+          name: "Cold Water Supply",
+          type: "pipe",
+          systemType: "domestic_cold",
+          relXmm: -120,
+          relYmm: -d / 2,
+          relZmm: 600,
+          dir: [0, -1, 0],
+          sizeMm: 15,
+        },
+        {
+          id: `${item.id}-c-waste`,
+          name: "Sanitary Waste Outlet",
+          type: "pipe",
+          systemType: "sanitary_waste",
+          relXmm: 0,
+          relYmm: -d / 2 + 100,
+          relZmm: 120,
+          dir: [0, -1, 0],
+          sizeMm: 100,
+        },
+      ]
+    : item.category === "sink"
+    ? [
+        {
+          id: `${item.id}-c-cold`,
+          name: "Cold Water Supply",
+          type: "pipe",
+          systemType: "domestic_cold",
+          relXmm: -80,
+          relYmm: -d / 2,
+          relZmm: 550,
+          dir: [0, -1, 0],
+          sizeMm: 15,
+        },
+        {
+          id: `${item.id}-c-hot`,
+          name: "Hot Water Supply",
+          type: "pipe",
+          systemType: "domestic_hot",
+          relXmm: 80,
+          relYmm: -d / 2,
+          relZmm: 550,
+          dir: [0, -1, 0],
+          sizeMm: 15,
+        },
+        {
+          id: `${item.id}-c-waste`,
+          name: "Sanitary Waste Drain",
+          type: "pipe",
+          systemType: "sanitary_waste",
+          relXmm: 0,
+          relYmm: -d / 2,
+          relZmm: 500,
+          dir: [0, -1, 0],
+          sizeMm: 40,
+        },
+      ]
+    : item.category === "boiler"
+    ? [
+        {
+          id: `${item.id}-c-cold`,
+          name: "Cold Feed",
+          type: "pipe",
+          systemType: "domestic_cold",
+          relXmm: -w / 2,
+          relYmm: 0,
+          relZmm: 150,
+          dir: [-1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-hot`,
+          name: "Hot Supply",
+          type: "pipe",
+          systemType: "domestic_hot",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: h - 150,
+          dir: [1, 0, 0],
+          sizeMm: 22,
+        },
+        {
+          id: `${item.id}-c-flow`,
+          name: "Heating Flow (Vorlauf)",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: -w / 2,
+          relYmm: 0,
+          relZmm: h - 250,
+          dir: [-1, 0, 0],
+          sizeMm: 28,
+        },
+        {
+          id: `${item.id}-c-ret`,
+          name: "Heating Return (Rücklauf)",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: -w / 2,
+          relYmm: 0,
+          relZmm: 350,
+          dir: [-1, 0, 0],
+          sizeMm: 28,
+        },
+      ]
+    : item.category === "chiller" || item.category === "heat_pump"
+    ? [
+        {
+          id: `${item.id}-c-flow`,
+          name: "Hydronic Flow",
+          type: "pipe",
+          systemType: "hydronic_supply",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 350,
+          dir: [1, 0, 0],
+          sizeMm: 35,
+        },
+        {
+          id: `${item.id}-c-ret`,
+          name: "Hydronic Return",
+          type: "pipe",
+          systemType: "hydronic_return",
+          relXmm: w / 2,
+          relYmm: 0,
+          relZmm: 650,
+          dir: [1, 0, 0],
+          sizeMm: 35,
+        },
+        {
+          id: `${item.id}-c-elec`,
+          name: "Power Supply",
+          type: "electrical",
+          relXmm: -w / 2 + 100,
+          relYmm: 0,
+          relZmm: h - 150,
+          dir: [0, 0, 1],
+        },
+      ]
+    : item.category === "panel"
+    ? [
+        {
+          id: `${item.id}-c-main`,
+          name: "Mains Electrical Infeed",
+          type: "electrical",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: h,
+          dir: [0, 0, 1],
+        },
+      ]
+    : item.category === "socket"
+    ? [
+        {
+          id: `${item.id}-c-elec`,
+          name: "Branch Power Feed",
+          type: "electrical",
+          relXmm: 0,
+          relYmm: 0,
+          relZmm: h / 2,
+          dir: [0, 0, 1],
+        },
+      ]
     : item.category === "radiator"
     ? [
         {
