@@ -27,70 +27,83 @@ export function getHatchCanvasTexture(
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
+  const size = 256;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext("2d");
 
   if (ctx) {
-    // Fill background
+    // 1. Fill background
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillRect(0, 0, size, size);
+
+    // Subtle micro-surface texture noise
+    const imgData = ctx.getImageData(0, 0, size, size);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const noise = (Math.random() - 0.5) * 14;
+      data[i] = Math.max(0, Math.min(255, data[i] + noise));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+    }
+    ctx.putImageData(imgData, 0, 0);
 
     ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = 2;
-    ctx.lineCap = "square";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
 
     switch (hatchStyle) {
       case "horizontal":
-        for (let y = 8; y < 64; y += 12) {
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+        for (let y = 16; y < size; y += 32) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke();
         }
         break;
 
       case "vertical":
-        for (let x = 8; x < 64; x += 12) {
-          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 64); ctx.stroke();
+        for (let x = 16; x < size; x += 32) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke();
         }
         break;
 
       case "diagonal":
-        // 45 degree diagonal hatching
-        for (let i = -64; i < 128; i += 16) {
+        for (let i = -size; i < size * 2; i += 32) {
           ctx.beginPath();
           ctx.moveTo(i, 0);
-          ctx.lineTo(i + 64, 64);
+          ctx.lineTo(i + size, size);
           ctx.stroke();
         }
         break;
 
       case "cross":
-        // Cross-hatch (diagonal in both directions)
-        for (let i = -64; i < 128; i += 16) {
-          ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i + 64, 64);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.moveTo(i + 64, 0);
-          ctx.lineTo(i, 64);
-          ctx.stroke();
+        for (let i = -size; i < size * 2; i += 32) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(i + size, 0); ctx.lineTo(i, size); ctx.stroke();
         }
         break;
 
       case "grid":
       case "tile":
       case "checker": {
-        const step = hatchStyle === "tile" ? 16 : 12;
-        for (let p = 0; p <= 64; p += step) {
-          ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(64, p); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 64); ctx.stroke();
+        const step = hatchStyle === "tile" ? 64 : 48;
+        // Grout line shadow
+        ctx.strokeStyle = "rgba(0,0,0,0.35)";
+        ctx.lineWidth = 4;
+        for (let p = 0; p <= size; p += step) {
+          ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
+        }
+        // Grout line highlight
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.lineWidth = 2;
+        for (let p = 2; p <= size; p += step) {
+          ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
         }
         if (hatchStyle === "checker") {
-          ctx.globalAlpha = 0.18;
           ctx.fillStyle = strokeColor;
-          for (let y = 0; y < 64; y += step) {
-            for (let x = 0; x < 64; x += step) {
+          ctx.globalAlpha = 0.22;
+          for (let y = 0; y < size; y += step) {
+            for (let x = 0; x < size; x += step) {
               if ((x / step + y / step) % 2 === 0) ctx.fillRect(x, y, step, step);
             }
           }
@@ -99,251 +112,143 @@ export function getHatchCanvasTexture(
         break;
       }
 
-      case "brick":
-        // Running bond brick pattern
-        ctx.beginPath();
-        // Horizontal bed joints
-        ctx.moveTo(0, 16);
-        ctx.lineTo(64, 16);
-        ctx.moveTo(0, 32);
-        ctx.lineTo(64, 32);
-        ctx.moveTo(0, 48);
-        ctx.lineTo(64, 48);
-        ctx.moveTo(0, 64);
-        ctx.lineTo(64, 64);
-
-        // Vertical head joints
-        ctx.moveTo(16, 0);
-        ctx.lineTo(16, 16);
-        ctx.moveTo(48, 0);
-        ctx.lineTo(48, 16);
-
-        ctx.moveTo(0, 16);
-        ctx.lineTo(0, 32);
-        ctx.moveTo(32, 16);
-        ctx.lineTo(32, 32);
-        ctx.moveTo(64, 16);
-        ctx.lineTo(64, 32);
-
-        ctx.moveTo(16, 32);
-        ctx.lineTo(16, 48);
-        ctx.moveTo(48, 32);
-        ctx.lineTo(48, 48);
-
-        ctx.moveTo(0, 48);
-        ctx.lineTo(0, 64);
-        ctx.moveTo(32, 48);
-        ctx.lineTo(32, 64);
-        ctx.moveTo(64, 48);
-        ctx.lineTo(64, 64);
-        ctx.stroke();
-        break;
-
-      case "concrete":
-        // Random aggregate stipple dots + small triangles
-        ctx.fillStyle = strokeColor;
-        const dots = [
-          [8, 12, 2], [24, 6, 3], [44, 18, 2], [56, 8, 1.5],
-          [14, 36, 3], [32, 42, 2], [50, 34, 3.5], [60, 46, 2],
-          [6, 56, 2], [26, 58, 3], [42, 54, 2], [58, 60, 2.5],
-        ];
-        for (const [x, y, r] of dots) {
+      case "brick": {
+        // High-definition running bond brickwork with shaded mortar lines
+        const rowH = 32;
+        const colW = 64;
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 3;
+        for (let r = 0; r < size; r += rowH) {
+          // Bed joint (horizontal)
           ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // Small triangles
-        ctx.beginPath();
-        ctx.moveTo(18, 24); ctx.lineTo(24, 20); ctx.lineTo(22, 28); ctx.closePath();
-        ctx.moveTo(38, 12); ctx.lineTo(44, 8); ctx.lineTo(42, 16); ctx.closePath();
-        ctx.moveTo(46, 46); ctx.lineTo(52, 42); ctx.lineTo(50, 50); ctx.closePath();
-        ctx.fill();
-        break;
+          ctx.moveTo(0, r);
+          ctx.lineTo(size, r);
+          ctx.stroke();
 
-      case "dots":
-        // Regular dot grid
-        ctx.fillStyle = strokeColor;
-        for (let x = 8; x < 64; x += 16) {
-          for (let y = 8; y < 64; y += 16) {
+          // Head joints (vertical, staggered)
+          const offset = (r / rowH) % 2 === 0 ? 0 : colW / 2;
+          for (let c = offset; c <= size; c += colW) {
             ctx.beginPath();
-            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(c, r);
+            ctx.lineTo(c, r + rowH);
+            ctx.stroke();
           }
         }
-        break;
-
-      case "sand":
-      case "earth": {
-        ctx.fillStyle = strokeColor;
-        for (let i = 0; i < 36; i++) {
-          const x = (i * 29 + 7) % 64;
-          const y = (i * 43 + 11) % 64;
-          ctx.beginPath();
-          ctx.arc(x, y, hatchStyle === "earth" ? 1.8 : 1.1, 0, Math.PI * 2);
-          ctx.fill();
-          if (hatchStyle === "earth" && i % 3 === 0) {
-            ctx.beginPath(); ctx.moveTo(x - 4, y + 3); ctx.lineTo(x + 5, y - 2); ctx.stroke();
-          }
+        // Bevel highlight on bricks
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1.5;
+        for (let r = 2; r < size; r += rowH) {
+          ctx.beginPath(); ctx.moveTo(0, r); ctx.lineTo(size, r); ctx.stroke();
         }
         break;
       }
 
-      case "steel":
-        for (let i = -64; i < 128; i += 12) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 64, 64); ctx.stroke();
-        }
-        ctx.lineWidth = 1;
-        for (let i = -64; i < 128; i += 24) {
-          ctx.beginPath(); ctx.moveTo(i + 64, 0); ctx.lineTo(i, 64); ctx.stroke();
-        }
-        break;
-
-      case "zigzag":
-        // Insulation zigzag pattern
-        ctx.beginPath();
-        for (let x = 0; x < 64; x += 16) {
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x + 8, 32);
-          ctx.lineTo(x + 16, 0);
-          ctx.moveTo(x + 8, 32);
-          ctx.lineTo(x + 16, 64);
-          ctx.lineTo(x + 24, 32);
-        }
-        ctx.stroke();
-        break;
-
-      case "wood":
-        // Wood grain wavy rings
-        ctx.beginPath();
-        ctx.moveTo(0, 10);
-        ctx.bezierCurveTo(20, 15, 40, 5, 64, 12);
-        ctx.moveTo(0, 26);
-        ctx.bezierCurveTo(18, 32, 44, 20, 64, 28);
-        ctx.moveTo(0, 42);
-        ctx.bezierCurveTo(22, 48, 38, 36, 64, 44);
-        ctx.moveTo(0, 56);
-        ctx.bezierCurveTo(20, 62, 42, 50, 64, 58);
-        ctx.stroke();
-        break;
-
-      case "reinforced-concrete":
-        // 45 degree diagonal hatching + random concrete aggregate stipples/triangles
-        ctx.lineWidth = 1.5;
-        for (let i = -64; i < 128; i += 16) {
-          ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i + 64, 64);
-          ctx.stroke();
-        }
+      case "concrete": {
+        // Multi-frequency aggregate stone chips + pores
         ctx.fillStyle = strokeColor;
-        const rcDots = [
-          [10, 18, 1.8], [30, 10, 2.2], [48, 22, 1.6],
-          [20, 42, 2.4], [38, 48, 1.8], [54, 38, 2.2],
-        ];
-        for (const [x, y, r] of rcDots) {
+        ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 90; i++) {
+          const x = (i * 37 + 13) % size;
+          const y = (i * 59 + 29) % size;
+          const r = 1.2 + ((i * 17) % 4);
           ctx.beginPath();
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.beginPath();
-        ctx.moveTo(14, 28); ctx.lineTo(19, 24); ctx.lineTo(17, 31); ctx.closePath();
-        ctx.moveTo(42, 14); ctx.lineTo(47, 10); ctx.lineTo(45, 17); ctx.closePath();
-        ctx.fill();
-        break;
-
-      case "insulation":
-        // Standard architectural batt insulation looping curve
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        for (let x = 0; x <= 64; x += 16) {
-          ctx.moveTo(x, 0);
-          ctx.bezierCurveTo(x + 4, 20, x - 4, 44, x + 8, 64);
-          ctx.bezierCurveTo(x + 20, 44, x + 12, 20, x + 16, 0);
-        }
-        ctx.stroke();
-        break;
-
-      case "gypsum":
-        // Paired fine diagonal lines (plasterboard / drywall standard)
-        ctx.lineWidth = 1.2;
-        for (let i = -64; i < 128; i += 24) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 64, 64); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(i + 4, 0); ctx.lineTo(i + 68, 64); ctx.stroke();
-        }
-        break;
-
-      case "stone":
-        // Random rubble masonry stone outlines
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(4, 8); ctx.lineTo(24, 6); ctx.lineTo(28, 22); ctx.lineTo(6, 26); ctx.closePath();
-        ctx.moveTo(32, 4); ctx.lineTo(58, 8); ctx.lineTo(62, 24); ctx.lineTo(34, 20); ctx.closePath();
-        ctx.moveTo(2, 32); ctx.lineTo(20, 28); ctx.lineTo(26, 46); ctx.lineTo(4, 50); ctx.closePath();
-        ctx.moveTo(28, 26); ctx.lineTo(48, 24); ctx.lineTo(52, 44); ctx.lineTo(26, 46); ctx.closePath();
-        ctx.moveTo(54, 28); ctx.lineTo(64, 30); ctx.lineTo(64, 48); ctx.lineTo(54, 46); ctx.closePath();
-        ctx.moveTo(6, 54); ctx.lineTo(34, 52); ctx.lineTo(32, 64); ctx.lineTo(4, 64); ctx.closePath();
-        ctx.moveTo(38, 50); ctx.lineTo(62, 52); ctx.lineTo(60, 64); ctx.lineTo(36, 64); ctx.closePath();
-        ctx.stroke();
-        break;
-
-      case "timber-cut":
-        // Structural lumber cut cross (45° diagonals + growth ring arcs)
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(0, 0); ctx.lineTo(64, 64);
-        ctx.moveTo(64, 0); ctx.lineTo(0, 64);
-        ctx.stroke();
-        ctx.lineWidth = 1.0;
-        ctx.beginPath();
-        ctx.arc(32, 32, 12, 0, Math.PI * 2);
-        ctx.arc(32, 32, 22, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-
-      case "glass":
-        // Architectural glass triple-slash pattern
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        // Group 1
-        ctx.moveTo(12, 4); ctx.lineTo(4, 20);
-        ctx.moveTo(18, 4); ctx.lineTo(10, 20);
-        ctx.moveTo(24, 4); ctx.lineTo(16, 20);
-        // Group 2
-        ctx.moveTo(48, 36); ctx.lineTo(40, 52);
-        ctx.moveTo(54, 36); ctx.lineTo(46, 52);
-        ctx.moveTo(60, 36); ctx.lineTo(52, 52);
-        ctx.stroke();
-        break;
-
-      case "gravel":
-        // Packed pebble aggregate
-        ctx.lineWidth = 1.2;
-        ctx.fillStyle = strokeColor;
-        const pebbles = [
-          [12, 14, 4, 3], [28, 10, 5, 4], [46, 16, 4, 3], [58, 8, 3, 3],
-          [8, 32, 4, 4], [24, 28, 6, 4], [40, 34, 5, 4], [56, 30, 4, 3],
-          [16, 48, 5, 3], [34, 46, 4, 4], [50, 48, 5, 3], [60, 44, 3, 3],
-          [8, 60, 3, 3], [24, 60, 4, 3], [42, 58, 5, 4], [58, 60, 4, 3],
-        ];
-        for (const [cx, cy, rx, ry] of pebbles) {
+        // Small fractured gravel triangles
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        for (let i = 0; i < 24; i++) {
+          const x = (i * 47 + 19) % size;
+          const y = (i * 73 + 41) % size;
           ctx.beginPath();
-          ctx.ellipse(cx, cy, rx, ry, (cx + cy) * 0.1, 0, Math.PI * 2);
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + 6, y - 4);
+          ctx.lineTo(x + 4, y + 5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "wood": {
+        // High-definition organic wood grain rings
+        ctx.strokeStyle = "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 2.5;
+        for (let y = 10; y < size; y += 22) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(size * 0.3, y + 14, size * 0.7, y - 12, size, y + 4);
+          ctx.stroke();
+        }
+        // Fine grain fibers
+        ctx.strokeStyle = "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 1;
+        for (let y = 5; y < size; y += 11) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(size * 0.25, y + 8, size * 0.75, y - 8, size, y + 2);
           ctx.stroke();
         }
         break;
+      }
 
-      case "membrane":
-        // Waterproofing membrane barrier (dashed / thick line)
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 6]);
-        for (let y = 10; y < 64; y += 18) {
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+      case "reinforced-concrete": {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2.5;
+        for (let i = -size; i < size * 2; i += 32) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
         }
-        ctx.setLineDash([]);
+        ctx.fillStyle = strokeColor;
+        for (let i = 0; i < 40; i++) {
+          const x = (i * 43 + 17) % size;
+          const y = (i * 67 + 31) % size;
+          ctx.beginPath();
+          ctx.arc(x, y, 2 + (i % 3), 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
+      }
 
-      default:
+      case "insulation": {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 3;
+        for (let x = 0; x <= size; x += 48) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.bezierCurveTo(x + 16, size * 0.35, x - 16, size * 0.65, x + 24, size);
+          ctx.bezierCurveTo(x + 64, size * 0.65, x + 32, size * 0.35, x + 48, 0);
+          ctx.stroke();
+        }
         break;
+      }
+
+      case "stone": {
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.lineWidth = 3;
+        // Natural ashlar / rubble stones
+        const stoneBlocks = [
+          [8, 12, 100, 50], [116, 10, 130, 54],
+          [6, 70, 70, 56], [82, 72, 90, 52], [178, 70, 70, 56],
+          [10, 134, 120, 52], [138, 132, 110, 56],
+          [6, 194, 80, 54], [92, 196, 95, 50], [192, 194, 58, 54],
+        ];
+        for (const [x, y, w, h] of stoneBlocks) {
+          ctx.strokeRect(x, y, w, h);
+        }
+        break;
+      }
+
+      default: {
+        // Fallback subtle stipple
+        ctx.fillStyle = strokeColor;
+        ctx.globalAlpha = 0.2;
+        for (let i = 0; i < 50; i++) {
+          ctx.fillRect((i * 37) % size, (i * 59) % size, 3, 3);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
     }
   }
 

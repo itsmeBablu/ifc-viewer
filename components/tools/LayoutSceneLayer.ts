@@ -3143,16 +3143,15 @@ export default class LayoutSceneLayer {
 
     const customMat = useMaterialStore.getState().getMaterial(matType);
 
-    // 2. Full Color (Shaded) mode: clean solid colors, Lambert-like matte finish, thick gray, NO textures/bump
+    // 2. Full Color (Shaded) mode: ONE thick gray color for all materials like thick Lambert style
     if (this.currentRenderMode === "fullColor") {
-      mat.roughness = 0.9;
-      mat.metalness = 0.02;
-      const effectiveColor = colorStr || customMat?.color || (matType === "brick" ? "#a0522d" : matType === "wood" ? "#8b5a2b" : matType === "glass" ? "#bae6fd" : matType === "metal" ? "#94a3b8" : "#9ca3af");
-      mat.color.setStyle(effectiveColor);
+      mat.roughness = 0.95;
+      mat.metalness = 0.0;
+      mat.color.setHex(0x8e95a0); // Consistent thick architectural Lambert gray
       return;
     }
 
-    // 3. Realistic / Texture mode: full PBR materials with textures, roughness, metalness, transparency
+    // 3. Realistic mode: render-quality PBR materials with high-res textures, bump, clearcoat, reflection
     if (customMat) {
       mat.roughness = customMat.roughness;
       mat.metalness = customMat.metalness;
@@ -3164,10 +3163,10 @@ export default class LayoutSceneLayer {
       mat.emissiveIntensity = customMat.emissiveIntensity ?? 0;
       if (mat instanceof THREE.MeshPhysicalMaterial) {
         mat.transmission = customMat.transmission ?? 0;
-        mat.clearcoat = customMat.clearcoat ?? 0;
-        mat.clearcoatRoughness = customMat.clearcoatRoughness ?? 0.1;
-        mat.ior = customMat.ior ?? 1.5;
-        mat.thickness = (customMat.transmission ?? 0) > 0 ? 0.12 : 0;
+        mat.clearcoat = customMat.clearcoat ?? (customMat.category === "Flooring" || customMat.category === "Glass" ? 0.6 : 0);
+        mat.clearcoatRoughness = customMat.clearcoatRoughness ?? 0.08;
+        mat.ior = customMat.ior ?? (customMat.category === "Glass" ? 1.52 : 1.45);
+        mat.thickness = (customMat.transmission ?? 0) > 0 ? 0.15 : 0;
       }
 
       const effectiveColor = customMat.color || colorStr || "#cfd4dc";
@@ -3178,7 +3177,7 @@ export default class LayoutSceneLayer {
         : (this.currentRenderMode === "realistic" ? "concrete" : null);
 
       if (hatchStyle) {
-        const strokeColor = "#374151";
+        const strokeColor = "#1f2937";
         const tex = getHatchCanvasTexture(
           hatchStyle,
           strokeColor,
