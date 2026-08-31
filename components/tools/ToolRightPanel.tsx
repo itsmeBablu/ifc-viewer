@@ -255,7 +255,13 @@ export default function ToolRightPanel({
 
   // Type definitions
   const activeTypeKey = selectedWall
-    ? "wall-generic-200"
+    ? (selectedWall.wallTypeId && (types[selectedWall.wallTypeId] || DEFAULT_ELEMENT_TYPES[selectedWall.wallTypeId])
+        ? selectedWall.wallTypeId
+        : (selectedWall.thicknessMm === 100
+            ? "wall-interior-100"
+            : selectedWall.thicknessMm === 300
+            ? "wall-exterior-300"
+            : "wall-generic-200"))
     : selectedDoor
     ? "door-single-900"
     : selectedWindow
@@ -267,13 +273,15 @@ export default function ToolRightPanel({
   const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
   const handleTypeChange = (typeId: string) => {
-    const tDef = types[typeId];
+    const tDef = types[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
     if (!tDef) return;
     if (selectedWall && tDef.category === "Wall") {
       const ids = selectedElements.filter((item) => item.kind === "wall").map((item) => item.id);
       for (const id of ids.length ? ids : [selectedWall.id]) void updateWall(id, {
         thicknessMm: tDef.thicknessMm || selectedWall.thicknessMm,
         heightMm: tDef.heightMm || selectedWall.heightMm,
+        wallTypeId: tDef.id,
+        layers: tDef.layers ? [...tDef.layers] : undefined,
       });
     } else if (selectedDoor && tDef.category === "Door") {
       const ids = selectedElements.filter((item) => item.kind === "door").map((item) => item.id);
@@ -297,7 +305,17 @@ export default function ToolRightPanel({
 
   const handleTypeSave = (updated: ElementTypeDefinition) => {
     setTypes((prev) => ({ ...prev, [updated.id]: updated }));
-    handleTypeChange(updated.id);
+    if (selectedWall && updated.category === "Wall") {
+      const ids = selectedElements.filter((item) => item.kind === "wall").map((item) => item.id);
+      for (const id of ids.length ? ids : [selectedWall.id]) void updateWall(id, {
+        thicknessMm: updated.thicknessMm || selectedWall.thicknessMm,
+        heightMm: updated.heightMm || selectedWall.heightMm,
+        wallTypeId: updated.id,
+        layers: updated.layers ? [...updated.layers] : undefined,
+      });
+    } else {
+      handleTypeChange(updated.id);
+    }
   };
 
   // Dimensions formatted

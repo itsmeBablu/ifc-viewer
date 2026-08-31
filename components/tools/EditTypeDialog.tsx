@@ -432,11 +432,11 @@ export default function EditTypeDialog({
                 onClick={() => {
                   const newLayer: WallLayer = {
                     id: `l-${Date.now()}`,
-                    name: "New Layer",
+                    name: "Thermal Insulation",
                     function: "insulation",
-                    material: "Thermal Insulation",
+                    material: "thermal-insulation",
                     thicknessMm: 50,
-                    color: "#fde047",
+                    color: "#fef08a",
                   };
                   const updatedLayers = [...(formData.layers || []), newLayer];
                   const total = updatedLayers.reduce((s, l) => s + l.thicknessMm, 0);
@@ -455,17 +455,19 @@ export default function EditTypeDialog({
 
             {/* Visual Cross-Section Preview Bar */}
             {formData.layers && formData.layers.length > 0 && (
-              <div className="flex h-4 w-full overflow-hidden rounded border border-slate-700 bg-slate-900">
+              <div className="flex h-5 w-full overflow-hidden rounded border border-slate-700 bg-slate-900 shadow-inner">
                 {formData.layers.map((l, i) => (
                   <div
                     key={l.id || i}
                     style={{
-                      width: `${(l.thicknessMm / (formData.thicknessMm || 1)) * 100}%`,
-                      backgroundColor: l.color || (l.function === "insulation" ? "#facc15" : l.function === "structure" ? "#64748b" : "#94a3b8"),
+                      width: `${(l.thicknessMm / Math.max(1, formData.thicknessMm || 1)) * 100}%`,
+                      backgroundColor: l.color || (l.function === "insulation" ? "#facc15" : l.function === "structure" ? "#64748b" : l.function === "finish1" ? "#f1f5f9" : "#94a3b8"),
                     }}
-                    title={`${l.name}: ${l.thicknessMm}mm`}
-                    className="h-full border-r border-slate-950/40 last:border-none"
-                  />
+                    title={`${l.name} (${l.function}): ${l.thicknessMm}mm`}
+                    className="h-full border-r border-slate-950/40 last:border-none flex items-center justify-center overflow-hidden text-[8px] font-mono text-zinc-900 font-bold"
+                  >
+                    {l.thicknessMm >= 25 ? `${l.thicknessMm}` : ""}
+                  </div>
                 ))}
               </div>
             )}
@@ -481,8 +483,15 @@ export default function EditTypeDialog({
                     <select
                       value={layer.function}
                       onChange={(e) => {
+                        const fn = e.target.value as WallLayerFunction;
+                        const defaultColor =
+                          fn === "insulation" ? "#fef08a" :
+                          fn === "structure" ? "#8e9196" :
+                          fn === "finish1" ? "#f8fafc" :
+                          fn === "finish2" ? "#e2e8f0" :
+                          fn === "substrate" ? "#cbd5e1" : "#94a3b8";
                         const updated = (formData.layers || []).map((l, i) =>
-                          i === idx ? { ...l, function: e.target.value as WallLayerFunction } : l
+                          i === idx ? { ...l, function: fn, color: l.color || defaultColor } : l
                         );
                         setFormData({ ...formData, layers: updated });
                       }}
@@ -500,6 +509,8 @@ export default function EditTypeDialog({
                       <input
                         type="number"
                         value={layer.thicknessMm}
+                        min={1}
+                        max={1000}
                         onChange={(e) => {
                           const val = Math.max(1, Number(e.target.value));
                           const updated = (formData.layers || []).map((l, i) =>
@@ -512,6 +523,19 @@ export default function EditTypeDialog({
                       />
                       <span className="text-[9px] text-[var(--text-muted)] font-mono">mm</span>
                     </div>
+
+                    <input
+                      type="color"
+                      value={layer.color || "#94a3b8"}
+                      onChange={(e) => {
+                        const updated = (formData.layers || []).map((l, i) =>
+                          i === idx ? { ...l, color: e.target.value } : l
+                        );
+                        setFormData({ ...formData, layers: updated });
+                      }}
+                      title="Layer color"
+                      className="h-6 w-6 rounded border border-[var(--panel-divider)] bg-transparent p-0 cursor-pointer shrink-0"
+                    />
 
                     <button
                       type="button"
@@ -537,7 +561,7 @@ export default function EditTypeDialog({
                         );
                         setFormData({ ...formData, layers: updated });
                       }}
-                      placeholder="Material name..."
+                      placeholder="Material name / id..."
                       className="min-w-0 flex-1 rounded-md border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] px-2 py-1 text-[10px] text-[var(--text-strong)] placeholder:text-[var(--text-muted)] focus:border-yellow-400 focus:outline-none"
                     />
                   </div>

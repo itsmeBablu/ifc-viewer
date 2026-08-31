@@ -81,6 +81,9 @@ export default function ToolPropertiesDock() {
   // Match Active Element to a Type Definition
   const getActiveTypeKey = (): string => {
     if (selectedWall) {
+      if (selectedWall.wallTypeId && (types[selectedWall.wallTypeId] || DEFAULT_ELEMENT_TYPES[selectedWall.wallTypeId])) {
+        return selectedWall.wallTypeId;
+      }
       if (selectedWall.thicknessMm === 100) return "wall-interior-100";
       if (selectedWall.thicknessMm === 150) return "wall-interior-150";
       if (selectedWall.thicknessMm === 300) return "wall-exterior-300";
@@ -104,14 +107,19 @@ export default function ToolPropertiesDock() {
   };
 
   const activeTypeKey = getActiveTypeKey();
-  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
+  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
   const handleTypeChange = (newTypeKey: string) => {
-    const target = types[newTypeKey];
+    const target = types[newTypeKey] || DEFAULT_ELEMENT_TYPES[newTypeKey];
     if (!target) return;
 
-    if (selectedWall && target.thicknessMm) {
-      updateWall(selectedWall.id, { thicknessMm: target.thicknessMm });
+    if (selectedWall && target.category === "Wall") {
+      updateWall(selectedWall.id, {
+        thicknessMm: target.thicknessMm || selectedWall.thicknessMm,
+        heightMm: target.heightMm || selectedWall.heightMm,
+        wallTypeId: target.id,
+        layers: target.layers ? [...target.layers] : undefined,
+      });
     } else if (selectedDoor && target.widthMm && target.heightMm) {
       updateDoor(selectedDoor.id, { widthMm: target.widthMm, heightMm: target.heightMm });
     } else if (selectedWindow && target.widthMm && target.heightMm) {
@@ -129,10 +137,15 @@ export default function ToolPropertiesDock() {
     setTypes((prev) => ({ ...prev, [updated.id]: updated }));
 
     // Global update for all matching elements
-    if (updated.category === "Wall" && updated.thicknessMm) {
+    if (updated.category === "Wall") {
       walls.forEach((w) => {
-        if (w.thicknessMm === currentType.thicknessMm) {
-          updateWall(w.id, { thicknessMm: updated.thicknessMm });
+        if (w.wallTypeId === updated.id || (!w.wallTypeId && w.thicknessMm === currentType.thicknessMm)) {
+          updateWall(w.id, {
+            thicknessMm: updated.thicknessMm || w.thicknessMm,
+            heightMm: updated.heightMm || w.heightMm,
+            wallTypeId: updated.id,
+            layers: updated.layers ? [...updated.layers] : undefined,
+          });
         }
       });
     } else if (updated.category === "Door" && updated.widthMm && updated.heightMm) {
