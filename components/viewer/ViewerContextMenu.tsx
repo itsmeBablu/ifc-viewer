@@ -438,12 +438,20 @@ export default function ViewerContextMenu({
                       close();
                     }}
                   >
-                    <span>3D Grid / Graph</span>
+                    <span>3D Graph & XYZ Axes</span>
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        show3DGrid ? ctxToggleOn : ctxToggleOff
+                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                        show3DGrid
+                          ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                          : "bg-zinc-300 dark:bg-zinc-600"
                       }`}
-                    />
+                    >
+                      <span
+                        className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                          show3DGrid ? "translate-x-3.5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </span>
                   </button>
 
                   <div className="my-1 border-t border-amber-200/45 dark:border-[var(--panel-divider)]" />
@@ -696,12 +704,20 @@ export default function ViewerContextMenu({
                   close();
                 }}
               >
-                <span>3D Grid / Graph</span>
+                <span>3D Graph & XYZ Axes</span>
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    show3DGrid ? ctxToggleOn : ctxToggleOff
+                  className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                    show3DGrid
+                      ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                      : "bg-zinc-300 dark:bg-zinc-600"
                   }`}
-                />
+                >
+                  <span
+                    className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                      show3DGrid ? "translate-x-3.5" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
               </button>
 
               <button

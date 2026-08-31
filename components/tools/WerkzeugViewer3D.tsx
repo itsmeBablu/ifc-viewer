@@ -1205,7 +1205,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     const axes = new THREE.AxesHelper(4);
     axes.name = "3d-axes";
-    axes.visible = true;
+    axes.visible = useAppStore.getState().show3DGrid;
     helpers.add(axes);
     scene.add(helpers);
 
@@ -2556,7 +2556,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const g = helpersRef.current.getObjectByName("3d-grid");
         if (g) g.visible = useAppStore.getState().show3DGrid;
         const ax = helpersRef.current.getObjectByName("3d-axes");
-        if (ax) ax.visible = true;
+        if (ax) ax.visible = useAppStore.getState().show3DGrid;
       }
       if (s.wallDraw) {
         const lvl =
@@ -3495,6 +3495,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const grid = helpersRef.current?.getObjectByName("3d-grid");
     if (grid) {
       grid.visible = show3DGrid;
+    }
+    const axes = helpersRef.current?.getObjectByName("3d-axes");
+    if (axes) {
+      axes.visible = show3DGrid;
     }
   }, [show3DGrid]);
 

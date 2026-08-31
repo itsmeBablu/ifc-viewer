@@ -986,7 +986,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     const axes = new THREE.AxesHelper(4);
     axes.name = "3d-axes";
-    axes.visible = true;
+    axes.visible = useAppStore.getState().show3DGrid;
     helpers.add(axes);
     scene.add(helpers);
 
@@ -1963,6 +1963,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const grid = helpersRef.current?.getObjectByName("3d-grid");
     if (grid) {
       grid.visible = show3DGrid;
+    }
+    const axes = helpersRef.current?.getObjectByName("3d-axes");
+    if (axes) {
+      axes.visible = show3DGrid;
     }
   }, [show3DGrid]);
 
