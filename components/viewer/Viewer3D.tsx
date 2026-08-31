@@ -727,6 +727,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   const roomFocusToken = useAppStore((s) => s.roomFocusToken);
   const floorFocusToken = useAppStore((s) => s.floorFocusToken);
   const viewerContextMenuOpen = useAppStore((s) => s.viewerContextMenuOpen);
+  const show3DGrid = useAppStore((s) => s.show3DGrid);
   const setSelectedVentilationZoneKey = useAppStore(
     (s) => s.setSelectedVentilationZoneKey,
   );
@@ -974,13 +975,19 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const helpers = new THREE.Group();
     helpers.name = "empty-helpers";
     const grid = new THREE.GridHelper(50, 50, 0xa8adb8, 0xc8cdd6);
+    grid.name = "3d-grid";
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material];
     for (const m of gridMats) {
       m.transparent = true;
       m.opacity = 0.55;
     }
+    grid.visible = useAppStore.getState().show3DGrid;
     helpers.add(grid);
-    helpers.add(new THREE.AxesHelper(4));
+
+    const axes = new THREE.AxesHelper(4);
+    axes.name = "3d-axes";
+    axes.visible = true;
+    helpers.add(axes);
     scene.add(helpers);
 
     const storeyLinesGroup = new THREE.Group();
@@ -1951,6 +1958,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     if (!controls) return;
     controls.enabled = !viewerContextMenuOpen;
   }, [viewerContextMenuOpen]);
+
+  useEffect(() => {
+    const grid = helpersRef.current?.getObjectByName("3d-grid");
+    if (grid) {
+      grid.visible = show3DGrid;
+    }
+  }, [show3DGrid]);
 
   // Instant plane/cap height while dragging — basic view only
   useEffect(() => {

@@ -824,6 +824,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const roomFocusToken = useAppStore((s) => s.roomFocusToken);
   const floorFocusToken = useAppStore((s) => s.floorFocusToken);
   const viewerContextMenuOpen = useAppStore((s) => s.viewerContextMenuOpen);
+  const show3DGrid = useAppStore((s) => s.show3DGrid);
   const setSelectedVentilationZoneKey = useAppStore(
     (s) => s.setSelectedVentilationZoneKey,
   );
@@ -1193,13 +1194,19 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const helpers = new THREE.Group();
     helpers.name = "empty-helpers";
     const grid = new THREE.GridHelper(50, 50, 0xa8adb8, 0xc8cdd6);
+    grid.name = "3d-grid";
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material];
     for (const m of gridMats) {
       m.transparent = true;
       m.opacity = 0.55;
     }
+    grid.visible = useAppStore.getState().show3DGrid;
     helpers.add(grid);
-    helpers.add(new THREE.AxesHelper(4));
+
+    const axes = new THREE.AxesHelper(4);
+    axes.name = "3d-axes";
+    axes.visible = true;
+    helpers.add(axes);
     scene.add(helpers);
 
     sceneRef.current = scene;
@@ -2546,6 +2553,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
       if (helpersRef.current) {
         helpersRef.current.visible = !isPlanView;
+        const g = helpersRef.current.getObjectByName("3d-grid");
+        if (g) g.visible = useAppStore.getState().show3DGrid;
+        const ax = helpersRef.current.getObjectByName("3d-axes");
+        if (ax) ax.visible = true;
       }
       if (s.wallDraw) {
         const lvl =
@@ -3479,6 +3490,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (!controls) return;
     controls.enabled = !viewerContextMenuOpen;
   }, [viewerContextMenuOpen]);
+
+  useEffect(() => {
+    const grid = helpersRef.current?.getObjectByName("3d-grid");
+    if (grid) {
+      grid.visible = show3DGrid;
+    }
+  }, [show3DGrid]);
 
   // Instant plane/cap height while dragging — basic view only
   useEffect(() => {

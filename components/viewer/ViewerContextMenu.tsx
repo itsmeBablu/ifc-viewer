@@ -97,6 +97,8 @@ export default function ViewerContextMenu({
   const setAutoSceneBackground = useAppStore((s) => s.setAutoSceneBackground);
   const autoFocusSelection = useAppStore((s) => s.autoFocusSelection);
   const setAutoFocusSelection = useAppStore((s) => s.setAutoFocusSelection);
+  const show3DGrid = useAppStore((s) => s.show3DGrid);
+  const setShow3DGrid = useAppStore((s) => s.setShow3DGrid);
   const addSavedView = useAppStore((s) => s.addSavedView);
   const toolMode = useAppStore((s) => s.toolMode);
 
@@ -426,6 +428,24 @@ export default function ViewerContextMenu({
                     <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
                   </button>
 
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={show3DGrid}
+                    className={itemCls()}
+                    onClick={() => {
+                      setShow3DGrid(!show3DGrid);
+                      close();
+                    }}
+                  >
+                    <span>3D Grid / Graph</span>
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        show3DGrid ? ctxToggleOn : ctxToggleOff
+                      }`}
+                    />
+                  </button>
+
                   <div className="my-1 border-t border-amber-200/45 dark:border-[var(--panel-divider)]" />
 
                   <button
@@ -665,6 +685,24 @@ export default function ViewerContextMenu({
                   />
                 </button>
               ) : null}
+
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={show3DGrid}
+                className={itemCls()}
+                onClick={() => {
+                  setShow3DGrid(!show3DGrid);
+                  close();
+                }}
+              >
+                <span>3D Grid / Graph</span>
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    show3DGrid ? ctxToggleOn : ctxToggleOff
+                  }`}
+                />
+              </button>
 
               <button
                 type="button"

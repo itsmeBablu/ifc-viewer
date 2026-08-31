@@ -58,6 +58,7 @@ const PALETTE_KEY = "ifc-viewer:colorPalette";
 const BG_KEY = "ifc-viewer:sceneBackground";
 const AUTO_BG_KEY = "ifc-viewer:autoSceneBackground";
 const AUTO_FOCUS_KEY = "ifc-viewer:autoFocusSelection";
+const SHOW_3D_GRID_KEY = "ifc-viewer:show3dgrid";
 const THEME_KEY = "ifc-viewer:colorTheme";
 const HEIZLAST_RANGE_KEY = "ifc-viewer:heizlastRange:v2";
 const KUHLLAST_RANGE_KEY = "ifc-viewer:kuhllastRange:v2";
@@ -179,6 +180,8 @@ type AppState = {
   autoSceneBackground: boolean;
   /** When true, selecting a room/zone flies the camera (like Lüftung focus). Default off. */
   autoFocusSelection: boolean;
+  /** When true, show 3D ground grid/graph. Default off. */
+  show3DGrid: boolean;
   /** True while PDF capture is running — hide chrome that must not appear in captures. */
   pdfCaptureActive: boolean;
   /** Presentation (exploded) vs basic imported view. */
@@ -294,6 +297,7 @@ type AppState = {
   setSceneBackground: (value: string, options?: { persist?: boolean }) => void;
   setAutoSceneBackground: (on: boolean) => void;
   setAutoFocusSelection: (on: boolean) => void;
+  setShow3DGrid: (show: boolean) => void;
   setPdfCaptureActive: (on: boolean) => void;
   setSliceProgress: (t: number) => void;
   setPresentationView: (active: boolean) => void;
@@ -525,6 +529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sceneBackground: initialBackground(),
   autoSceneBackground: initialAutoSceneBackground(),
   autoFocusSelection: initialAutoFocusSelection(),
+  show3DGrid: readBool(SHOW_3D_GRID_KEY, false),
   pdfCaptureActive: false,
   isPresentationView: false,
   presentationPrevFloor: null,
@@ -897,6 +902,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else if (s.selectedRoomId) {
       get().requestRoomFocus(s.selectedRoomId);
     }
+  },
+  setShow3DGrid: (show) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(SHOW_3D_GRID_KEY, show ? "1" : "0");
+      } catch {
+        // ignore
+      }
+    }
+    set({ show3DGrid: show });
   },
   setPdfCaptureActive: (on) => set({ pdfCaptureActive: on }),
   setSliceProgress: (t) => set({ sliceProgress: clamp01(t) }),
