@@ -62,7 +62,7 @@ const RAMP_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
-  private currentRenderMode: RenderMode = "realistic";
+  private currentRenderMode: RenderMode = "fullColor";
   private wallMeshes = new Map<string, THREE.Mesh>();
   private doorMeshes = new Map<string, THREE.Group>();
   private windowMeshes = new Map<string, THREE.Group>();
@@ -3068,11 +3068,11 @@ export default class LayoutSceneLayer {
 
     const customMat = useMaterialStore.getState().getMaterial(matType);
 
-    // 2. Full Color (Shaded) mode: clean solid colors, matte finish, NO textures/bump
+    // 2. Full Color (Shaded) mode: clean solid colors, Lambert-like matte finish, thick gray, NO textures/bump
     if (this.currentRenderMode === "fullColor") {
-      mat.roughness = 0.75;
-      mat.metalness = 0.05;
-      const effectiveColor = colorStr || customMat?.color || (matType === "brick" ? "#a0522d" : matType === "wood" ? "#8b5a2b" : matType === "glass" ? "#bae6fd" : matType === "metal" ? "#94a3b8" : "#d6d3d1");
+      mat.roughness = 0.9;
+      mat.metalness = 0.02;
+      const effectiveColor = colorStr || customMat?.color || (matType === "brick" ? "#a0522d" : matType === "wood" ? "#8b5a2b" : matType === "glass" ? "#bae6fd" : matType === "metal" ? "#94a3b8" : "#9ca3af");
       mat.color.setStyle(effectiveColor);
       return;
     }
