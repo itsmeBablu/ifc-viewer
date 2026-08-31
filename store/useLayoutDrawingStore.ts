@@ -35,6 +35,7 @@ import {
   rememberWindowSize,
   snapPlanPointToWalls,
   snapWallEndpointMm,
+  computeArcFromThreePoints,
   trimWallPair,
   type CableTrayType,
   type DuctShape,
@@ -161,6 +162,8 @@ export type WallDrawState = {
   lengthMm: number | null;
   /** Active snap type indicator shown in HUD. */
   snapType?: PlanSnapType | null;
+  equalLengthMm?: number | null;
+  alignedAxis?: "x" | "y" | "xy" | null;
 } | null;
 
 export type SketchDrawState = {
@@ -170,6 +173,8 @@ export type SketchDrawState = {
   angleDeg: number | null;
   angleSnapped: boolean;
   lengthMm: number | null;
+  equalLengthMm?: number | null;
+  alignedAxis?: "x" | "y" | "xy" | null;
 } | null;
 
 export type SlabDrawState = {
@@ -280,6 +285,7 @@ type LayoutDrawingState = {
   unitSystem: "metric" | "imperial";
   underlays: ReferenceUnderlay[];
   presets: LayoutPresets;
+  draftDrawMode: "line" | "arc";
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
   stairDraw: StairDrawState;
@@ -433,6 +439,7 @@ type LayoutDrawingState = {
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
 
+  setDraftDrawMode: (mode: "line" | "arc") => void;
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
   setSketchTargetKind: (kind: "floor" | "roof" | null) => void;
   setDraftSketchLineStyle: (patch: Partial<Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">>) => void;
@@ -900,6 +907,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
+  draftDrawMode: "line",
   armedLayoutTool: null,
   wallDraw: null,
   stairDraw: null,
@@ -1672,10 +1680,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
     const prevFrom =
       draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
-    // Object snaps use the raw pointer. Polar/orthogonal tracking is a fallback,
-    // never a preprocessing step that can move the aperture away from geometry.
+
+    const levelWalls = get().walls.filter((w) => w.levelId === draw.levelId);
+    const existingLengths = levelWalls.map((w) => Math.hypot(w.endXmm - w.startXmm, w.endYmm - w.startYmm));
+    const alignmentPoints: { xMm: number; yMm: number }[] = [];
+    for (const w of levelWalls) {
+      alignmentPoints.push({ xMm: w.startXmm, yMm: w.startYmm }, { xMm: w.endXmm, yMm: w.endYmm });
+    }
+
     const directWallSnap = snapPlanPointToWalls(cursor, get().walls, draw.levelId, 140, get().planSnapModes, last);
-    const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
+    const snapped = snapWallEndpointMm(last, cursor, { prevFrom, existingLengths, alignmentPoints });
     const underSnap = snapPlanToUnderlayLines(
       snapped.point,
       get().underlays,
@@ -1697,9 +1711,13 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         angleSnapped: snapped.snapped || underSnap.snapped,
         lengthMm,
         snapType: wallSnap.type,
+        equalLengthMm: snapped.equalLengthMm,
+        alignedAxis: snapped.alignedAxis,
       },
     });
   },
+
+  setDraftDrawMode: (mode) => set({ draftDrawMode: mode }),
 
   addWallPoint: async (point) => {
     const draw = get().wallDraw;
@@ -1769,20 +1787,65 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const heightMm = topLevel
       ? topLevel.elevationMm - (level?.elevationMm ?? 0)
       : get().draftWallHeightMm;
-    const wall: LayoutWall = {
-      id: newLayoutId("wall"),
-      projectId,
-      levelId: draw.levelId,
-      topLevelId: topLevel?.id,
-      startXmm: last.xMm,
-      startYmm: last.yMm,
-      endXmm: end.xMm,
-      endYmm: end.yMm,
-      thicknessMm,
-      heightMm,
-      color: "#d6d3d1",
-      createdAt: Date.now(),
-    };
+
+    // Check if drawing 3-point curved wall
+    let wall: LayoutWall;
+    if (get().draftDrawMode === "arc" && draw.points.length === 2) {
+      const arc = computeArcFromThreePoints(draw.points[0], end, draw.points[1]);
+      if (arc) {
+        wall = {
+          id: newLayoutId("wall"),
+          projectId,
+          levelId: draw.levelId,
+          topLevelId: topLevel?.id,
+          startXmm: draw.points[0].xMm,
+          startYmm: draw.points[0].yMm,
+          endXmm: draw.points[1].xMm,
+          endYmm: draw.points[1].yMm,
+          thicknessMm,
+          heightMm,
+          color: "#d6d3d1",
+          curved: true,
+          arcCenterXmm: arc.arcCenterXmm,
+          arcCenterYmm: arc.arcCenterYmm,
+          arcRadiusMm: arc.arcRadiusMm,
+          arcStartAngleDeg: arc.arcStartAngleDeg,
+          arcEndAngleDeg: arc.arcEndAngleDeg,
+          createdAt: Date.now(),
+        };
+      } else {
+        wall = {
+          id: newLayoutId("wall"),
+          projectId,
+          levelId: draw.levelId,
+          topLevelId: topLevel?.id,
+          startXmm: last.xMm,
+          startYmm: last.yMm,
+          endXmm: end.xMm,
+          endYmm: end.yMm,
+          thicknessMm,
+          heightMm,
+          color: "#d6d3d1",
+          createdAt: Date.now(),
+        };
+      }
+    } else {
+      wall = {
+        id: newLayoutId("wall"),
+        projectId,
+        levelId: draw.levelId,
+        topLevelId: topLevel?.id,
+        startXmm: last.xMm,
+        startYmm: last.yMm,
+        endXmm: end.xMm,
+        endYmm: end.yMm,
+        thicknessMm,
+        heightMm,
+        color: "#d6d3d1",
+        createdAt: Date.now(),
+      };
+    }
+
     pushWerkzeugHistory();
     await idbPutWall(wall);
     const presets = {
@@ -1800,7 +1863,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         ? thicknessMm
         : get().draftWallThicknessMm,
       lastMutatedAt: Date.now(),
-      wallDraw: {
+      wallDraw: get().draftDrawMode === "arc" && draw.points.length === 2 ? null : {
         ...draw,
         points: [...draw.points, end],
         cursor: end,
@@ -2910,7 +2973,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
     const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
-    const snapped = snapWallEndpointMm(last, cursor, { prevFrom });
+
+    const levelWalls = get().walls.filter((w) => w.levelId === draw.levelId);
+    const levelLines = get().sketchLines.filter((l) => l.levelId === draw.levelId);
+    const existingLengths = [
+      ...levelWalls.map((w) => Math.hypot(w.endXmm - w.startXmm, w.endYmm - w.startYmm)),
+      ...levelLines.map((l) => Math.hypot(l.endXmm - l.startXmm, l.endYmm - l.startYmm)),
+    ];
+    const alignmentPoints: { xMm: number; yMm: number }[] = [];
+    for (const w of levelWalls) alignmentPoints.push({ xMm: w.startXmm, yMm: w.startYmm }, { xMm: w.endXmm, yMm: w.endYmm });
+    for (const l of levelLines) alignmentPoints.push({ xMm: l.startXmm, yMm: l.startYmm }, { xMm: l.endXmm, yMm: l.endYmm });
+
+    const snapped = snapWallEndpointMm(last, cursor, { prevFrom, existingLengths, alignmentPoints });
     const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
     let point = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
     const first = draw.points[0];
@@ -2923,6 +2997,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         angleDeg: snapped.angleDeg,
         angleSnapped: snapped.snapped || underSnap.snapped,
         lengthMm,
+        equalLengthMm: snapped.equalLengthMm,
+        alignedAxis: snapped.alignedAxis,
       },
     });
   },
@@ -2946,7 +3022,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return null;
     }
     const prevFrom = draw.points.length >= 2 ? draw.points[draw.points.length - 2] : null;
-    const snapped = snapWallEndpointMm(last, point, { prevFrom });
+
+    const levelWalls = get().walls.filter((w) => w.levelId === draw.levelId);
+    const levelLines = get().sketchLines.filter((l) => l.levelId === draw.levelId);
+    const existingLengths = [
+      ...levelWalls.map((w) => Math.hypot(w.endXmm - w.startXmm, w.endYmm - w.startYmm)),
+      ...levelLines.map((l) => Math.hypot(l.endXmm - l.startXmm, l.endYmm - l.startYmm)),
+    ];
+    const alignmentPoints: { xMm: number; yMm: number }[] = [];
+    for (const w of levelWalls) alignmentPoints.push({ xMm: w.startXmm, yMm: w.startYmm }, { xMm: w.endXmm, yMm: w.endYmm });
+    for (const l of levelLines) alignmentPoints.push({ xMm: l.startXmm, yMm: l.startYmm }, { xMm: l.endXmm, yMm: l.endYmm });
+
+    const snapped = snapWallEndpointMm(last, point, { prevFrom, existingLengths, alignmentPoints });
     const underSnap = snapPlanToUnderlayLines(snapped.point, get().underlays, draw.levelId);
     let end = underSnap.snapped ? { xMm: underSnap.xMm, yMm: underSnap.yMm } : snapped.point;
     const first = draw.points[0];
@@ -2956,24 +3043,60 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const dy = end.yMm - last.yMm;
     if (Math.hypot(dx, dy) < 50) return null;
 
-    const line: LayoutSketchLine = {
-      id: newLayoutId("line"),
-      projectId,
-      levelId: draw.levelId,
-      startXmm: last.xMm,
-      startYmm: last.yMm,
-      endXmm: end.xMm,
-      endYmm: end.yMm,
-      ...get().draftSketchLineStyle,
-      createdAt: Date.now(),
-    };
+    let line: LayoutSketchLine;
+    if (get().draftDrawMode === "arc" && draw.points.length === 2) {
+      const arc = computeArcFromThreePoints(draw.points[0], end, draw.points[1]);
+      if (arc) {
+        line = {
+          id: newLayoutId("line"),
+          projectId,
+          levelId: draw.levelId,
+          startXmm: draw.points[0].xMm,
+          startYmm: draw.points[0].yMm,
+          endXmm: draw.points[1].xMm,
+          endYmm: draw.points[1].yMm,
+          curved: true,
+          arcCenterXmm: arc.arcCenterXmm,
+          arcCenterYmm: arc.arcCenterYmm,
+          arcRadiusMm: arc.arcRadiusMm,
+          arcStartAngleDeg: arc.arcStartAngleDeg,
+          arcEndAngleDeg: arc.arcEndAngleDeg,
+          ...get().draftSketchLineStyle,
+          createdAt: Date.now(),
+        };
+      } else {
+        line = {
+          id: newLayoutId("line"),
+          projectId,
+          levelId: draw.levelId,
+          startXmm: last.xMm,
+          startYmm: last.yMm,
+          endXmm: end.xMm,
+          endYmm: end.yMm,
+          ...get().draftSketchLineStyle,
+          createdAt: Date.now(),
+        };
+      }
+    } else {
+      line = {
+        id: newLayoutId("line"),
+        projectId,
+        levelId: draw.levelId,
+        startXmm: last.xMm,
+        startYmm: last.yMm,
+        endXmm: end.xMm,
+        endYmm: end.yMm,
+        ...get().draftSketchLineStyle,
+        createdAt: Date.now(),
+      };
+    }
 
     pushWerkzeugHistory();
     set({
       sketchLines: [...get().sketchLines, line],
       lastMutatedAt: Date.now(),
       gapHighlightPoints: [],
-      sketchDraw: closesLoop ? null : {
+      sketchDraw: (closesLoop || (get().draftDrawMode === "arc" && draw.points.length === 2)) ? null : {
         ...draw,
         points: [...draw.points, end],
         cursor: end,

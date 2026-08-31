@@ -2536,10 +2536,27 @@ export default class LayoutSceneLayer {
       const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
       const y = fromMm(elevMm) + 0.08;
 
-      const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
-      const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
-
-      makeSegment(p1, p2, y, col, isSelected ? 0.95 : 0.75, l.id, 100, targetKind ? { thicknessPx: 2, pattern: "solid" } : l);
+      if (l.curved && l.arcCenterXmm != null && l.arcCenterYmm != null && l.arcRadiusMm != null && l.arcStartAngleDeg != null && l.arcEndAngleDeg != null) {
+        const cx = fromMm(l.arcCenterXmm);
+        const cz = fromMm(l.arcCenterYmm);
+        const r = fromMm(l.arcRadiusMm);
+        const a1 = (l.arcStartAngleDeg * Math.PI) / 180;
+        const a2 = (l.arcEndAngleDeg * Math.PI) / 180;
+        let sweep = a2 - a1;
+        while (sweep > Math.PI) sweep -= 2 * Math.PI;
+        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        const SEG_COUNT = 24;
+        const arcPts: THREE.Vector3[] = [];
+        for (let i = 0; i <= SEG_COUNT; i++) {
+          const ang = a1 + sweep * (i / SEG_COUNT);
+          arcPts.push(new THREE.Vector3(cx + Math.cos(ang) * r, y, cz + Math.sin(ang) * r));
+        }
+        for (let i = 0; i < arcPts.length - 1; i++) {
+          makeSegment(arcPts[i], arcPts[i + 1], y, col, isSelected ? 0.95 : 0.75, l.id, 100, targetKind ? { thicknessPx: 2, pattern: "solid" } : l);
+        }
+      } else {
+        makeSegment(p1, p2, y, col, isSelected ? 0.95 : 0.75, l.id, 100, targetKind ? { thicknessPx: 2, pattern: "solid" } : l);
+      }
 
       // Node dots — flat disc (CircleGeometry in XZ plane)
       for (const pt of [p1, p2]) {

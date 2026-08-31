@@ -150,6 +150,12 @@ export type LayoutSketchLine = {
   dashSizeMm?: number;
   gapSizeMm?: number;
   createdAt: number;
+  curved?: boolean;
+  arcCenterXmm?: number;
+  arcCenterYmm?: number;
+  arcRadiusMm?: number;
+  arcStartAngleDeg?: number;
+  arcEndAngleDeg?: number;
 };
 
 export type WallLayerFunction = "finish1" | "substrate" | "insulation" | "structure" | "core" | "finish2";
@@ -1844,13 +1850,53 @@ export function nearestOffsetOnWallMm(
   return clamped * Math.sqrt(len2);
 }
 
-/** Cardinal angles (degrees) for wall drawing assist. */
-export const WALL_CARDINAL_DEG = [0, 90, 180, 270] as const;
+/** Cardinal & polar tracking angles (degrees) for drawing assist. */
+export const WALL_CARDINAL_DEG = [0, 45, 90, 135, 180, 225, 270, 315] as const;
 
 /**
- * Snap a draft endpoint toward 0/90/180/270° relative to `from`, or to the
+ * Computes circle center, radius, start angle, and end angle from 3 points on an arc:
+ * p1 (start), p2 (mid / bulge point), p3 (end).
+ */
+export function computeArcFromThreePoints(
+  p1: { xMm: number; yMm: number },
+  p2: { xMm: number; yMm: number },
+  p3: { xMm: number; yMm: number },
+): {
+  arcCenterXmm: number;
+  arcCenterYmm: number;
+  arcRadiusMm: number;
+  arcStartAngleDeg: number;
+  arcEndAngleDeg: number;
+} | null {
+  const temp = p2.xMm * p2.xMm + p2.yMm * p2.yMm;
+  const bc = (p1.xMm * p1.xMm + p1.yMm * p1.yMm - temp) / 2;
+  const cd = (temp - p3.xMm * p3.xMm - p3.yMm * p3.yMm) / 2;
+  const det = (p1.xMm - p2.xMm) * (p2.yMm - p3.yMm) - (p2.xMm - p3.xMm) * (p1.yMm - p2.yMm);
+  if (Math.abs(det) < 1e-6) return null; // Collinear points
+
+  const cx = (bc * (p2.yMm - p3.yMm) - cd * (p1.yMm - p2.yMm)) / det;
+  const cy = ((p1.xMm - p2.xMm) * cd - (p2.xMm - p3.xMm) * bc) / det;
+  const radius = Math.hypot(p1.xMm - cx, p1.yMm - cy);
+
+  let a1 = (Math.atan2(p1.yMm - cy, p1.xMm - cx) * 180) / Math.PI;
+  let a3 = (Math.atan2(p3.yMm - cy, p3.xMm - cx) * 180) / Math.PI;
+
+  a1 = ((a1 % 360) + 360) % 360;
+  a3 = ((a3 % 360) + 360) % 360;
+
+  return {
+    arcCenterXmm: Math.round(cx),
+    arcCenterYmm: Math.round(cy),
+    arcRadiusMm: Math.round(radius),
+    arcStartAngleDeg: Math.round(a1 * 10) / 10,
+    arcEndAngleDeg: Math.round(a3 * 10) / 10,
+  };
+}
+
+/**
+ * Snap a draft endpoint toward 0/45/90/135/180/225/270/315° relative to `from`, or to the
  * previous segment direction when `prevFrom` is set.
- * Soft assist: only snaps when within `toleranceDeg` of a cardinal.
+ * Also snaps to equal lengths of nearby walls/lines and aligned axes.
  */
 export function snapWallEndpointMm(
   from: { xMm: number; yMm: number },
@@ -1858,18 +1904,62 @@ export function snapWallEndpointMm(
   opts?: {
     prevFrom?: { xMm: number; yMm: number } | null;
     toleranceDeg?: number;
+    existingLengths?: number[];
+    alignmentPoints?: { xMm: number; yMm: number }[];
   },
 ): {
   point: { xMm: number; yMm: number };
   angleDeg: number;
   snapped: boolean;
+  equalLengthMm?: number | null;
+  alignedAxis?: "x" | "y" | "xy" | null;
 } {
-  const tolerance = opts?.toleranceDeg ?? 8;
-  const dx = to.xMm - from.xMm;
-  const dy = to.yMm - from.yMm;
-  const len = Math.hypot(dx, dy);
+  const tolerance = opts?.toleranceDeg ?? 6;
+  let dx = to.xMm - from.xMm;
+  let dy = to.yMm - from.yMm;
+  let len = Math.hypot(dx, dy);
   if (len < 1e-3) {
     return { point: { ...to }, angleDeg: 0, snapped: false };
+  }
+
+  // 1. Equal length snap (Revit style)
+  let equalLengthMm: number | null = null;
+  if (opts?.existingLengths && opts.existingLengths.length > 0) {
+    for (const targetLen of opts.existingLengths) {
+      if (targetLen > 150 && Math.abs(len - targetLen) <= 150) {
+        equalLengthMm = targetLen;
+        len = targetLen;
+        break;
+      }
+    }
+  }
+
+  // 2. Alignment tracking
+  let alignedAxis: "x" | "y" | "xy" | null = null;
+  const snappedTo = { ...to };
+  if (opts?.alignmentPoints && opts.alignmentPoints.length > 0) {
+    for (const pt of opts.alignmentPoints) {
+      const matchX = Math.abs(to.xMm - pt.xMm) <= 120;
+      const matchY = Math.abs(to.yMm - pt.yMm) <= 120;
+      if (matchX && matchY) {
+        snappedTo.xMm = pt.xMm;
+        snappedTo.yMm = pt.yMm;
+        alignedAxis = "xy";
+        break;
+      } else if (matchX && alignedAxis !== "y") {
+        snappedTo.xMm = pt.xMm;
+        alignedAxis = "x";
+      } else if (matchY && alignedAxis !== "x") {
+        snappedTo.yMm = pt.yMm;
+        alignedAxis = "y";
+      }
+    }
+  }
+
+  if (alignedAxis) {
+    dx = snappedTo.xMm - from.xMm;
+    dy = snappedTo.yMm - from.yMm;
+    len = Math.hypot(dx, dy);
   }
 
   let baseRad = 0;
@@ -1895,23 +1985,30 @@ export function snapWallEndpointMm(
     }
   }
 
-  if (bestDelta <= tolerance) {
+  if (bestDelta <= tolerance && !alignedAxis) {
     const snappedRelRad = (best * Math.PI) / 180;
     const snappedAbsRad = baseRad + snappedRelRad;
     return {
       point: {
-        xMm: from.xMm + Math.cos(snappedAbsRad) * len,
-        yMm: from.yMm + Math.sin(snappedAbsRad) * len,
+        xMm: Math.round(from.xMm + Math.cos(snappedAbsRad) * len),
+        yMm: Math.round(from.yMm + Math.sin(snappedAbsRad) * len),
       },
       angleDeg: Math.round(best),
       snapped: true,
+      equalLengthMm,
+      alignedAxis: null,
     };
   }
 
   return {
-    point: { ...to },
+    point: {
+      xMm: Math.round(snappedTo.xMm),
+      yMm: Math.round(snappedTo.yMm),
+    },
     angleDeg: Math.round(norm),
-    snapped: false,
+    snapped: Boolean(alignedAxis || equalLengthMm != null),
+    equalLengthMm,
+    alignedAxis,
   };
 }
 

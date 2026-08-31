@@ -10,6 +10,12 @@ export type Segment2D = {
   startYmm: number;
   endXmm: number;
   endYmm: number;
+  curved?: boolean;
+  arcCenterXmm?: number;
+  arcCenterYmm?: number;
+  arcRadiusMm?: number;
+  arcStartAngleDeg?: number;
+  arcEndAngleDeg?: number;
 };
 
 export type ClosedLoop = {
@@ -28,6 +34,40 @@ export type LoopDetectionResult = {
 
 function distance(p1: Point2D, p2: Point2D): number {
   return Math.hypot(p1.xMm - p2.xMm, p1.yMm - p2.yMm);
+}
+
+function sampleArcPoints(seg: Segment2D, reversed: boolean, count = 12): Point2D[] {
+  if (
+    !seg.curved ||
+    seg.arcCenterXmm == null ||
+    seg.arcCenterYmm == null ||
+    seg.arcRadiusMm == null ||
+    seg.arcStartAngleDeg == null ||
+    seg.arcEndAngleDeg == null
+  ) {
+    return reversed
+      ? [{ xMm: seg.startXmm, yMm: seg.startYmm }]
+      : [{ xMm: seg.endXmm, yMm: seg.endYmm }];
+  }
+  const cx = seg.arcCenterXmm;
+  const cy = seg.arcCenterYmm;
+  const r = seg.arcRadiusMm;
+  const a1 = (seg.arcStartAngleDeg * Math.PI) / 180;
+  const a2 = (seg.arcEndAngleDeg * Math.PI) / 180;
+  let sweep = a2 - a1;
+  while (sweep > Math.PI) sweep -= 2 * Math.PI;
+  while (sweep < -Math.PI) sweep += 2 * Math.PI;
+
+  const pts: Point2D[] = [];
+  for (let i = 1; i <= count; i++) {
+    const fraction = reversed ? 1 - i / count : i / count;
+    const ang = a1 + sweep * fraction;
+    pts.push({
+      xMm: Math.round(cx + Math.cos(ang) * r),
+      yMm: Math.round(cy + Math.sin(ang) * r),
+    });
+  }
+  return pts;
 }
 
 function calculateSignedArea(points: Point2D[]): number {
@@ -78,10 +118,17 @@ export function detectLoopsFromSegments(
   const gapPoints: Point2D[] = [];
 
   while (remaining.length > 0) {
-    const currentPath: Point2D[] = [
-      { xMm: remaining[0].startXmm, yMm: remaining[0].startYmm },
-      { xMm: remaining[0].endXmm, yMm: remaining[0].endYmm },
-    ];
+    const firstSeg = remaining[0];
+    const initialPoints: Point2D[] = firstSeg.curved
+      ? [
+          { xMm: firstSeg.startXmm, yMm: firstSeg.startYmm },
+          ...sampleArcPoints(firstSeg, false),
+        ]
+      : [
+          { xMm: firstSeg.startXmm, yMm: firstSeg.startYmm },
+          { xMm: firstSeg.endXmm, yMm: firstSeg.endYmm },
+        ];
+    const currentPath: Point2D[] = initialPoints;
     remaining.shift();
 
     let extended = true;
@@ -101,22 +148,26 @@ export function detectLoopsFromSegments(
         const segEnd: Point2D = { xMm: seg.endXmm, yMm: seg.endYmm };
 
         if (distance(tail, segStart) <= toleranceMm) {
-          currentPath.push(segEnd);
+          const addPts = seg.curved ? sampleArcPoints(seg, false) : [segEnd];
+          currentPath.push(...addPts);
           remaining.splice(i, 1);
           extended = true;
           break;
         } else if (distance(tail, segEnd) <= toleranceMm) {
-          currentPath.push(segStart);
+          const addPts = seg.curved ? sampleArcPoints(seg, true) : [segStart];
+          currentPath.push(...addPts);
           remaining.splice(i, 1);
           extended = true;
           break;
         } else if (distance(head, segEnd) <= toleranceMm) {
-          currentPath.unshift(segStart);
+          const addPts = seg.curved ? sampleArcPoints(seg, false) : [segStart];
+          currentPath.unshift(...addPts);
           remaining.splice(i, 1);
           extended = true;
           break;
         } else if (distance(head, segStart) <= toleranceMm) {
-          currentPath.unshift(segEnd);
+          const addPts = seg.curved ? sampleArcPoints(seg, true) : [segEnd];
+          currentPath.unshift(...addPts);
           remaining.splice(i, 1);
           extended = true;
           break;

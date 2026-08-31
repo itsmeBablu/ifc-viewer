@@ -4539,6 +4539,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   `${after.angleDeg}°${after.angleSnapped ? " ✦" : ""}`,
                 );
               }
+              if (after.equalLengthMm != null) {
+                parts.push(`= ${after.equalLengthMm} mm (Equal Length)`);
+              }
+              if (after.alignedAxis) {
+                parts.push(`Aligned (${after.alignedAxis.toUpperCase()})`);
+              }
               ms.setDragSnapHint({
                 text: parts.join(" · "),
                 clientX: e.clientX,
@@ -4592,6 +4598,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 parts.push(
                   `${after.angleDeg}°${after.angleSnapped ? " ✦" : ""}`,
                 );
+              }
+              if (after.equalLengthMm != null) {
+                parts.push(`= ${after.equalLengthMm} mm (Equal Length)`);
+              }
+              if (after.alignedAxis) {
+                parts.push(`Aligned (${after.alignedAxis.toUpperCase()})`);
               }
               ms.setDragSnapHint({
                 text: parts.join(" · "),
