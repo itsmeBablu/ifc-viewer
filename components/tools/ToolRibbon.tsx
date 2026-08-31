@@ -1018,6 +1018,34 @@ export default function ToolRibbon({
           <RibbonBtn
             active
             onClick={async () => {
+              const target = sketchTargetKind || "floor";
+              const res = await convertSketchToSlab(target);
+              if (!res.success && res.error) {
+                setSketchError(res.error);
+              } else {
+                setSketchError(null);
+              }
+            }}
+            title="Finish Boundary Sketch (✓)"
+          >
+            <LuCheck className="h-4 w-4 text-emerald-500" />
+            <span className="text-[9px] font-bold text-emerald-500">Finish (✓)</span>
+          </RibbonBtn>
+
+          <RibbonBtn
+            danger
+            onClick={() => {
+              useLayoutDrawingStore.getState().cancelSlabBoundaryEdit();
+              setSketchError(null);
+            }}
+            title="Cancel Boundary Sketch (✕)"
+          >
+            <LuX className="h-4 w-4 text-rose-500" />
+            <span className="text-[9px] font-bold text-rose-500">Cancel (✕)</span>
+          </RibbonBtn>
+
+          <RibbonBtn
+            onClick={async () => {
               const res = await convertSketchToSlab("floor");
               if (!res.success && res.error) {
                 setSketchError(res.error);
@@ -1025,14 +1053,13 @@ export default function ToolRibbon({
                 setSketchError(null);
               }
             }}
-            title="Convert closed sketch loop into Floor slab"
+            title="Convert sketch loop into Floor slab"
           >
             <IconMarkupFloor className="h-4 w-4" />
             <span className="text-[9px]">To Floor</span>
           </RibbonBtn>
 
           <RibbonBtn
-            active
             onClick={async () => {
               const res = await convertSketchToSlab("roof");
               if (!res.success && res.error) {
@@ -1041,7 +1068,7 @@ export default function ToolRibbon({
                 setSketchError(null);
               }
             }}
-            title="Convert closed sketch loop into Roof slab"
+            title="Convert sketch loop into Roof slab"
           >
             <IconMarkupRoof className="h-4 w-4" />
             <span className="text-[9px]">To Roof</span>
@@ -1142,6 +1169,34 @@ export default function ToolRibbon({
               <LuArrowLeftRight className="h-4 w-4 text-amber-500" />
               <span className="text-[9px]">Flip Window</span>
             </RibbonBtn>
+          )}
+
+          {selectedSlabId && (
+            <>
+              <RibbonBtn
+                onClick={() => {
+                  useLayoutDrawingStore.getState().beginSlabBoundaryEdit(selectedSlabId);
+                }}
+                title="Edit Slab Boundary (Grenzen bearbeiten)"
+              >
+                <LuPencil className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Edit Boundary</span>
+              </RibbonBtn>
+              <RibbonBtn
+                onClick={() => {
+                  const slab = useLayoutDrawingStore.getState().slabs.find((s) => s.id === selectedSlabId);
+                  if (slab) {
+                    void useLayoutDrawingStore.getState().updateSlab(slab.id, {
+                      kind: slab.kind === "floor" ? "roof" : "floor",
+                    });
+                  }
+                }}
+                title="Toggle Floor / Roof"
+              >
+                <IconMarkupRoof className="h-4 w-4 text-amber-500" />
+                <span className="text-[9px]">Floor/Roof</span>
+              </RibbonBtn>
+            </>
           )}
 
           {selectedPlacementId && (

@@ -86,6 +86,7 @@ import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
   getEquipmentConnectors,
+  snapMepPoint,
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
   snapPlanPointToWalls,
@@ -5509,10 +5510,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   levelId = "default-level";
                 }
                 if (levelId) {
+                  const fromPoint = layoutStore.wallDraw?.points.slice(-1)[0] ?? null;
+                  const wallSnap = snapPlanPointToWalls(plan, layoutStore.walls, levelId, 350, layoutStore.planSnapModes, fromPoint);
+                  const effectivePlan = wallSnap.point;
+
                   if (!layoutStore.wallDraw) {
-                    layoutStore.beginWallDraw(levelId, plan);
+                    layoutStore.beginWallDraw(levelId, effectivePlan);
                   } else if (e.detail >= 2) {
-                    void layoutStore.addWallPoint(plan).then((wall) => {
+                    void layoutStore.addWallPoint(effectivePlan).then((wall) => {
                       if (wall) {
                         useToolMarkupStore.getState().setDragSnapHint({
                           text: `${wall.thicknessMm} mm ✦`,
@@ -5523,7 +5528,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                       layoutStore.finishWallDraw();
                     });
                   } else {
-                    void layoutStore.addWallPoint(plan).then((wall) => {
+                    void layoutStore.addWallPoint(effectivePlan).then((wall) => {
                       if (!wall) return;
                       const draft =
                         useLayoutDrawingStore.getState().draftWallThicknessMm;
@@ -5846,24 +5851,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
-                for (const eq of layoutStore.mepEquipment) {
-                  const conns = getEquipmentConnectors(eq);
-                  for (const c of conns) {
-                    if (c.type === "duct") {
-                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
-                      if (dist <= 300) {
-                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
-                        break;
-                      }
-                    }
-                  }
-                }
+                const mepSnap = snapMepPoint(plan, "duct", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
+                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
 
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.ductDraw) {
-                  layoutStore.startDuctDraw(levelId, plan);
+                  layoutStore.startDuctDraw(levelId, effectivePlan);
                 } else {
-                  layoutStore.updateDuctDrawCursor(plan);
+                  layoutStore.updateDuctDrawCursor(effectivePlan);
                   void layoutStore.finishDuctDraw().then((duct) => {
                     if (duct && (toolKind === "flex_duct" || toolKind === "mep_placeholder")) {
                       void layoutStore.updateDuct(duct.id, {
@@ -5892,24 +5887,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
-                for (const eq of layoutStore.mepEquipment) {
-                  const conns = getEquipmentConnectors(eq);
-                  for (const c of conns) {
-                    if (c.type === "pipe") {
-                      const dist = Math.hypot(plan.xMm - c.worldXmm, plan.yMm - c.worldYmm);
-                      if (dist <= 250) {
-                        plan = { xMm: c.worldXmm, yMm: c.worldYmm };
-                        break;
-                      }
-                    }
-                  }
-                }
+                const mepSnap = snapMepPoint(plan, "pipe", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
+                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
 
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.pipeDraw) {
-                  layoutStore.startPipeDraw(levelId, plan);
+                  layoutStore.startPipeDraw(levelId, effectivePlan);
                 } else {
-                  layoutStore.updatePipeDrawCursor(plan);
+                  layoutStore.updatePipeDrawCursor(effectivePlan);
                   void layoutStore.finishPipeDraw();
                 }
                 return;
@@ -5931,11 +5916,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
+                const mepSnap = snapMepPoint(plan, "cabletray", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
+                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
+
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.cableTrayDraw) {
-                  layoutStore.startCableTrayDraw(levelId, plan);
+                  layoutStore.startCableTrayDraw(levelId, effectivePlan);
                 } else {
-                  layoutStore.updateCableTrayDrawCursor(plan);
+                  layoutStore.updateCableTrayDrawCursor(effectivePlan);
                   void layoutStore.finishCableTrayDraw();
                 }
                 return;

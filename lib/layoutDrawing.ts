@@ -595,6 +595,146 @@ export function getEquipmentConnectors(
   });
 }
 
+export type MepSnapResult = {
+  point: { xMm: number; yMm: number; zMm?: number };
+  snapped: boolean;
+  targetKind?: "connector" | "duct_endpoint" | "pipe_endpoint" | "tray_endpoint" | "duct_centerline" | "pipe_centerline";
+  targetId?: string;
+  systemType?: string;
+};
+
+export function snapMepPoint(
+  point: { xMm: number; yMm: number },
+  mepKind: "duct" | "pipe" | "cabletray" | "wire" | "equipment",
+  equipment: LayoutMepEquipment[],
+  ducts: LayoutDuct[],
+  pipes: LayoutPipe[],
+  cableTrays: LayoutCableTray[],
+  toleranceMm = 350,
+): MepSnapResult {
+  // 1. Check equipment connectors matching MEP kind
+  for (const eq of equipment) {
+    const conns = getEquipmentConnectors(eq);
+    for (const c of conns) {
+      const match =
+        (mepKind === "duct" && c.type === "duct") ||
+        (mepKind === "pipe" && c.type === "pipe") ||
+        (mepKind === "wire" && (c.type === "electrical" || c.type === "data")) ||
+        (mepKind === "equipment");
+      if (match) {
+        const dist = Math.hypot(point.xMm - c.worldXmm, point.yMm - c.worldYmm);
+        if (dist <= toleranceMm) {
+          return {
+            point: { xMm: Math.round(c.worldXmm), yMm: Math.round(c.worldYmm), zMm: c.worldZmm },
+            snapped: true,
+            targetKind: "connector",
+            targetId: c.id,
+            systemType: c.systemType,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Check existing ducts
+  if (mepKind === "duct" || mepKind === "equipment") {
+    for (const duct of ducts) {
+      const dStart = Math.hypot(point.xMm - duct.startXmm, point.yMm - duct.startYmm);
+      if (dStart <= toleranceMm) {
+        return {
+          point: { xMm: duct.startXmm, yMm: duct.startYmm, zMm: duct.elevationMm },
+          snapped: true,
+          targetKind: "duct_endpoint",
+          targetId: duct.id,
+          systemType: duct.systemType,
+        };
+      }
+      const dEnd = Math.hypot(point.xMm - duct.endXmm, point.yMm - duct.endYmm);
+      if (dEnd <= toleranceMm) {
+        return {
+          point: { xMm: duct.endXmm, yMm: duct.endYmm, zMm: duct.elevationMm },
+          snapped: true,
+          targetKind: "duct_endpoint",
+          targetId: duct.id,
+          systemType: duct.systemType,
+        };
+      }
+      const perp = distPointSeg(point.xMm, point.yMm, duct.startXmm, duct.startYmm, duct.endXmm, duct.endYmm);
+      if (perp.dist <= toleranceMm && perp.t >= 0.05 && perp.t <= 0.95) {
+        return {
+          point: { xMm: Math.round(perp.x), yMm: Math.round(perp.y), zMm: duct.elevationMm },
+          snapped: true,
+          targetKind: "duct_centerline",
+          targetId: duct.id,
+          systemType: duct.systemType,
+        };
+      }
+    }
+  }
+
+  // 3. Check existing pipes
+  if (mepKind === "pipe" || mepKind === "equipment") {
+    for (const pipe of pipes) {
+      const pStart = Math.hypot(point.xMm - pipe.startXmm, point.yMm - pipe.startYmm);
+      if (pStart <= toleranceMm) {
+        return {
+          point: { xMm: pipe.startXmm, yMm: pipe.startYmm, zMm: pipe.elevationMm },
+          snapped: true,
+          targetKind: "pipe_endpoint",
+          targetId: pipe.id,
+          systemType: pipe.systemType,
+        };
+      }
+      const pEnd = Math.hypot(point.xMm - pipe.endXmm, point.yMm - pipe.endYmm);
+      if (pEnd <= toleranceMm) {
+        return {
+          point: { xMm: pipe.endXmm, yMm: pipe.endYmm, zMm: pipe.elevationMm },
+          snapped: true,
+          targetKind: "pipe_endpoint",
+          targetId: pipe.id,
+          systemType: pipe.systemType,
+        };
+      }
+      const perp = distPointSeg(point.xMm, point.yMm, pipe.startXmm, pipe.startYmm, pipe.endXmm, pipe.endYmm);
+      if (perp.dist <= toleranceMm && perp.t >= 0.05 && perp.t <= 0.95) {
+        return {
+          point: { xMm: Math.round(perp.x), yMm: Math.round(perp.y), zMm: pipe.elevationMm },
+          snapped: true,
+          targetKind: "pipe_centerline",
+          targetId: pipe.id,
+          systemType: pipe.systemType,
+        };
+      }
+    }
+  }
+
+  // 4. Check existing cable trays
+  if (mepKind === "cabletray") {
+    for (const tray of cableTrays) {
+      const tStart = Math.hypot(point.xMm - tray.startXmm, point.yMm - tray.startYmm);
+      if (tStart <= toleranceMm) {
+        return {
+          point: { xMm: tray.startXmm, yMm: tray.startYmm, zMm: tray.elevationMm },
+          snapped: true,
+          targetKind: "tray_endpoint",
+          targetId: tray.id,
+        };
+      }
+      const tEnd = Math.hypot(point.xMm - tray.endXmm, point.yMm - tray.endYmm);
+      if (tEnd <= toleranceMm) {
+        return {
+          point: { xMm: tray.endXmm, yMm: tray.endYmm, zMm: tray.elevationMm },
+          snapped: true,
+          targetKind: "tray_endpoint",
+          targetId: tray.id,
+        };
+      }
+    }
+  }
+
+  return { point: { ...point }, snapped: false };
+}
+
 export type SelectedElementRef = {
   kind:
     | "wall"
@@ -1227,6 +1367,8 @@ function distPointSeg(
   return { dist: Math.hypot(px - x, py - y), t, x, y };
 }
 
+const JOIN_EPS_MM = 350;
+
 /**
  * CAD plan snap shared by wall drawing and slab boundary picking.
  * Priority is endpoint -> intersection -> midpoint -> perpendicular projection.
@@ -1235,7 +1377,7 @@ export function snapPlanPointToWalls(
   point: { xMm: number; yMm: number },
   walls: LayoutWall[],
   levelId: string,
-  toleranceMm = 140,
+  toleranceMm = 350,
   modes: PlanSnapModes = DEFAULT_PLAN_SNAP_MODES,
   from?: { xMm: number; yMm: number } | null,
 ): PlanSnapResult {
@@ -1412,6 +1554,7 @@ export function joinedWallCenterlines(
 
       const endsA: Array<"start" | "end"> = ["start", "end"];
       const endsB: Array<"start" | "end"> = ["start", "end"];
+      const maxThickness = Math.max(JOIN_EPS_MM, a.thicknessMm, b.thicknessMm);
 
       // L-corner: both walls have an endpoint near each other
       for (const ea of endsA) {
@@ -1420,9 +1563,9 @@ export function joinedWallCenterlines(
         for (const eb of endsB) {
           const bx = eb === "start" ? b.startXmm : b.endXmm;
           const by = eb === "start" ? b.startYmm : b.endYmm;
-          if (Math.hypot(ax - bx, ay - by) > JOIN_EPS_MM) continue;
+          if (Math.hypot(ax - bx, ay - by) > maxThickness) continue;
           // Intersection should lie near the shared corner
-          if (Math.hypot(hit.x - ax, hit.y - ay) > JOIN_EPS_MM * 3) continue;
+          if (Math.hypot(hit.x - ax, hit.y - ay) > maxThickness * 2.5) continue;
           const ra = result.get(a.id)!;
           const rb = result.get(b.id)!;
           if (ea === "start") {
@@ -1443,7 +1586,7 @@ export function joinedWallCenterlines(
       }
 
       // T-junction: endpoint of one wall sits mid-segment on the other
-      const joinTol = Math.max(a.thicknessMm, b.thicknessMm) * 0.6 + 20;
+      const joinTol = Math.max(a.thicknessMm, b.thicknessMm) * 0.9 + 50;
       for (const [stem, through] of [
         [a, b],
         [b, a],
@@ -1459,29 +1602,15 @@ export function joinedWallCenterlines(
             through.endXmm,
             through.endYmm,
           );
-          if (near.dist > joinTol) continue;
-          if (near.t < 0.02 || near.t > 0.98) continue; // L handled above
-          const onThrough = distPointSeg(
-            hit.x,
-            hit.y,
-            through.startXmm,
-            through.startYmm,
-            through.endXmm,
-            through.endYmm,
-          );
-          const target =
-            onThrough.t > 0.02 &&
-              onThrough.t < 0.98 &&
-              onThrough.dist < joinTol
-              ? hit
-              : { x: near.x, y: near.y };
-          const rs = result.get(stem.id)!;
-          if (which === "start") {
-            rs.startXmm = target.x;
-            rs.startYmm = target.y;
-          } else {
-            rs.endXmm = target.x;
-            rs.endYmm = target.y;
+          if (near.dist <= joinTol && near.t >= 0.001 && near.t <= 0.999) {
+            const rStem = result.get(stem.id)!;
+            if (which === "start") {
+              rStem.startXmm = near.x;
+              rStem.startYmm = near.y;
+            } else {
+              rStem.endXmm = near.x;
+              rStem.endYmm = near.y;
+            }
           }
         }
       }

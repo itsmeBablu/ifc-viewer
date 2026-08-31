@@ -10,6 +10,9 @@ import {
   LuMove,
   LuRotate3D,
   LuScaling,
+  LuCheck,
+  LuX,
+  LuPencil,
 } from "react-icons/lu";
 
 export default function ToolOptionsBar() {
@@ -99,6 +102,13 @@ export default function ToolOptionsBar() {
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const editingSlabId = useLayoutDrawingStore((s) => s.editingSlabId);
+  const sketchTargetKind = useLayoutDrawingStore((s) => s.sketchTargetKind);
+  const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
+  const beginSlabBoundaryEdit = useLayoutDrawingStore((s) => s.beginSlabBoundaryEdit);
+  const cancelSlabBoundaryEdit = useLayoutDrawingStore((s) => s.cancelSlabBoundaryEdit);
+  const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const selectedStair = useLayoutDrawingStore((s) => s.stairs.find((item) => item.id === s.selectedStairId));
@@ -280,10 +290,38 @@ export default function ToolOptionsBar() {
           </div>
         )}
 
-        {/* FLOOR / SLAB TOOL OPTIONS */}
-        {armedLayoutTool === "floor" && (
+        {/* FLOOR / ROOF / BOUNDARY EDIT TOOL OPTIONS */}
+        {(editingSlabId || (armedLayoutTool === "lines" && sketchTargetKind)) ? (
           <div className="flex items-center gap-3">
-            <span className="font-bold text-amber-500">Floor Slab:</span>
+            <span className="font-bold text-pink-500 flex items-center gap-1">
+              <LuPencil className="h-3.5 w-3.5" />
+              <span>Boundary Edit Mode ({sketchTargetKind || "slab"}):</span>
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)] italic">Draw closed boundary lines</span>
+            <button
+              type="button"
+              onClick={async () => {
+                const target = sketchTargetKind || "floor";
+                const res = await convertSketchToSlab(target);
+                if (!res.success && res.error) alert(res.error);
+              }}
+              className="flex items-center gap-1 rounded-md px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/50 text-[11px] font-bold text-emerald-500 hover:bg-emerald-500/30 transition-colors"
+            >
+              <LuCheck className="h-3.5 w-3.5" />
+              <span>Finish (✓)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => cancelSlabBoundaryEdit()}
+              className="flex items-center gap-1 rounded-md px-2 py-0.5 bg-rose-500/20 border border-rose-500/40 text-[11px] font-semibold text-rose-500 hover:bg-rose-500/30 transition-colors"
+            >
+              <LuX className="h-3.5 w-3.5" />
+              <span>Cancel (✕)</span>
+            </button>
+          </div>
+        ) : (armedLayoutTool === "floor" || armedLayoutTool === "roof") && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-amber-500 capitalize">{armedLayoutTool} Slab:</span>
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)]">Thickness:</span>
               <input
@@ -294,7 +332,7 @@ export default function ToolOptionsBar() {
               />
               <span className="text-[10px] text-[var(--text-muted)]">mm</span>
             </div>
-            <span className="text-[10px] text-emerald-500 font-medium italic">Click 1st corner, then opposite corner in Top View</span>
+            <span className="text-[10px] text-emerald-500 font-medium italic">Draw boundary lines or click corners</span>
           </div>
         )}
 
@@ -967,16 +1005,51 @@ export default function ToolOptionsBar() {
             </button>
           )}
 
-          {selectedSlabId && (
-            <button
-              type="button"
-              onClick={() => deleteSlab(selectedSlabId)}
-              className="flex items-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/30 text-[10px] font-semibold text-red-500 hover:bg-red-500/20"
-            >
-              <LuTrash2 className="h-3 w-3" />
-              <span>Delete Slab</span>
-            </button>
-          )}
+          {selectedSlabId && (() => {
+            const slab = slabs.find((s) => s.id === selectedSlabId);
+            if (!slab) return null;
+            return (
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-amber-500 capitalize">{slab.kind}:</span>
+                <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                  Thick:
+                  <input
+                    type="number"
+                    value={slab.thicknessMm}
+                    onChange={(e) => void updateSlab(slab.id, { thicknessMm: Math.max(50, Number(e.target.value)) })}
+                    className="w-14 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right font-mono text-[10px]"
+                  />
+                  <span>mm</span>
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                  Offset:
+                  <input
+                    type="number"
+                    value={slab.elevationOffsetMm ?? 0}
+                    onChange={(e) => void updateSlab(slab.id, { elevationOffsetMm: Number(e.target.value) })}
+                    className="w-14 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right font-mono text-[10px]"
+                  />
+                  <span>mm</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => beginSlabBoundaryEdit(slab.id)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-[10px] font-semibold text-amber-500 hover:bg-amber-500/20"
+                >
+                  <LuPencil className="h-3 w-3" />
+                  <span>Edit Boundary</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteSlab(slab.id)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 bg-red-500/10 border border-red-500/30 text-[10px] font-semibold text-red-500 hover:bg-red-500/20"
+                >
+                  <LuTrash2 className="h-3 w-3" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            );
+          })()}
 
           {selectedStairId && (
             <>

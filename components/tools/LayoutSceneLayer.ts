@@ -4227,6 +4227,8 @@ export default class LayoutSceneLayer {
       mesh.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
+        duct.levelId == null ||
+        duct.levelId === "default-level" ||
         duct.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -4311,6 +4313,8 @@ export default class LayoutSceneLayer {
       mesh.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
+        pipe.levelId == null ||
+        pipe.levelId === "default-level" ||
         pipe.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -4393,6 +4397,8 @@ export default class LayoutSceneLayer {
       grp.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
+        wire.levelId == null ||
+        wire.levelId === "default-level" ||
         wire.levelId === opts.activeLevelId;
     }
   }
@@ -4495,6 +4501,8 @@ export default class LayoutSceneLayer {
       mesh.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
+        tray.levelId == null ||
+        tray.levelId === "default-level" ||
         tray.levelId === opts.activeLevelId;
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -4755,6 +4763,8 @@ export default class LayoutSceneLayer {
       grp.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
+        item.levelId == null ||
+        item.levelId === "default-level" ||
         item.levelId === opts.activeLevelId;
 
       // Selection outline for primary child

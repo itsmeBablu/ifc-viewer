@@ -365,6 +365,7 @@ type LayoutDrawingState = {
   selectedCableTrayId: string | null;
   selectedEquipmentId: string | null;
   selectedWireId: string | null;
+  editingSlabId: string | null;
 
   draftDuctShape: DuctShape;
   draftDuctWidthMm: number;
@@ -2099,7 +2100,30 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         { xMm: slab.maxXmm, yMm: slab.maxYmm },
         { xMm: slab.minXmm, yMm: slab.maxYmm },
       ];
+    // Convert boundary polygon to editable sketch lines
+    const lines: LayoutSketchLine[] = [];
+    for (let i = 0; i < boundary.length; i++) {
+      const p1 = boundary[i];
+      const p2 = boundary[(i + 1) % boundary.length];
+      lines.push({
+        id: newLayoutId("line"),
+        projectId: slab.projectId,
+        levelId: slab.levelId,
+        startXmm: p1.xMm,
+        startYmm: p1.yMm,
+        endXmm: p2.xMm,
+        endYmm: p2.yMm,
+        createdAt: Date.now(),
+        color: "#ec4899",
+      });
+    }
     set({
+      editingSlabId: id,
+      sketchLines: lines,
+      sketchTargetKind: slab.kind,
+      armedLayoutTool: "lines",
+      selectedSlabId: null,
+      selectedElements: [],
       slabBoundaryEdit: {
         slabId: id,
         phase: "editing",
@@ -2154,6 +2178,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({
       slabs: get().slabs.map((item) => item.id === draft.id ? draft : item),
       slabBoundaryEdit: null,
+      editingSlabId: null,
+      sketchLines: [],
+      armedLayoutTool: null,
+      sketchTargetKind: null,
+      selectedSlabId: draft.id,
       lastMutatedAt: Date.now(),
     });
     await idbPutSlab(draft);
@@ -2161,10 +2190,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   cancelSlabBoundaryEdit: () => {
     const edit = get().slabBoundaryEdit;
-    if (!edit) return;
+    const editingId = get().editingSlabId || edit?.slabId;
+    if (!edit) {
+      set({
+        editingSlabId: null,
+        sketchLines: [],
+        armedLayoutTool: null,
+        sketchTargetKind: null,
+        slabBoundaryEdit: null,
+        selectedSlabId: editingId ?? null,
+      });
+      return;
+    }
     const slab = get().slabs.find((item) => item.id === edit.slabId);
     if (!slab) {
-      set({ slabBoundaryEdit: null });
+      set({
+        slabBoundaryEdit: null,
+        editingSlabId: null,
+        sketchLines: [],
+        armedLayoutTool: null,
+        sketchTargetKind: null,
+      });
       return;
     }
     const boundary = edit.originalBoundary.map((point) => ({ ...point }));
@@ -2181,6 +2227,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         autoBoundaryFromWalls: edit.originalAutoBoundaryFromWalls,
       } : item),
       slabBoundaryEdit: null,
+      editingSlabId: null,
+      sketchLines: [],
+      armedLayoutTool: null,
+      sketchTargetKind: null,
+      selectedSlabId: slab.id,
     });
   },
 
@@ -2966,6 +3017,42 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     pushWerkzeugHistory();
 
+    const editingSlabId = get().editingSlabId;
+    if (editingSlabId) {
+      const existing = get().slabs.find((s) => s.id === editingSlabId);
+      if (existing && result.outerLoops.length > 0) {
+        const outer = result.outerLoops[0];
+        const holes = result.nestedHoles.get(outer) || [];
+        const xs = outer.points.map((p) => p.xMm);
+        const ys = outer.points.map((p) => p.yMm);
+        const next: LayoutSlab = {
+          ...existing,
+          minXmm: Math.min(...xs),
+          maxXmm: Math.max(...xs),
+          minYmm: Math.min(...ys),
+          maxYmm: Math.max(...ys),
+          boundary: outer.points,
+          holes: holes.map((h) => h.points),
+          autoBoundaryFromWalls: false,
+        };
+        await idbPutSlab(next);
+        set((s) => ({
+          slabs: s.slabs.map((sl) => (sl.id === editingSlabId ? next : sl)),
+          selectedSlabId: editingSlabId,
+          editingSlabId: null,
+          sketchLines: [],
+          sketchDraw: null,
+          selectedSketchLineId: null,
+          gapHighlightPoints: [],
+          armedLayoutTool: null,
+          sketchTargetKind: null,
+          slabBoundaryEdit: null,
+          lastMutatedAt: Date.now(),
+        }));
+        return { success: true };
+      }
+    }
+
     // Convert outer loops to slabs (with nested holes if present)
     for (const outer of result.outerLoops) {
       const holes = result.nestedHoles.get(outer) || [];
@@ -3014,6 +3101,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       gapHighlightPoints: [],
       armedLayoutTool: null,
       sketchTargetKind: null,
+      editingSlabId: null,
+      slabBoundaryEdit: null,
       lastMutatedAt: Date.now(),
     });
 
