@@ -2966,6 +2966,8 @@ export default class LayoutSceneLayer {
     const state = useLayoutDrawingStore.getState();
     const mode = this.currentRenderMode;
 
+    const isWireframe = mode === "wireframe";
+
     for (const [id, mesh] of this.wallMeshes) {
       const wall = state.walls.find((w) => w.id === id);
       if (wall && mesh.material instanceof THREE.MeshStandardMaterial) {
@@ -2978,9 +2980,9 @@ export default class LayoutSceneLayer {
           mesh.material.emissiveIntensity = 0;
           this.applyMaterialAndColor(mesh.material, wall.color, wall.material);
         }
-        mesh.material.wireframe = mode === "wireframe";
         mesh.material.needsUpdate = true;
       }
+      this.updateWireframeEdges(mesh, isWireframe);
     }
     for (const [id, mesh] of this.slabMeshes) {
       const slab = state.slabs.find((s) => s.id === id);
@@ -2994,27 +2996,27 @@ export default class LayoutSceneLayer {
           mesh.material.emissiveIntensity = 0;
           this.applyMaterialAndColor(mesh.material, slab.color, slab.material);
         }
-        mesh.material.wireframe = mode === "wireframe";
         mesh.material.needsUpdate = true;
       }
+      this.updateWireframeEdges(mesh, isWireframe);
     }
     for (const [id, mesh] of this.columnMeshes) {
       const column = state.columns.find((item) => item.id === id);
       if (column && mesh.material instanceof THREE.MeshStandardMaterial) {
         this.applyMaterialAndColor(mesh.material, column.color, column.material);
         if (!column.color && !column.material) mesh.material.color.setHex(0x94a3b8);
-        mesh.material.wireframe = mode === "wireframe";
         mesh.material.needsUpdate = true;
       }
+      this.updateWireframeEdges(mesh, isWireframe);
     }
     for (const [id, mesh] of this.beamMeshes) {
       const beam = state.beams.find((item) => item.id === id);
       if (beam && mesh.material instanceof THREE.MeshStandardMaterial) {
         this.applyMaterialAndColor(mesh.material, beam.color, beam.material);
         if (!beam.color && !beam.material) mesh.material.color.setHex(0x64748b);
-        mesh.material.wireframe = mode === "wireframe";
         mesh.material.needsUpdate = true;
       }
+      this.updateWireframeEdges(mesh, isWireframe);
     }
     for (const [id, g] of this.doorMeshes) {
       const door = state.doors.find((d) => d.id === id);
@@ -3024,6 +3026,7 @@ export default class LayoutSceneLayer {
         const elev = level?.elevationMm ?? 0;
         this.placeOpening(g, wall, door.positionMm, door.widthMm, door.heightMm, elev, 0);
       }
+      this.updateWireframeEdges(g, isWireframe);
     }
     for (const [id, g] of this.windowMeshes) {
       const win = state.windows.find((w) => w.id === id);
@@ -3033,6 +3036,68 @@ export default class LayoutSceneLayer {
         const elev = level?.elevationMm ?? 0;
         this.placeOpening(g, wall, win.positionMm, win.widthMm, win.heightMm, elev, win.sillHeightMm);
       }
+      this.updateWireframeEdges(g, isWireframe);
+    }
+    for (const grp of this.equipmentMeshes.values()) {
+      this.updateWireframeEdges(grp, isWireframe);
+    }
+    for (const mesh of this.ductMeshes.values()) {
+      this.updateWireframeEdges(mesh, isWireframe);
+    }
+    for (const mesh of this.pipeMeshes.values()) {
+      this.updateWireframeEdges(mesh, isWireframe);
+    }
+    for (const mesh of this.cableTrayMeshes.values()) {
+      this.updateWireframeEdges(mesh, isWireframe);
+    }
+    for (const grp of this.stairMeshes.values()) {
+      this.updateWireframeEdges(grp, isWireframe);
+    }
+    for (const grp of this.rampMeshes.values()) {
+      this.updateWireframeEdges(grp, isWireframe);
+    }
+  }
+
+  private updateWireframeEdges(mesh: THREE.Object3D, isWireframe: boolean) {
+    if (mesh instanceof THREE.Mesh) {
+      let edges = mesh.getObjectByName("quad-edges") as THREE.LineSegments | undefined;
+      if (!isWireframe) {
+        if (edges) edges.visible = false;
+        if (mesh.material instanceof THREE.Material) {
+          mesh.material.wireframe = false;
+          mesh.material.visible = true;
+        }
+        return;
+      }
+
+      if (!edges || edges.userData.geometryKey !== mesh.geometry.uuid) {
+        if (edges) {
+          mesh.remove(edges);
+          edges.geometry.dispose();
+          (edges.material as THREE.Material).dispose();
+        }
+        const edgeGeo = new THREE.EdgesGeometry(mesh.geometry, 20);
+        const edgeMat = new THREE.LineBasicMaterial({
+          color: 0x0f172a,
+          depthTest: true,
+        });
+        edges = new THREE.LineSegments(edgeGeo, edgeMat);
+        edges.name = "quad-edges";
+        edges.userData.geometryKey = mesh.geometry.uuid;
+        mesh.add(edges);
+      }
+      edges.visible = true;
+      if (mesh.material instanceof THREE.Material) {
+        mesh.material.wireframe = false;
+        mesh.material.transparent = true;
+        mesh.material.opacity = 0.12;
+      }
+    } else if (mesh instanceof THREE.Group) {
+      mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name !== "quad-edges") {
+          this.updateWireframeEdges(child, isWireframe);
+        }
+      });
     }
   }
 
@@ -3058,11 +3123,21 @@ export default class LayoutSceneLayer {
     }
     mat.wireframe = this.currentRenderMode === "wireframe";
 
-    // 1. Light (Clay / Monochrome) mode: clean white matte material across all elements
+    // 1. Light (Clay / Pastel tint) mode: clean soft matte materials tinted with material colors
     if (this.currentRenderMode === "light") {
-      mat.color.setHex(0xf8fafc);
-      mat.roughness = 0.95;
-      mat.metalness = 0;
+      mat.roughness = 0.96;
+      mat.metalness = 0.0;
+      mat.wireframe = false;
+      mat.map = null;
+      const lightCol = colorStr || customMat?.color || (
+        matType === "brick" ? "#fed7aa" :
+        matType === "wood" ? "#fde68a" :
+        matType === "glass" ? "#e0f2fe" :
+        matType === "metal" ? "#e2e8f0" :
+        matType === "concrete" ? "#d4d4d8" :
+        "#f1f5f9"
+      );
+      mat.color.setStyle(lightCol);
       return;
     }
 
