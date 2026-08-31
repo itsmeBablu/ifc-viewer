@@ -42,6 +42,7 @@ import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
 import ToolStatusBar from "./ToolStatusBar";
+import WorkspaceViewTabs from "./WorkspaceViewTabs";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import SheetViewDialog from "./SheetViewDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
@@ -580,6 +581,8 @@ export default function WerkzeugApp() {
           />
         )}
         </div>
+
+        {isDesktop && hasActiveWorkspace && <WorkspaceViewTabs />}
 
         {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
         <main
