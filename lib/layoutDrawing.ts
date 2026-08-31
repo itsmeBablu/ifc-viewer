@@ -1297,7 +1297,7 @@ export type WallCenterlineMm = {
   endYmm: number;
 };
 
-const JOIN_EPS_MM = 160;
+const JOIN_EPS_MM = 350;
 
 export type PlanSnapType =
   | "endpoint"
@@ -1366,8 +1366,6 @@ function distPointSeg(
   const y = ay + t * dy;
   return { dist: Math.hypot(px - x, py - y), t, x, y };
 }
-
-const JOIN_EPS_MM = 350;
 
 /**
  * CAD plan snap shared by wall drawing and slab boundary picking.
