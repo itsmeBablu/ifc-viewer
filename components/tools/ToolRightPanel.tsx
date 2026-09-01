@@ -74,11 +74,15 @@ export default function ToolRightPanel({
   isLoadingModel = false,
   panelWidth: controlledPanelWidth,
   onPanelWidthChange,
+  onOpenRoomSchedule,
+  onOpenSheet,
 }: {
   onFile?: (file: File) => void;
   isLoadingModel?: boolean;
   panelWidth?: number;
   onPanelWidthChange?: (w: number) => void;
+  onOpenRoomSchedule?: () => void;
+  onOpenSheet?: (sheetId: string) => void;
 }) {
   // -- Panel open/width state ------------------------------------------------
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
@@ -192,6 +196,8 @@ export default function ToolRightPanel({
   const elementsCategoryFilter = useLayoutDrawingStore((s) => s.elementsCategoryFilter);
   const [views3DOpen, setViews3DOpen] = useState(true);
   const [viewsSidesOpen, setViewsSidesOpen] = useState(true);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
+  const [sheetsOpen, setSheetsOpen] = useState(false);
 
   const getViewTitle = () => {
     if (viewPreset === "top") {

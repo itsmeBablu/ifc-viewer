@@ -602,6 +602,8 @@ export default function WerkzeugApp() {
             isLoadingModel={isLoadingModel}
             panelWidth={panelWidth}
             onPanelWidthChange={setPanelWidth}
+            onOpenRoomSchedule={() => setRoomScheduleOpen(true)}
+            onOpenSheet={(_sheetId) => setSheetViewOpen(true)}
           />
         )}
 
