@@ -1567,6 +1567,56 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
         <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={20} value={store.draftSlabThicknessMm} onChange={(event) => store.setDraftSlabThicknessMm(Number(event.target.value))} /></label>
       )}
 
+      {tool === "duct" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Shape
+            <select className={fieldClass} value={store.draftDuctShape} onChange={(e) => store.setDraftDuctShape(e.target.value as any)}>
+              <option value="rectangular">Rectangular</option>
+              <option value="round">Round</option>
+            </select>
+          </label>
+          <label className={labelClass}>System
+            <select className={fieldClass} value={store.draftDuctSystem} onChange={(e) => store.setDraftDuctSystem(e.target.value as any)}>
+              <option value="supply">Supply Air</option>
+              <option value="return">Return Air</option>
+              <option value="exhaust">Exhaust Air</option>
+            </select>
+          </label>
+          {store.draftDuctShape === "rectangular" ? (
+            <>
+              <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftDuctWidthMm} onChange={(e) => store.setDraftDuctWidthMm(Number(e.target.value))} /></label>
+              <label className={labelClass}>Height (mm)<input className={fieldClass} type="number" min={50} value={store.draftDuctHeightMm} onChange={(e) => store.setDraftDuctHeightMm(Number(e.target.value))} /></label>
+            </>
+          ) : (
+            <label className={`${labelClass} col-span-2`}>Diameter (mm)<input className={fieldClass} type="number" min={50} value={store.draftDuctDiameterMm} onChange={(e) => store.setDraftDuctDiameterMm(Number(e.target.value))} /></label>
+          )}
+          <label className={`${labelClass} col-span-2`}>Elevation offset (mm)<input className={fieldClass} type="number" value={store.draftDuctElevationMm} onChange={(e) => store.setDraftDuctElevationMm(Number(e.target.value))} /></label>
+        </div>
+      )}
+
+      {tool === "pipe" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Diameter (mm)<input className={fieldClass} type="number" min={10} value={store.draftPipeDiameterMm} onChange={(e) => store.setDraftPipeDiameterMm(Number(e.target.value))} /></label>
+          <label className={labelClass}>System
+            <select className={fieldClass} value={store.draftPipeSystem} onChange={(e) => store.setDraftPipeSystem(e.target.value as any)}>
+              <option value="domestic_cold">Cold Water</option>
+              <option value="domestic_hot">Hot Water</option>
+              <option value="sanitary_waste">Sanitary Waste</option>
+              <option value="gas">Gas</option>
+            </select>
+          </label>
+          <label className={`${labelClass} col-span-2`}>Elevation offset (mm)<input className={fieldClass} type="number" value={store.draftPipeElevationMm} onChange={(e) => store.setDraftPipeElevationMm(Number(e.target.value))} /></label>
+        </div>
+      )}
+
+      {tool === "cabletray" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftCableTrayWidthMm} onChange={(e) => store.setDraftCableTrayWidthMm(Number(e.target.value))} /></label>
+          <label className={labelClass}>Height (mm)<input className={fieldClass} type="number" min={25} value={store.draftCableTrayHeightMm} onChange={(e) => store.setDraftCableTrayHeightMm(Number(e.target.value))} /></label>
+          <label className={`${labelClass} col-span-2`}>Elevation offset (mm)<input className={fieldClass} type="number" value={store.draftCableTrayElevationMm} onChange={(e) => store.setDraftCableTrayElevationMm(Number(e.target.value))} /></label>
+        </div>
+      )}
+
       {tool === "lines" && <DraftSketchLineProperties />}
 
     </div>

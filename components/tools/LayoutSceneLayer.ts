@@ -739,6 +739,239 @@ export default class LayoutSceneLayer {
     }
   }
 
+  syncDucts(
+    ducts: LayoutDuct[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedDuctIds: Set<string>;
+      showAllLevels: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+    },
+  ) {
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    const keep = new Set(ducts.map((d) => d.id));
+    for (const [id, mesh] of this.ductMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.ductMeshes.delete(id);
+      }
+    }
+
+    for (const duct of ducts) {
+      const level = levelById.get(duct.levelId);
+      const elev = fromMm((level?.elevationMm ?? 0) + (duct.elevationOffsetMm ?? duct.elevationMm ?? 2800));
+      const dx = fromMm(duct.endXmm - duct.startXmm);
+      const dz = fromMm(duct.endYmm - duct.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+
+      const angle = Math.atan2(dz, dx);
+      const midX = fromMm((duct.startXmm + duct.endXmm) / 2);
+      const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
+      const isSelected = opts.selectedDuctIds.has(duct.id);
+
+      let mesh = this.ductMeshes.get(duct.id);
+      if (!mesh) {
+        const w = fromMm(duct.widthMm ?? 300);
+        const h = fromMm(duct.heightMm ?? 200);
+        const dia = fromMm(duct.diameterMm ?? 200);
+        const geo =
+          duct.shape === "round"
+            ? new THREE.CylinderGeometry(dia / 2, dia / 2, len, 16)
+            : new THREE.BoxGeometry(len, h, w);
+
+        const sysColor =
+          duct.systemType === "supply"
+            ? 0x38bdf8
+            : duct.systemType === "return"
+              ? 0x818cf8
+              : duct.systemType === "exhaust"
+                ? 0xf43f5e
+                : 0xa855f7;
+
+        const mat = new THREE.MeshPhysicalMaterial({
+          color: sysColor,
+          roughness: 0.3,
+          metalness: 0.2,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        if (duct.shape === "round") {
+          mesh.rotation.z = Math.PI / 2;
+        }
+        mesh.userData.layoutDuctId = duct.id;
+        mesh.userData.kind = "duct";
+        this.ductMeshes.set(duct.id, mesh);
+        this.group.add(mesh);
+      }
+
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      const vis = this.checkElementVisibility(duct.id, "mep", opts);
+      mesh.visible =
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          duct.levelId === opts.activeLevelId);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      this.applyGhostMaterial(mesh, vis.isGhosted);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncPipes(
+    pipes: LayoutPipe[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedPipeIds: Set<string>;
+      showAllLevels: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+    },
+  ) {
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    const keep = new Set(pipes.map((p) => p.id));
+    for (const [id, mesh] of this.pipeMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.pipeMeshes.delete(id);
+      }
+    }
+
+    for (const pipe of pipes) {
+      const level = levelById.get(pipe.levelId);
+      const elev = fromMm((level?.elevationMm ?? 0) + (pipe.elevationOffsetMm ?? pipe.elevationMm ?? 2600));
+      const dx = fromMm(pipe.endXmm - pipe.startXmm);
+      const dz = fromMm(pipe.endYmm - pipe.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+
+      const angle = Math.atan2(dz, dx);
+      const midX = fromMm((pipe.startXmm + pipe.endXmm) / 2);
+      const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
+      const isSelected = opts.selectedPipeIds.has(pipe.id);
+
+      let mesh = this.pipeMeshes.get(pipe.id);
+      if (!mesh) {
+        const dia = fromMm(pipe.diameterMm ?? 32);
+        const geo = new THREE.CylinderGeometry(dia / 2, dia / 2, len, 12);
+        const sysColor =
+          pipe.systemType === "domestic_hot" || pipe.systemType === "hydronic_supply"
+            ? 0xef4444
+            : pipe.systemType === "domestic_cold" || pipe.systemType === "hydronic_return"
+              ? 0x0ea5e9
+              : pipe.systemType === "sanitary_waste"
+                ? 0x10b981
+                : 0xeab308;
+
+        const mat = new THREE.MeshPhysicalMaterial({
+          color: sysColor,
+          roughness: 0.25,
+          metalness: 0.6,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.z = Math.PI / 2;
+        mesh.userData.layoutPipeId = pipe.id;
+        mesh.userData.kind = "pipe";
+        this.pipeMeshes.set(pipe.id, mesh);
+        this.group.add(mesh);
+      }
+
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      const vis = this.checkElementVisibility(pipe.id, "mep", opts);
+      mesh.visible =
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          pipe.levelId === opts.activeLevelId);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      this.applyGhostMaterial(mesh, vis.isGhosted);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
+  syncCableTrays(
+    cableTrays: LayoutCableTray[],
+    levels: LayoutLevel[],
+    opts: {
+      activeLevelId: string | null;
+      selectedCableTrayIds: Set<string>;
+      showAllLevels: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+    },
+  ) {
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    const keep = new Set(cableTrays.map((ct) => ct.id));
+    for (const [id, mesh] of this.cableTrayMeshes) {
+      if (!keep.has(id)) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        this.cableTrayMeshes.delete(id);
+      }
+    }
+
+    for (const ct of cableTrays) {
+      const level = levelById.get(ct.levelId);
+      const elev = fromMm((level?.elevationMm ?? 0) + (ct.elevationOffsetMm ?? ct.elevationMm ?? 2900));
+      const dx = fromMm(ct.endXmm - ct.startXmm);
+      const dz = fromMm(ct.endYmm - ct.startYmm);
+      const len = Math.hypot(dx, dz);
+      if (len < 0.01) continue;
+
+      const angle = Math.atan2(dz, dx);
+      const midX = fromMm((ct.startXmm + ct.endXmm) / 2);
+      const midZ = fromMm((ct.startYmm + ct.endYmm) / 2);
+      const isSelected = opts.selectedCableTrayIds.has(ct.id);
+
+      let mesh = this.cableTrayMeshes.get(ct.id);
+      if (!mesh) {
+        const w = fromMm(ct.widthMm ?? 200);
+        const h = fromMm(ct.heightMm ?? 60);
+        const geo = new THREE.BoxGeometry(len, h, w);
+        const mat = new THREE.MeshPhysicalMaterial({
+          color: 0xf59e0b,
+          roughness: 0.4,
+          metalness: 0.3,
+        });
+        mesh = new THREE.Mesh(geo, mat);
+        mesh.userData.layoutCableTrayId = ct.id;
+        mesh.userData.kind = "cabletray";
+        this.cableTrayMeshes.set(ct.id, mesh);
+        this.group.add(mesh);
+      }
+
+      mesh.position.set(midX, elev, midZ);
+      mesh.rotation.y = -angle;
+      const vis = this.checkElementVisibility(ct.id, "mep", opts);
+      mesh.visible =
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          ct.levelId === opts.activeLevelId);
+
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      this.applyGhostMaterial(mesh, vis.isGhosted);
+      this.setMeshSelectionOutline(mesh, isSelected);
+    }
+  }
+
   syncStairs(
     stairs: LayoutStair[],
     levels: LayoutLevel[],

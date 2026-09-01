@@ -399,6 +399,9 @@ type LayoutDrawingState = {
 
   setDraftDuctShape: (shape: DuctShape) => void;
   setDraftDuctSize: (widthMm: number, heightMm: number, diameterMm: number) => void;
+  setDraftDuctWidthMm: (w: number) => void;
+  setDraftDuctHeightMm: (h: number) => void;
+  setDraftDuctDiameterMm: (d: number) => void;
   setDraftDuctSystem: (system: DuctSystemType) => void;
   setDraftDuctElevationMm: (elevationMm: number) => void;
   setDraftDuctFlowM3h: (flowM3h: number) => void;
@@ -406,6 +409,8 @@ type LayoutDrawingState = {
   setDraftPipeSystem: (system: PipeSystemType) => void;
   setDraftPipeElevationMm: (elevationMm: number) => void;
   setDraftCableTraySize: (widthMm: number, heightMm: number) => void;
+  setDraftCableTrayWidthMm: (w: number) => void;
+  setDraftCableTrayHeightMm: (h: number) => void;
   setDraftCableTrayType: (type: CableTrayType) => void;
   setDraftCableTrayElevationMm: (elevationMm: number) => void;
   setDraftEquipmentCategory: (cat: MepEquipmentCategory) => void;
@@ -1103,23 +1108,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftWireSystem: "power",
 
   setDraftDuctShape: (shape) => set({ draftDuctShape: shape }),
-  setDraftDuctSize: (w, h, dia) =>
-    set({
-      draftDuctWidthMm: Math.max(50, Math.round(w)),
-      draftDuctHeightMm: Math.max(50, Math.round(h)),
-      draftDuctDiameterMm: Math.max(50, Math.round(dia)),
-    }),
+  setDraftDuctSize: (widthMm, heightMm, diameterMm) => set({ draftDuctWidthMm: widthMm, draftDuctHeightMm: heightMm, draftDuctDiameterMm: diameterMm }),
+  setDraftDuctWidthMm: (w) => set({ draftDuctWidthMm: Math.max(20, w) }),
+  setDraftDuctHeightMm: (h) => set({ draftDuctHeightMm: Math.max(20, h) }),
+  setDraftDuctDiameterMm: (d) => set({ draftDuctDiameterMm: Math.max(20, d) }),
   setDraftDuctSystem: (sys) => set({ draftDuctSystem: sys }),
-  setDraftDuctElevationMm: (elev) => set({ draftDuctElevationMm: Math.round(elev) }),
-  setDraftDuctFlowM3h: (flow) => set({ draftDuctFlowM3h: Math.max(0, Math.round(flow)) }),
-  setDraftPipeDiameterMm: (dia) => set({ draftPipeDiameterMm: Math.max(10, Math.round(dia)) }),
+  setDraftDuctElevationMm: (elev) => set({ draftDuctElevationMm: elev }),
+  setDraftPipeDiameterMm: (d) => set({ draftPipeDiameterMm: Math.max(10, d) }),
   setDraftPipeSystem: (sys) => set({ draftPipeSystem: sys }),
-  setDraftPipeElevationMm: (elev) => set({ draftPipeElevationMm: Math.round(elev) }),
-  setDraftCableTraySize: (w, h) =>
-    set({
-      draftCableTrayWidthMm: Math.max(50, Math.round(w)),
-      draftCableTrayHeightMm: Math.max(25, Math.round(h)),
-    }),
+  setDraftPipeElevationMm: (elev) => set({ draftPipeElevationMm: elev }),
+  setDraftCableTraySize: (widthMm, heightMm) => set({ draftCableTrayWidthMm: widthMm, draftCableTrayHeightMm: heightMm }),
+  setDraftCableTrayWidthMm: (w) => set({ draftCableTrayWidthMm: Math.max(20, w) }),
+  setDraftCableTrayHeightMm: (h) => set({ draftCableTrayHeightMm: Math.max(20, h) }),
   setDraftCableTrayType: (type) => set({ draftCableTrayType: type }),
   setDraftCableTrayElevationMm: (elev) => set({ draftCableTrayElevationMm: Math.round(elev) }),
   setDraftEquipmentCategory: (cat) => set({ draftEquipmentCategory: cat }),

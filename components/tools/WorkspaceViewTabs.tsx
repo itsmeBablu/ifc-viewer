@@ -7,6 +7,7 @@ import {
   LuGrid2X2,
   LuLayers3,
   LuPanelTop,
+  LuScissors,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -28,6 +29,8 @@ export default function WorkspaceViewTabs() {
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
+  const sectionCutMode = useAppStore((s) => s.sliceProgress < 100);
+  const setSliceProgress = useAppStore((s) => s.setSliceProgress);
   const levels = useLayoutDrawingStore((s) => s.levels);
   const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -50,6 +53,14 @@ export default function WorkspaceViewTabs() {
     setViewPreset(preset);
   };
 
+  const toggleSectionCut = () => {
+    if (sectionCutMode) {
+      setSliceProgress(100);
+    } else {
+      setSliceProgress(50);
+    }
+  };
+
   return (
     <nav
       ref={rootRef}
@@ -59,8 +70,8 @@ export default function WorkspaceViewTabs() {
       <ViewTab
         active={!quadView && viewPreset === "top"}
         icon={<LuLayers3 />}
-        label={activeLevel ? `2D · ${activeLevel.name}` : "2D Plan"}
-        title="Open the active level as a precise 2D floor plan"
+        label={activeLevel ? `Plan · ${activeLevel.name}` : "Plan View"}
+        title="Open the active level as a 2D plan"
         onClick={() => openView("top")}
       />
       <ViewTab
@@ -81,7 +92,7 @@ export default function WorkspaceViewTabs() {
           onClick={() => setElevationsOpen((open) => !open)}
         >
           <LuPanelTop />
-          <span>{isElevation ? `${viewPreset[0].toUpperCase()}${viewPreset.slice(1)} Elevation` : "Elevations"}</span>
+          <span>{isElevation ? `${viewPreset[0].toUpperCase()}${viewPreset.slice(1)} Elevation` : "Elevation"}</span>
           <LuChevronDown className={`h-3 w-3 transition-transform ${elevationsOpen ? "rotate-180" : ""}`} />
         </button>
         {elevationsOpen && (
@@ -103,6 +114,14 @@ export default function WorkspaceViewTabs() {
           </div>
         )}
       </div>
+
+      <ViewTab
+        active={sectionCutMode}
+        icon={<LuScissors />}
+        label="Section"
+        title="Toggle vertical/horizontal cutting plane section view"
+        onClick={toggleSectionCut}
+      />
 
       <span className="mx-0.5 h-5 w-px bg-[var(--panel-divider)]" aria-hidden />
       <ViewTab

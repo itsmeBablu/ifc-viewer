@@ -37,6 +37,8 @@ import VStudioErrorBoundary from "./VStudioErrorBoundary";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
+import NavigationBar from "./NavigationBar";
+import ActiveLevelBadge from "./ActiveLevelBadge";
 import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
@@ -637,6 +639,15 @@ export default function WerkzeugApp() {
             });
           }}
         />}
+
+        {/* Navigation Bar & Persistent Active Level Indicator */}
+        <NavigationBar
+          onHome={() => viewerRef.current?.goHome()}
+          onZoomIn={() => viewerRef.current?.zoomIn()}
+          onZoomOut={() => viewerRef.current?.zoomOut()}
+          onZoomFit={() => viewerRef.current?.zoomFit()}
+        />
+        <ActiveLevelBadge />
 
         {/* Drag Snap & Hover Tooltip HUDs */}
         <DragSnapHud />

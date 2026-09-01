@@ -150,6 +150,10 @@ export type WerkzeugViewer3DHandle = {
   flyToRoom: (roomId: string) => Promise<void>;
   /** Capture PNG; scale>1 renders at higher resolution for PDF. */
   captureViewport: (opts?: { scale?: number }) => string | null;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  zoomFit: () => void;
+  goHome: () => void;
 };
 
 type Props = {
@@ -1063,6 +1067,27 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           renderer.render(scene, camera);
         }
       }
+    },
+    zoomIn: () => {
+      const controls = controlsRef.current;
+      if (controls) {
+        controls.dollyIn(1.25);
+        controls.update();
+      }
+    },
+    zoomOut: () => {
+      const controls = controlsRef.current;
+      if (controls) {
+        controls.dollyOut(1.25);
+        controls.update();
+      }
+    },
+    zoomFit: () => {
+      fitVisibleRef.current?.();
+    },
+    goHome: () => {
+      useToolMarkupStore.getState().setQuadView(false);
+      useToolMarkupStore.getState().setViewPreset("free");
     },
   }));
 
