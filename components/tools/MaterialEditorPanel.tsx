@@ -398,7 +398,7 @@ function VYellowDropdown<T extends string>({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border border-white/20 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur-xl thin-scroll">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] p-1 shadow-2xl backdrop-blur-xl thin-scroll">
           {options.map((opt) => (
             <button
               key={opt}
@@ -412,7 +412,7 @@ function VYellowDropdown<T extends string>({
                   ? isMep
                     ? "bg-sky-400 text-zinc-950 font-black"
                     : "bg-yellow-400 text-zinc-950 font-black"
-                  : "text-zinc-200 hover:bg-white/10 hover:text-white"
+                  : "text-[var(--text-strong)] hover:bg-[var(--surface-overlay)]"
               }`}
             >
               <span className="truncate">{opt}</span>
@@ -733,9 +733,9 @@ export default function MaterialEditorPanel({
                 className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
                   m.id === selected.id
                     ? isMep
-                      ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.4)] bg-sky-950/40"
-                      : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.4)] bg-yellow-950/40"
-                    : "border-white/10 bg-zinc-950/70 hover:border-yellow-400/60 shadow-md"
+                      ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-overlay)]"
+                      : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-overlay)]"
+                    : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
                 }`}
                 title={`${m.name} (${m.category})`}
               >
@@ -749,14 +749,14 @@ export default function MaterialEditorPanel({
                 />
 
                 {/* Grip Icon */}
-                <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-white/50 drop-shadow" />
+                <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
 
                 {/* Bottom Overlay Label */}
-                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-black/95 via-black/60 to-transparent p-1.5 pt-4 pointer-events-none">
-                  <span className="truncate text-[10px] font-bold text-white leading-tight drop-shadow-sm">
+                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-[var(--surface-card)] via-[var(--surface-card)]/80 to-transparent p-1.5 pt-4 pointer-events-none">
+                  <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-tight">
                     {m.name}
                   </span>
-                  <span className="truncate text-[8px] font-medium text-zinc-400 opacity-80 group-hover:opacity-100 transition-opacity">
+                  <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
                     {m.category}
                   </span>
                 </div>
