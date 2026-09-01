@@ -13,7 +13,7 @@ import {
   LuPrinter,
   LuMaximize,
   LuMinimize,
-  LuGrid,
+  LuGrid2X2,
   LuCheck,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
@@ -312,7 +312,7 @@ export default function StudioSettingsModal() {
                   : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
               }`}
             >
-              <LuGrid className="h-3 w-3" />
+              <LuGrid2X2 className="h-3 w-3" />
               <span>3D Grid</span>
             </button>
           </div>

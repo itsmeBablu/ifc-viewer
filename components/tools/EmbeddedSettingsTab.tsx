@@ -6,7 +6,7 @@ import {
   LuPalette,
   LuType,
   LuGlobe,
-  LuGrid,
+  LuGrid2X2,
   LuPrinter,
   LuMaximize,
   LuCheck,
@@ -253,7 +253,7 @@ export default function EmbeddedSettingsTab() {
               : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
           }`}
         >
-          <LuGrid className="h-2.5 w-2.5" />
+          <LuGrid2X2 className="h-2.5 w-2.5" />
           <span>Grid</span>
         </button>
       </div>
