@@ -43,6 +43,7 @@ import {
   LuFan,
   LuFlame,
   LuDroplets,
+  LuSettings,
   LuActivity,
   LuShieldAlert,
   LuLock,
@@ -76,6 +77,8 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { UnifiedButton } from "@/components/common/UnifiedButton";
 import { undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
+import StudioSettingsModal from "./StudioSettingsModal";
+import { useStudioSettingsStore } from "@/store/useStudioSettingsStore";
 import {
   buildFragBlob,
   buildMarkupOnlyIfc,
@@ -1753,7 +1756,20 @@ export default function ToolRibbon({
           >
             {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
           </button>
+          {/* Studio Settings */}
+          <div className="h-4 w-px bg-[var(--panel-divider)]" />
+          <button
+            type="button"
+            onClick={() => useStudioSettingsStore.getState().setSettingsModalOpen(true)}
+            title="Studio & Workspace Settings"
+            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+          >
+            <LuSettings className="h-3.5 w-3.5" />
+          </button>
         </div>
+
+        {/* Global Studio Settings Modal */}
+        <StudioSettingsModal />
 
         {/* Center: Active Model Name + Active View (When right panel is collapsed) */}
         {!rightPanelOpen && (

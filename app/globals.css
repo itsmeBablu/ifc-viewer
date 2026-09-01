@@ -120,6 +120,35 @@ body.werkzeug-active.mep-mode-active .werkzeug-view-tab.is-active {
   --font-mono: var(--font-geist-mono);
 }
 
+/* Studio Font Family and Sizing Utilities */
+html[data-studio-font="inter"],
+body[data-studio-font="inter"] {
+  font-family: var(--font-geist-sans), Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.011em;
+}
+
+html[data-studio-font="jakarta"],
+body[data-studio-font="jakarta"] {
+  font-family: "Plus Jakarta Sans", Outfit, var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+
+html[data-studio-font="mono"],
+body[data-studio-font="mono"] {
+  font-family: var(--font-geist-mono), "JetBrains Mono", "Fira Code", monospace;
+  letter-spacing: -0.005em;
+}
+
+html[data-studio-font-scale="compact"] {
+  font-size: 13px;
+}
+html[data-studio-font-scale="default"] {
+  font-size: 14px;
+}
+html[data-studio-font-scale="spacious"] {
+  font-size: 15px;
+}
+
 @utility liquid-glass-panel {
   background-color: var(--glass-tint);
   backdrop-filter: blur(48px) saturate(var(--glass-saturate));

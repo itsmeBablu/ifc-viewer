@@ -35,10 +35,12 @@ import {
   LuMinus,
   LuPalette,
   LuSearch,
+  LuSettings,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useStudioSettingsStore, STUDIO_ACCENTS } from "@/store/useStudioSettingsStore";
 import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import { useIfcStructure } from "./useIfcStructure";
 import IfcStructureTree from "./IfcStructureTree";
@@ -46,7 +48,9 @@ import ToolFloorsSection from "./ToolFloorsSection";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
+import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
 import MaterialEditorPanel from "./MaterialEditorPanel";
+import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import {
   wallLengthMm,
@@ -100,10 +104,15 @@ export default function ToolRightPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // -- Edit type and material editor panels ----------------------------------
+  // -- Edit type, materials, and settings tabs in Properties -----------------
+  const [propTab, setPropTab] = useState<"properties" | "materials" | "settings">("properties");
+  const [editTypeMode, setEditTypeMode] = useState(false);
   const [editTypeOpen, setEditTypeOpen] = useState(false);
   const [materialEditorOpen, setMaterialEditorOpen] = useState(false);
   const [types, setTypes] = useState<Record<string, ElementTypeDefinition>>(DEFAULT_ELEMENT_TYPES);
+
+  const accent = useStudioSettingsStore((s) => s.accent);
+  const syncArchMep = useStudioSettingsStore((s) => s.syncArchMep);
 
   // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
@@ -444,46 +453,59 @@ export default function ToolRightPanel({
         </div>
 
         <div
-          className="tool-properties-region flex flex-col border-b border-[var(--panel-divider)] overflow-y-auto thin-scroll shrink-0"
+          className="tool-properties-region flex flex-col border-b border-[var(--panel-divider)] overflow-hidden shrink-0"
           style={{ height: propHeight, minHeight: 120 }}
         >
-          <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5 truncate">
-              <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
-              {propertiesTitle}
-            </span>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <UnifiedButton
-                size="xs"
-                variant="secondary"
-                onClick={() => setMaterialEditorOpen(true)}
-                icon={<LuPalette className="h-2.5 w-2.5 text-yellow-400" />}
-                title="Open Material Editor"
-              >
-                Materials
-              </UnifiedButton>
-
-              {hasSelection &&
-                (selectedWall ||
-                  selectedDoor ||
-                  selectedWindow ||
-                  selectedSlab) && (
-                  <UnifiedButton
-                    size="xs"
-                    variant="primary"
-                    onClick={() => setEditTypeOpen(true)}
-                    icon={<LuSlidersHorizontal className="h-2.5 w-2.5" />}
-                  >
-                    Edit Type
-                  </UnifiedButton>
-                )}
-            </div>
-          </div>
-
-          <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
-            {hasSelection ? (
+          {/* TAB 1: PROPERTIES */}
+          {propTab === "properties" && (
+            editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
+              <EditTypeEmbeddedPanel
+                typeDef={currentType}
+                onBack={() => setEditTypeMode(false)}
+                onSave={handleTypeSave}
+                onOpenMaterialPicker={() => setPropTab("materials")}
+              />
+            ) : (
               <>
+                <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${activeAccent.textClass} flex items-center gap-1.5 truncate`}>
+                    <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
+                    {propertiesTitle}
+                  </span>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <UnifiedButton
+                      size="xs"
+                      variant="secondary"
+                      onClick={() => setPropTab("materials")}
+                      icon={<LuPalette className={`h-2.5 w-2.5 ${activeAccent.textClass}`} />}
+                      title="Open Material Studio Tab"
+                    >
+                      Materials
+                    </UnifiedButton>
+
+                    {hasSelection &&
+                      (selectedWall ||
+                        selectedDoor ||
+                        selectedWindow ||
+                        selectedSlab) && (
+                        <UnifiedButton
+                          size="xs"
+                          variant="primary"
+                          onClick={() => setEditTypeMode(true)}
+                          icon={<LuSlidersHorizontal className="h-2.5 w-2.5" />}
+                          className={`${activeAccent.bgClass} !text-zinc-950 font-bold`}
+                          title="Edit Type Parameters (Esc to return)"
+                        >
+                          Edit Type
+                        </UnifiedButton>
+                      )}
+                  </div>
+                </div>
+
+                <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+                  {hasSelection ? (
+                    <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />
                 ) : selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment ? (
@@ -956,7 +978,76 @@ export default function ToolRightPanel({
               </div>
             )}
           </div>
-        </div>
+        </>
+      )
+    )}
+
+          {/* TAB 2: EMBEDDED MATERIALS */}
+          {propTab === "materials" && (
+              <div className="flex-1 min-h-0 h-full overflow-hidden">
+                <MaterialEditorPanel
+                  isOpen={true}
+                  onClose={() => setPropTab("properties")}
+                  embedded={true}
+                />
+              </div>
+            )}
+
+            {/* TAB 3: EMBEDDED SETTINGS */}
+            {propTab === "settings" && (
+              <div className="flex-1 min-h-0 h-full overflow-hidden">
+                <EmbeddedSettingsTab />
+              </div>
+            )}
+
+            {/* Bottom Docked Tab Bar for Properties Region */}
+            <div className="flex h-7 shrink-0 items-center justify-around border-t border-[var(--panel-divider)]/40 px-1 bg-[var(--surface-overlay)]/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setPropTab("properties");
+                  setEditTypeMode(false);
+                }}
+                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  propTab === "properties"
+                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                }`}
+                title="Element Properties & Type Editing"
+              >
+                <LuSlidersHorizontal className="h-3 w-3" />
+                <span>Properties</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPropTab("materials")}
+                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  propTab === "materials"
+                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                }`}
+                title="Material Library & Shader Studio"
+              >
+                <LuPalette className="h-3 w-3" />
+                <span>Materials</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPropTab("settings")}
+                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  propTab === "settings"
+                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                }`}
+                title="Studio Settings & Workspace Preferences"
+              >
+                <LuSettings className="h-3 w-3" />
+                <span>Settings</span>
+              </button>
+            </div>
+          </div>
 
         {/* -- Horizontal splitter ----------------------------------------- */}
         <div
