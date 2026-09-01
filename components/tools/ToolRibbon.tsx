@@ -77,6 +77,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { UnifiedButton } from "@/components/common/UnifiedButton";
 import { undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
+import StudioSettingsDropdown from "./StudioSettingsDropdown";
 import StudioSettingsModal from "./StudioSettingsModal";
 import { useStudioSettingsStore } from "@/store/useStudioSettingsStore";
 import {
@@ -373,6 +374,7 @@ export default function ToolRibbon({
   };
 
   const isDark = colorTheme === "dark";
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
 
   // Layout Store
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -1756,19 +1758,29 @@ export default function ToolRibbon({
           >
             {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
           </button>
-          {/* Studio Settings */}
+          {/* Studio Settings Dropdown Trigger */}
           <div className="h-4 w-px bg-[var(--panel-divider)]" />
           <button
             type="button"
-            onClick={() => useStudioSettingsStore.getState().setSettingsModalOpen(true)}
+            onClick={() => setSettingsDropdownOpen((v) => !v)}
             title="Studio & Workspace Settings"
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+            className={`rounded-md p-1.5 transition-colors ${
+              settingsDropdownOpen
+                ? "bg-[var(--glass-inset-bg)] text-yellow-400 font-bold"
+                : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+            }`}
           >
             <LuSettings className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Global Studio Settings Modal */}
+        {/* Dropdown Popover attached to Settings Trigger */}
+        <StudioSettingsDropdown
+          isOpen={settingsDropdownOpen}
+          onClose={() => setSettingsDropdownOpen(false)}
+        />
+
+        {/* Global Studio Settings Modal (fallback/direct store trigger) */}
         <StudioSettingsModal />
 
         {/* Center: Active Model Name + Active View (When right panel is collapsed) */}

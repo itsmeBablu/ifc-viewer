@@ -36,6 +36,8 @@ import {
   LuPalette,
   LuSearch,
   LuSettings,
+  LuTable,
+  LuFileSpreadsheet,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -459,21 +461,72 @@ export default function ToolRightPanel({
           </button>
         </div>
 
-        <div
-          className="tool-properties-region flex flex-col border-b border-[var(--panel-divider)] overflow-hidden shrink-0"
-          style={{ height: propHeight, minHeight: 120 }}
-        >
-          {/* TAB 1: PROPERTIES */}
-          {propTab === "properties" && (
-            editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
+        {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME */}
+        <div className="flex h-8 shrink-0 items-center border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 px-1 gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setPropTab("properties");
+              setEditTypeMode(false);
+            }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-[11px] font-bold transition-all ${
+              propTab === "properties"
+                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+            }`}
+            title="Properties & Layout Inspector"
+          >
+            <LuSlidersHorizontal className="h-3.5 w-3.5" />
+            <span className="truncate">Properties & Layout</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPropTab("materials")}
+            className={`flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-[11px] font-bold transition-all ${
+              propTab === "materials"
+                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+            }`}
+            title="Material Library & Shader Studio"
+          >
+            <LuPalette className="h-3.5 w-3.5" />
+            <span className="truncate">Materials</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPropTab("settings")}
+            className={`flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-[11px] font-bold transition-all ${
+              propTab === "settings"
+                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+            }`}
+            title="Studio Settings & Workspace Preferences"
+          >
+            <LuSettings className="h-3.5 w-3.5" />
+            <span className="truncate">Settings</span>
+          </button>
+        </div>
+
+        {/* TAB 1: PROPERTIES & LAYOUT */}
+        {propTab === "properties" && (
+          editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
+            <div className="flex-1 min-h-0 h-full overflow-hidden">
               <EditTypeEmbeddedPanel
                 typeDef={currentType}
                 onBack={() => setEditTypeMode(false)}
                 onSave={handleTypeSave}
                 onOpenMaterialPicker={() => setPropTab("materials")}
               />
-            ) : (
-              <>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+              {/* Top Properties Region */}
+              <div
+                className="tool-properties-region flex flex-col border-b border-[var(--panel-divider)] overflow-hidden shrink-0"
+                style={{ height: propHeight, minHeight: 120 }}
+              >
                 <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${activeAccent.textClass} flex items-center gap-1.5 truncate`}>
                     <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
@@ -985,226 +1038,257 @@ export default function ToolRightPanel({
               </div>
             )}
           </div>
-        </>
-      )
-    )}
-
-          {/* TAB 2: EMBEDDED MATERIALS */}
-          {propTab === "materials" && (
-              <div className="flex-1 min-h-0 h-full overflow-hidden">
-                <MaterialEditorPanel
-                  isOpen={true}
-                  onClose={() => setPropTab("properties")}
-                  embedded={true}
-                />
-              </div>
-            )}
-
-            {/* TAB 3: EMBEDDED SETTINGS */}
-            {propTab === "settings" && (
-              <div className="flex-1 min-h-0 h-full overflow-hidden">
-                <EmbeddedSettingsTab />
-              </div>
-            )}
-
-            {/* Bottom Docked Tab Bar for Properties Region */}
-            <div className="flex h-7 shrink-0 items-center justify-around border-t border-[var(--panel-divider)]/40 px-1 bg-[var(--surface-overlay)]/60">
-              <button
-                type="button"
-                onClick={() => {
-                  setPropTab("properties");
-                  setEditTypeMode(false);
-                }}
-                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  propTab === "properties"
-                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-                }`}
-                title="Element Properties & Type Editing"
-              >
-                <LuSlidersHorizontal className="h-3 w-3" />
-                <span>Properties</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPropTab("materials")}
-                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  propTab === "materials"
-                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-                }`}
-                title="Material Library & Shader Studio"
-              >
-                <LuPalette className="h-3 w-3" />
-                <span>Materials</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPropTab("settings")}
-                className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  propTab === "settings"
-                    ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-                }`}
-                title="Studio Settings & Workspace Preferences"
-              >
-                <LuSettings className="h-3 w-3" />
-                <span>Settings</span>
-              </button>
-            </div>
-          </div>
-
-        {/* -- Horizontal splitter ----------------------------------------- */}
-        <div
-          onMouseDown={onSplitterMouseDown}
-          className="tool-properties-splitter h-1 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
-          title="Drag to resize split"
-        >
-          <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-yellow-400" />
         </div>
 
-        {/* -- LAYOUT (formerly Project Browser) -------------------------- */}
-        <div className="tool-layout-browser flex flex-col flex-1 min-h-0">
-          {/* Layout header + tabs */}
-          <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-              Layout
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setBrowserTab("all")}
-                className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
-                  browserTab === "all"
-                    ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setBrowserTab("ifc")}
-                className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
-                  browserTab === "ifc"
-                    ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                IFC
-              </button>
-            </div>
+          {/* -- Horizontal splitter ----------------------------------------- */}
+          <div
+            onMouseDown={onSplitterMouseDown}
+            className="tool-properties-splitter h-1 shrink-0 cursor-row-resize flex items-center justify-center bg-[var(--panel-divider)]/30 hover:bg-yellow-400/40 transition-colors group"
+            title="Drag to resize split"
+          >
+            <LuGripVertical className="h-3.5 w-3.5 text-[var(--text-muted)] rotate-90 opacity-60 group-hover:opacity-100 group-hover:text-yellow-400" />
           </div>
 
-          {/* Layout body (Compact, Thin Dividers) */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1.5 thin-scroll text-[11px] space-y-1.5">
-            {browserTab === "all" ? (
-              <>
-                {/* Levels & Stories tree */}
-                <div className="pb-1.5 border-b border-[var(--panel-divider)]/40">
-                  <button 
-                    type="button" 
-                    onClick={() => setFloorsOpen(!floorsOpen)} 
-                    className="w-full flex items-center justify-between text-[9px] font-semibold uppercase tracking-[.08em] text-[var(--text-strong)] mb-1 hover:text-yellow-400 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <LuLayers className="h-3 w-3 text-yellow-400" />
-                      Building Levels & Stories
-                    </div>
-                    <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-yellow-400 bg-[var(--surface-overlay)]/50 transition-colors">
-                      {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" />}
-                    </div>
-                  </button>
-                  {floorsOpen && <ToolFloorsSection />}
-                </div>
+          {/* -- LAYOUT (formerly Project Browser) -------------------------- */}
+          <div className="tool-layout-browser flex flex-col flex-1 min-h-0">
+            {/* Layout header + tabs */}
+            <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                Layout
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setBrowserTab("all")}
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                    browserTab === "all"
+                      ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrowserTab("ifc")}
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                    browserTab === "ifc"
+                      ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                  }`}
+                >
+                  IFC
+                </button>
+              </div>
+            </div>
 
-                {/* Views tree */}
-                <div className="pt-1">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
-                    <LuEye className="h-3 w-3 text-yellow-400" />
-                    Views
+            {/* Layout body (Compact, Thin Dividers) */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-1.5 thin-scroll text-[11px] space-y-1.5">
+              {browserTab === "all" ? (
+                <>
+                  {/* Levels & Stories tree */}
+                  <div className="pb-1.5 border-b border-[var(--panel-divider)]/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setFloorsOpen(!floorsOpen)} 
+                      className="w-full flex items-center justify-between text-[9px] font-semibold uppercase tracking-[.08em] text-[var(--text-strong)] mb-1 hover:text-yellow-400 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <LuLayers className="h-3 w-3 text-yellow-400" />
+                        Building Levels & Stories
+                      </div>
+                      <div className="flex items-center justify-center h-4 w-4 rounded border border-[var(--panel-divider)] group-hover:border-yellow-400 bg-[var(--surface-overlay)]/50 transition-colors">
+                        {floorsOpen ? <LuMinus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" /> : <LuPlus className="h-3 w-3 text-[var(--text-muted)] group-hover:text-yellow-400" />}
+                      </div>
+                    </button>
+                    {floorsOpen && <ToolFloorsSection />}
                   </div>
-                  <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)]/40 space-y-2">
-                    {/* 3D Views */}
-                    <div className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => setViews3DOpen(!views3DOpen)}
-                        className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
-                      >
-                        <span>3D Views</span>
-                        {views3DOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
-                      </button>
-                      {views3DOpen && (
-                        <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
-                          <button 
-                            onClick={() => setViewPreset("free")} 
-                            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
-                          >
-                            <LuChevronRight className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
-                            3D View
-                          </button>
-                        </div>
-                      )}
-                    </div>
 
-                    {/* All Sides (Elevations) */}
-                    <div className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => setViewsSidesOpen(!viewsSidesOpen)}
-                        className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
-                      >
-                        <span>All Sides</span>
-                        {viewsSidesOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
-                      </button>
-                      {viewsSidesOpen && (
-                        <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
-                          {[
-                            { id: 'north', label: 'North Elevation' },
-                            { id: 'south', label: 'South Elevation' },
-                            { id: 'east', label: 'East Elevation' },
-                            { id: 'west', label: 'West Elevation' },
-                          ].map(v => (
+                  {/* Views tree */}
+                  <div className="pt-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-strong)] mb-2 flex items-center gap-1.5">
+                      <LuEye className="h-3 w-3 text-yellow-400" />
+                      Views
+                    </div>
+                    <div className="flex flex-col ml-1 pl-2 border-l border-[var(--panel-divider)]/40 space-y-2">
+                      {/* 3D Views */}
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => setViews3DOpen(!views3DOpen)}
+                          className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
+                        >
+                          <span>3D Views</span>
+                          {views3DOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
+                        </button>
+                        {views3DOpen && (
+                          <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
                             <button 
-                              key={v.id} 
-                              onClick={() => setViewPreset(v.id as any)} 
+                              onClick={() => setViewPreset("free")} 
                               className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
                             >
                               <LuChevronRight className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
-                              {v.label}
+                              3D View
                             </button>
-                          ))}
-                        </div>
-                      )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* All Sides (Elevations) */}
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => setViewsSidesOpen(!viewsSidesOpen)}
+                          className="w-full flex items-center justify-between text-[10px] font-semibold text-[var(--text-muted)] uppercase hover:text-yellow-400 transition-colors"
+                        >
+                          <span>All Sides</span>
+                          {viewsSidesOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
+                        </button>
+                        {viewsSidesOpen && (
+                          <div className="flex flex-col space-y-0.5 pl-1.5 pt-0.5">
+                            {[
+                              { id: 'north', label: 'North Elevation' },
+                              { id: 'south', label: 'South Elevation' },
+                              { id: 'east', label: 'East Elevation' },
+                              { id: 'west', label: 'West Elevation' },
+                            ].map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => setViewPreset(s.id as 'north' | 'south' | 'east' | 'west')}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                              >
+                                <LuChevronRight className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Schedules / Quantities */}
+                  <div className="pt-1 border-t border-[var(--panel-divider)]/40">
+                    <button
+                      type="button"
+                      onClick={() => setSchedulesOpen(!schedulesOpen)}
+                      className="w-full flex items-center justify-between text-[10px] font-bold text-[var(--text-strong)] uppercase hover:text-yellow-400 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <LuTable className="h-3 w-3 text-yellow-400" />
+                        <span>Schedules / Quantities</span>
+                      </div>
+                      {schedulesOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
+                    </button>
+                    {schedulesOpen && (
+                      <div className="flex flex-col space-y-0.5 pl-4 pt-1">
+                        <button
+                          type="button"
+                          onClick={onOpenRoomSchedule}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                        >
+                          <LuTable className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                          <span>Room Schedule</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sheets */}
+                  <div className="pt-1 border-t border-[var(--panel-divider)]/40">
+                    <button
+                      type="button"
+                      onClick={() => setSheetsOpen(!sheetsOpen)}
+                      className="w-full flex items-center justify-between text-[10px] font-bold text-[var(--text-strong)] uppercase hover:text-yellow-400 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <LuFileSpreadsheet className="h-3 w-3 text-yellow-400" />
+                        <span>Sheets (All)</span>
+                      </div>
+                      {sheetsOpen ? <LuChevronDown className="h-3 w-3" /> : <LuChevronRight className="h-3 w-3" />}
+                    </button>
+                    {sheetsOpen && (
+                      <div className="flex flex-col space-y-0.5 pl-4 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenSheet?.("A101")}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                        >
+                          <LuFileSpreadsheet className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                          <span>A101 - Floor Plan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenSheet?.("A102")}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 transition-colors text-left w-full group"
+                        >
+                          <LuFileSpreadsheet className="h-2.5 w-2.5 text-[var(--text-muted)] group-hover:text-yellow-400" />
+                          <span>A102 - Elevations</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* IFC Spatial Hierarchy */
+                <div className="space-y-1">
+                  {loading && (
+                    <div className="p-4 text-center text-xs text-[var(--text-muted)]">
+                      Loading IFC structure...
+                    </div>
+                  )}
+                  {!loading && !structure && (
+                    <div className="p-4 text-center text-xs text-[var(--text-muted)]">
+                      No IFC model loaded or no structure found.
+                    </div>
+                  )}
+                  {structure && (
+                    <div className="font-mono text-[10px] space-y-1">
+                      <div className="font-bold text-yellow-400 truncate">
+                        Project: {structure.name || "IFC Project"}
+                      </div>
+                      {structure.sites?.map((site, sIdx) => (
+                        <div key={sIdx} className="pl-2 border-l border-[var(--panel-divider)] space-y-1">
+                          <div className="text-[var(--text-strong)]">Site: {site.name || "Site"}</div>
+                          {site.buildings?.map((bldg, bIdx) => (
+                            <div key={bIdx} className="pl-2 border-l border-[var(--panel-divider)] space-y-1">
+                              <div className="text-[var(--text-strong)]">Building: {bldg.name || "Building"}</div>
+                              {bldg.storeys?.map((storey, stIdx) => (
+                                <div key={stIdx} className="pl-2 border-l border-[var(--panel-divider)]">
+                                  <span className="text-yellow-400">Level: {storey.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </>
-            ) : (
-              /* IFC Tree tab */
-              <div className="h-full flex-1">
-                <IfcStructureTree structure={structure} loading={loading} />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
+      )
+    )}
 
-        {/* In-dock Slide-Over Edit Type Panel */}
-        <EditTypeDialog
-          typeDef={currentType}
-          isOpen={editTypeOpen}
-          onClose={() => setEditTypeOpen(false)}
-          onSave={handleTypeSave}
-        />
+      {/* TAB 2: EMBEDDED MATERIALS (Complete Full Height) */}
+      {propTab === "materials" && (
+        <div className="flex-1 min-h-0 h-full overflow-hidden">
+          <MaterialEditorPanel
+            isOpen={true}
+            onClose={() => setPropTab("properties")}
+            embedded={true}
+          />
+        </div>
+      )}
 
-        {/* In-dock Slide-Over Material Editor */}
-        <MaterialEditorPanel
-          isOpen={materialEditorOpen}
-          onClose={() => setMaterialEditorOpen(false)}
-        />
+      {/* TAB 3: EMBEDDED SETTINGS (Complete Full Height) */}
+      {propTab === "settings" && (
+        <div className="flex-1 min-h-0 h-full overflow-hidden">
+          <EmbeddedSettingsTab />
+        </div>
+      )}
       </aside>
     </>
   );

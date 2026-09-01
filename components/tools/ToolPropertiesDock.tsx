@@ -207,15 +207,65 @@ export default function ToolPropertiesDock() {
       {/* Dock Content Body */}
       {!collapsed && (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* THREE TABS DIRECTLY BELOW HEADER */}
+          <div className="flex h-8 shrink-0 items-center border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 px-1 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setDockTab("properties");
+                setEditTypeMode(false);
+              }}
+              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+                dockTab === "properties"
+                  ? `${accentBg} !text-zinc-950 shadow-sm`
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+              }`}
+              title="Element Properties & Type Editing"
+            >
+              <LuSlidersHorizontal className="h-3 w-3" />
+              <span className="truncate">Properties</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDockTab("materials")}
+              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+                dockTab === "materials"
+                  ? `${accentBg} !text-zinc-950 shadow-sm`
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+              }`}
+              title="Material Library & Shader Studio"
+            >
+              <LuPalette className="h-3 w-3" />
+              <span className="truncate">Materials</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDockTab("settings")}
+              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+                dockTab === "settings"
+                  ? `${accentBg} !text-zinc-950 shadow-sm`
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+              }`}
+              title="Studio Settings & Workspace Preferences"
+            >
+              <LuSettings className="h-3 w-3" />
+              <span className="truncate">Settings</span>
+            </button>
+          </div>
+
           {/* TAB 1: PROPERTIES (Instance or In-Place Edit Type) */}
           {dockTab === "properties" && (
             editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
-              <EditTypeEmbeddedPanel
-                typeDef={currentType}
-                onBack={() => setEditTypeMode(false)}
-                onSave={handleTypeSave}
-                onOpenMaterialPicker={() => setDockTab("materials")}
-              />
+              <div className="flex-1 min-h-0 h-full overflow-hidden">
+                <EditTypeEmbeddedPanel
+                  typeDef={currentType}
+                  onBack={() => setEditTypeMode(false)}
+                  onSave={handleTypeSave}
+                  onOpenMaterialPicker={() => setDockTab("materials")}
+                />
+              </div>
             ) : (
               <div ref={contentRef} className="flex flex-1 min-h-0 flex-col overflow-y-auto p-2 thin-scroll space-y-1.5 text-xs">
                 {/* TYPE SELECTOR HEADER & EDIT TYPE BUTTON */}
@@ -448,54 +498,6 @@ export default function ToolPropertiesDock() {
               <EmbeddedSettingsTab />
             </div>
           )}
-
-          {/* Bottom Dock Icon Tab Bar */}
-          <div className="flex h-8 shrink-0 items-center justify-around border-t border-[var(--panel-divider)]/50 px-1 bg-[var(--surface-overlay)]/70">
-            <button
-              type="button"
-              onClick={() => {
-                setDockTab("properties");
-                setEditTypeMode(false);
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                dockTab === "properties"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-              }`}
-              title="Element Properties & Type Editing"
-            >
-              <LuSlidersHorizontal className="h-3 w-3" />
-              <span>Properties</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDockTab("materials")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                dockTab === "materials"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-              }`}
-              title="Material Library & Shader Studio"
-            >
-              <LuPalette className="h-3 w-3" />
-              <span>Materials</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setDockTab("settings")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all ${
-                dockTab === "settings"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
-              }`}
-              title="Studio Settings & Workspace Preferences"
-            >
-              <LuSettings className="h-3 w-3" />
-              <span>Settings</span>
-            </button>
-          </div>
         </div>
       )}
     </aside>
