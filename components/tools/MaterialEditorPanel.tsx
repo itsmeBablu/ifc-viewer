@@ -247,9 +247,6 @@ const CLASS_DEFAULTS: Record<MaterialDefinition["category"], Partial<MaterialDef
   },
 };
 
-const field =
-  "h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-xs text-zinc-900 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] outline-none backdrop-blur-xl focus:border-amber-500 dark:focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20";
-
 function Slider({
   label,
   value,
@@ -258,6 +255,7 @@ function Slider({
   step = 0.01,
   display,
   onChange,
+  isDark = false,
 }: {
   label: string;
   value: number;
@@ -266,6 +264,7 @@ function Slider({
   step?: number;
   display?: string;
   onChange: (n: number) => void;
+  isDark?: boolean;
 }) {
   const progress = `${Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))}%`;
   const isPercent = display === undefined;
@@ -282,7 +281,9 @@ function Slider({
   };
 
   return (
-    <label className="grid grid-cols-[90px_1fr_56px] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300 py-1 border-b border-black/[0.04] dark:border-white/[0.04] last:border-b-0">
+    <label className={`grid grid-cols-[90px_1fr_56px] items-center gap-2 text-[11px] py-1 border-b last:border-b-0 ${
+      isDark ? "text-zinc-300 border-white/[0.04]" : "text-zinc-600 border-black/[0.04]"
+    }`}>
       <span>{label}</span>
       <input
         type="range"
@@ -294,7 +295,9 @@ function Slider({
         className="material-slider w-full cursor-pointer"
         style={{ "--slider-progress": progress } as React.CSSProperties}
       />
-      <span className="flex items-baseline justify-end font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
+      <span className={`flex items-baseline justify-end font-mono text-[10px] font-bold ${
+        isDark ? "text-amber-300" : "text-amber-700"
+      }`}>
         <input
           type="number"
           min={editableMin}
@@ -302,10 +305,12 @@ function Slider({
           step={editableStep}
           value={editableValue}
           onChange={(e) => changeEditableValue(e.target.value)}
-          className="w-10 appearance-none border-0 bg-transparent p-0 text-right font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className={`w-10 appearance-none border-0 bg-transparent p-0 text-right font-mono text-[10px] font-bold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+            isDark ? "text-amber-300" : "text-amber-700"
+          }`}
           aria-label={`${label} value`}
         />
-        {suffix && <span className="ml-0.5 text-zinc-400 dark:text-zinc-500">{suffix}</span>}
+        {suffix && <span className={`ml-0.5 ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>{suffix}</span>}
       </span>
     </label>
   );
@@ -317,20 +322,28 @@ function Section({
   badgeGradient,
   children,
   defaultOpen = true,
+  isDark = false,
 }: {
   title: string;
   icon: React.ReactNode;
   badgeGradient: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  isDark?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="ios-glass-card rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className={`ios-glass-card rounded-2xl border backdrop-blur-md overflow-hidden ${
+      isDark
+        ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
+        : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+    }`}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between p-3 text-left font-bold text-xs text-zinc-900 dark:text-white hover:bg-black/[0.03] dark:hover:bg-white/5 transition-colors"
+        className={`flex w-full items-center justify-between p-3 text-left font-bold text-xs transition-colors ${
+          isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
+        }`}
       >
         <div className="flex items-center gap-2">
           <div
@@ -346,7 +359,9 @@ function Section({
           }`}
         />
       </button>
-      <GsapHeightAccordion open={open} contentKey={title} innerClassName="space-y-2.5 p-3 pt-0 border-t border-black/[0.04] dark:border-white/[0.06]">
+      <GsapHeightAccordion open={open} contentKey={title} innerClassName={`space-y-2.5 p-3 pt-0 border-t ${
+        isDark ? "border-white/[0.06]" : "border-black/[0.04]"
+      }`}>
         {children}
       </GsapHeightAccordion>
     </section>
@@ -362,7 +377,7 @@ export default function MaterialEditorPanel({
   onClose: () => void;
   embedded?: boolean;
 }) {
-  const _isDark = useAppStore((s) => s.colorTheme === "dark");
+  const isDark = useAppStore((s) => s.colorTheme === "dark");
   const materials = useMaterialStore((s) => s.materials);
   const selectedId = useMaterialStore((s) => s.selectedMaterialId);
   const select = useMaterialStore((s) => s.setSelectedMaterialId);
@@ -387,44 +402,54 @@ export default function MaterialEditorPanel({
   const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
 
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("All");
-  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string>("All");
+  const [search, setSearch] = useState<string>("");
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(
-    () =>
-      materials.filter(
-        (m) =>
-          (category === "All" || m.category === category || (category === "Custom" && !m.isPreset)) &&
-          (!search || `${m.name} ${m.category}`.toLowerCase().includes(search.toLowerCase()))
-      ),
-    [materials, category, search]
-  );
-
-  const selected = materials.find((m) => m.id === selectedId) ?? filtered[0] ?? materials[0];
-
-  // GSAP animation on panel open
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        ".ios-glass-card",
-        { opacity: 0, y: 10 },
-        { opacity: 1, y: 0, duration: 0.3, stagger: 0.04, ease: "power2.out" }
+        containerRef.current,
+        { opacity: 0, x: embedded ? 0 : 24, scale: embedded ? 0.98 : 1 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.35, ease: "power2.out" }
       );
     }, containerRef);
     return () => ctx.revert();
-  }, [isOpen, category]);
+  }, [isOpen, embedded]);
 
-  if (!isOpen || !selected) return null;
+  const selected = useMemo(() => {
+    return materials.find((m) => m.id === selectedId) ?? materials[0];
+  }, [materials, selectedId]);
 
-  const patch = (p: Partial<MaterialDefinition>) => update(selected.id, p);
-  const clone = () =>
-    select(add({ ...selected, name: `${selected.name} Copy`, category: "Custom", isPreset: false }).id);
+  const filtered = useMemo(() => {
+    return materials.filter((m) => {
+      if (category !== "All" && m.category !== category) return false;
+      if (search && !m.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+  }, [materials, category, search]);
+
+  if (!isOpen) return null;
+
+  const patch = (p: Partial<MaterialDefinition>) => {
+    update(selected.id, p);
+  };
+
+  const clone = () => {
+    const next: MaterialDefinition = {
+      ...selected,
+      id: `mat-custom-${Date.now()}`,
+      name: `${selected.name} Copy`,
+      isPreset: false,
+    };
+    add(next);
+    select(next.id);
+  };
 
   const assign = () => {
-    const p = { material: selected.id, color: selected.color };
+    const p = { material: selected.name, color: selected.color };
     if (wallId) void updateWall(wallId, p);
     else if (slabId) void updateSlab(slabId, p);
     else if (doorId) void updateDoor(doorId, p);
@@ -459,29 +484,45 @@ export default function MaterialEditorPanel({
     Math.min(96, (selected.hatchScaleMm ?? 200) / Math.max(0.1, selected.tilingScale ?? 1) / 4)
   );
 
+  const fieldInputClass = `h-8 w-full rounded-xl border px-2.5 text-xs outline-none backdrop-blur-xl transition-all ${
+    isDark
+      ? "border-white/15 bg-black/40 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20"
+      : "border-black/10 bg-white text-zinc-900 shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20"
+  }`;
+
   return (
     <div
       ref={containerRef}
       className={`${
         embedded ? "relative h-full min-h-0 w-full" : "absolute inset-0 max-[1100px]:fixed max-[1100px]:inset-3"
-      } z-40 flex select-none flex-col overflow-hidden border-l border-black/[0.08] dark:border-white/10 bg-white/85 dark:bg-slate-950/90 text-zinc-900 dark:text-white shadow-[0_16px_50px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-3xl max-[1100px]:rounded-[28px] max-[1100px]:border transition-colors`}
+      } z-40 flex select-none flex-col overflow-hidden border-l ${
+        isDark
+          ? "border-white/10 bg-slate-950/90 text-white shadow-[0_16px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)]"
+          : "border-black/[0.08] bg-white/95 text-zinc-900 shadow-[0_16px_50px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      } backdrop-blur-3xl max-[1100px]:rounded-[28px] max-[1100px]:border transition-colors`}
     >
       {/* Header */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] px-3.5">
+      <header className={`flex h-12 shrink-0 items-center justify-between border-b px-3.5 ${
+        isDark ? "border-white/10 bg-white/[0.02]" : "border-black/[0.06] bg-black/[0.02]"
+      }`}>
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs shadow-sm">
             <LuPalette className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-xs font-bold text-zinc-900 dark:text-white tracking-tight">Slate Material Studio</p>
-            <p className="text-[9px] text-zinc-500 dark:text-zinc-400">PBR Photometric · iOS 26 Glass</p>
+            <p className={`text-xs font-bold tracking-tight ${isDark ? "text-white" : "text-zinc-900"}`}>Slate Material Studio</p>
+            <p className={`text-[9px] ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>PBR Photometric · iOS 26 Glass</p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
           <button
             onClick={clone}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shadow-sm"
+            className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-95 shadow-sm ${
+              isDark
+                ? "bg-white/10 hover:bg-white/20 border-white/10 text-zinc-200 hover:text-white"
+                : "bg-black/5 hover:bg-black/10 border-black/5 text-zinc-600 hover:text-zinc-900"
+            }`}
             title="Duplicate Material"
           >
             <LuPlus className="h-3.5 w-3.5" />
@@ -489,7 +530,7 @@ export default function MaterialEditorPanel({
           {!selected.isPreset && (
             <button
               onClick={() => remove(selected.id)}
-              className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center justify-center text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-all active:scale-95 shadow-sm"
+              className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center justify-center text-red-500 hover:text-red-600 transition-all active:scale-95 shadow-sm"
               title="Delete Material"
             >
               <LuTrash2 className="h-3.5 w-3.5" />
@@ -497,7 +538,11 @@ export default function MaterialEditorPanel({
           )}
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shadow-sm"
+            className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-95 shadow-sm ${
+              isDark
+                ? "bg-white/10 hover:bg-white/20 border-white/10 text-zinc-200 hover:text-white"
+                : "bg-black/5 hover:bg-black/10 border-black/5 text-zinc-600 hover:text-zinc-900"
+            }`}
             title="Close"
           >
             <LuX className="h-3.5 w-3.5" />
@@ -512,6 +557,7 @@ export default function MaterialEditorPanel({
           title="Material Palette & Slots"
           icon={<LuBox className="h-3 w-3" />}
           badgeGradient="from-amber-500 to-orange-600"
+          isDark={isDark}
         >
           {/* Search bar */}
           <div className="relative">
@@ -520,7 +566,7 @@ export default function MaterialEditorPanel({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search PBR materials…"
-              className={`${field} pl-8`}
+              className={`${fieldInputClass} pl-8`}
             />
           </div>
 
@@ -533,7 +579,9 @@ export default function MaterialEditorPanel({
                 className={`shrink-0 rounded-xl px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-95 ${
                   category === c
                     ? "bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 shadow-[0_2px_8px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] font-bold"
-                    : "border border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10"
+                    : isDark
+                    ? "border border-white/10 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10"
+                    : "border border-black/5 bg-black/5 text-zinc-600 hover:text-zinc-900 hover:bg-black/10"
                 }`}
               >
                 {c}
@@ -551,12 +599,18 @@ export default function MaterialEditorPanel({
                 onClick={() => select(m.id)}
                 className={`group relative min-w-0 rounded-xl border p-1.5 text-left transition-all active:scale-95 ${
                   m.id === selected.id
-                    ? "border-amber-500 dark:border-amber-400 bg-amber-500/10 shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] dark:shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]"
-                    : "border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-black/30 hover:border-black/15 dark:hover:border-white/20"
+                    ? isDark
+                      ? "border-amber-400 bg-amber-400/10 shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]"
+                      : "border-amber-500 bg-amber-500/10 shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    : isDark
+                    ? "border-white/10 bg-black/30 hover:border-white/20"
+                    : "border-black/[0.06] bg-black/[0.02] hover:border-black/15"
                 }`}
                 title="Drag onto a 3D object"
               >
-                <LuGrip className="absolute right-1 top-1 h-3 w-3 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300" />
+                <LuGrip className={`absolute right-1 top-1 h-3 w-3 ${
+                  isDark ? "text-zinc-500 group-hover:text-zinc-300" : "text-zinc-400 group-hover:text-zinc-700"
+                }`} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   draggable={false}
@@ -564,18 +618,24 @@ export default function MaterialEditorPanel({
                   alt=""
                   className="pointer-events-none mx-auto h-11 w-11 drop-shadow-md"
                 />
-                <span className="pointer-events-none block truncate text-[9px] font-bold text-zinc-900 dark:text-white mt-1">
+                <span className={`pointer-events-none block truncate text-[9px] font-bold mt-1 ${
+                  isDark ? "text-white" : "text-zinc-900"
+                }`}>
                   {m.name}
                 </span>
-                <span className="pointer-events-none block truncate text-[8px] text-zinc-500 dark:text-zinc-400">
+                <span className={`pointer-events-none block truncate text-[8px] ${
+                  isDark ? "text-zinc-400" : "text-zinc-500"
+                }`}>
                   {m.category}
                 </span>
               </button>
             ))}
           </div>
 
-          <p className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 pt-0.5">
-            <LuMousePointer2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+          <p className={`flex items-center gap-1.5 text-[10px] pt-0.5 ${
+            isDark ? "text-zinc-400" : "text-zinc-500"
+          }`}>
+            <LuMousePointer2 className={`h-3 w-3 ${isDark ? "text-amber-400" : "text-amber-600"}`} />
             <span>Drag a slot onto any building mesh in 3D.</span>
           </p>
         </Section>
@@ -585,15 +645,20 @@ export default function MaterialEditorPanel({
           title="Photometric 3D Preview"
           icon={<LuSlidersHorizontal className="h-3 w-3" />}
           badgeGradient="from-blue-500 to-indigo-600"
+          isDark={isDark}
         >
           <div className="grid grid-cols-[1fr_72px] gap-2.5">
             {/* 3D Chamber Preview Card */}
-            <div className="flex min-h-28 items-center justify-center rounded-2xl border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-black/50 shadow-inner p-2">
+            <div className={`flex min-h-28 items-center justify-center rounded-2xl border shadow-inner p-2 ${
+              isDark ? "border-white/15 bg-black/50" : "border-black/10 bg-black/[0.03]"
+            }`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview}
                 alt="Material preview"
-                className="h-24 w-24 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.3)] dark:drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]"
+                className={`h-24 w-24 object-contain ${
+                  isDark ? "drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]" : "drop-shadow-[0_8px_16px_rgba(0,0,0,0.25)]"
+                }`}
               />
             </div>
 
@@ -605,8 +670,12 @@ export default function MaterialEditorPanel({
                   onClick={() => setShape(s.id)}
                   className={`flex items-center justify-center gap-1 rounded-xl text-[10px] font-semibold border transition-all active:scale-95 ${
                     shape === s.id
-                      ? "border-blue-500 dark:border-blue-400 bg-blue-500/15 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 shadow-sm"
-                      : "border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                      ? isDark
+                        ? "border-blue-400 bg-blue-500/20 text-blue-300 shadow-sm"
+                        : "border-blue-500 bg-blue-500/15 text-blue-700 shadow-sm"
+                      : isDark
+                      ? "border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                      : "border-black/5 bg-black/5 text-zinc-600 hover:text-zinc-900"
                   }`}
                 >
                   {s.icon}
@@ -617,16 +686,16 @@ export default function MaterialEditorPanel({
 
           <div className="space-y-2 pt-1">
             <div className="grid grid-cols-[1fr_95px] gap-2">
-              <label className="text-[10px] text-zinc-500 dark:text-zinc-400 block">
+              <label className={`text-[10px] block ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
                 Name
                 <input
                   value={selected.name}
                   onChange={(e) => patch({ name: e.target.value })}
-                  className={`${field} mt-1`}
+                  className={`${fieldInputClass} mt-1`}
                 />
               </label>
 
-              <label className="text-[10px] text-zinc-500 dark:text-zinc-400 block">
+              <label className={`text-[10px] block ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
                 Class
                 <select
                   value={selected.category}
@@ -634,10 +703,10 @@ export default function MaterialEditorPanel({
                     const next = e.target.value as MaterialDefinition["category"];
                     patch({ ...CLASS_DEFAULTS[next], category: next });
                   }}
-                  className={`${field} mt-1`}
+                  className={`${fieldInputClass} mt-1`}
                 >
                   {CATEGORIES.slice(1).map((c) => (
-                    <option key={c} value={c} className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">
+                    <option key={c} value={c} className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>
                       {c}
                     </option>
                   ))}
@@ -650,9 +719,11 @@ export default function MaterialEditorPanel({
                 type="color"
                 value={selected.color}
                 onChange={(e) => patch({ color: e.target.value })}
-                className="h-8 w-10 rounded-xl border border-black/10 dark:border-white/20 bg-transparent p-0 cursor-pointer overflow-hidden shadow-sm"
+                className={`h-8 w-10 rounded-xl border bg-transparent p-0 cursor-pointer overflow-hidden shadow-sm ${
+                  isDark ? "border-white/20" : "border-black/10"
+                }`}
               />
-              <input value={selected.color.toUpperCase()} readOnly className={field} />
+              <input value={selected.color.toUpperCase()} readOnly className={fieldInputClass} />
             </div>
           </div>
         </Section>
@@ -662,20 +733,23 @@ export default function MaterialEditorPanel({
           title="PBR Physical Parameters"
           icon={<LuSparkles className="h-3 w-3" />}
           badgeGradient="from-emerald-500 to-teal-600"
+          isDark={isDark}
         >
-          <Slider label="Roughness" value={selected.roughness} onChange={(v) => patch({ roughness: v })} />
-          <Slider label="Metalness" value={selected.metalness} onChange={(v) => patch({ metalness: v })} />
-          <Slider label="Opacity" value={selected.opacity} min={0.02} onChange={(v) => patch({ opacity: v })} />
+          <Slider label="Roughness" value={selected.roughness} onChange={(v) => patch({ roughness: v })} isDark={isDark} />
+          <Slider label="Metalness" value={selected.metalness} onChange={(v) => patch({ metalness: v })} isDark={isDark} />
+          <Slider label="Opacity" value={selected.opacity} min={0.02} onChange={(v) => patch({ opacity: v })} isDark={isDark} />
           <Slider
             label="Transmission"
             value={selected.transmission ?? 0}
             onChange={(v) => patch({ transmission: v })}
+            isDark={isDark}
           />
-          <Slider label="Clearcoat" value={selected.clearcoat ?? 0} onChange={(v) => patch({ clearcoat: v })} />
+          <Slider label="Clearcoat" value={selected.clearcoat ?? 0} onChange={(v) => patch({ clearcoat: v })} isDark={isDark} />
           <Slider
             label="Coat Roughness"
             value={selected.clearcoatRoughness ?? 0.1}
             onChange={(v) => patch({ clearcoatRoughness: v })}
+            isDark={isDark}
           />
           <Slider
             label="IOR Index"
@@ -684,6 +758,7 @@ export default function MaterialEditorPanel({
             max={2.5}
             display={(selected.ior ?? 1.5).toFixed(2)}
             onChange={(v) => patch({ ior: v })}
+            isDark={isDark}
           />
           <Slider
             label="Bump Depth"
@@ -691,6 +766,7 @@ export default function MaterialEditorPanel({
             max={2}
             display={(selected.bumpScale ?? 0.2).toFixed(2)}
             onChange={(v) => patch({ bumpScale: v })}
+            isDark={isDark}
           />
         </Section>
 
@@ -699,26 +775,31 @@ export default function MaterialEditorPanel({
           title="Surface Hatch & Tiling"
           icon={<LuImage className="h-3 w-3" />}
           badgeGradient="from-purple-500 to-violet-600"
+          isDark={isDark}
         >
-          <label className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <label className={`grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] ${
+            isDark ? "text-zinc-300" : "text-zinc-600"
+          }`}>
             <span>Pattern</span>
             <select
               value={selected.hatchStyle}
               onChange={(e) => patch({ hatchStyle: e.target.value as HatchStyle })}
-              className={field}
+              className={fieldInputClass}
             >
               {HATCHES.map((h) => (
-                <option key={h.id} value={h.id} className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">
+                <option key={h.id} value={h.id} className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>
                   {h.glyph} {h.label}
                 </option>
               ))}
             </select>
           </label>
 
-          <div className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <div className={`grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] ${
+            isDark ? "text-zinc-300" : "text-zinc-600"
+          }`}>
             <span>Pattern Live</span>
             <div
-              className="h-9 rounded-xl border border-black/10 dark:border-white/20 shadow-inner"
+              className={`h-9 rounded-xl border shadow-inner ${isDark ? "border-white/20" : "border-black/10"}`}
               style={{
                 backgroundColor: selected.color,
                 backgroundImage: hatchUrl ? `url(${hatchUrl})` : undefined,
@@ -735,6 +816,7 @@ export default function MaterialEditorPanel({
             step={25}
             display={`${selected.hatchScaleMm ?? 200} mm`}
             onChange={(v) => patch({ hatchScaleMm: v })}
+            isDark={isDark}
           />
           <Slider
             label="UV Tiling"
@@ -744,11 +826,16 @@ export default function MaterialEditorPanel({
             step={0.1}
             display={`${(selected.tilingScale ?? 1).toFixed(1)}×`}
             onChange={(v) => patch({ tilingScale: v })}
+            isDark={isDark}
           />
         </Section>
 
         {/* Actions Footer */}
-        <div className="sticky bottom-0 grid grid-cols-2 gap-2 rounded-2xl border border-black/[0.06] dark:border-white/15 bg-white/90 dark:bg-slate-950/90 p-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl backdrop-blur-2xl">
+        <div className={`sticky bottom-0 grid grid-cols-2 gap-2 rounded-2xl border p-2.5 backdrop-blur-2xl ${
+          isDark
+            ? "border-white/15 bg-slate-950/90 shadow-2xl"
+            : "border-black/[0.06] bg-white/95 shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+        }`}>
           <button
             type="button"
             disabled={!hasSelection}
@@ -764,7 +851,9 @@ export default function MaterialEditorPanel({
             className={`flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold py-2 shadow-md transition-all active:scale-95 ${
               paintId === selected.id
                 ? "bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 ring-2 ring-amber-400/50"
-                : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-white"
+                : isDark
+                ? "bg-white/10 hover:bg-white/20 border border-white/10 text-white"
+                : "bg-black/5 hover:bg-black/10 border border-black/10 text-zinc-800"
             }`}
           >
             <LuSparkles className="h-4 w-4" />

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { LuX, LuCheck, LuSlidersHorizontal, LuInfo, LuPlus, LuTrash2, LuLayers } from "react-icons/lu";
 import gsap from "gsap";
+import { useAppStore } from "@/store/useAppStore";
 import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
 
 export type ElementTypeDefinition = {
@@ -398,6 +399,8 @@ export default function EditTypeDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
+  const isDark = useAppStore((s) => s.colorTheme === "dark");
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -427,14 +430,18 @@ export default function EditTypeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 dark:bg-black/70 backdrop-blur-xl animate-in fade-in duration-200 select-none">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 ${isDark ? "bg-black/70" : "bg-black/40"} backdrop-blur-xl animate-in fade-in duration-200 select-none`}>
       {/* Liquid Glass Modal Card */}
       <div
         ref={modalRef}
-        className="relative flex flex-col w-full max-w-2xl max-h-[90vh] rounded-[28px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-950/90 text-zinc-900 dark:text-white shadow-[0_24px_70px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-3xl overflow-hidden transition-colors"
+        className={`relative flex flex-col w-full max-w-2xl max-h-[90vh] rounded-[28px] border ${
+          isDark
+            ? "border-white/10 bg-slate-950/90 text-white shadow-[0_24px_70px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.25)]"
+            : "border-black/10 bg-white/95 text-zinc-900 shadow-[0_24px_70px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.9)]"
+        } backdrop-blur-3xl overflow-hidden transition-colors`}
       >
         {/* iOS 26 Glass Header */}
-        <div className="relative flex items-center justify-between px-5 py-4 border-b border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
+        <div className={`relative flex items-center justify-between px-5 py-4 border-b ${isDark ? "border-white/10 bg-white/[0.02]" : "border-black/[0.06] bg-black/[0.02]"}`}>
           <div className="flex items-center gap-3 min-w-0">
             <div
               className={`w-9 h-9 rounded-xl bg-gradient-to-br ${getCategoryGradient(
@@ -445,14 +452,14 @@ export default function EditTypeDialog({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? "text-amber-400" : "text-amber-600"}`}>
                   {formData.category} Type
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 border border-black/5 dark:border-white/10 text-zinc-600 dark:text-zinc-300 font-mono">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${isDark ? "bg-white/10 border-white/10 text-zinc-300" : "bg-black/5 border-black/5 text-zinc-600"}`}>
                   {formData.id}
                 </span>
               </div>
-              <h2 className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight truncate mt-0.5">
+              <h2 className={`text-sm font-bold tracking-tight truncate mt-0.5 ${isDark ? "text-white" : "text-zinc-900"}`}>
                 {formData.name}
               </h2>
             </div>
@@ -462,7 +469,11 @@ export default function EditTypeDialog({
             type="button"
             onClick={onClose}
             title="Close (Esc)"
-            className="w-8 h-8 rounded-full flex items-center justify-center bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shrink-0"
+            className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all active:scale-95 shrink-0 ${
+              isDark
+                ? "bg-white/10 hover:bg-white/20 border-white/10 text-zinc-300 hover:text-white"
+                : "bg-black/5 hover:bg-black/10 border-black/5 text-zinc-600 hover:text-zinc-900"
+            }`}
           >
             <LuX className="h-4 w-4" />
           </button>
@@ -470,7 +481,7 @@ export default function EditTypeDialog({
 
         {/* iOS 26 Segmented Control Navigation */}
         <div className="px-5 pt-3 pb-1">
-          <div className="flex p-1 rounded-xl bg-black/[0.05] dark:bg-black/40 border border-black/[0.06] dark:border-white/10 backdrop-blur-md">
+          <div className={`flex p-1 rounded-xl border backdrop-blur-md ${isDark ? "bg-black/40 border-white/10" : "bg-black/[0.05] border-black/[0.06]"}`}>
             {formData.category === "Wall" && (
               <button
                 type="button"
@@ -478,7 +489,7 @@ export default function EditTypeDialog({
                 className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === "layers"
                     ? "bg-gradient-to-r from-amber-500/90 to-orange-500/90 text-white shadow-[0_2px_8px_rgba(245,158,11,0.3),inset_0_1px_0_rgba(255,255,255,0.4)]"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
                 }`}
               >
                 <LuLayers className="h-3.5 w-3.5" />
@@ -491,7 +502,7 @@ export default function EditTypeDialog({
               className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === "dimensions"
                   ? "bg-gradient-to-r from-blue-500/90 to-indigo-500/90 text-white shadow-[0_2px_8px_rgba(59,130,246,0.3),inset_0_1px_0_rgba(255,255,255,0.4)]"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
               }`}
             >
               <span>Dimensions</span>
@@ -502,7 +513,7 @@ export default function EditTypeDialog({
               className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === "materials"
                   ? "bg-gradient-to-r from-emerald-500/90 to-teal-500/90 text-white shadow-[0_2px_8px_rgba(16,185,129,0.3),inset_0_1px_0_rgba(255,255,255,0.4)]"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
               }`}
             >
               <span>Material & Function</span>
@@ -513,7 +524,7 @@ export default function EditTypeDialog({
               className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === "physics"
                   ? "bg-gradient-to-r from-purple-500/90 to-violet-500/90 text-white shadow-[0_2px_8px_rgba(168,85,247,0.3),inset_0_1px_0_rgba(255,255,255,0.4)]"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                  : isDark ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-900"
               }`}
             >
               <span>Physics & Ratings</span>
@@ -531,29 +542,43 @@ export default function EditTypeDialog({
           {activeTab === "layers" && formData.category === "Wall" && (
             <div className="space-y-3 ios-card-anim">
               {/* Type Name Card */}
-              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-3.5 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block mb-1.5">
+              <div className={`rounded-2xl border p-3.5 backdrop-blur-md ${
+                isDark
+                  ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
+                  : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+              }`}>
+                <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
                   Type Name
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-3 py-2 text-xs font-semibold text-zinc-900 dark:text-white shadow-sm focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none transition-all"
+                  className={`w-full rounded-xl border px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-400/20 focus:outline-none transition-all ${
+                    isDark
+                      ? "border-white/15 bg-black/40 text-white focus:border-amber-400"
+                      : "border-black/10 bg-white text-zinc-900 shadow-sm focus:border-amber-500"
+                  }`}
                 />
               </div>
 
               {/* Cross-Section Visualizer Card */}
-              <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-3.5 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] space-y-2.5">
+              <div className={`rounded-2xl border p-3.5 backdrop-blur-md space-y-2.5 ${
+                isDark
+                  ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
+                  : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+              }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs shadow-sm">
                       <LuLayers className="h-3 w-3" />
                     </div>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Compound Cross-Section</span>
+                    <span className={`text-xs font-bold ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Compound Cross-Section</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                    <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                      isDark ? "text-amber-400 bg-amber-400/10 border-amber-400/20" : "text-amber-600 bg-amber-500/10 border-amber-500/20"
+                    }`}>
                       Total: {formData.thicknessMm || 200} mm
                     </span>
                     <button
@@ -575,7 +600,9 @@ export default function EditTypeDialog({
                           thicknessMm: total,
                         });
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-[11px] font-bold text-amber-700 dark:text-amber-300 transition-all active:scale-95"
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all active:scale-95 ${
+                        isDark ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/30 text-amber-300" : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-700"
+                      }`}
                     >
                       <LuPlus className="h-3 w-3" />
                       <span>Add Layer</span>
@@ -585,7 +612,9 @@ export default function EditTypeDialog({
 
                 {/* High-definition Layer Glass Bar */}
                 {formData.layers && formData.layers.length > 0 && (
-                  <div className="relative flex h-7 w-full overflow-hidden rounded-xl border border-black/10 dark:border-white/20 bg-black/10 dark:bg-black/60 shadow-[inset_0_2px_6px_rgba(0,0,0,0.2)] dark:shadow-[inset_0_2px_6px_rgba(0,0,0,0.6)] p-0.5 gap-0.5">
+                  <div className={`relative flex h-7 w-full overflow-hidden rounded-xl border p-0.5 gap-0.5 ${
+                    isDark ? "border-white/20 bg-black/60 shadow-[inset_0_2px_6px_rgba(0,0,0,0.6)]" : "border-black/10 bg-black/10 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)]"
+                  }`}>
                     {formData.layers.map((l, i) => (
                       <div
                         key={l.id || i}
@@ -615,7 +644,9 @@ export default function EditTypeDialog({
                   {(formData.layers || []).map((layer, idx) => (
                     <div
                       key={layer.id || idx}
-                      className="rounded-xl border border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-black/30 p-2.5 space-y-2 backdrop-blur-sm transition-all hover:border-black/15 dark:hover:border-white/20"
+                      className={`rounded-xl border p-2.5 space-y-2 backdrop-blur-sm transition-all ${
+                        isDark ? "border-white/10 bg-black/30 hover:border-white/20" : "border-black/[0.06] bg-black/[0.02] hover:border-black/15"
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         {/* Function Select */}
@@ -640,18 +671,22 @@ export default function EditTypeDialog({
                             );
                             setFormData({ ...formData, layers: updated });
                           }}
-                          className="h-8 rounded-lg border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/50 px-2.5 text-xs text-zinc-900 dark:text-white focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none flex-1 min-w-0"
+                          className={`h-8 rounded-lg border px-2.5 text-xs focus:outline-none flex-1 min-w-0 ${
+                            isDark ? "border-white/15 bg-black/50 text-white focus:border-amber-400" : "border-black/10 bg-white text-zinc-900 shadow-sm focus:border-amber-500"
+                          }`}
                         >
-                          <option value="finish1" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Finish 1 (Interior)</option>
-                          <option value="substrate" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Substrate</option>
-                          <option value="structure" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Structure</option>
-                          <option value="core" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Core Cavity</option>
-                          <option value="insulation" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Thermal Insulation</option>
-                          <option value="finish2" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Finish 2 (Exterior)</option>
+                          <option value="finish1" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Finish 1 (Interior)</option>
+                          <option value="substrate" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Substrate</option>
+                          <option value="structure" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Structure</option>
+                          <option value="core" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Core Cavity</option>
+                          <option value="insulation" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Thermal Insulation</option>
+                          <option value="finish2" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Finish 2 (Exterior)</option>
                         </select>
 
                         {/* Thickness Stepper */}
-                        <div className="flex items-center rounded-lg border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/50 overflow-hidden h-8">
+                        <div className={`flex items-center rounded-lg border overflow-hidden h-8 ${
+                          isDark ? "border-white/15 bg-black/50" : "border-black/10 bg-white shadow-sm"
+                        }`}>
                           <button
                             type="button"
                             onClick={() => {
@@ -662,7 +697,9 @@ export default function EditTypeDialog({
                               const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
                               setFormData({ ...formData, layers: updated, thicknessMm: total });
                             }}
-                            className="px-2 h-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 active:bg-black/10 dark:active:bg-white/20 transition-colors"
+                            className={`px-2 h-full transition-colors ${
+                              isDark ? "text-zinc-400 hover:text-white hover:bg-white/10 active:bg-white/20" : "text-zinc-600 hover:text-zinc-900 hover:bg-black/5 active:bg-black/10"
+                            }`}
                           >
                             -
                           </button>
@@ -679,7 +716,9 @@ export default function EditTypeDialog({
                               const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
                               setFormData({ ...formData, layers: updated, thicknessMm: total });
                             }}
-                            className="w-14 bg-transparent text-center font-mono text-xs font-bold text-amber-700 dark:text-amber-300 focus:outline-none"
+                            className={`w-14 bg-transparent text-center font-mono text-xs font-bold focus:outline-none ${
+                              isDark ? "text-amber-300" : "text-amber-700"
+                            }`}
                           />
                           <button
                             type="button"
@@ -691,7 +730,9 @@ export default function EditTypeDialog({
                               const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
                               setFormData({ ...formData, layers: updated, thicknessMm: total });
                             }}
-                            className="px-2 h-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 active:bg-black/10 dark:active:bg-white/20 transition-colors"
+                            className={`px-2 h-full transition-colors ${
+                              isDark ? "text-zinc-400 hover:text-white hover:bg-white/10 active:bg-white/20" : "text-zinc-600 hover:text-zinc-900 hover:bg-black/5 active:bg-black/10"
+                            }`}
                           >
                             +
                           </button>
@@ -709,7 +750,9 @@ export default function EditTypeDialog({
                             setFormData({ ...formData, layers: updated });
                           }}
                           title="Layer Color"
-                          className="h-8 w-8 rounded-lg border border-black/10 dark:border-white/15 bg-transparent p-0 cursor-pointer shrink-0 overflow-hidden"
+                          className={`h-8 w-8 rounded-lg border bg-transparent p-0 cursor-pointer shrink-0 overflow-hidden ${
+                            isDark ? "border-white/15" : "border-black/10 shadow-sm"
+                          }`}
                         />
 
                         {/* Delete Button */}
@@ -720,7 +763,7 @@ export default function EditTypeDialog({
                             const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
                             setFormData({ ...formData, layers: updated, thicknessMm: total });
                           }}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all shrink-0 active:scale-95"
+                          className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all shrink-0 active:scale-95"
                           title="Remove Layer"
                         >
                           <LuTrash2 className="h-3.5 w-3.5" />
@@ -738,7 +781,9 @@ export default function EditTypeDialog({
                           setFormData({ ...formData, layers: updated });
                         }}
                         placeholder="Material name / preset..."
-                        className="w-full h-7 rounded-lg border border-black/10 dark:border-white/10 bg-white/80 dark:bg-black/40 px-2.5 text-[11px] text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none"
+                        className={`w-full h-7 rounded-lg border px-2.5 text-[11px] focus:outline-none ${
+                          isDark ? "border-white/10 bg-black/40 text-zinc-200 placeholder:text-zinc-600 focus:border-amber-400" : "border-black/10 bg-white text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500 shadow-sm"
+                        }`}
                       />
                     </div>
                   ))}
@@ -749,24 +794,28 @@ export default function EditTypeDialog({
 
           {/* TAB 2: Dimensions */}
           {activeTab === "dimensions" && (
-            <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-4 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] space-y-3 ios-card-anim">
+            <div className={`rounded-2xl border p-4 backdrop-blur-md space-y-3 ios-card-anim ${
+              isDark ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]" : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+            }`}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs shadow-sm">
                   <LuSlidersHorizontal className="h-3.5 w-3.5" />
                 </div>
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Dimensional Specifications</span>
+                <span className={`text-xs font-bold ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Dimensional Specifications</span>
               </div>
 
               {formData.thicknessMm !== undefined && (
-                <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Thickness:</span>
+                <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Thickness:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.thicknessMm}
                       disabled={formData.category === "Wall" && Boolean(formData.layers && formData.layers.length > 0)}
                       onChange={(e) => setFormData({ ...formData, thicknessMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none disabled:opacity-60"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none disabled:opacity-60 ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -774,14 +823,16 @@ export default function EditTypeDialog({
               )}
 
               {formData.widthMm !== undefined && (
-                <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Width:</span>
+                <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Width:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.widthMm}
                       onChange={(e) => setFormData({ ...formData, widthMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -789,14 +840,16 @@ export default function EditTypeDialog({
               )}
 
               {formData.heightMm !== undefined && (
-                <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Height:</span>
+                <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Height:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.heightMm}
                       onChange={(e) => setFormData({ ...formData, heightMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -804,14 +857,16 @@ export default function EditTypeDialog({
               )}
 
               {formData.depthMm !== undefined && (
-                <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Depth:</span>
+                <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Depth:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.depthMm}
                       onChange={(e) => setFormData({ ...formData, depthMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -819,14 +874,16 @@ export default function EditTypeDialog({
               )}
 
               {formData.diameterMm !== undefined && (
-                <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Diameter:</span>
+                <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Diameter:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.diameterMm}
                       onChange={(e) => setFormData({ ...formData, diameterMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -835,13 +892,15 @@ export default function EditTypeDialog({
 
               {formData.sillHeightMm !== undefined && (
                 <div className="flex items-center justify-between py-1.5">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-300">Sill Height:</span>
+                  <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Sill Height:</span>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={formData.sillHeightMm}
                       onChange={(e) => setFormData({ ...formData, sillHeightMm: Number(e.target.value) })}
-                      className="w-24 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs font-bold text-blue-600 dark:text-blue-300 shadow-sm focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none"
+                      className={`w-24 h-8 rounded-xl border px-2.5 text-right font-mono text-xs font-bold focus:outline-none ${
+                        isDark ? "border-white/15 bg-black/40 text-blue-300 focus:border-blue-400" : "border-black/10 bg-white text-blue-600 shadow-sm focus:border-blue-500"
+                      }`}
                     />
                     <span className="text-[11px] text-zinc-500 font-mono">mm</span>
                   </div>
@@ -852,35 +911,41 @@ export default function EditTypeDialog({
 
           {/* TAB 3: Material & Function */}
           {activeTab === "materials" && (
-            <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-4 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] space-y-3 ios-card-anim">
+            <div className={`rounded-2xl border p-4 backdrop-blur-md space-y-3 ios-card-anim ${
+              isDark ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]" : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+            }`}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs shadow-sm">
                   <LuCheck className="h-3.5 w-3.5" />
                 </div>
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Material & Construction Class</span>
+                <span className={`text-xs font-bold ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Material & Construction Class</span>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                <span className="text-xs text-zinc-600 dark:text-zinc-300">Default Material:</span>
+              <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Default Material:</span>
                 <input
                   type="text"
                   value={formData.material}
                   onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                  className="w-48 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-xs text-emerald-700 dark:text-emerald-300 shadow-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none"
+                  className={`w-48 h-8 rounded-xl border px-2.5 text-xs focus:outline-none ${
+                    isDark ? "border-white/15 bg-black/40 text-emerald-300 focus:border-emerald-400" : "border-black/10 bg-white text-emerald-700 shadow-sm focus:border-emerald-500"
+                  }`}
                 />
               </div>
 
               <div className="flex items-center justify-between py-1.5">
-                <span className="text-xs text-zinc-600 dark:text-zinc-300">Structural Function:</span>
+                <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Structural Function:</span>
                 <select
                   value={formData.functionType}
                   onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
-                  className="w-40 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/50 px-2.5 text-xs text-zinc-900 dark:text-white shadow-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none"
+                  className={`w-40 h-8 rounded-xl border px-2.5 text-xs focus:outline-none ${
+                    isDark ? "border-white/15 bg-black/50 text-white focus:border-emerald-400" : "border-black/10 bg-white text-zinc-900 shadow-sm focus:border-emerald-500"
+                  }`}
                 >
-                  <option value="Interior" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Interior</option>
-                  <option value="Exterior" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Exterior</option>
-                  <option value="Structural" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Structural</option>
-                  <option value="Non-Bearing" className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">Non-Bearing</option>
+                  <option value="Interior" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Interior</option>
+                  <option value="Exterior" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Exterior</option>
+                  <option value="Structural" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Structural</option>
+                  <option value="Non-Bearing" className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>Non-Bearing</option>
                 </select>
               </div>
             </div>
@@ -888,42 +953,50 @@ export default function EditTypeDialog({
 
           {/* TAB 4: Physics & Ratings */}
           {activeTab === "physics" && (
-            <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-4 backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] space-y-3 ios-card-anim">
+            <div className={`rounded-2xl border p-4 backdrop-blur-md space-y-3 ios-card-anim ${
+              isDark ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]" : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
+            }`}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-white text-xs shadow-sm">
                   <LuInfo className="h-3.5 w-3.5" />
                 </div>
-                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Thermal & Engineering Ratings</span>
+                <span className={`text-xs font-bold ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Thermal & Engineering Ratings</span>
               </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-black/[0.04] dark:border-white/[0.06]">
-                <span className="text-xs text-zinc-600 dark:text-zinc-300">Thermal Conductivity (U/K):</span>
+              <div className={`flex items-center justify-between py-1.5 border-b ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Thermal Conductivity (U/K):</span>
                 <input
                   type="text"
                   value={formData.thermalConductivity || "0.35 W/mK"}
                   onChange={(e) => setFormData({ ...formData, thermalConductivity: e.target.value })}
-                  className="w-36 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs text-purple-700 dark:text-purple-300 shadow-sm focus:border-purple-500 dark:focus:border-purple-400 focus:outline-none"
+                  className={`w-36 h-8 rounded-xl border px-2.5 text-right font-mono text-xs focus:outline-none ${
+                    isDark ? "border-white/15 bg-black/40 text-purple-300 focus:border-purple-400" : "border-black/10 bg-white text-purple-700 shadow-sm focus:border-purple-500"
+                  }`}
                 />
               </div>
 
               <div className="flex items-center justify-between py-1.5">
-                <span className="text-xs text-zinc-600 dark:text-zinc-300">Fire Safety Class:</span>
+                <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-600"}`}>Fire Safety Class:</span>
                 <input
                   type="text"
                   value={formData.fireRating || "F90-A"}
                   onChange={(e) => setFormData({ ...formData, fireRating: e.target.value })}
-                  className="w-32 h-8 rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-right font-mono text-xs text-purple-700 dark:text-purple-300 shadow-sm focus:border-purple-500 dark:focus:border-purple-400 focus:outline-none"
+                  className={`w-32 h-8 rounded-xl border px-2.5 text-right font-mono text-xs focus:outline-none ${
+                    isDark ? "border-white/15 bg-black/40 text-purple-300 focus:border-purple-400" : "border-black/10 bg-white text-purple-700 shadow-sm focus:border-purple-500"
+                  }`}
                 />
               </div>
             </div>
           )}
 
           {/* Action Bottom Bar */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-black/[0.06] dark:border-white/10">
+          <div className={`flex items-center justify-end gap-3 pt-3 border-t ${isDark ? "border-white/10" : "border-black/[0.06]"}`}>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shadow-sm"
+              className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                isDark ? "border-white/15 bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 hover:text-white" : "border-black/10 bg-black/[0.04] hover:bg-black/[0.08] text-zinc-700 hover:text-zinc-900"
+              }`}
             >
               Cancel
             </button>

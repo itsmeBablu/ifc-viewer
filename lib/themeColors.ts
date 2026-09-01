@@ -194,6 +194,7 @@ export function applyThemeVars(
   const p = THEME_COLORS[theme];
   const root = document.documentElement;
   root.dataset.theme = theme;
+  root.classList.toggle("dark", theme === "dark");
   root.style.setProperty(
     "--background",
     surfaces?.pageBackground ?? p.background,
