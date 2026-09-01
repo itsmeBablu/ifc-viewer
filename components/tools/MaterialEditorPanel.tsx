@@ -562,13 +562,13 @@ export default function MaterialEditorPanel({
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold transition-all ${
+                className={`shrink-0 rounded px-2 py-0.5 text-[9px] font-semibold transition-all ${
                   category === c
-                    ? `${accentBg} text-zinc-950 font-bold`
-                    : "border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    ? `${isMep ? "btn-v-blue" : "btn-v-yellow"} btn-liquid-hover !text-zinc-950 font-bold shadow-sm`
+                    : "btn-yellow-border-hover border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                 }`}
               >
-                {c}...
+                {c}
               </button>
             ))}
           </div>
@@ -624,14 +624,14 @@ export default function MaterialEditorPanel({
                   key={s.id}
                   type="button"
                   onClick={() => setShape(s.id)}
-                  className={`flex items-center gap-1 rounded px-1 text-[8px] font-semibold border ${
+                  className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[8px] font-semibold border transition-all ${
                     shape === s.id
-                      ? `${accentBg} text-zinc-950 font-bold border-transparent`
-                      : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
+                      ? `${isMep ? "btn-v-blue" : "btn-v-yellow"} btn-liquid-hover !text-zinc-950 font-bold border-transparent shadow-sm`
+                      : "btn-yellow-border-hover border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
                   }`}
                 >
                   {s.icon}
-                  <span className="truncate">{s.label}...</span>
+                  <span className="truncate">{s.label}</span>
                 </button>
               ))}
             </div>
@@ -755,10 +755,10 @@ export default function MaterialEditorPanel({
             onClick={() => setPaintId(paintId === selected.id ? null : selected.id)}
             icon={<LuSparkles className="h-3.5 w-3.5" />}
             className={`w-full text-[10px] font-bold py-1 ${
-              isMep ? "!bg-sky-500 !text-white" : "!bg-yellow-400 !text-zinc-950"
-            }`}
+              isMep ? "!btn-v-blue" : "!btn-v-yellow"
+            } btn-liquid-hover !text-zinc-950`}
           >
-            {paintId === selected.id ? "Painting..." : "Paint in View..."}
+            {paintId === selected.id ? "Painting..." : "Paint in View"}
           </UnifiedButton>
         </div>
       </div>

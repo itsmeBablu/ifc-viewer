@@ -47,13 +47,25 @@ export default function ObjectSnapStrip({ compact = false, iconOnly = false, sho
         <div className="werkzeug-snap-menu-grid">
           {SNAP_ITEMS.map(([mode, label, Icon]) => {
             const active = modes[mode];
-            return (
-              <button key={mode} type="button" role="menuitemcheckbox" aria-checked={active} title={`${label} object snap`} onClick={() => setMode(mode, !active)} className={`werkzeug-snap-pill ${active ? "is-active" : ""}`}>
-                <Icon className="werkzeug-snap-icon" />
-                <span className="werkzeug-snap-name">{label}</span>
-                <LuCheck className="werkzeug-snap-check" aria-hidden="true" />
+              <button
+                key={mode}
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={active}
+                title={`${label} object snap`}
+                onClick={() => setMode(mode, !active)}
+                className={`werkzeug-snap-pill flex items-center justify-between gap-1.5 rounded-xl px-2.5 py-1.5 text-xs transition-all ${
+                  active
+                    ? "is-active btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold"
+                    : "btn-yellow-border-hover border border-transparent bg-[var(--surface-overlay)] text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)]"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="werkzeug-snap-icon h-3.5 w-3.5" />
+                  <span className="werkzeug-snap-name text-[11px] font-medium">{label}</span>
+                </div>
+                <LuCheck className={`werkzeug-snap-check h-3.5 w-3.5 ${active ? "opacity-100" : "opacity-0"}`} aria-hidden="true" />
               </button>
-            );
           })}
         </div>
       </div>}
