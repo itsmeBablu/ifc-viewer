@@ -281,6 +281,13 @@ export default function ToolRightPanel({
 
   const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
+  const isMepActive = Boolean(selectedDuct || selectedPipe || selectedCableTray || selectedEquipment);
+  const activeAccent = syncArchMep
+    ? (STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow)
+    : isMepActive
+    ? STUDIO_ACCENTS.vblue
+    : STUDIO_ACCENTS.vyellow;
+
   const handleTypeChange = (typeId: string) => {
     const tDef = types[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
     if (!tDef) return;
