@@ -4486,7 +4486,7 @@ export default class LayoutSceneLayer {
   ): THREE.Group {
     const g = new THREE.Group();
     const y = fromMm(elevMm) + 0.03;
-    const angle = wallAngleRad(wall);
+    const angle = wallAngleAtPositionRad(wall, win.positionMm);
     const dirX = Math.cos(angle);
     const dirZ = Math.sin(angle);
     const perpX = -dirZ;
@@ -4499,6 +4499,7 @@ export default class LayoutSceneLayer {
     const bx = fromMm(b.xMm);
     const bz = fromMm(b.yMm);
     const thick = fromMm(wall.thicknessMm);
+    const halfT = thick / 2;
     const offsets = [-0.35, 0, 0.35].map((t) => t * thick);
     const mat = new THREE.LineBasicMaterial({
       color: 0x0284c7,
@@ -4515,6 +4516,31 @@ export default class LayoutSceneLayer {
       line.renderOrder = 20;
       g.add(line);
     }
+    // Window jamb / sill end caps in 2D
+    const capMat = new THREE.LineBasicMaterial({
+      color: 0x334155,
+      depthTest: false,
+    });
+    const leftCap = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(ax - perpX * halfT, y, az - perpZ * halfT),
+        new THREE.Vector3(ax + perpX * halfT, y, az + perpZ * halfT),
+      ]),
+      capMat,
+    );
+    leftCap.renderOrder = 21;
+    g.add(leftCap);
+
+    const rightCap = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(bx - perpX * halfT, y, bz - perpZ * halfT),
+        new THREE.Vector3(bx + perpX * halfT, y, bz + perpZ * halfT),
+      ]),
+      capMat,
+    );
+    rightCap.renderOrder = 21;
+    g.add(rightCap);
+
     const pick = new THREE.Mesh(
       new THREE.BoxGeometry(
         fromMm(win.widthMm),

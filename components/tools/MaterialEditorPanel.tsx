@@ -31,6 +31,8 @@ import {
 } from "@/store/materialStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import type { WallType } from "@/lib/layoutDrawing";
+import DuplicateOrApplyTypeDialog from "./DuplicateOrApplyTypeDialog";
 
 const HATCHES: { id: HatchStyle; label: string; glyph: string }[] = [
   ["solid", "Solid / none", "■"],
@@ -383,6 +385,20 @@ export default function MaterialEditorPanel({
   const updateColumn = useLayoutDrawingStore((s) => s.updateColumn);
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
 
+  const walls = useLayoutDrawingStore((s) => s.walls);
+  const wallTypes = useLayoutDrawingStore((s) => s.wallTypes);
+  const updateWallType = useLayoutDrawingStore((s) => s.updateWallType);
+  const addWallType = useLayoutDrawingStore((s) => s.addWallType);
+
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{
+    isOpen: boolean;
+    wallId: string;
+    typeName: string;
+    matchingWallIds: string[];
+    materialName: string;
+    color?: string;
+  } | null>(null);
+
   const [category, setCategory] = useState<string>("All");
   const [search, setSearch] = useState<string>("");
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
@@ -448,10 +464,70 @@ export default function MaterialEditorPanel({
     select(next.id);
   };
 
+  const handleApplyToAll = () => {
+    if (!duplicatePrompt) return;
+    const { matchingWallIds, materialName, color } = duplicatePrompt;
+    for (const wid of matchingWallIds) {
+      void updateWall(wid, { material: materialName, color });
+    }
+    setDuplicatePrompt(null);
+  };
+
+  const handleDuplicate = () => {
+    if (!duplicatePrompt) return;
+    const { wallId, typeName, materialName, color } = duplicatePrompt;
+    const selectedWall = walls.find((w) => w.id === wallId);
+    const newTypeId = `wall-type-${Date.now()}`;
+    const newTypeName = `${typeName} (Custom)`;
+    const thick = selectedWall?.thicknessMm || 200;
+
+    const newType: WallType = {
+      id: newTypeId,
+      name: newTypeName,
+      totalThicknessMm: thick,
+      layers: selectedWall?.layers ? selectedWall.layers.map((l) => ({
+        ...l,
+        material: l.function === "structure" ? materialName : l.material,
+        color: l.function === "structure" ? (color || l.color) : l.color,
+      })) : [
+        { id: `l1-${Date.now()}`, name: "Interior Finish", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f8fafc" },
+        { id: `l2-${Date.now()}`, name: "Structural Core", function: "structure", material: materialName, thicknessMm: Math.max(10, thick - 30), color: color || "#8e9196" },
+        { id: `l3-${Date.now()}`, name: "Exterior Finish", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#f1f5f9" },
+      ],
+    };
+
+    void addWallType(newType);
+    void updateWall(wallId, {
+      wallTypeId: newTypeId,
+      material: materialName,
+      color,
+      layers: newType.layers,
+    });
+    setDuplicatePrompt(null);
+  };
+
   const assign = () => {
     const p = { material: selected.name, color: selected.color };
-    if (wallId) void updateWall(wallId, p);
-    else if (slabId) void updateSlab(slabId, p);
+    if (wallId) {
+      const selectedWall = walls.find((w) => w.id === wallId);
+      if (selectedWall) {
+        const typeId = selectedWall.wallTypeId;
+        const matching = walls.filter((w) => (typeId ? w.wallTypeId === typeId : (w.thicknessMm === selectedWall.thicknessMm)));
+        if (matching.length > 1) {
+          const typeName = wallTypes.find((t) => t.id === typeId)?.name || `Wall - ${selectedWall.thicknessMm}mm`;
+          setDuplicatePrompt({
+            isOpen: true,
+            wallId,
+            typeName,
+            matchingWallIds: matching.map((w) => w.id),
+            materialName: selected.name,
+            color: selected.color,
+          });
+          return;
+        }
+      }
+      void updateWall(wallId, p);
+    } else if (slabId) void updateSlab(slabId, p);
     else if (doorId) void updateDoor(doorId, p);
     else if (windowId) void updateWindow(windowId, p);
     else if (columnId) void updateColumn(columnId, p);
@@ -762,6 +838,18 @@ export default function MaterialEditorPanel({
           </UnifiedButton>
         </div>
       </div>
+
+      {duplicatePrompt && (
+        <DuplicateOrApplyTypeDialog
+          isOpen={duplicatePrompt.isOpen}
+          typeName={duplicatePrompt.typeName}
+          matchingCount={duplicatePrompt.matchingWallIds.length}
+          materialName={duplicatePrompt.materialName}
+          onApplyToAll={handleApplyToAll}
+          onDuplicate={handleDuplicate}
+          onCancel={() => setDuplicatePrompt(null)}
+        />
+      )}
     </div>
   );
 }

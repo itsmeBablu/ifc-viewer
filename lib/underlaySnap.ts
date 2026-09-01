@@ -49,39 +49,131 @@ export function underlaySnapSegmentsWorld(
   });
 }
 
+export function segLineIntersection(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+): { x: number; y: number } | null {
+  const rX = bx - ax;
+  const rY = by - ay;
+  const sX = dx - cx;
+  const sY = dy - cy;
+  const den = rX * sY - rY * sX;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((cx - ax) * sY - (cy - ay) * sX) / den;
+  const u = ((cx - ax) * rY - (cy - ay) * rX) / den;
+  if (t >= -0.01 && t <= 1.01 && u >= -0.01 && u <= 1.01) {
+    return { x: ax + t * rX, y: ay + t * rY };
+  }
+  return null;
+}
+
 /**
- * Snap a plan point to the nearest underlay line on the active level.
- * Returns the original point if nothing is within thresholdMm.
+ * Snap a plan point to reference underlay vector lines (DWG) with full OSNAP support:
+ * Endpoints, Midpoints, Intersections, Nearest, Perpendiculars.
  */
 export function snapPlanToUnderlayLines(
   point: PlanPointMm,
   underlays: ReferenceUnderlay[],
   levelId: string | null,
-  thresholdMm = 150,
-): PlanPointMm & { snapped: boolean } {
+  thresholdMm = 350,
+  modes?: Record<string, boolean>,
+  from?: PlanPointMm | null,
+): PlanPointMm & { snapped: boolean; snapType?: string } {
   if (!levelId) return { ...point, snapped: false };
-  let best: { xMm: number; yMm: number; dist: number } | null = null;
+
+  const checkEndpoint = modes ? Boolean(modes.endpoint || modes.node) : true;
+  const checkMidpoint = modes ? Boolean(modes.midpoint) : true;
+  const checkIntersection = modes ? Boolean(modes.intersection) : true;
+  const checkNearest = modes ? Boolean(modes.nearest) : true;
+  const checkPerpendicular = modes ? Boolean(modes.perpendicular && from) : false;
+
+  type Candidate = {
+    point: { xMm: number; yMm: number };
+    type: string;
+    priority: number;
+    distance: number;
+  };
+  const candidates: Candidate[] = [];
+
+  const add = (x: number, y: number, type: string, priority: number) => {
+    const dist = Math.hypot(point.xMm - x, point.yMm - y);
+    if (dist <= thresholdMm) {
+      candidates.push({
+        point: { xMm: Math.round(x), yMm: Math.round(y) },
+        type,
+        priority,
+        distance: dist,
+      });
+    }
+  };
+
+  const activeSegments: { ax: number; ay: number; bx: number; by: number }[] = [];
   for (const u of underlays) {
     if (u.levelId !== levelId) continue;
-    for (const seg of underlaySnapSegmentsWorld(u)) {
-      const n = nearestOnSegment(
-        point.xMm,
-        point.yMm,
-        seg.ax,
-        seg.ay,
-        seg.bx,
-        seg.by,
-      );
-      if (n.dist <= thresholdMm && (!best || n.dist < best.dist)) {
-        best = { xMm: n.x, yMm: n.y, dist: n.dist };
+    for (const s of underlaySnapSegmentsWorld(u)) {
+      activeSegments.push(s);
+    }
+  }
+
+  if (!activeSegments.length) return { ...point, snapped: false };
+
+  for (let i = 0; i < activeSegments.length; i++) {
+    const seg = activeSegments[i];
+    // Filter segments too far away
+    const midX = (seg.ax + seg.bx) / 2;
+    const midY = (seg.ay + seg.by) / 2;
+    const segLen = Math.hypot(seg.bx - seg.ax, seg.by - seg.ay);
+    if (Math.hypot(point.xMm - midX, point.yMm - midY) > segLen / 2 + thresholdMm + 100) {
+      continue;
+    }
+
+    if (checkEndpoint) {
+      add(seg.ax, seg.ay, "endpoint", 0);
+      add(seg.bx, seg.by, "endpoint", 0);
+    }
+    if (checkMidpoint) {
+      add(midX, midY, "midpoint", 2);
+    }
+    if (checkNearest) {
+      const n = nearestOnSegment(point.xMm, point.yMm, seg.ax, seg.ay, seg.bx, seg.by);
+      if (n.dist <= thresholdMm) {
+        add(n.x, n.y, "nearest", 6);
+      }
+    }
+    if (checkPerpendicular && from) {
+      const perp = nearestOnSegment(from.xMm, from.yMm, seg.ax, seg.ay, seg.bx, seg.by);
+      add(perp.x, perp.y, "perpendicular", 4);
+    }
+
+    if (checkIntersection) {
+      for (let j = i + 1; j < Math.min(activeSegments.length, i + 30); j++) {
+        const segB = activeSegments[j];
+        const hit = segLineIntersection(
+          seg.ax, seg.ay, seg.bx, seg.by,
+          segB.ax, segB.ay, segB.bx, segB.by,
+        );
+        if (hit) {
+          add(hit.x, hit.y, "intersection", 1);
+        }
       }
     }
   }
-  if (!best) return { ...point, snapped: false };
+
+  if (!candidates.length) return { ...point, snapped: false };
+
+  candidates.sort((a, b) => a.distance - b.distance || a.priority - b.priority);
+  const best = candidates[0];
   return {
-    xMm: Math.round(best.xMm),
-    yMm: Math.round(best.yMm),
+    xMm: best.point.xMm,
+    yMm: best.point.yMm,
     snapped: true,
+    snapType: best.type,
   };
 }
 

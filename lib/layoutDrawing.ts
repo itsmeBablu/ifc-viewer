@@ -1589,6 +1589,7 @@ export function snapPlanPointToWalls(
   toleranceMm = 350,
   modes: PlanSnapModes = DEFAULT_PLAN_SNAP_MODES,
   from?: { xMm: number; yMm: number } | null,
+  underlays?: ReferenceUnderlay[],
 ): PlanSnapResult {
   const levelWalls = walls.filter((w) => w.levelId === levelId);
   const straight = levelWalls.filter((w) => !w.curved);
@@ -1676,6 +1677,61 @@ export function snapPlanPointToWalls(
     if (modes.parallel && from) {
       const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm - from.xMm, point.yMm - from.yMm);
       for (const pa of [a, a + Math.PI]) add(from.xMm + Math.cos(pa) * len, from.yMm + Math.sin(pa) * len, "parallel", 5, wall.id);
+    }
+  }
+
+  // Evaluate DWG / reference underlays vector line segments
+  if (underlays && underlays.length > 0) {
+    const underlaySegs: { ax: number; ay: number; bx: number; by: number }[] = [];
+    for (const u of underlays) {
+      if (u.levelId !== levelId || !u.snapSegments?.length) continue;
+      for (const s of u.snapSegments) {
+        const a = underlayUvToWorld(u, s.u0, s.v0);
+        const b = underlayUvToWorld(u, s.u1, s.v1);
+        underlaySegs.push({ ax: a.xMm, ay: a.yMm, bx: b.xMm, by: b.yMm });
+      }
+    }
+
+    for (let i = 0; i < underlaySegs.length; i++) {
+      const seg = underlaySegs[i];
+      const midX = (seg.ax + seg.bx) / 2;
+      const midY = (seg.ay + seg.by) / 2;
+      const segLen = Math.hypot(seg.bx - seg.ax, seg.by - seg.ay);
+      if (Math.hypot(point.xMm - midX, point.yMm - midY) > segLen / 2 + toleranceMm + 100) {
+        continue;
+      }
+
+      if (modes.endpoint || modes.node) {
+        add(seg.ax, seg.ay, "endpoint", 0);
+        add(seg.bx, seg.by, "endpoint", 0);
+      }
+      if (modes.midpoint) {
+        add(midX, midY, "midpoint", 2);
+      }
+      const projected = distPointSeg(point.xMm, point.yMm, seg.ax, seg.ay, seg.bx, seg.by);
+      if (modes.nearest && projected.t > 0.01 && projected.t < 0.99) {
+        add(projected.x, projected.y, "nearest", 6);
+      }
+      if (modes.perpendicular && from) {
+        const perp = distPointSeg(from.xMm, from.yMm, seg.ax, seg.ay, seg.bx, seg.by);
+        if (perp.t > 0.01 && perp.t < 0.99) add(perp.x, perp.y, "perpendicular", 4);
+      }
+      if (modes.intersection) {
+        for (let j = i + 1; j < Math.min(underlaySegs.length, i + 25); j++) {
+          const segB = underlaySegs[j];
+          const hit = lineLineIntersection(
+            seg.ax, seg.ay, seg.bx, seg.by,
+            segB.ax, segB.ay, segB.bx, segB.by,
+          );
+          if (hit) {
+            const onA = distPointSeg(hit.x, hit.y, seg.ax, seg.ay, seg.bx, seg.by);
+            const onB = distPointSeg(hit.x, hit.y, segB.ax, segB.ay, segB.bx, segB.by);
+            if (onA.dist <= 5 && onB.dist <= 5) {
+              add(hit.x, hit.y, "intersection", 1);
+            }
+          }
+        }
+      }
     }
   }
 

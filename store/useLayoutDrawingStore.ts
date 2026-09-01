@@ -581,6 +581,7 @@ type LayoutDrawingState = {
     underlayId?: string | null,
   ) => Promise<void>;
   cycleTraceCandidate: (dir?: 1 | -1) => void;
+  pickTraceCandidate: (index: number) => void;
   clearTracePreview: () => void;
   confirmTraceCandidate: () => Promise<
     LayoutWall | LayoutDoor | LayoutWindow | null
@@ -1536,6 +1537,14 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({ tracePreview: { ...prev, index } });
   },
 
+  pickTraceCandidate: (index: number) => {
+    const prev = get().tracePreview;
+    if (!prev || !prev.candidates.length) return;
+    const n = prev.candidates.length;
+    const validIdx = Math.max(0, Math.min(n - 1, index));
+    set({ tracePreview: { ...prev, index: validIdx } });
+  },
+
   clearTracePreview: () => set({ tracePreview: null }),
 
   confirmTraceCandidate: async () => {
@@ -1547,6 +1556,26 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     if (cand.kind === "wall") {
       const level = get().levels.find((l) => l.id === preview.levelId);
+      const thickMm = Math.round(cand.thicknessMm);
+      const typeName = `Wall - ${thickMm}mm`;
+
+      // Check if wall type with this name / id already exists or create new
+      let wallType = get().wallTypes.find((wt) => wt.name === typeName || wt.id === `wall-generic-${thickMm}`);
+      if (!wallType) {
+        wallType = {
+          id: `wall-type-${thickMm}mm-${Date.now()}`,
+          name: typeName,
+          totalThicknessMm: thickMm,
+          layers: [
+            { id: `l-int-${Date.now()}`, name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f8fafc" },
+            { id: `l-str-${Date.now()}`, name: "Structural Core", function: "structure", material: "Concrete Core", thicknessMm: Math.max(10, thickMm - 30), color: "#8e9196" },
+            { id: `l-ext-${Date.now()}`, name: "Exterior Plaster", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#f1f5f9" },
+          ],
+        };
+        await idbPutWallType(wallType);
+        set((s) => ({ wallTypes: [...s.wallTypes, wallType!] }));
+      }
+
       const wall: LayoutWall = {
         id: newLayoutId("wall"),
         projectId,
@@ -1555,8 +1584,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         startYmm: cand.startYmm,
         endXmm: cand.endXmm,
         endYmm: cand.endYmm,
-        thicknessMm: cand.thicknessMm,
+        thicknessMm: thickMm,
         heightMm: level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM,
+        wallTypeId: wallType.id,
+        layers: wallType.layers ? [...wallType.layers] : undefined,
         createdAt: Date.now(),
       };
       pushWerkzeugHistory();
