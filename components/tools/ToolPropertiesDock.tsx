@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import {
   LuChevronLeft,
   LuChevronRight,
@@ -15,15 +15,13 @@ import {
   LuShieldCheck,
   LuSparkles,
 } from "react-icons/lu";
-import gsap from "gsap";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
-import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
 import ElementInspector from "./ElementInspector";
 import EditTypeDialog, { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
-import { wallLengthMm, wallAngleDeg } from "@/lib/layoutDrawing";
+import { wallLengthMm } from "@/lib/layoutDrawing";
 
 export default function ToolPropertiesDock() {
   const [collapsed, setCollapsed] = useState(false);
@@ -44,17 +42,6 @@ export default function ToolPropertiesDock() {
   const toggleSection = (key: keyof typeof openSections) => {
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
   };
-
-  // GSAP animation on collapse toggle & selection change
-  useEffect(() => {
-    if (!collapsed && contentRef.current) {
-      gsap.fromTo(
-        contentRef.current.querySelectorAll(".ios-glass-card"),
-        { opacity: 0, y: 8 },
-        { opacity: 1, y: 0, duration: 0.28, stagger: 0.03, ease: "power2.out" }
-      );
-    }
-  }, [collapsed]);
 
   const isDark = useAppStore((s) => s.colorTheme === "dark");
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
@@ -101,9 +88,7 @@ export default function ToolPropertiesDock() {
         return selectedWall.wallTypeId;
       }
       if (selectedWall.thicknessMm === 100) return "wall-interior-100";
-      if (selectedWall.thicknessMm === 150) return "wall-interior-150";
       if (selectedWall.thicknessMm === 300) return "wall-exterior-300";
-      if (selectedWall.thicknessMm === 365) return "wall-exterior-365";
       return "wall-generic-200";
     }
     if (selectedDoor) {
@@ -117,7 +102,8 @@ export default function ToolPropertiesDock() {
       return "win-double-1200";
     }
     if (selectedSlab) {
-      return selectedSlab.kind === "roof" ? "slab-roof-300" : "slab-floor-200";
+      if (selectedSlab.thicknessMm === 300) return "slab-roof-300";
+      return "slab-floor-200";
     }
     return "wall-generic-200";
   };
@@ -125,91 +111,70 @@ export default function ToolPropertiesDock() {
   const activeTypeKey = getActiveTypeKey();
   const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
-  // Propagate Type Selection
-  const handleTypeChange = (typeId: string) => {
-    const chosenType = types[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
-    if (!chosenType) return;
+  const handleTypeChange = (newTypeId: string) => {
+    const selectedDef = types[newTypeId] || DEFAULT_ELEMENT_TYPES[newTypeId];
+    if (!selectedDef) return;
 
     if (selectedWall) {
-      updateWall(selectedWall.id, {
-        thicknessMm: chosenType.thicknessMm || selectedWall.thicknessMm,
-        heightMm: chosenType.heightMm || selectedWall.heightMm,
-        wallTypeId: chosenType.id,
-        layers: chosenType.layers ? [...chosenType.layers] : undefined,
+      void updateWall(selectedWall.id, {
+        wallTypeId: selectedDef.id,
+        thicknessMm: selectedDef.thicknessMm || selectedWall.thicknessMm,
+        heightMm: selectedDef.heightMm || selectedWall.heightMm,
+        material: selectedDef.material,
+        layers: selectedDef.layers,
       });
-    } else if (selectedDoor && chosenType.widthMm && chosenType.heightMm) {
-      updateDoor(selectedDoor.id, {
-        widthMm: chosenType.widthMm,
-        heightMm: chosenType.heightMm,
+    } else if (selectedDoor) {
+      void updateDoor(selectedDoor.id, {
+        widthMm: selectedDef.widthMm || selectedDoor.widthMm,
+        heightMm: selectedDef.heightMm || selectedDoor.heightMm,
+        material: selectedDef.material,
       });
-    } else if (selectedWindow && chosenType.widthMm && chosenType.heightMm) {
-      updateWindow(selectedWindow.id, {
-        widthMm: chosenType.widthMm,
-        heightMm: chosenType.heightMm,
+    } else if (selectedWindow) {
+      void updateWindow(selectedWindow.id, {
+        widthMm: selectedDef.widthMm || selectedWindow.widthMm,
+        heightMm: selectedDef.heightMm || selectedWindow.heightMm,
+        sillHeightMm: selectedDef.sillHeightMm || selectedWindow.sillHeightMm,
+        material: selectedDef.material,
       });
-    } else if (selectedSlab && chosenType.thicknessMm) {
-      updateSlab(selectedSlab.id, {
-        thicknessMm: chosenType.thicknessMm,
+    } else if (selectedSlab) {
+      void updateSlab(selectedSlab.id, {
+        thicknessMm: selectedDef.thicknessMm || selectedSlab.thicknessMm,
+        material: selectedDef.material,
       });
     }
   };
 
-  // Propagate Edit Type Dialog updates to all matching instances
   const handleTypeSave = (updated: ElementTypeDefinition) => {
     setTypes((prev) => ({ ...prev, [updated.id]: updated }));
-
-    if (updated.category === "Wall" && updated.thicknessMm) {
-      walls.forEach((w) => {
-        if (w.wallTypeId === updated.id || (!w.wallTypeId && w.thicknessMm === currentType.thicknessMm)) {
-          updateWall(w.id, {
-            thicknessMm: updated.thicknessMm,
-            heightMm: updated.heightMm || w.heightMm,
-            wallTypeId: updated.id,
-            layers: updated.layers ? [...updated.layers] : undefined,
-          });
-        }
-      });
-    } else if (updated.category === "Door" && updated.widthMm && updated.heightMm) {
-      doors.forEach((d) => {
-        if (d.widthMm === currentType.widthMm) {
-          updateDoor(d.id, { widthMm: updated.widthMm, heightMm: updated.heightMm });
-        }
-      });
-    }
+    handleTypeChange(updated.id);
   };
 
-  // Calculations for selected wall
+  // Dimensions Helpers
   const wallLen = selectedWall ? Math.round(wallLengthMm(selectedWall)) : 0;
-  const wallArea = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2) : "0";
-  const wallVol = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000) * selectedWall.thicknessMm) / 1_000_000_000).toFixed(3) : "0";
+  const wallArea = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2) : "0.00";
+  const wallVol = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000) * selectedWall.thicknessMm) / 1_000_000_000).toFixed(2) : "0.00";
 
-  const cardStyle = `ios-glass-card rounded-2xl border backdrop-blur-md overflow-hidden transition-all ${
-    isDark
-      ? "border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
-      : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
-  }`;
+  const isMepSelection = false; // Architecture mode default
+  const accentColor = isMepSelection ? "text-sky-400" : "text-yellow-400";
+  const accentBg = isMepSelection ? "bg-sky-400" : "bg-yellow-400";
+
+  const cardStyle = "rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-card)] overflow-hidden shadow-sm";
 
   return (
     <>
       <aside
         ref={dockRef}
-        className={`fixed left-0 top-[116px] bottom-7 z-30 flex flex-col border-r transition-all duration-300 select-none ${
-          isDark
-            ? "border-white/10 bg-slate-950/85 text-white shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.25)]"
-            : "border-black/[0.08] bg-white/95 text-zinc-900 shadow-[0_8px_32px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]"
-        } backdrop-blur-3xl ${collapsed ? "w-11" : "w-80"}`}
+        className={`pointer-events-auto flex select-none flex-col border-l border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] shadow-xl backdrop-blur-2xl transition-all duration-200 ${
+          collapsed ? "w-9" : "w-72"
+        }`}
       >
         {/* Dock Header */}
-        <div className={`flex h-11 shrink-0 items-center justify-between border-b px-3.5 ${
-          isDark ? "border-white/10 bg-white/[0.02]" : "border-black/[0.06] bg-black/[0.02]"
-        }`}>
+        <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-2 bg-[var(--surface-overlay)]/60">
           {!collapsed && (
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs shadow-sm">
-                <LuSlidersHorizontal className="h-3.5 w-3.5" />
-              </div>
-              <span className={`font-bold text-xs tracking-wide uppercase font-mono ${isDark ? "text-white" : "text-zinc-900"}`}>
-                Properties
+            <div className="flex items-center gap-1.5 min-w-0 pr-1">
+              <span className={`h-2 w-2 rounded-full ${accentBg} shrink-0`} />
+              <span className="font-bold text-[11px] tracking-wide uppercase text-[var(--text-strong)] truncate">
+                Properties:
               </span>
             </div>
           )}
@@ -217,54 +182,38 @@ export default function ToolPropertiesDock() {
           <button
             type="button"
             onClick={() => setCollapsed(!collapsed)}
-            title={collapsed ? "Expand Properties Palette" : "Collapse Properties Palette"}
-            className={`flex h-7 w-7 items-center justify-center rounded-xl border transition-all active:scale-95 ${
-              isDark
-                ? "bg-white/5 hover:bg-white/15 border-white/10 text-zinc-300 hover:text-white"
-                : "bg-black/5 hover:bg-black/10 border-black/5 text-zinc-600 hover:text-zinc-900"
-            }`}
+            title={collapsed ? "Expand Properties" : "Collapse Properties"}
+            className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors shrink-0"
           >
-            {collapsed ? <LuChevronRight className="h-4 w-4" /> : <LuChevronLeft className="h-4 w-4" />}
+            {collapsed ? <LuChevronRight className="h-3.5 w-3.5" /> : <LuChevronLeft className="h-3.5 w-3.5" />}
           </button>
         </div>
 
         {/* Dock Content Body */}
         {!collapsed && (
-          <div ref={contentRef} className="flex flex-1 min-h-0 flex-col overflow-y-auto p-3 thin-scroll space-y-3 text-xs">
+          <div ref={contentRef} className="flex flex-1 min-h-0 flex-col overflow-y-auto p-2 thin-scroll space-y-1.5 text-xs">
             {/* TYPE SELECTOR HEADER & EDIT TYPE BUTTON */}
             {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
-              <div className={`rounded-2xl border p-3.5 backdrop-blur-md space-y-2.5 ${
-                isDark
-                  ? "border-white/15 bg-white/[0.04] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-                  : "border-black/[0.06] bg-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)]"
-              }`}>
+              <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1.5 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+                  <div className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider ${accentColor}`}>
                     <LuSparkles className="h-3 w-3" />
-                    <span>Type Definition</span>
+                    <span className="truncate">Type Definition:</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setEditTypeOpen(true)}
-                    className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1 font-bold text-[10px] shadow-sm transition-all active:scale-95 border ${
-                      isDark
-                        ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border-amber-500/40 text-amber-300"
-                        : "bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 border-amber-500/30 text-amber-700"
-                    }`}
+                    className={`flex items-center gap-1 rounded px-2 py-0.5 font-bold text-[9px] transition-all border border-[var(--panel-divider)] ${accentColor} hover:${accentBg} hover:text-zinc-950`}
                   >
-                    <LuSlidersHorizontal className="h-3 w-3" />
-                    <span>Edit Type</span>
+                    <LuSlidersHorizontal className="h-2.5 w-2.5" />
+                    <span>Edit Type...</span>
                   </button>
                 </div>
 
                 <select
                   value={activeTypeKey}
                   onChange={(e) => handleTypeChange(e.target.value)}
-                  className={`w-full h-8 rounded-xl border px-3 text-xs font-semibold focus:outline-none transition-all ${
-                    isDark
-                      ? "border-white/15 bg-black/40 text-white focus:border-amber-400"
-                      : "border-black/10 bg-white text-zinc-900 shadow-sm focus:border-amber-500"
-                  }`}
+                  className="w-full h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:outline-none truncate"
                 >
                   {Object.values(types)
                     .filter((t) => {
@@ -275,7 +224,7 @@ export default function ToolPropertiesDock() {
                       return true;
                     })
                     .map((t) => (
-                      <option key={t.id} value={t.id} className={isDark ? "bg-slate-900 text-white" : "bg-white text-zinc-900"}>
+                      <option key={t.id} value={t.id}>
                         {t.name}
                       </option>
                     ))}
@@ -285,43 +234,35 @@ export default function ToolPropertiesDock() {
 
             {/* COLLAPSIBLE SECTIONS FOR SELECTED ELEMENT */}
             {hasSelection ? (
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {/* 1. IDENTITY DATA */}
                 <div className={cardStyle}>
                   <button
                     type="button"
                     onClick={() => toggleSection("identity")}
-                    className={`flex w-full items-center justify-between p-3 font-bold text-xs transition-colors ${
-                      isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
-                    }`}
+                    className="flex w-full items-center justify-between p-2 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-white text-[10px] shadow-sm">
-                        <LuFileText className="h-3 w-3" />
-                      </div>
-                      <span>Identity Data</span>
+                    <span className="flex items-center gap-1.5 truncate">
+                      <LuFileText className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="truncate">Identity Data:</span>
                     </span>
-                    {openSections.identity ? <LuChevronUp className="h-3.5 w-3.5 text-zinc-400" /> : <LuChevronDown className="h-3.5 w-3.5 text-zinc-400" />}
+                    {openSections.identity ? <LuChevronUp className="h-3 w-3 text-[var(--text-muted)] shrink-0" /> : <LuChevronDown className="h-3 w-3 text-[var(--text-muted)] shrink-0" />}
                   </button>
 
                   {openSections.identity && (
-                    <div className={`p-3 pt-0 space-y-2 border-t text-xs ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Mark / ID:</span>
-                        <span className={`font-mono font-bold ${isDark ? "text-purple-300" : "text-purple-700"}`}>
+                    <div className="p-2 pt-0 space-y-1 border-t border-[var(--panel-divider)]/40 text-[10px]">
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Mark / ID:</span>
+                        <span className={`font-mono font-bold ${accentColor} truncate`}>
                           {selectedWall ? `W-${selectedWall.id.slice(-4)}` : selectedDoor ? `D-${selectedDoor.id.slice(-4)}` : selectedWindow ? `WN-${selectedWindow.id.slice(-4)}` : "EL-1"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between py-1">
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Comments:</span>
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--text-muted)] truncate max-w-[80px]">Remarks:</span>
                         <input
                           type="text"
                           placeholder="Add remark…"
-                          className={`w-36 h-6 rounded-lg border px-2 text-right text-[11px] focus:outline-none ${
-                            isDark
-                              ? "border-white/10 bg-black/40 text-zinc-200 placeholder:text-zinc-600 focus:border-purple-400"
-                              : "border-black/10 bg-white text-zinc-900 placeholder:text-zinc-400 focus:border-purple-500 shadow-sm"
-                          }`}
+                          className="w-32 h-6 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 text-right text-[10px] text-[var(--text-strong)] focus:outline-none truncate"
                         />
                       </div>
                     </div>
@@ -333,89 +274,85 @@ export default function ToolPropertiesDock() {
                   <button
                     type="button"
                     onClick={() => toggleSection("dimensions")}
-                    className={`flex w-full items-center justify-between p-3 font-bold text-xs transition-colors ${
-                      isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
-                    }`}
+                    className="flex w-full items-center justify-between p-2 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] shadow-sm">
-                        <LuRuler className="h-3 w-3" />
-                      </div>
-                      <span>Dimensions</span>
+                    <span className="flex items-center gap-1.5 truncate">
+                      <LuRuler className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="truncate">Dimensions:</span>
                     </span>
-                    {openSections.dimensions ? <LuChevronUp className="h-3.5 w-3.5 text-zinc-400" /> : <LuChevronDown className="h-3.5 w-3.5 text-zinc-400" />}
+                    {openSections.dimensions ? <LuChevronUp className="h-3 w-3 text-[var(--text-muted)] shrink-0" /> : <LuChevronDown className="h-3 w-3 text-[var(--text-muted)] shrink-0" />}
                   </button>
 
                   {openSections.dimensions && (
-                    <div className={`p-3 pt-0 space-y-2 border-t text-xs ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
+                    <div className="p-2 pt-0 space-y-1 border-t border-[var(--panel-divider)]/40 text-[10px]">
                       {selectedWall && (
                         <>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Length:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{wallLen} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Length:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{wallLen} mm</span>
                           </div>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Thickness:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedWall.thicknessMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Thickness:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedWall.thicknessMm} mm</span>
                           </div>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Height:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedWall.heightMm || 3000} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Height:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedWall.heightMm || 3000} mm</span>
                           </div>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Surface Area:</span>
-                            <span className={`font-mono font-bold ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>{wallArea} m²</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Area:</span>
+                            <span className={`font-mono font-bold ${accentColor} truncate`}>{wallArea} m²</span>
                           </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Volume:</span>
-                            <span className={`font-mono font-bold ${isDark ? "text-cyan-400" : "text-cyan-600"}`}>{wallVol} m³</span>
+                          <div className="flex items-center justify-between py-0.5">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Volume:</span>
+                            <span className={`font-mono font-bold ${accentColor} truncate`}>{wallVol} m³</span>
                           </div>
                         </>
                       )}
 
                       {selectedDoor && (
                         <>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Width:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedDoor.widthMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Width:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedDoor.widthMm} mm</span>
                           </div>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Height:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedDoor.heightMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Height:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedDoor.heightMm} mm</span>
                           </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Clear Opening:</span>
-                            <span className={`font-mono font-bold ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span>
+                          <div className="flex items-center justify-between py-0.5">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Clear Opening:</span>
+                            <span className={`font-mono font-bold ${accentColor} truncate`}>{((selectedDoor.widthMm * selectedDoor.heightMm) / 1_000_000).toFixed(2)} m²</span>
                           </div>
                         </>
                       )}
 
                       {selectedWindow && (
                         <>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Width:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedWindow.widthMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Width:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedWindow.widthMm} mm</span>
                           </div>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Height:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedWindow.heightMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Height:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedWindow.heightMm} mm</span>
                           </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Sill Height:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedWindow.sillHeightMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Sill Height:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedWindow.sillHeightMm} mm</span>
                           </div>
                         </>
                       )}
 
                       {selectedSlab && (
                         <>
-                          <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Thickness:</span>
-                            <span className={`font-mono font-semibold ${isDark ? "text-blue-300" : "text-blue-600"}`}>{selectedSlab.thicknessMm} mm</span>
+                          <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Thickness:</span>
+                            <span className="font-mono font-semibold text-[var(--text-strong)] truncate">{selectedSlab.thicknessMm} mm</span>
                           </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Footprint Area:</span>
-                            <span className={`font-mono font-bold ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+                          <div className="flex items-center justify-between py-0.5">
+                            <span className="text-[var(--text-muted)] truncate max-w-[100px]">Footprint:</span>
+                            <span className={`font-mono font-bold ${accentColor} truncate`}>
                               {(((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm)) / 1_000_000).toFixed(2)} m²
                             </span>
                           </div>
@@ -434,30 +371,26 @@ export default function ToolPropertiesDock() {
                   <button
                     type="button"
                     onClick={() => toggleSection("constraints")}
-                    className={`flex w-full items-center justify-between p-3 font-bold text-xs transition-colors ${
-                      isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
-                    }`}
+                    className="flex w-full items-center justify-between p-2 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-[10px] shadow-sm">
-                        <LuLayers className="h-3 w-3" />
-                      </div>
-                      <span>Constraints</span>
+                    <span className="flex items-center gap-1.5 truncate">
+                      <LuLayers className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="truncate">Constraints:</span>
                     </span>
-                    {openSections.constraints ? <LuChevronUp className="h-3.5 w-3.5 text-zinc-400" /> : <LuChevronDown className="h-3.5 w-3.5 text-zinc-400" />}
+                    {openSections.constraints ? <LuChevronUp className="h-3 w-3 text-[var(--text-muted)] shrink-0" /> : <LuChevronDown className="h-3 w-3 text-[var(--text-muted)] shrink-0" />}
                   </button>
 
                   {openSections.constraints && (
-                    <div className={`p-3 pt-0 space-y-2 border-t text-xs ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Base Constraint:</span>
-                        <span className={`font-semibold ${isDark ? "text-amber-400" : "text-amber-600"}`}>
-                          {currentFloorObj ? currentFloorObj.name : "Level 1 (0.00m)"}
+                    <div className="p-2 pt-0 space-y-1 border-t border-[var(--panel-divider)]/40 text-[10px]">
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Base Level:</span>
+                        <span className={`font-semibold ${accentColor} truncate`}>
+                          {currentFloorObj ? currentFloorObj.name : "Level 1 (0.00m)"}...
                         </span>
                       </div>
-                      <div className="flex items-center justify-between py-1">
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Base Offset:</span>
-                        <span className={`font-mono ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>0 mm</span>
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Base Offset:</span>
+                        <span className="font-mono text-[var(--text-body)] truncate">0 mm</span>
                       </div>
                     </div>
                   )}
@@ -468,28 +401,24 @@ export default function ToolPropertiesDock() {
                   <button
                     type="button"
                     onClick={() => toggleSection("materials")}
-                    className={`flex w-full items-center justify-between p-3 font-bold text-xs transition-colors ${
-                      isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
-                    }`}
+                    className="flex w-full items-center justify-between p-2 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-[10px] shadow-sm">
-                        <LuBox className="h-3 w-3" />
-                      </div>
-                      <span>Materials & Finish</span>
+                    <span className="flex items-center gap-1.5 truncate">
+                      <LuBox className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="truncate">Materials & Finish:</span>
                     </span>
-                    {openSections.materials ? <LuChevronUp className="h-3.5 w-3.5 text-zinc-400" /> : <LuChevronDown className="h-3.5 w-3.5 text-zinc-400" />}
+                    {openSections.materials ? <LuChevronUp className="h-3 w-3 text-[var(--text-muted)] shrink-0" /> : <LuChevronDown className="h-3 w-3 text-[var(--text-muted)] shrink-0" />}
                   </button>
 
                   {openSections.materials && (
-                    <div className={`p-3 pt-0 space-y-2 border-t text-xs ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Material:</span>
-                        <span className={`font-medium truncate max-w-[140px] ${isDark ? "text-emerald-300" : "text-emerald-600"}`}>{currentType.material}</span>
+                    <div className="p-2 pt-0 space-y-1 border-t border-[var(--panel-divider)]/40 text-[10px]">
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[90px]">Material:</span>
+                        <span className={`font-medium truncate max-w-[140px] ${accentColor}`}>{currentType.material}...</span>
                       </div>
-                      <div className="flex items-center justify-between py-1">
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Function:</span>
-                        <span className={`font-medium ${isDark ? "text-zinc-200" : "text-zinc-700"}`}>{currentType.functionType}</span>
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--text-muted)] truncate max-w-[90px]">Function:</span>
+                        <span className="font-medium text-[var(--text-strong)] truncate">{currentType.functionType}...</span>
                       </div>
                     </div>
                   )}
@@ -500,25 +429,21 @@ export default function ToolPropertiesDock() {
                   <button
                     type="button"
                     onClick={() => toggleSection("ifc")}
-                    className={`flex w-full items-center justify-between p-3 font-bold text-xs transition-colors ${
-                      isDark ? "text-white hover:bg-white/5" : "text-zinc-900 hover:bg-black/[0.03]"
-                    }`}
+                    className="flex w-full items-center justify-between p-2 font-bold text-[11px] text-[var(--text-strong)] hover:bg-[var(--surface-overlay)] transition-colors"
                   >
-                    <span className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-white text-[10px] shadow-sm">
-                        <LuShieldCheck className="h-3 w-3" />
-                      </div>
-                      <span>IFC / BIM Data</span>
+                    <span className="flex items-center gap-1.5 truncate">
+                      <LuShieldCheck className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="truncate">IFC / BIM Data:</span>
                     </span>
-                    {openSections.ifc ? <LuChevronUp className="h-3.5 w-3.5 text-zinc-400" /> : <LuChevronDown className="h-3.5 w-3.5 text-zinc-400" />}
+                    {openSections.ifc ? <LuChevronUp className="h-3 w-3 text-[var(--text-muted)] shrink-0" /> : <LuChevronDown className="h-3 w-3 text-[var(--text-muted)] shrink-0" />}
                   </button>
 
                   {openSections.ifc && (
-                    <div className={`p-3 pt-0 space-y-2 border-t text-xs ${isDark ? "border-white/[0.06]" : "border-black/[0.04]"}`}>
-                      <div className="flex items-center justify-between py-1">
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Export Entity:</span>
-                        <span className={`font-mono ${isDark ? "text-rose-300" : "text-rose-600"}`}>
-                          {selectedWall ? "IfcWallStandardCase" : selectedDoor ? "IfcDoor" : selectedWindow ? "IfcWindow" : "IfcSlab"}
+                    <div className="p-2 pt-0 space-y-1 border-t border-[var(--panel-divider)]/40 text-[10px]">
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--text-muted)] truncate max-w-[90px]">Entity:</span>
+                        <span className="font-mono text-[var(--text-strong)] truncate">
+                          {selectedWall ? "IfcWallStandardCase" : selectedDoor ? "IfcDoor" : selectedWindow ? "IfcWindow" : "IfcSlab"}...
                         </span>
                       </div>
                     </div>
@@ -527,58 +452,56 @@ export default function ToolPropertiesDock() {
               </div>
             ) : (
               /* DEFAULT PROJECT METADATA WHEN NOTHING SELECTED */
-              <div className="space-y-3.5">
+              <div className="space-y-2">
                 <div className={cardStyle}>
-                  <div className="p-3.5 space-y-2.5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs shadow-sm">
-                        <LuInfo className="h-3.5 w-3.5" />
-                      </div>
-                      <span className={`text-xs font-bold tracking-tight ${isDark ? "text-white" : "text-zinc-900"}`}>Project Information</span>
+                  <div className="p-2 space-y-1.5">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <LuInfo className={`h-3 w-3 ${accentColor} shrink-0`} />
+                      <span className="text-[11px] font-bold tracking-tight text-[var(--text-strong)] truncate">Project Information:</span>
                     </div>
 
-                    <div className="space-y-1.5 text-xs">
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Model Name:</span>
-                        <span className={`font-semibold truncate max-w-[140px] ${isDark ? "text-white" : "text-zinc-900"}`}>
-                          {activeModelLabel || "Standard Project"}
+                    <div className="space-y-1 text-[10px]">
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Model:</span>
+                        <span className="font-semibold truncate max-w-[140px] text-[var(--text-strong)]">
+                          {activeModelLabel || "Standard Project"}...
                         </span>
                       </div>
 
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Active Level:</span>
-                        <span className={`font-semibold ${isDark ? "text-amber-400" : "text-amber-600"}`}>
-                          {currentFloorObj ? currentFloorObj.name : "All Levels"}
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Active Level:</span>
+                        <span className={`font-semibold ${accentColor} truncate`}>
+                          {currentFloorObj ? currentFloorObj.name : "All Levels"}...
                         </span>
                       </div>
 
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Units:</span>
-                        <span className={`font-semibold ${isDark ? "text-zinc-200" : "text-zinc-700"}`}>Millimeters (mm)</span>
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Units:</span>
+                        <span className="font-semibold text-[var(--text-strong)] truncate">Millimeters (mm)</span>
                       </div>
 
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Total Levels:</span>
-                        <span className={`font-mono font-bold ${isDark ? "text-blue-400" : "text-blue-600"}`}>{floors.length}</span>
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Total Levels:</span>
+                        <span className="font-mono font-bold text-[var(--text-strong)]">{floors.length}</span>
                       </div>
 
-                      <div className={`flex items-center justify-between py-1 border-b ${isDark ? "border-white/[0.04]" : "border-black/[0.03]"}`}>
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>Placed Walls:</span>
-                        <span className={`font-mono font-bold ${isDark ? "text-amber-400" : "text-amber-600"}`}>{walls.length}</span>
+                      <div className="flex items-center justify-between py-0.5 border-b border-[var(--panel-divider)]/30">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">Placed Walls:</span>
+                        <span className={`font-mono font-bold ${accentColor}`}>{walls.length}</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-1">
-                        <span className={isDark ? "text-zinc-400" : "text-zinc-500"}>3D Shapes:</span>
-                        <span className={`font-mono font-bold ${isDark ? "text-purple-400" : "text-purple-600"}`}>{placements.length}</span>
+                      <div className="flex items-center justify-between py-0.5">
+                        <span className="text-[var(--text-muted)] truncate max-w-[100px]">3D Shapes:</span>
+                        <span className={`font-mono font-bold ${accentColor}`}>{placements.length}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* IFC INSPECTOR ON SELECTION */}
-                <div className={`pt-2 border-t ${isDark ? "border-white/10" : "border-black/[0.06]"}`}>
-                  <div className={`text-[11px] font-bold mb-2 uppercase tracking-wide ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
-                    IFC Element Details
+                <div className="pt-1 border-t border-[var(--panel-divider)]/40">
+                  <div className="text-[10px] font-bold mb-1 uppercase tracking-wide text-[var(--text-muted)] truncate">
+                    IFC Element Details:
                   </div>
                   <ElementInspector />
                 </div>
