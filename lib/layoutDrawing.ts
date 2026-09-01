@@ -1674,6 +1674,38 @@ export function snapPlanPointToWalls(
         add(wall.startXmm + t * dx, wall.startYmm + t * dy, "extension", 4, wall.id);
       }
     }
+    // Wall boundary face lines (outer & inner edges for exact wall thickness & face snapping)
+    const len = Math.hypot(dx, dy);
+    if (len > 1) {
+      const halfThick = (wall.thicknessMm || 200) / 2;
+      const nx = (-dy / len) * halfThick;
+      const ny = (dx / len) * halfThick;
+
+      for (const side of [1, -1]) {
+        const sx = wall.startXmm + nx * side;
+        const sy = wall.startYmm + ny * side;
+        const ex = wall.endXmm + nx * side;
+        const ey = wall.endYmm + ny * side;
+
+        if (modes.endpoint || modes.node) {
+          add(sx, sy, "endpoint", 0, wall.id);
+          add(ex, ey, "endpoint", 0, wall.id);
+        }
+        if (modes.midpoint) {
+          add((sx + ex) / 2, (sy + ey) / 2, "midpoint", 2, wall.id);
+        }
+        const projFace = distPointSeg(point.xMm, point.yMm, sx, sy, ex, ey);
+        if (modes.nearest && projFace.t >= 0 && projFace.t <= 1) {
+          add(projFace.x, projFace.y, "nearest", 4, wall.id);
+        }
+        if (modes.perpendicular && from) {
+          const perpFace = distPointSeg(from.xMm, from.yMm, sx, sy, ex, ey);
+          if (perpFace.t >= 0 && perpFace.t <= 1) {
+            add(perpFace.x, perpFace.y, "perpendicular", 2, wall.id);
+          }
+        }
+      }
+    }
     if (modes.parallel && from) {
       const a = Math.atan2(dy, dx), len = Math.hypot(point.xMm - from.xMm, point.yMm - from.yMm);
       for (const pa of [a, a + Math.PI]) add(from.xMm + Math.cos(pa) * len, from.yMm + Math.sin(pa) * len, "parallel", 5, wall.id);

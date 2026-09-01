@@ -91,6 +91,7 @@ export default class LayoutSceneLayer {
   private underlayMeshes = new Map<string, THREE.Mesh>();
   private underlayTextures = new Map<string, THREE.Texture>();
   private underlayEdges = new Map<string, THREE.LineSegments>();
+  private underlayVectorLines = new Map<string, THREE.LineSegments>();
   private mepDimmingMaterialState = new WeakMap<
     THREE.Material,
     { opacity: number; transparent: boolean; depthWrite: boolean }
@@ -246,6 +247,58 @@ export default class LayoutSceneLayer {
     if (this.ground) this.ground.visible = false;
   }
 
+  private checkElementVisibility(
+    id: string,
+    category: string,
+    opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+    },
+  ): { isHidden: boolean; showMesh: boolean; isGhosted: boolean } {
+    let isHidden = false;
+    if (opts.isolatedElementIds !== null && opts.isolatedElementIds !== undefined) {
+      if (!opts.isolatedElementIds.has(id)) isHidden = true;
+    }
+    if (opts.hiddenElementIds?.has(id)) isHidden = true;
+    if (opts.hiddenCategories?.has(category)) isHidden = true;
+
+    if (!isHidden) {
+      return { isHidden: false, showMesh: true, isGhosted: false };
+    }
+    if (opts.revealHiddenMode) {
+      return { isHidden: true, showMesh: true, isGhosted: true };
+    }
+    return { isHidden: true, showMesh: false, isGhosted: false };
+  }
+
+  private applyGhostMaterial(obj: THREE.Object3D, isGhosted: boolean) {
+    obj.userData.isHiddenGhost = isGhosted;
+    if (!isGhosted) return;
+    obj.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        if (Array.isArray(child.material)) {
+          for (const m of child.material) {
+            m.transparent = true;
+            m.opacity = 0.35;
+            if ("emissive" in m) {
+              (m as any).emissive?.setHex?.(0xec4899);
+              (m as any).emissiveIntensity = 0.5;
+            }
+          }
+        } else {
+          child.material.transparent = true;
+          child.material.opacity = 0.35;
+          if ("emissive" in child.material) {
+            (child.material as any).emissive?.setHex?.(0xec4899);
+            (child.material as any).emissiveIntensity = 0.5;
+          }
+        }
+      }
+    });
+  }
+
   sync(
     levels: LayoutLevel[],
     walls: LayoutWall[],
@@ -265,6 +318,10 @@ export default class LayoutSceneLayer {
       showAllLevels: boolean;
       /** Top/plan view — CAD door/window symbols instead of 3D boxes. */
       planMode?: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
     },
   ) {
     const planMode = Boolean(opts.planMode);
@@ -282,10 +339,12 @@ export default class LayoutSceneLayer {
     for (const wall of walls) {
       const level = levelById.get(wall.levelId);
       const elev = level?.elevationMm ?? 0;
+      const vis = this.checkElementVisibility(wall.id, "walls", opts);
       const visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        wall.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          wall.levelId === opts.activeLevelId);
       const cl = joins.get(wall.id) ?? wall;
       const miter = miterJoins.get(wall.id);
       const wallDoors = doors.filter((d) => d.wallId === wall.id);
@@ -317,6 +376,7 @@ export default class LayoutSceneLayer {
           }
         }
       });
+      this.applyGhostMaterial(grp, vis.isGhosted);
       this.setMeshSelectionOutline(grp, isWallSelected);
     }
 
@@ -332,10 +392,12 @@ export default class LayoutSceneLayer {
       if (!wall) continue;
       const level = levelById.get(wall.levelId);
       const elev = level?.elevationMm ?? 0;
+      const vis = this.checkElementVisibility(door.id, "doors", opts);
       const visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        wall.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          wall.levelId === opts.activeLevelId);
       let g = this.doorMeshes.get(door.id);
       if (!g) {
         g = this.createOpeningGroup("Door", DOOR_COLOR);
@@ -343,11 +405,11 @@ export default class LayoutSceneLayer {
         this.doorMeshes.set(door.id, g);
         this.group.add(g);
       }
-      // this.stripOpeningLabels(g);
       this.syncDoorPlanSymbol(g, wall, door, elev, planMode);
       g.visible = visible;
       const isDoorSelected = door.id === opts.selectedDoorId || Boolean(opts.selectedDoorIds?.has(door.id));
       this.tintOpening(g, isDoorSelected);
+      this.applyGhostMaterial(g, vis.isGhosted);
     }
 
     const winKeep = new Set(windows.map((w) => w.id));
@@ -362,10 +424,12 @@ export default class LayoutSceneLayer {
       if (!wall) continue;
       const level = levelById.get(wall.levelId);
       const elev = level?.elevationMm ?? 0;
+      const vis = this.checkElementVisibility(win.id, "windows", opts);
       const visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        wall.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          wall.levelId === opts.activeLevelId);
       let g = this.windowMeshes.get(win.id);
       if (!g) {
         g = this.createOpeningGroup("Window", WINDOW_COLOR);
@@ -373,11 +437,11 @@ export default class LayoutSceneLayer {
         this.windowMeshes.set(win.id, g);
         this.group.add(g);
       }
-      // this.stripOpeningLabels(g);
       this.syncWindowPlanSymbol(g, wall, win, elev, planMode);
       g.visible = visible;
       const isWinSelected = win.id === opts.selectedWindowId || Boolean(opts.selectedWindowIds?.has(win.id));
       this.tintOpening(g, isWinSelected);
+      this.applyGhostMaterial(g, vis.isGhosted);
     }
 
     const slabKeep = new Set(slabs.map((s) => s.id));
@@ -392,10 +456,12 @@ export default class LayoutSceneLayer {
     for (const slab of slabs) {
       const level = levelById.get(slab.levelId);
       const elev = level?.elevationMm ?? 0;
+      const vis = this.checkElementVisibility(slab.id, "slabs", opts);
       const visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        slab.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          slab.levelId === opts.activeLevelId);
       let mesh = this.slabMeshes.get(slab.id);
       if (!mesh) {
         mesh = this.createSlabMesh(slab, elev);
@@ -414,6 +480,7 @@ export default class LayoutSceneLayer {
       if (!slab.color && !slab.material) {
         mat.color.setHex(defaultColor);
       }
+      this.applyGhostMaterial(mesh, vis.isGhosted);
       this.setMeshSelectionOutline(mesh, isSlabSelected);
     }
 
@@ -431,6 +498,10 @@ export default class LayoutSceneLayer {
       activeLevelId: string | null;
       selectedColumnIds: Set<string>;
       showAllLevels: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
     },
   ) {
     const levelById = new Map(levels.map((l) => [l.id, l]));
@@ -481,16 +552,19 @@ export default class LayoutSceneLayer {
       }
 
       mesh.position.set(fromMm(col.xMm), fromMm(elev) + height / 2, fromMm(col.yMm));
+      const vis = this.checkElementVisibility(col.id, "structural", opts);
       mesh.visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        col.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          col.levelId === opts.activeLevelId);
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       this.applyMaterialAndColor(mat, col.color, col.material);
       if (!col.color && !col.material) mat.color.setHex(0x94a3b8);
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
+      this.applyGhostMaterial(mesh, vis.isGhosted);
       this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
@@ -502,6 +576,10 @@ export default class LayoutSceneLayer {
       activeLevelId: string | null;
       selectedBeamIds: Set<string>;
       showAllLevels: boolean;
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
     },
   ) {
     const levelById = new Map(levels.map((l) => [l.id, l]));
@@ -556,16 +634,19 @@ export default class LayoutSceneLayer {
         fromMm((beam.startYmm + beam.endYmm) / 2),
       );
       mesh.rotation.y = -Math.atan2(dz, dx);
+      const vis = this.checkElementVisibility(beam.id, "structural", opts);
       mesh.visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        beam.levelId === opts.activeLevelId;
+        vis.showMesh &&
+        (opts.showAllLevels ||
+          opts.activeLevelId == null ||
+          beam.levelId === opts.activeLevelId);
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       this.applyMaterialAndColor(mat, beam.color, beam.material);
       if (!beam.color && !beam.material) mat.color.setHex(0x64748b);
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
+      this.applyGhostMaterial(mesh, vis.isGhosted);
       this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
@@ -782,6 +863,13 @@ export default class LayoutSceneLayer {
           (edge.material as THREE.Material).dispose();
           this.underlayEdges.delete(id);
         }
+        const vecLines = this.underlayVectorLines.get(id);
+        if (vecLines) {
+          this.group.remove(vecLines);
+          vecLines.geometry.dispose();
+          (vecLines.material as THREE.Material).dispose();
+          this.underlayVectorLines.delete(id);
+        }
       }
     }
     for (const u of underlays) {
@@ -832,6 +920,38 @@ export default class LayoutSceneLayer {
           this.loadUnderlayTexture(u.id, u.imageDataUrl, mat);
         }
       }
+
+      // Vector lines overlay for ultra-crisp DWG linework
+      let vecLines = this.underlayVectorLines.get(u.id);
+      if (u.snapSegments && u.snapSegments.length > 0) {
+        if (!vecLines || vecLines.userData.segCount !== u.snapSegments.length) {
+          if (vecLines) {
+            this.group.remove(vecLines);
+            vecLines.geometry.dispose();
+            (vecLines.material as THREE.Material).dispose();
+          }
+          const positions: number[] = [];
+          for (const s of u.snapSegments) {
+            positions.push(s.u0 - 0.5, 0.5 - s.v0, 0.002);
+            positions.push(s.u1 - 0.5, 0.5 - s.v1, 0.002);
+          }
+          const lineGeo = new THREE.BufferGeometry();
+          lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          const lineMat = new THREE.LineBasicMaterial({
+            color: 0x0f172a,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+          });
+          vecLines = new THREE.LineSegments(lineGeo, lineMat);
+          vecLines.renderOrder = -1;
+          vecLines.userData.segCount = u.snapSegments.length;
+          vecLines.userData.isUnderlayVector = true;
+          this.underlayVectorLines.set(u.id, vecLines);
+          this.group.add(vecLines);
+        }
+      }
+
       const cal = resolveUnderlayCalibration(u, u.levelId);
       const w = fromMm(underlayWidthMm(u, u.levelId));
       const h = fromMm(underlayHeightMm(u, u.levelId));
@@ -857,6 +977,13 @@ export default class LayoutSceneLayer {
         edge.visible = show && selected;
         const em = edge.material as THREE.LineBasicMaterial;
         em.color.setHex(u.locked ? 0x94a3b8 : 0xf59e0b);
+      }
+
+      if (vecLines) {
+        vecLines.position.copy(mesh.position);
+        vecLines.rotation.copy(mesh.rotation);
+        vecLines.scale.copy(mesh.scale);
+        vecLines.visible = show;
       }
     }
 

@@ -2465,6 +2465,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const selWireIds = new Set(sel.filter((e) => (e as any).kind === "wire").map((e) => e.id));
       if (s.selectedWireId) selWireIds.add(s.selectedWireId);
 
+      const visOpts = {
+        hiddenElementIds: s.hiddenElementIds,
+        hiddenCategories: s.hiddenCategories,
+        isolatedElementIds: s.isolatedElementIds,
+        revealHiddenMode: s.revealHiddenMode,
+      };
+
       layer.sync(s.levels, s.walls, s.doors, s.windows, s.slabs, {
         activeLevelId: markupFloor,
         selectedWallId: s.selectedWallId,
@@ -2477,16 +2484,19 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         selectedSlabIds: selSlabIds,
         showAllLevels,
         planMode: isPlanView,
+        ...visOpts,
       });
       layer.syncColumns(s.columns || [], s.levels, {
         activeLevelId: markupFloor,
         selectedColumnIds: selColIds,
         showAllLevels,
+        ...visOpts,
       });
       layer.syncBeams(s.beams || [], s.levels, {
         activeLevelId: markupFloor,
         selectedBeamIds: selBeamIds,
         showAllLevels,
+        ...visOpts,
       });
       layer.syncGridLines(s.gridLines || [], s.levels, {
         activeLevelId: markupFloor,

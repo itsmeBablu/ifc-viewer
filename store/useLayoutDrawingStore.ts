@@ -783,6 +783,19 @@ type LayoutDrawingState = {
   convertPlaceholderToDuct: (id: string) => Promise<void>;
   convertPlaceholderToPipe: (id: string) => Promise<void>;
   setActiveWorkPlane: (plane: LayoutWorkPlane | null) => void;
+
+  // Visibility / Eye mode
+  hiddenElementIds: Set<string>;
+  hiddenCategories: Set<string>;
+  isolatedElementIds: Set<string> | null;
+  revealHiddenMode: boolean;
+  hideSelected: () => void;
+  isolateSelected: () => void;
+  toggleHideCategory: (category: string) => void;
+  toggleHideElement: (id: string) => void;
+  unhideElement: (id: string) => void;
+  unhideAll: () => void;
+  toggleRevealHiddenMode: () => void;
 };
 
 async function persistPresets(projectId: string, presets: LayoutPresets) {
@@ -852,6 +865,86 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   activeWorkPlane: null,
   mepModeActive: false,
   mepArchitectureLocked: true,
+
+  // Visibility / Eye Mode state
+  hiddenElementIds: new Set<string>(),
+  hiddenCategories: new Set<string>(),
+  isolatedElementIds: null,
+  revealHiddenMode: false,
+
+  hideSelected: () => {
+    const s = get();
+    const toHide = new Set(s.hiddenElementIds);
+    if (s.selectedWallId) toHide.add(s.selectedWallId);
+    if (s.selectedDoorId) toHide.add(s.selectedDoorId);
+    if (s.selectedWindowId) toHide.add(s.selectedWindowId);
+    if (s.selectedSlabId) toHide.add(s.selectedSlabId);
+    if (s.selectedDuctId) toHide.add(s.selectedDuctId);
+    if (s.selectedPipeId) toHide.add(s.selectedPipeId);
+    if (s.selectedCableTrayId) toHide.add(s.selectedCableTrayId);
+    if (s.selectedEquipmentId) toHide.add(s.selectedEquipmentId);
+    if (s.selectedStairId) toHide.add(s.selectedStairId);
+    if (s.selectedRampId) toHide.add(s.selectedRampId);
+    if (s.selectedSketchLineId) toHide.add(s.selectedSketchLineId);
+    for (const el of s.selectedElements) toHide.add(el.id);
+    set({ hiddenElementIds: toHide });
+    get().clearSelection();
+  },
+
+  isolateSelected: () => {
+    const s = get();
+    const isolated = new Set<string>();
+    if (s.selectedWallId) isolated.add(s.selectedWallId);
+    if (s.selectedDoorId) isolated.add(s.selectedDoorId);
+    if (s.selectedWindowId) isolated.add(s.selectedWindowId);
+    if (s.selectedSlabId) isolated.add(s.selectedSlabId);
+    if (s.selectedDuctId) isolated.add(s.selectedDuctId);
+    if (s.selectedPipeId) isolated.add(s.selectedPipeId);
+    if (s.selectedCableTrayId) isolated.add(s.selectedCableTrayId);
+    if (s.selectedEquipmentId) isolated.add(s.selectedEquipmentId);
+    if (s.selectedStairId) isolated.add(s.selectedStairId);
+    if (s.selectedRampId) isolated.add(s.selectedRampId);
+    if (s.selectedSketchLineId) isolated.add(s.selectedSketchLineId);
+    for (const el of s.selectedElements) isolated.add(el.id);
+    if (isolated.size > 0) {
+      set({ isolatedElementIds: isolated });
+    }
+  },
+
+  toggleHideCategory: (category: string) => {
+    const next = new Set(get().hiddenCategories);
+    if (next.has(category)) next.delete(category);
+    else next.add(category);
+    set({ hiddenCategories: next });
+  },
+
+  toggleHideElement: (id: string) => {
+    const next = new Set(get().hiddenElementIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    set({ hiddenElementIds: next });
+  },
+
+  unhideElement: (id: string) => {
+    const next = new Set(get().hiddenElementIds);
+    next.delete(id);
+    const nextIso = get().isolatedElementIds ? new Set(get().isolatedElementIds) : null;
+    if (nextIso) nextIso.add(id);
+    set({ hiddenElementIds: next, isolatedElementIds: nextIso });
+  },
+
+  unhideAll: () => {
+    set({
+      hiddenElementIds: new Set<string>(),
+      hiddenCategories: new Set<string>(),
+      isolatedElementIds: null,
+      revealHiddenMode: false,
+    });
+  },
+
+  toggleRevealHiddenMode: () => {
+    set({ revealHiddenMode: !get().revealHiddenMode });
+  },
   setMepModeActive: (active) => set((state) => {
     if (!active || !state.mepArchitectureLocked) return { mepModeActive: active };
     const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
