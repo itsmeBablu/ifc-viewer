@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { MdKeyboardArrowRight } from "react-icons/md";
+import { LuEye, LuEyeOff, LuFocus, LuRotateCcw } from "react-icons/lu";
 import { compareBothModesLabelKey, supportsCompareBothModes } from "@/lib/dataViewMode";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -63,6 +64,33 @@ const ctxLabel = "text-[10px] font-semibold tracking-wide text-[var(--text-muted
 
 const ctxPrimaryBtn =
   "w-full rounded-xl border border-white bg-white/85 px-2 py-1.5 text-xs font-semibold text-zinc-800 shadow-[inset_0_1px_0_white,0_4px_14px_rgba(15,23,42,0.10)] transition hover:bg-white disabled:opacity-40";
+
+function getCategoryInfo(kind: string): { id: string; label: string } {
+  switch (kind) {
+    case "wall":
+      return { id: "walls", label: "Walls" };
+    case "door":
+      return { id: "doors", label: "Doors" };
+    case "window":
+      return { id: "windows", label: "Windows" };
+    case "slab":
+      return { id: "slabs", label: "Floors & Roofs" };
+    case "column":
+    case "beam":
+      return { id: "structural", label: "Columns & Beams" };
+    case "stair":
+    case "ramp":
+      return { id: "circulation", label: "Stairs & Ramps" };
+    case "duct":
+    case "pipe":
+    case "cabletray":
+    case "equipment":
+    case "wire":
+      return { id: "mep", label: "MEP Systems" };
+    default:
+      return { id: kind, label: `${kind[0].toUpperCase()}${kind.slice(1)}s` };
+  }
+}
 
 /**
  * Right-click context menu for the 3D canvas.
@@ -132,6 +160,20 @@ export default function WerkzeugContextMenu({
   const deleteSelected = useLayoutDrawingStore((s) => s.deleteSelected);
   const lockedElementKeys = useLayoutDrawingStore((s) => s.lockedElementKeys);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+
+  // Visibility / Eye mode store bindings
+  const hiddenElementIds = useLayoutDrawingStore((s) => s.hiddenElementIds);
+  const hiddenCategories = useLayoutDrawingStore((s) => s.hiddenCategories);
+  const isolatedElementIds = useLayoutDrawingStore((s) => s.isolatedElementIds);
+  const revealHiddenMode = useLayoutDrawingStore((s) => s.revealHiddenMode);
+  const hideSelected = useLayoutDrawingStore((s) => s.hideSelected);
+  const isolateSelected = useLayoutDrawingStore((s) => s.isolateSelected);
+  const isolateCategory = useLayoutDrawingStore((s) => s.isolateCategory);
+  const toggleHideCategory = useLayoutDrawingStore((s) => s.toggleHideCategory);
+  const toggleHideElement = useLayoutDrawingStore((s) => s.toggleHideElement);
+  const unhideElement = useLayoutDrawingStore((s) => s.unhideElement);
+  const unhideAll = useLayoutDrawingStore((s) => s.unhideAll);
+  const toggleRevealHiddenMode = useLayoutDrawingStore((s) => s.toggleRevealHiddenMode);
 
   const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
@@ -476,6 +518,132 @@ export default function WerkzeugContextMenu({
                           <span>{t(uiLanguage, "markupDelete")}</span>
                         </button>
                       </div>
+
+                      {/* Visibility & Isolate section for selected element */}
+                      {(() => {
+                        const cat = getCategoryInfo(primaryLayoutSelection.kind);
+                        const isItemHidden =
+                          hiddenElementIds.has(primaryLayoutSelection.id) ||
+                          hiddenCategories.has(cat.id) ||
+                          (isolatedElementIds !== null && !isolatedElementIds.has(primaryLayoutSelection.id));
+                        const isCatHidden = hiddenCategories.has(cat.id);
+
+                        return (
+                          <div className="mt-1 border-t border-slate-200/80 pt-1">
+                            <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                              Visibility & Isolate
+                            </div>
+
+                            {/* Hide / Unhide Element */}
+                            {isItemHidden ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className={itemCls()}
+                                onClick={() => {
+                                  unhideElement(primaryLayoutSelection.id);
+                                  close();
+                                }}
+                              >
+                                <span className="flex items-center gap-1.5 font-medium text-pink-600">
+                                  <LuEye className="h-3.5 w-3.5" />
+                                  <span>Unhide {layoutSelectionLabel}</span>
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className={itemCls()}
+                                onClick={() => {
+                                  hideSelected();
+                                  close();
+                                }}
+                              >
+                                <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                                  <LuEyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                                  <span>Hide {layoutSelectionLabel}</span>
+                                </span>
+                              </button>
+                            )}
+
+                            {/* Hide / Unhide Category */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={itemCls()}
+                              onClick={() => {
+                                toggleHideCategory(cat.id);
+                                close();
+                              }}
+                            >
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                                {isCatHidden ? (
+                                  <>
+                                    <LuEye className="h-3.5 w-3.5 text-pink-600" />
+                                    <span className="text-pink-600">Unhide All {cat.label}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <LuEyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                                    <span>Hide All {cat.label}</span>
+                                  </>
+                                )}
+                              </span>
+                            </button>
+
+                            {/* Isolate Element */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={itemCls()}
+                              onClick={() => {
+                                isolateSelected();
+                                close();
+                              }}
+                            >
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                                <LuFocus className="h-3.5 w-3.5 text-zinc-500" />
+                                <span>Isolate {layoutSelectionLabel}</span>
+                              </span>
+                            </button>
+
+                            {/* Isolate Category */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={itemCls()}
+                              onClick={() => {
+                                isolateCategory(cat.id);
+                                close();
+                              }}
+                            >
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                                <LuFocus className="h-3.5 w-3.5 text-amber-500" />
+                                <span>Isolate All {cat.label}</span>
+                              </span>
+                            </button>
+
+                            {/* Reset / Unhide All */}
+                            {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null) && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className={`${itemCls()} text-amber-600 hover:text-amber-700`}
+                                onClick={() => {
+                                  unhideAll();
+                                  close();
+                                }}
+                              >
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <LuRotateCcw className="h-3.5 w-3.5" />
+                                  <span>Unhide All (Reset)</span>
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {!primaryLayoutSelection && selectedPlacementId && (
@@ -495,6 +663,40 @@ export default function WerkzeugContextMenu({
                     </div>
                   )}
                   {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId == null && <>
+                  {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null || revealHiddenMode) && (
+                    <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1">
+                      <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                        <span>Visibility</span>
+                        {revealHiddenMode && <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[8px] font-bold text-white">Ghost Mode</span>}
+                      </div>
+                      <button
+                        type="button"
+                        className={itemCls()}
+                        onClick={() => {
+                          toggleRevealHiddenMode();
+                          close();
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5 text-zinc-700">
+                          <LuEye className="h-3.5 w-3.5 text-pink-500" />
+                          <span>{revealHiddenMode ? "Exit Ghost Mode" : "Reveal Hidden (Ghost Mode)"}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`${itemCls()} text-amber-600 hover:text-amber-700`}
+                        onClick={() => {
+                          unhideAll();
+                          close();
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <LuRotateCcw className="h-3.5 w-3.5" />
+                          <span>Unhide All Elements</span>
+                        </span>
+                      </button>
+                    </div>
+                  )}
                   <p className={`mb-1 px-2 ${ctxLabel}`}>
                     {t(uiLanguage, "markupViews")}
                   </p>

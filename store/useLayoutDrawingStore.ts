@@ -791,6 +791,7 @@ type LayoutDrawingState = {
   revealHiddenMode: boolean;
   hideSelected: () => void;
   isolateSelected: () => void;
+  isolateCategory: (category: string) => void;
   toggleHideCategory: (category: string) => void;
   toggleHideElement: (id: string) => void;
   unhideElement: (id: string) => void;
@@ -908,6 +909,34 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const el of s.selectedElements) isolated.add(el.id);
     if (isolated.size > 0) {
       set({ isolatedElementIds: isolated });
+    }
+  },
+
+  isolateCategory: (category: string) => {
+    const s = get();
+    const isolated = new Set<string>();
+    if (category === "walls") {
+      s.walls.forEach((w) => isolated.add(w.id));
+    } else if (category === "doors") {
+      s.doors.forEach((d) => isolated.add(d.id));
+    } else if (category === "windows") {
+      s.windows.forEach((w) => isolated.add(w.id));
+    } else if (category === "slabs") {
+      s.slabs.forEach((sl) => isolated.add(sl.id));
+    } else if (category === "structural") {
+      s.columns.forEach((c) => isolated.add(c.id));
+      s.beams.forEach((b) => isolated.add(b.id));
+    } else if (category === "circulation") {
+      s.stairs.forEach((st) => isolated.add(st.id));
+      s.ramps.forEach((r) => isolated.add(r.id));
+    } else if (category === "mep") {
+      s.ducts.forEach((d) => isolated.add(d.id));
+      s.pipes.forEach((p) => isolated.add(p.id));
+      s.cableTrays.forEach((c) => isolated.add(c.id));
+      s.mepEquipment.forEach((e) => isolated.add(e.id));
+    }
+    if (isolated.size > 0) {
+      set({ isolatedElementIds: isolated, hiddenCategories: new Set<string>() });
     }
   },
 
