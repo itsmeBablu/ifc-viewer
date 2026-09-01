@@ -5,10 +5,12 @@ import {
   LuBox,
   LuCheck,
   LuChevronRight,
+  LuChevronDown,
   LuCircle,
   LuCylinder,
   LuGrip,
   LuLayers,
+  LuLoader2,
   LuMousePointer2,
   LuPalette,
   LuPlus,
@@ -352,6 +354,77 @@ function Section({
   );
 }
 
+function VYellowDropdown<T extends string>({
+  value,
+  options,
+  onChange,
+  className = "",
+  isMep = false,
+}: {
+  value: T;
+  options: T[];
+  onChange: (val: T) => void;
+  className?: string;
+  isMep?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`flex h-7 w-full items-center justify-between rounded-lg border px-2 text-[11px] font-semibold transition-all ${
+          open
+            ? isMep
+              ? "border-sky-400 bg-sky-500/15 text-white ring-1 ring-sky-400/40"
+              : "border-yellow-400 bg-yellow-500/15 text-white ring-1 ring-yellow-400/40"
+            : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] hover:border-yellow-400/50"
+        }`}
+      >
+        <span className="truncate">{value}</span>
+        <LuChevronDown className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border border-white/20 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur-xl thin-scroll">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors ${
+                opt === value
+                  ? isMep
+                    ? "bg-sky-400 text-zinc-950 font-black"
+                    : "bg-yellow-400 text-zinc-950 font-black"
+                  : "text-zinc-200 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <span className="truncate">{opt}</span>
+              {opt === value && <LuCheck className="h-3 w-3 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MaterialEditorPanel({
   isOpen,
   onClose,
@@ -649,7 +722,7 @@ export default function MaterialEditorPanel({
             ))}
           </div>
 
-          <div className="grid max-h-40 grid-cols-3 gap-1 overflow-y-auto pr-0.5 thin-scroll">
+          <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
             {filtered.map((m) => (
               <button
                 key={m.id}
@@ -657,27 +730,36 @@ export default function MaterialEditorPanel({
                 draggable
                 onDragStart={(e) => drag(e, m)}
                 onClick={() => select(m.id)}
-                className={`group relative min-w-0 rounded border p-1 text-left transition-all ${
+                className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
                   m.id === selected.id
-                    ? `${isMep ? "border-sky-400" : "border-yellow-400"} bg-[var(--surface-overlay)]`
-                    : "border-[var(--panel-divider)] bg-[var(--surface-card)] hover:border-[var(--text-muted)]"
+                    ? isMep
+                      ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.4)] bg-sky-950/40"
+                      : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.4)] bg-yellow-950/40"
+                    : "border-white/10 bg-zinc-950/70 hover:border-yellow-400/60 shadow-md"
                 }`}
                 title={`${m.name} (${m.category})`}
               >
-                <LuGrip className="absolute right-0.5 top-0.5 h-2.5 w-2.5 text-[var(--text-muted)] opacity-50" />
+                {/* Full Square High-Texture Preview */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   draggable={false}
-                  src={renderMaterialPreview(m, "sphere", 48)}
+                  src={renderMaterialPreview(m, "sphere", 128)}
                   alt=""
-                  className="pointer-events-none mx-auto h-8 w-8 object-contain"
+                  className="h-full w-full object-contain p-1.5 transition-transform duration-300 group-hover:scale-110"
                 />
-                <span className="pointer-events-none block truncate text-[9px] font-semibold text-[var(--text-strong)]">
-                  {m.name}...
-                </span>
-                <span className="pointer-events-none block truncate text-[8px] text-[var(--text-muted)]">
-                  {m.category}...
-                </span>
+
+                {/* Grip Icon */}
+                <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-white/50 drop-shadow" />
+
+                {/* Bottom Overlay Label */}
+                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-black/95 via-black/60 to-transparent p-1.5 pt-4 pointer-events-none">
+                  <span className="truncate text-[10px] font-bold text-white leading-tight drop-shadow-sm">
+                    {m.name}
+                  </span>
+                  <span className="truncate text-[8px] font-medium text-zinc-400 opacity-80 group-hover:opacity-100 transition-opacity">
+                    {m.category}
+                  </span>
+                </div>
               </button>
             ))}
           </div>
@@ -713,30 +795,26 @@ export default function MaterialEditorPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_80px] gap-1 pt-1 border-t border-[var(--panel-divider)]/40">
+          <div className="grid grid-cols-[1fr_105px] gap-1.5 pt-1 border-t border-[var(--panel-divider)]/40">
             <label className="text-[9px] text-[var(--text-muted)] block">
-              <span className="truncate block">Name:</span>
+              <span className="truncate block mb-0.5">Name:</span>
               <input
                 value={selected.name}
                 onChange={(e) => patch({ name: e.target.value })}
                 className={fieldInputClass}
               />
             </label>
-            <label className="text-[9px] text-[var(--text-muted)] block">
-              <span className="truncate block">Class:</span>
-              <select
+            <div className="text-[9px] text-[var(--text-muted)] block">
+              <span className="truncate block mb-0.5">Class:</span>
+              <VYellowDropdown
                 value={selected.category}
-                onChange={(e) => {
-                  const next = e.target.value as MaterialDefinition["category"];
-                  patch({ ...CLASS_DEFAULTS[next], category: next });
+                options={CATEGORIES.slice(1)}
+                onChange={(next) => {
+                  patch({ ...CLASS_DEFAULTS[next as MaterialDefinition["category"]], category: next as MaterialDefinition["category"] });
                 }}
-                className={fieldInputClass}
-              >
-                {CATEGORIES.slice(1).map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
+                isMep={isMep}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-[32px_1fr] items-center gap-1.5 pt-0.5">

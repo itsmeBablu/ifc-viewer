@@ -5243,6 +5243,24 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             }
           }
           if (pt) {
+            const layoutState = useLayoutDrawingStore.getState();
+            const activeLevelId = layoutState.draftWallBaseLevelId ?? layoutState.levels[0]?.id;
+            if (activeLevelId) {
+              const measureFrom = ms.measureDraft ? { xMm: toMm(ms.measureDraft.x), yMm: toMm(ms.measureDraft.z) } : null;
+              const snap = snapPlanPointToWalls(
+                { xMm: toMm(pt.x), yMm: toMm(pt.z) },
+                layoutState.walls,
+                activeLevelId,
+                350,
+                layoutState.planSnapModes,
+                measureFrom,
+                layoutState.underlays,
+              );
+              if (snap.type) {
+                pt.x = fromMm(snap.point.xMm);
+                pt.z = fromMm(snap.point.yMm);
+              }
+            }
             if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "y", "z"]);
             layer.setSnapIndicator(pt);
             layer.syncMeasurements(
@@ -5477,6 +5495,24 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             }
           }
           if (pt) {
+            const layoutState = useLayoutDrawingStore.getState();
+            const activeLevelId = layoutState.draftWallBaseLevelId ?? layoutState.levels[0]?.id;
+            if (activeLevelId) {
+              const measureFrom = markupStore.measureDraft ? { xMm: toMm(markupStore.measureDraft.x), yMm: toMm(markupStore.measureDraft.z) } : null;
+              const snap = snapPlanPointToWalls(
+                { xMm: toMm(pt.x), yMm: toMm(pt.z) },
+                layoutState.walls,
+                activeLevelId,
+                350,
+                layoutState.planSnapModes,
+                measureFrom,
+                layoutState.underlays,
+              );
+              if (snap.type) {
+                pt.x = fromMm(snap.point.xMm);
+                pt.z = fromMm(snap.point.yMm);
+              }
+            }
             if (markupStore.gridSnap) {
               pt = applyGridSnap(pt, markupStore.gridSize, ["x", "y", "z"]);
             }

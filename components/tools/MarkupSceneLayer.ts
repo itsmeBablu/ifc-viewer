@@ -419,6 +419,8 @@ export class MarkupSceneLayer {
 
       const dx = cursor.x - draft.x;
       const dz = cursor.z - draft.z;
+      const dxMm = Math.round(toMm(Math.abs(dx)));
+      const dzMm = Math.round(toMm(Math.abs(dz)));
       let angleDeg = Math.round((Math.atan2(-dz, dx) * 180) / Math.PI);
       if (angleDeg < 0) angleDeg += 360;
 
@@ -428,19 +430,26 @@ export class MarkupSceneLayer {
         const el = document.createElement("div");
         el.style.cssText = [
           "pointer-events:none",
-          "padding:3px 8px",
-          "border-radius:9999px",
-          "background:rgba(14,165,233,0.92)",
-          "color:#fff",
-          "font:700 11px/1.2 system-ui,sans-serif",
-          "box-shadow:0 2px 8px rgba(0,0,0,.25)",
+          "padding:4px 10px",
+          "border-radius:10px",
+          "background:rgba(9,9,11,0.88)",
+          "border:1px solid rgba(250,204,21,0.5)",
+          "color:#facc15",
+          "font:700 11px/1.25 system-ui,sans-serif",
+          "box-shadow:0 8px 24px rgba(0,0,0,0.5), 0 0 16px rgba(250,204,21,0.25)",
           "white-space:nowrap",
-          "transform:translate(-50%,-120%)",
+          "transform:translate(-50%,-130%)",
+          "backdrop-filter:blur(8px)",
+          "display:flex",
+          "flex-direction:column",
+          "align-items:center",
+          "gap:2px",
         ].join(";");
         this.measureDraftLabel = new CSS2DObject(el);
         this.group.add(this.measureDraftLabel);
       }
-      this.measureDraftLabel.element.textContent = `${distMm} mm · ${angleDeg}°`;
+      const distM = (distMm / 1000).toFixed(2);
+      this.measureDraftLabel.element.innerHTML = `<span style="font-weight:900;color:#fff">${distMm} mm <span style="color:#facc15;font-weight:600">(${distM} m)</span> · ${angleDeg}°</span><span style="font-size:9px;color:#a1a1aa">ΔX: ${dxMm} mm | ΔZ: ${dzMm} mm</span>`;
       this.measureDraftLabel.position.copy(mid);
       this.measureDraftLabel.visible = true;
     } else {

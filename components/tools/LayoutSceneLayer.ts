@@ -915,6 +915,10 @@ export default class LayoutSceneLayer {
     const loader = new THREE.TextureLoader();
     loader.load(dataUrl, (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.anisotropy = 16;
       this.underlayTextures.set(id, tex);
       mat.map = tex;
       mat.needsUpdate = true;
