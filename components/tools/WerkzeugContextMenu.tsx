@@ -131,6 +131,8 @@ export default function WerkzeugContextMenu({
   const toolMode = useAppStore((s) => s.toolMode);
 
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
+  const quadView = useToolMarkupStore((s) => s.quadView);
+  const setQuadView = useToolMarkupStore((s) => s.setQuadView);
   const setArmedTool = useToolMarkupStore((s) => s.setArmedTool);
   const setTransformMode = useToolMarkupStore((s) => s.setTransformMode);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
@@ -705,8 +707,9 @@ export default function WerkzeugContextMenu({
                       <button
                         key={v.id}
                         type="button"
-                        className={`${ctxChipOff} px-2 py-1 text-[10px] font-bold`}
+                        className={`${!quadView && viewPreset === v.id ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
                         onClick={() => {
+                          setQuadView(false);
                           setViewPreset(v.id);
                           close();
                         }}
@@ -714,6 +717,16 @@ export default function WerkzeugContextMenu({
                         {v.label}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      className={`${quadView ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
+                      onClick={() => {
+                        setQuadView(!quadView);
+                        close();
+                      }}
+                    >
+                      4 Views
+                    </button>
                   </div>
 
                   <button

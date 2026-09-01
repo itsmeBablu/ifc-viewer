@@ -108,7 +108,7 @@ export default function WorkspaceViewTabs() {
       <ViewTab
         active={quadView}
         icon={<LuGrid2X2 />}
-        label="2D + 3D"
+        label="4 Views"
         title="Coordinate plan, 3D and elevations in four linked viewports"
         onClick={() => setQuadView(!quadView)}
       />
