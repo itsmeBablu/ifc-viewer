@@ -2320,7 +2320,7 @@ export default class LayoutSceneLayer {
 
     const dotGeo = new THREE.CircleGeometry(0.04, 16);
     dotGeo.rotateX(-Math.PI / 2);
-    const dotMesh = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x2563eb, depthTest: false }));
+    const dotMesh = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0xfacc15, depthTest: false }));
     dotMesh.position.set(0.08, 0.025, 0);
     group.add(dotMesh);
 
@@ -2329,14 +2329,14 @@ export default class LayoutSceneLayer {
       new THREE.Vector3(0.08, 0.025, 0),
       new THREE.Vector3(arrowEndXM, 0.025, 0),
     ]);
-    group.add(new THREE.Line(arrowLineGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+    group.add(new THREE.Line(arrowLineGeo, new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false })));
 
     const headGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(arrowEndXM - 0.15, 0.025, -0.08),
       new THREE.Vector3(arrowEndXM, 0.025, 0),
       new THREE.Vector3(arrowEndXM - 0.15, 0.025, 0.08),
     ]);
-    group.add(new THREE.Line(headGeo, new THREE.LineBasicMaterial({ color: 0x2563eb, depthTest: false })));
+    group.add(new THREE.Line(headGeo, new THREE.LineBasicMaterial({ color: 0xfacc15, depthTest: false })));
 
     root.add(group);
   }
@@ -2614,9 +2614,9 @@ export default class LayoutSceneLayer {
     this.clearGroupContents(this.sketchGroup);
 
     const levelMap = new Map(levels.map((lvl) => [lvl.id, lvl.elevationMm]));
-    const boundaryBlue = 0x2563eb;
+    const boundaryYellow = 0xfacc15;
     const draftingGray = 0x374151;
-    const selectedCyan = 0x38bdf8;
+    const selectedYellow = 0xfde047;
     const gapRed = 0xef4444;
     // Ribbon dimensions: width visible from top, height visible from side
     const RIBBON_H = 0.006;
@@ -2677,7 +2677,7 @@ export default class LayoutSceneLayer {
     for (const l of lines) {
       const isSelected = l.id === selectedLineId;
       const parsed = l.color ? Number.parseInt(l.color.replace("#", ""), 16) : draftingGray;
-      const col = isSelected ? selectedCyan : targetKind ? boundaryBlue : parsed;
+      const col = isSelected ? selectedYellow : targetKind ? boundaryYellow : parsed;
       const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
       const y = fromMm(elevMm) + 0.08;
 
@@ -2739,7 +2739,7 @@ export default class LayoutSceneLayer {
           const p1 = new THREE.Vector3(fromMm(a.xMm), drawY, fromMm(a.yMm));
           const p2 = new THREE.Vector3(fromMm(b.xMm), drawY, fromMm(b.yMm));
           const isRubberband = i === pts.length - 2 && draw.cursor != null;
-          const col = targetKind ? 0x3b82f6 : isRubberband ? 0x6b7280 : draftingGray;
+          const col = targetKind ? 0xfacc15 : isRubberband ? 0x6b7280 : draftingGray;
           makeSegment(p1, p2, drawY, col, isRubberband ? 0.9 : 0.7, null, 105);
         }
       }
@@ -2749,7 +2749,7 @@ export default class LayoutSceneLayer {
         const discGeo = new THREE.CircleGeometry(0.05, 14);
         discGeo.rotateX(-Math.PI / 2);
         const discMat = new THREE.MeshBasicMaterial({
-          color: targetKind ? 0x2563eb : draftingGray,
+          color: targetKind ? 0xfacc15 : draftingGray,
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.95,

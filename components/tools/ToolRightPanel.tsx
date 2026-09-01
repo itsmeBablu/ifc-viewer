@@ -516,14 +516,10 @@ export default function ToolRightPanel({
             ref={tabTrackRef}
             className="relative flex h-7 items-center rounded-full border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-0.5 shadow-inner backdrop-blur-md"
           >
-            {/* Animated Sliding Capsule Highlight */}
+            {/* Animated Sliding Capsule Highlight - Neutral Gray/Black/White */}
             <div
               ref={capsuleIndicatorRef}
-              className={`absolute top-0.5 bottom-0.5 left-0 rounded-full pointer-events-none transition-colors ${
-                isMepActive
-                  ? "bg-sky-400 text-zinc-950 shadow-sm shadow-sky-400/30"
-                  : "bg-yellow-400 text-zinc-950 shadow-sm shadow-yellow-400/30"
-              }`}
+              className="absolute top-0.5 bottom-0.5 left-0 rounded-full pointer-events-none transition-colors bg-white text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,1)] dark:bg-zinc-800 dark:text-zinc-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.3)]"
               style={{
                 width: "33.333%",
               }}
@@ -538,7 +534,7 @@ export default function ToolRightPanel({
               }}
               className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "properties"
-                  ? "!text-zinc-950 font-black"
+                  ? "!text-[var(--text-strong)] font-bold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Default: Properties & Layout Inspector"
@@ -553,7 +549,7 @@ export default function ToolRightPanel({
               onClick={() => setPropTab("materials")}
               className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "materials"
-                  ? "!text-zinc-950 font-black"
+                  ? "!text-[var(--text-strong)] font-bold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Material Library & Shader Studio"
@@ -568,7 +564,7 @@ export default function ToolRightPanel({
               onClick={() => setPropTab("settings")}
               className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "settings"
-                  ? "!text-zinc-950 font-black"
+                  ? "!text-[var(--text-strong)] font-bold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Studio Settings & Workspace Preferences"
@@ -1580,7 +1576,7 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
 function DraftSketchLineProperties() {
   const store = useLayoutDrawingStore();
   const totalLength = store.sketchLines.reduce((sum, line) => sum + Math.hypot(line.endXmm - line.startXmm, line.endYmm - line.startYmm), 0);
-  return <div className="space-y-2"><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Current length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.lengthMm ?? 0)} mm</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Angle</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.angleDeg ?? 0)}°</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Segments</span><strong className="font-mono text-xs text-[var(--text-strong)]">{store.sketchLines.length}</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Total length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(totalLength)} mm</strong></div></div>{!store.sketchTargetKind && <SketchLineStyleEditor />}{store.sketchTargetKind && <p className="rounded-lg bg-blue-500/10 p-2 text-[10px] font-semibold text-blue-500">Blue boundary mode · draw one closed outer loop and optional closed inner loops for openings.</p>}<div className="grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab(store.sketchTargetKind ?? "floor")}>Create {store.sketchTargetKind ?? "floor"}</button>{!store.sketchTargetKind && <button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab("roof")}>Create roof</button>}{store.sketchDraw && <button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.finishSketchLineDraw}>Finish</button>}<button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.clearSketchLines}>Clear</button></div></div>;
+  return <div className="space-y-2"><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Current length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.lengthMm ?? 0)} mm</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Angle</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(store.sketchDraw?.angleDeg ?? 0)}°</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Segments</span><strong className="font-mono text-xs text-[var(--text-strong)]">{store.sketchLines.length}</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Total length</span><strong className="font-mono text-xs text-[var(--text-strong)]">{Math.round(totalLength)} mm</strong></div></div>{!store.sketchTargetKind && <SketchLineStyleEditor />}{store.sketchTargetKind && <p className="rounded-lg bg-yellow-500/10 p-2 text-[10px] font-semibold text-yellow-600">Yellow boundary mode · draw one closed outer loop and optional closed inner loops for openings.</p>}<div className="grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab(store.sketchTargetKind ?? "floor")}>Create {store.sketchTargetKind ?? "floor"}</button>{!store.sketchTargetKind && <button type="button" className="btn-v-yellow min-h-9 rounded-lg px-2 text-[10px]" onClick={() => void store.convertSketchToSlab("roof")}>Create roof</button>}{store.sketchDraw && <button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.finishSketchLineDraw}>Finish</button>}<button type="button" className="btn-yellow-border-hover min-h-9 rounded-lg border border-[var(--panel-divider)] px-2 text-[10px]" onClick={store.clearSketchLines}>Clear</button></div></div>;
 }
 
 function SketchLineStyleEditor({ lineId }: { lineId?: string }) {

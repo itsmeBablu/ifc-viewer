@@ -198,7 +198,7 @@ export default function ToolFloorsSection({
                 if (lvl) select(lvl.id, true);
               });
             }}
-            className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-sky-900 hover:bg-sky-200/80"
+            className="rounded-md bg-yellow-400/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-zinc-900 hover:bg-yellow-400/30"
           >
             + {t(uiLanguage, "layoutAddLevel")}
           </button>
@@ -227,7 +227,7 @@ export default function ToolFloorsSection({
           }}
           className={`mb-0.5 w-full rounded-md px-1.5 py-1 flex items-center justify-between text-[10px] font-medium transition duration-150 ${
             activeId == null
-              ? "bg-amber-100 text-amber-950"
+              ? "btn-v-yellow btn-liquid-hover text-zinc-950 font-bold"
               : "text-[var(--text-body)] hover:bg-[var(--surface-muted)]"
           }`}
         >
@@ -259,7 +259,7 @@ export default function ToolFloorsSection({
                 select(row.id, true);
               }}
               className={`mb-px rounded-md px-0.5 py-0 transition duration-150 ${
-                active ? "bg-sky-100 text-sky-950" : "hover:bg-[var(--surface-muted)]/40"
+                active ? "btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold" : "hover:bg-[var(--surface-muted)]/40"
               }`}
             >
               <div className="flex items-center gap-1">
@@ -295,7 +295,7 @@ export default function ToolFloorsSection({
                         setEditingLevelId(null);
                       }
                     }}
-                    className="min-w-0 flex-1 rounded border border-sky-400 bg-white px-1 py-0.5 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-sky-300"
+                    className="min-w-0 flex-1 rounded border border-yellow-400 bg-white px-1 py-0.5 text-[11px] font-semibold outline-none focus:ring-1 focus:ring-yellow-300"
                   />
                 ) : (
                   <button
@@ -329,9 +329,9 @@ export default function ToolFloorsSection({
                     className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${
                       underlay
                         ? selectedUnderlayId === underlay.id
-                          ? "bg-amber-400/90 text-amber-950"
+                          ? "btn-v-yellow text-zinc-950"
                           : "bg-amber-100 text-amber-900 hover:bg-amber-200/80"
-                        : "bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-sky-50 hover:text-sky-900"
+                        : "bg-[var(--surface-muted)] text-[var(--text-muted)] hover:bg-yellow-400/20 hover:text-zinc-900"
                     }`}
                   >
                     {underlay

@@ -354,16 +354,16 @@ function Section({
   );
 }
 
-function VYellowDropdown<T extends string>({
+function VYellowDropdown({
   value,
   options,
   onChange,
   className = "",
   isMep = false,
 }: {
-  value: T;
-  options: T[];
-  onChange: (val: T) => void;
+  value: string;
+  options: (string | { id: string; label: string; glyph?: string })[];
+  onChange: (val: string) => void;
   className?: string;
   isMep?: boolean;
 }) {
@@ -380,45 +380,58 @@ function VYellowDropdown<T extends string>({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const getOptId = (opt: string | { id: string; label: string; glyph?: string }) =>
+    typeof opt === "string" ? opt : opt.id;
+  const getOptLabel = (opt: string | { id: string; label: string; glyph?: string }) =>
+    typeof opt === "string" ? opt : `${opt.glyph ? `${opt.glyph} ` : ""}${opt.label}`;
+
+  const currentOption = options.find((o) => getOptId(o) === value);
+  const currentLabel = currentOption ? getOptLabel(currentOption) : value;
+
   return (
-    <div ref={dropdownRef} className={`relative ${className}`}>
+    <div ref={dropdownRef} className={`relative ${open ? "z-[300]" : "z-10"} ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={`flex h-7 w-full items-center justify-between rounded-lg border px-2 text-[11px] font-semibold transition-all ${
           open
             ? isMep
-              ? "border-sky-400 bg-sky-500/15 text-white ring-1 ring-sky-400/40"
-              : "border-yellow-400 bg-yellow-500/15 text-white ring-1 ring-yellow-400/40"
+              ? "border-sky-400 bg-sky-500/15 text-[var(--text-strong)] ring-1 ring-sky-400/40"
+              : "border-yellow-400 bg-yellow-500/15 text-[var(--text-strong)] ring-1 ring-yellow-400/40"
             : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] hover:border-yellow-400/50"
         }`}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{currentLabel}</span>
         <LuChevronDown className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] p-1 shadow-2xl backdrop-blur-xl thin-scroll">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors ${
-                opt === value
-                  ? isMep
-                    ? "bg-sky-400 text-zinc-950 font-black"
-                    : "bg-yellow-400 text-zinc-950 font-black"
-                  : "text-[var(--text-strong)] hover:bg-[var(--surface-overlay)]"
-              }`}
-            >
-              <span className="truncate">{opt}</span>
-              {opt === value && <LuCheck className="h-3 w-3 shrink-0" />}
-            </button>
-          ))}
+        <div className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card,#ffffff)] text-[var(--text-strong)] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.30)] backdrop-blur-2xl thin-scroll">
+          {options.map((opt) => {
+            const id = getOptId(opt);
+            const label = getOptLabel(opt);
+            const isSelected = id === value;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  onChange(id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors ${
+                  isSelected
+                    ? isMep
+                      ? "bg-sky-400 text-zinc-950 font-black"
+                      : "bg-yellow-400 text-zinc-950 font-black"
+                    : "text-[var(--text-strong)] hover:bg-[var(--surface-overlay)]"
+                }`}
+              >
+                <span className="truncate">{label}</span>
+                {isSelected && <LuCheck className="h-3 w-3 shrink-0" />}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -474,6 +487,7 @@ export default function MaterialEditorPanel({
 
   const [category, setCategory] = useState<string>("All");
   const [search, setSearch] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
   const [panelWidth, setPanelWidth] = useState<number>(340);
 
@@ -722,47 +736,66 @@ export default function MaterialEditorPanel({
             ))}
           </div>
 
-          <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
-            {filtered.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                draggable
-                onDragStart={(e) => drag(e, m)}
-                onClick={() => select(m.id)}
-                className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
-                  m.id === selected.id
-                    ? isMep
-                      ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-overlay)]"
-                      : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-overlay)]"
-                    : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
-                }`}
-                title={`${m.name} (${m.category})`}
-              >
-                {/* Full Square High-Texture Preview */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  draggable={false}
-                  src={renderMaterialPreview(m, "sphere", 128)}
-                  alt=""
-                  className="h-full w-full object-contain p-1.5 transition-transform duration-300 group-hover:scale-110"
-                />
-
-                {/* Grip Icon */}
-                <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
-
-                {/* Bottom Overlay Label */}
-                <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-[var(--surface-card)] via-[var(--surface-card)]/80 to-transparent p-1.5 pt-4 pointer-events-none">
-                  <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-tight">
-                    {m.name}
-                  </span>
-                  <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
-                    {m.category}
-                  </span>
+          {isLoading ? (
+            <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 p-1">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="aspect-square w-full rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)] animate-pulse flex flex-col justify-between p-2"
+                >
+                  <div className="flex justify-end">
+                    <div className="h-2.5 w-2.5 rounded bg-zinc-400/20" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-2 w-3/4 rounded bg-zinc-400/20" />
+                    <div className="h-1.5 w-1/2 rounded bg-zinc-400/15" />
+                  </div>
                 </div>
-              </button>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
+              {filtered.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  draggable
+                  onDragStart={(e) => drag(e, m)}
+                  onClick={() => select(m.id)}
+                  className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
+                    m.id === selected.id
+                      ? isMep
+                        ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-overlay)]"
+                        : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-overlay)]"
+                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
+                  }`}
+                  title={`${m.name} (${m.category})`}
+                >
+                  {/* Full Square High-Texture Preview */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    draggable={false}
+                    src={renderMaterialPreview(m, "sphere", 128)}
+                    alt=""
+                    className="h-full w-full object-contain p-1.5 transition-transform duration-300 group-hover:scale-110"
+                  />
+
+                  {/* Grip Icon */}
+                  <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
+
+                  {/* Bottom Overlay Label */}
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-[var(--surface-card)] via-[var(--surface-card)]/80 to-transparent p-1.5 pt-4 pointer-events-none">
+                    <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-tight">
+                      {m.name}
+                    </span>
+                    <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
+                      {m.category}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
           <p className="flex items-center gap-1 text-[9px] text-[var(--text-muted)]">
             <LuMousePointer2 className="h-2.5 w-2.5" />
             <span>Drag slot onto any 3D model element</span>
@@ -843,20 +876,15 @@ export default function MaterialEditorPanel({
         </Section>
 
         <Section title="Surface Pattern / Poche" icon={<LuLayers className="h-3.5 w-3.5" />} isMep={isMep}>
-          <label className="grid grid-cols-[70px_1fr] items-center gap-1 text-[10px] text-[var(--text-body)]">
+          <div className="grid grid-cols-[70px_1fr] items-center gap-1 text-[10px] text-[var(--text-body)]">
             <span className="truncate">Pattern:</span>
-            <select
+            <VYellowDropdown
               value={selected.hatchStyle}
-              onChange={(e) => patch({ hatchStyle: e.target.value as HatchStyle })}
-              className={fieldInputClass}
-            >
-              {HATCHES.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.glyph} {h.label}...
-                </option>
-              ))}
-            </select>
-          </label>
+              options={HATCHES}
+              onChange={(val) => patch({ hatchStyle: val as HatchStyle })}
+              isMep={isMep}
+            />
+          </div>
 
           <div className="grid grid-cols-[70px_1fr] items-center gap-1 text-[10px] text-[var(--text-body)]">
             <span className="truncate">Live Swatch:</span>
