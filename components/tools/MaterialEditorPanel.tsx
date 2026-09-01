@@ -248,7 +248,7 @@ const CLASS_DEFAULTS: Record<MaterialDefinition["category"], Partial<MaterialDef
 };
 
 const field =
-  "h-8 w-full rounded-xl border border-white/15 bg-black/40 px-2.5 text-xs text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] outline-none backdrop-blur-xl focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20";
+  "h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-black/40 px-2.5 text-xs text-zinc-900 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] outline-none backdrop-blur-xl focus:border-amber-500 dark:focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20";
 
 function Slider({
   label,
@@ -282,7 +282,7 @@ function Slider({
   };
 
   return (
-    <label className="grid grid-cols-[90px_1fr_56px] items-center gap-2 text-[11px] text-zinc-300 py-1 border-b border-white/[0.04] last:border-b-0">
+    <label className="grid grid-cols-[90px_1fr_56px] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300 py-1 border-b border-black/[0.04] dark:border-white/[0.04] last:border-b-0">
       <span>{label}</span>
       <input
         type="range"
@@ -294,7 +294,7 @@ function Slider({
         className="material-slider w-full cursor-pointer"
         style={{ "--slider-progress": progress } as React.CSSProperties}
       />
-      <span className="flex items-baseline justify-end font-mono text-[10px] font-bold text-amber-300">
+      <span className="flex items-baseline justify-end font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
         <input
           type="number"
           min={editableMin}
@@ -302,10 +302,10 @@ function Slider({
           step={editableStep}
           value={editableValue}
           onChange={(e) => changeEditableValue(e.target.value)}
-          className="w-10 appearance-none border-0 bg-transparent p-0 text-right font-mono text-[10px] font-bold text-amber-300 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="w-10 appearance-none border-0 bg-transparent p-0 text-right font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           aria-label={`${label} value`}
         />
-        {suffix && <span className="ml-0.5 text-zinc-500">{suffix}</span>}
+        {suffix && <span className="ml-0.5 text-zinc-400 dark:text-zinc-500">{suffix}</span>}
       </span>
     </label>
   );
@@ -326,11 +326,11 @@ function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="ios-glass-card rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="ios-glass-card rounded-2xl border border-black/[0.06] dark:border-white/10 bg-white/70 dark:bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.03),inset_0_1px_0_0_rgba(255,255,255,0.9)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between p-3 text-left font-bold text-xs text-white hover:bg-white/5 transition-colors"
+        className="flex w-full items-center justify-between p-3 text-left font-bold text-xs text-zinc-900 dark:text-white hover:bg-black/[0.03] dark:hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-2">
           <div
@@ -346,7 +346,7 @@ function Section({
           }`}
         />
       </button>
-      <GsapHeightAccordion open={open} contentKey={title} innerClassName="space-y-2.5 p-3 pt-0 border-t border-white/[0.06]">
+      <GsapHeightAccordion open={open} contentKey={title} innerClassName="space-y-2.5 p-3 pt-0 border-t border-black/[0.04] dark:border-white/[0.06]">
         {children}
       </GsapHeightAccordion>
     </section>
@@ -362,7 +362,7 @@ export default function MaterialEditorPanel({
   onClose: () => void;
   embedded?: boolean;
 }) {
-  const isDark = useAppStore((s) => s.colorTheme === "dark");
+  const _isDark = useAppStore((s) => s.colorTheme === "dark");
   const materials = useMaterialStore((s) => s.materials);
   const selectedId = useMaterialStore((s) => s.selectedMaterialId);
   const select = useMaterialStore((s) => s.setSelectedMaterialId);
@@ -464,24 +464,24 @@ export default function MaterialEditorPanel({
       ref={containerRef}
       className={`${
         embedded ? "relative h-full min-h-0 w-full" : "absolute inset-0 max-[1100px]:fixed max-[1100px]:inset-3"
-      } z-40 flex select-none flex-col overflow-hidden border-l border-white/20 dark:border-white/10 bg-slate-900/85 dark:bg-slate-950/90 text-white shadow-[0_16px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-3xl max-[1100px]:rounded-[28px] max-[1100px]:border`}
+      } z-40 flex select-none flex-col overflow-hidden border-l border-black/[0.08] dark:border-white/10 bg-white/85 dark:bg-slate-950/90 text-zinc-900 dark:text-white shadow-[0_16px_50px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-3xl max-[1100px]:rounded-[28px] max-[1100px]:border transition-colors`}
     >
       {/* Header */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 bg-white/[0.02] px-3.5">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] px-3.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xs shadow-sm">
             <LuPalette className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-xs font-bold text-white tracking-tight">Slate Material Studio</p>
-            <p className="text-[9px] text-zinc-400">PBR Photometric · iOS 26 Glass</p>
+            <p className="text-xs font-bold text-zinc-900 dark:text-white tracking-tight">Slate Material Studio</p>
+            <p className="text-[9px] text-zinc-500 dark:text-zinc-400">PBR Photometric · iOS 26 Glass</p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
           <button
             onClick={clone}
-            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-zinc-200 hover:text-white transition-all active:scale-95"
+            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shadow-sm"
             title="Duplicate Material"
           >
             <LuPlus className="h-3.5 w-3.5" />
@@ -489,7 +489,7 @@ export default function MaterialEditorPanel({
           {!selected.isPreset && (
             <button
               onClick={() => remove(selected.id)}
-              className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center justify-center text-red-400 hover:text-red-300 transition-all active:scale-95"
+              className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center justify-center text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-all active:scale-95 shadow-sm"
               title="Delete Material"
             >
               <LuTrash2 className="h-3.5 w-3.5" />
@@ -497,7 +497,7 @@ export default function MaterialEditorPanel({
           )}
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-zinc-200 hover:text-white transition-all active:scale-95"
+            className="w-7 h-7 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white transition-all active:scale-95 shadow-sm"
             title="Close"
           >
             <LuX className="h-3.5 w-3.5" />
@@ -532,8 +532,8 @@ export default function MaterialEditorPanel({
                 onClick={() => setCategory(c)}
                 className={`shrink-0 rounded-xl px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-95 ${
                   category === c
-                    ? "bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 shadow-[0_2px_8px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.4)]"
-                    : "border border-white/10 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10"
+                    ? "bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 shadow-[0_2px_8px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] font-bold"
+                    : "border border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white hover:bg-black/10 dark:hover:bg-white/10"
                 }`}
               >
                 {c}
@@ -551,12 +551,12 @@ export default function MaterialEditorPanel({
                 onClick={() => select(m.id)}
                 className={`group relative min-w-0 rounded-xl border p-1.5 text-left transition-all active:scale-95 ${
                   m.id === selected.id
-                    ? "border-amber-400 bg-amber-500/10 shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]"
-                    : "border-white/10 bg-black/30 hover:border-white/20"
+                    ? "border-amber-500 dark:border-amber-400 bg-amber-500/10 shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] dark:shadow-[0_3px_12px_rgba(250,204,21,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]"
+                    : "border-black/[0.06] dark:border-white/10 bg-black/[0.02] dark:bg-black/30 hover:border-black/15 dark:hover:border-white/20"
                 }`}
                 title="Drag onto a 3D object"
               >
-                <LuGrip className="absolute right-1 top-1 h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                <LuGrip className="absolute right-1 top-1 h-3 w-3 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   draggable={false}
@@ -564,18 +564,18 @@ export default function MaterialEditorPanel({
                   alt=""
                   className="pointer-events-none mx-auto h-11 w-11 drop-shadow-md"
                 />
-                <span className="pointer-events-none block truncate text-[9px] font-bold text-white mt-1">
+                <span className="pointer-events-none block truncate text-[9px] font-bold text-zinc-900 dark:text-white mt-1">
                   {m.name}
                 </span>
-                <span className="pointer-events-none block truncate text-[8px] text-zinc-400">
+                <span className="pointer-events-none block truncate text-[8px] text-zinc-500 dark:text-zinc-400">
                   {m.category}
                 </span>
               </button>
             ))}
           </div>
 
-          <p className="flex items-center gap-1.5 text-[10px] text-zinc-400 pt-0.5">
-            <LuMousePointer2 className="h-3 w-3 text-amber-400" />
+          <p className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 pt-0.5">
+            <LuMousePointer2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
             <span>Drag a slot onto any building mesh in 3D.</span>
           </p>
         </Section>
@@ -588,12 +588,12 @@ export default function MaterialEditorPanel({
         >
           <div className="grid grid-cols-[1fr_72px] gap-2.5">
             {/* 3D Chamber Preview Card */}
-            <div className="flex min-h-28 items-center justify-center rounded-2xl border border-white/15 bg-black/50 shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] p-2">
+            <div className="flex min-h-28 items-center justify-center rounded-2xl border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-black/50 shadow-inner p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview}
                 alt="Material preview"
-                className="h-24 w-24 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]"
+                className="h-24 w-24 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.3)] dark:drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]"
               />
             </div>
 
@@ -605,8 +605,8 @@ export default function MaterialEditorPanel({
                   onClick={() => setShape(s.id)}
                   className={`flex items-center justify-center gap-1 rounded-xl text-[10px] font-semibold border transition-all active:scale-95 ${
                     shape === s.id
-                      ? "border-blue-400 bg-blue-500/20 text-blue-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
-                      : "border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                      ? "border-blue-500 dark:border-blue-400 bg-blue-500/15 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 shadow-sm"
+                      : "border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
                   }`}
                 >
                   {s.icon}
@@ -617,7 +617,7 @@ export default function MaterialEditorPanel({
 
           <div className="space-y-2 pt-1">
             <div className="grid grid-cols-[1fr_95px] gap-2">
-              <label className="text-[10px] text-zinc-400 block">
+              <label className="text-[10px] text-zinc-500 dark:text-zinc-400 block">
                 Name
                 <input
                   value={selected.name}
@@ -626,7 +626,7 @@ export default function MaterialEditorPanel({
                 />
               </label>
 
-              <label className="text-[10px] text-zinc-400 block">
+              <label className="text-[10px] text-zinc-500 dark:text-zinc-400 block">
                 Class
                 <select
                   value={selected.category}
@@ -637,7 +637,7 @@ export default function MaterialEditorPanel({
                   className={`${field} mt-1`}
                 >
                   {CATEGORIES.slice(1).map((c) => (
-                    <option key={c} value={c} className="bg-slate-900 text-white">
+                    <option key={c} value={c} className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">
                       {c}
                     </option>
                   ))}
@@ -650,7 +650,7 @@ export default function MaterialEditorPanel({
                 type="color"
                 value={selected.color}
                 onChange={(e) => patch({ color: e.target.value })}
-                className="h-8 w-10 rounded-xl border border-white/20 bg-transparent p-0 cursor-pointer overflow-hidden shadow-sm"
+                className="h-8 w-10 rounded-xl border border-black/10 dark:border-white/20 bg-transparent p-0 cursor-pointer overflow-hidden shadow-sm"
               />
               <input value={selected.color.toUpperCase()} readOnly className={field} />
             </div>
@@ -700,7 +700,7 @@ export default function MaterialEditorPanel({
           icon={<LuImage className="h-3 w-3" />}
           badgeGradient="from-purple-500 to-violet-600"
         >
-          <label className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-300">
+          <label className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300">
             <span>Pattern</span>
             <select
               value={selected.hatchStyle}
@@ -708,17 +708,17 @@ export default function MaterialEditorPanel({
               className={field}
             >
               {HATCHES.map((h) => (
-                <option key={h.id} value={h.id} className="bg-slate-900 text-white">
+                <option key={h.id} value={h.id} className="bg-white dark:bg-slate-900 text-zinc-900 dark:text-white">
                   {h.glyph} {h.label}
                 </option>
               ))}
             </select>
           </label>
 
-          <div className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-300">
+          <div className="grid grid-cols-[80px_1fr] items-center gap-2 text-[11px] text-zinc-600 dark:text-zinc-300">
             <span>Pattern Live</span>
             <div
-              className="h-9 rounded-xl border border-white/20 shadow-inner"
+              className="h-9 rounded-xl border border-black/10 dark:border-white/20 shadow-inner"
               style={{
                 backgroundColor: selected.color,
                 backgroundImage: hatchUrl ? `url(${hatchUrl})` : undefined,
@@ -748,7 +748,7 @@ export default function MaterialEditorPanel({
         </Section>
 
         {/* Actions Footer */}
-        <div className="sticky bottom-0 grid grid-cols-2 gap-2 rounded-2xl border border-white/15 bg-slate-950/90 p-2.5 shadow-2xl backdrop-blur-2xl">
+        <div className="sticky bottom-0 grid grid-cols-2 gap-2 rounded-2xl border border-black/[0.06] dark:border-white/15 bg-white/90 dark:bg-slate-950/90 p-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] dark:shadow-2xl backdrop-blur-2xl">
           <button
             type="button"
             disabled={!hasSelection}
@@ -764,7 +764,7 @@ export default function MaterialEditorPanel({
             className={`flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold py-2 shadow-md transition-all active:scale-95 ${
               paintId === selected.id
                 ? "bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 ring-2 ring-amber-400/50"
-                : "bg-white/10 hover:bg-white/20 border border-white/10 text-white"
+                : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 text-zinc-800 dark:text-white"
             }`}
           >
             <LuSparkles className="h-4 w-4" />
