@@ -511,18 +511,18 @@ export default function ToolRightPanel({
         </div>
 
         {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME (Animated GSAP Sliding Capsule) */}
-        <div className="border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 px-2 py-1.5">
+        <div className="border-b border-[var(--panel-divider)] px-2.5 py-1.5 bg-[var(--surface-overlay)]/40">
           <div
             ref={tabTrackRef}
-            className="relative flex h-7 items-center rounded-full border border-white/10 bg-zinc-950/70 p-0.5 shadow-inner backdrop-blur-md"
+            className="relative flex h-7 items-center rounded-full border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-0.5 shadow-inner backdrop-blur-md"
           >
             {/* Animated Sliding Capsule Highlight */}
             <div
               ref={capsuleIndicatorRef}
-              className={`absolute top-0.5 bottom-0.5 left-0 rounded-full shadow-lg transition-colors pointer-events-none ${
+              className={`absolute top-0.5 bottom-0.5 left-0 rounded-full pointer-events-none transition-colors ${
                 isMepActive
-                  ? "bg-gradient-to-r from-sky-400 to-cyan-400 text-zinc-950 shadow-sky-400/30"
-                  : "bg-gradient-to-r from-yellow-400 to-amber-400 text-zinc-950 shadow-yellow-400/30"
+                  ? "bg-sky-400 text-zinc-950 shadow-sm shadow-sky-400/30"
+                  : "bg-yellow-400 text-zinc-950 shadow-sm shadow-yellow-400/30"
               }`}
               style={{
                 width: "33.333%",
@@ -536,10 +536,10 @@ export default function ToolRightPanel({
                 setPropTab("properties");
                 setEditTypeMode(false);
               }}
-              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold transition-colors ${
+              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "properties"
                   ? "!text-zinc-950 font-black"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Default: Properties & Layout Inspector"
             >
@@ -551,10 +551,10 @@ export default function ToolRightPanel({
               ref={materialsBtnRef}
               type="button"
               onClick={() => setPropTab("materials")}
-              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold transition-colors ${
+              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "materials"
                   ? "!text-zinc-950 font-black"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Material Library & Shader Studio"
             >
@@ -566,10 +566,10 @@ export default function ToolRightPanel({
               ref={settingsBtnRef}
               type="button"
               onClick={() => setPropTab("settings")}
-              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold transition-colors ${
+              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "settings"
                   ? "!text-zinc-950 font-black"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
               title="Studio Settings & Workspace Preferences"
             >
