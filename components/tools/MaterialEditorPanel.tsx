@@ -487,9 +487,17 @@ export default function MaterialEditorPanel({
 
   const [category, setCategory] = useState<string>("All");
   const [search, setSearch] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
   const [panelWidth, setPanelWidth] = useState<number>(340);
+
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [category]);
 
   const isResizingRef = useRef(false);
   const resizeStartXRef = useRef(0);
@@ -533,8 +541,8 @@ export default function MaterialEditorPanel({
   if (!isOpen) return null;
 
   const isMep = selected.category === "MEP" || category === "MEP";
-  const accentColor = isMep ? "text-sky-400" : "text-yellow-400";
-  const accentBg = isMep ? "bg-sky-400" : "bg-yellow-400";
+  const accentColor = isMep ? "text-[#0018B2] dark:text-sky-400" : "text-yellow-400";
+  const accentBg = isMep ? "bg-[#0018B2]" : "bg-yellow-400";
 
   const patch = (p: Partial<MaterialDefinition>) => {
     update(selected.id, p);
@@ -709,13 +717,13 @@ export default function MaterialEditorPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-2 thin-scroll text-xs">
         <Section title="Material Browser" icon={<LuSearch className="h-3.5 w-3.5" />} isMep={isMep}>
-          <div className="relative">
-            <LuSearch className="absolute left-2 top-2 h-3 w-3 text-[var(--text-muted)]" />
+          <div className="relative pb-0.5">
+            <LuSearch className="absolute left-0.5 top-2 h-3.5 w-3.5 text-[var(--text-muted)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search library..."
-              className={`${fieldInputClass} pl-6`}
+              className="w-full bg-transparent border-0 border-b border-[var(--panel-divider)] pl-6 pr-2 py-1 text-[11px] text-[var(--text-strong)] placeholder:text-[var(--text-muted)] outline-none focus:border-yellow-400 dark:focus:border-yellow-400 transition-colors"
             />
           </div>
 
