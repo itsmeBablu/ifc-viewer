@@ -207,51 +207,51 @@ export default function ToolPropertiesDock() {
       {/* Dock Content Body */}
       {!collapsed && (
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          {/* THREE TABS DIRECTLY BELOW HEADER */}
-          <div className="flex h-8 shrink-0 items-center border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 px-1 gap-1">
+          {/* THREE TABS DIRECTLY BELOW HEADER (Equal width grid, icon fallback on compact) */}
+          <div className="grid grid-cols-3 h-8 shrink-0 border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 p-1 gap-1">
             <button
               type="button"
               onClick={() => {
                 setDockTab("properties");
                 setEditTypeMode(false);
               }}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+              className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "properties"
                   ? `${accentBg} !text-zinc-950 shadow-sm`
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
               }`}
-              title="Element Properties & Type Editing"
+              title="Default: Element Properties & Type Editing"
             >
-              <LuSlidersHorizontal className="h-3 w-3" />
-              <span className="truncate">Properties</span>
+              <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
+              <span className="truncate hidden min-[240px]:inline">Default</span>
             </button>
 
             <button
               type="button"
               onClick={() => setDockTab("materials")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+              className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "materials"
                   ? `${accentBg} !text-zinc-950 shadow-sm`
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
               }`}
               title="Material Library & Shader Studio"
             >
-              <LuPalette className="h-3 w-3" />
-              <span className="truncate">Materials</span>
+              <LuPalette className="h-3 w-3 shrink-0" />
+              <span className="truncate hidden min-[240px]:inline">Materials</span>
             </button>
 
             <button
               type="button"
               onClick={() => setDockTab("settings")}
-              className={`flex-1 flex items-center justify-center gap-1 py-1 px-1.5 rounded-md text-[10px] font-bold transition-all ${
+              className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "settings"
                   ? `${accentBg} !text-zinc-950 shadow-sm`
                   : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
               }`}
               title="Studio Settings & Workspace Preferences"
             >
-              <LuSettings className="h-3 w-3" />
-              <span className="truncate">Settings</span>
+              <LuSettings className="h-3 w-3 shrink-0" />
+              <span className="truncate hidden min-[240px]:inline">Settings</span>
             </button>
           </div>
 

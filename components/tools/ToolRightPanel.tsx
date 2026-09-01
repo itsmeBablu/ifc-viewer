@@ -467,55 +467,55 @@ export default function ToolRightPanel({
           </button>
         </div>
 
-        {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME */}
-        <div className="flex h-8 shrink-0 items-center border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 px-1 gap-1">
+        {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME (Equal width grid, icon fallback on compact) */}
+        <div className="grid grid-cols-3 h-8 shrink-0 border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 p-1 gap-1">
           <button
             type="button"
             onClick={() => {
               setPropTab("properties");
               setEditTypeMode(false);
             }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-[11px] font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "properties"
                 ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
                 : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
             }`}
-            title="Properties & Layout Inspector"
+            title="Default: Properties & Layout Inspector"
           >
-            <LuSlidersHorizontal className="h-3.5 w-3.5" />
-            <span className="truncate">Properties & Layout</span>
+            <LuSlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate hidden min-[310px]:inline">Default</span>
           </button>
 
           <button
             type="button"
             onClick={() => setPropTab("materials")}
-            className={`flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-[11px] font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "materials"
                 ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
                 : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
             }`}
             title="Material Library & Shader Studio"
           >
-            <LuPalette className="h-3.5 w-3.5" />
-            <span className="truncate">Materials</span>
+            <LuPalette className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate hidden min-[310px]:inline">Materials</span>
           </button>
 
           <button
             type="button"
             onClick={() => setPropTab("settings")}
-            className={`flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-[11px] font-bold transition-all ${
+            className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "settings"
                 ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
                 : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
             }`}
             title="Studio Settings & Workspace Preferences"
           >
-            <LuSettings className="h-3.5 w-3.5" />
-            <span className="truncate">Settings</span>
+            <LuSettings className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate hidden min-[310px]:inline">Settings</span>
           </button>
         </div>
 
-        {/* TAB 1: PROPERTIES & LAYOUT */}
+        {/* TAB 1: DEFAULT (PROPERTIES & LAYOUT) */}
         {propTab === "properties" && (
           editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
             <div className="flex-1 min-h-0 h-full overflow-hidden">
@@ -540,16 +540,6 @@ export default function ToolRightPanel({
                   </span>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <UnifiedButton
-                      size="xs"
-                      variant="secondary"
-                      onClick={() => setPropTab("materials")}
-                      icon={<LuPalette className={`h-2.5 w-2.5 ${activeAccent.textClass}`} />}
-                      title="Open Material Studio Tab"
-                    >
-                      Materials
-                    </UnifiedButton>
-
                     {hasSelection &&
                       (selectedWall ||
                         selectedDoor ||

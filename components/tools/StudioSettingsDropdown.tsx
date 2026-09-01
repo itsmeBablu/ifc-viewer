@@ -77,14 +77,19 @@ export default function StudioSettingsDropdown({
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (
+        !target.closest(".settings-menu-container") &&
+        menuRef.current &&
+        !menuRef.current.contains(target as Node)
+      ) {
         onClose();
       }
     };
     if (isOpen) {
-      document.addEventListener("mousedown", onDocClick);
+      document.addEventListener("click", onDocClick);
     }
-    return () => document.removeEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
   }, [isOpen, onClose]);
 
   const toggleFullscreen = () => {
@@ -104,7 +109,7 @@ export default function StudioSettingsDropdown({
   return (
     <GsapPopMenu
       show={isOpen}
-      className="absolute top-[calc(100%+0.5rem)] right-0 z-[60]"
+      className="absolute top-[calc(100%+0.5rem)] left-0 z-[60]"
       onMouseLeave={() => setHoverId(null)}
     >
       <div ref={menuRef}>

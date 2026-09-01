@@ -682,6 +682,9 @@ export default function ToolRibbon({
       if (!target.closest('.save-menu-container')) {
         setSaveMenuOpen(false);
       }
+      if (!target.closest('.settings-menu-container')) {
+        setSettingsDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
@@ -1730,55 +1733,29 @@ export default function ToolRibbon({
             <LuRedo2 className="h-3.5 w-3.5" />
           </button>
 
-          {/* Print */}
-          <div className="h-4 w-px bg-[var(--panel-divider)]" />
-          <button
-            type="button"
-            onClick={handlePrint}
-            title="Print (Ctrl+P)"
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            <LuPrinter className="h-3.5 w-3.5" />
-          </button>
-          {/* Theme & Fullscreen */}
-          <div className="h-4 w-px bg-[var(--panel-divider)]" />
-          <button
-            type="button"
-            onClick={() => setColorTheme(isDark ? "light" : "dark")}
-            title={isDark ? "Switch to Light Theme" : "Switch to Dark Theme"}
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            {isDark ? <LuSun className="h-3.5 w-3.5 text-yellow-400" /> : <LuMoon className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-            className="rounded-md p-1.5 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
-          >
-            {isFullscreen ? <LuMinimize className="h-3.5 w-3.5" /> : <LuMaximize className="h-3.5 w-3.5" />}
-          </button>
           {/* Studio Settings Dropdown Trigger */}
           <div className="h-4 w-px bg-[var(--panel-divider)]" />
-          <button
-            type="button"
-            onClick={() => setSettingsDropdownOpen((v) => !v)}
-            title="Studio & Workspace Settings"
-            className={`rounded-md p-1.5 transition-colors ${
-              settingsDropdownOpen
-                ? "bg-[var(--glass-inset-bg)] text-yellow-400 font-bold"
-                : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
-            }`}
-          >
-            <LuSettings className="h-3.5 w-3.5" />
-          </button>
-        </div>
+          <div className="relative settings-menu-container">
+            <button
+              type="button"
+              onClick={() => setSettingsDropdownOpen((v) => !v)}
+              title="Studio & Workspace Settings"
+              className={`rounded-md p-1.5 transition-colors ${
+                settingsDropdownOpen
+                  ? "bg-yellow-400/20 text-yellow-400 font-bold"
+                  : "text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)]"
+              }`}
+            >
+              <LuSettings className="h-3.5 w-3.5" />
+            </button>
 
-        {/* Dropdown Popover attached to Settings Trigger */}
-        <StudioSettingsDropdown
-          isOpen={settingsDropdownOpen}
-          onClose={() => setSettingsDropdownOpen(false)}
-        />
+            {/* Dropdown Popover attached to Settings Trigger */}
+            <StudioSettingsDropdown
+              isOpen={settingsDropdownOpen}
+              onClose={() => setSettingsDropdownOpen(false)}
+            />
+          </div>
+        </div>
 
         {/* Global Studio Settings Modal (fallback/direct store trigger) */}
         <StudioSettingsModal />
