@@ -119,6 +119,16 @@ export default function ToolRightPanel({
 
   const accent = useStudioSettingsStore((s) => s.accent);
   const syncArchMep = useStudioSettingsStore((s) => s.syncArchMep);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+
+  const activeHighlightClass = mepModeActive
+    ? "btn-v-blue btn-liquid-hover shadow-md shadow-sky-400/30 !text-slate-950 font-bold"
+    : "btn-v-yellow btn-liquid-hover shadow-md shadow-yellow-400/30 !text-zinc-950 font-bold";
+  const activeTextClass = mepModeActive ? "text-sky-400" : "text-yellow-400";
+  const activeDotClass = mepModeActive
+    ? "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]"
+    : "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]";
+  const activeAccent = STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow;
 
   // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
@@ -467,7 +477,7 @@ export default function ToolRightPanel({
           </button>
         </div>
 
-        {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME (Equal width grid, icon fallback on compact) */}
+        {/* THREE TABS DIRECTLY BELOW FILE NAME AND LEVEL NAME (Equal width grid, V-Yellow / V-Blue liquidglass) */}
         <div className="grid grid-cols-3 h-8 shrink-0 border-b border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 p-1 gap-1">
           <button
             type="button"
@@ -477,8 +487,8 @@ export default function ToolRightPanel({
             }}
             className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "properties"
-                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                ? activeHighlightClass
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
             }`}
             title="Default: Properties & Layout Inspector"
           >
@@ -491,8 +501,8 @@ export default function ToolRightPanel({
             onClick={() => setPropTab("materials")}
             className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "materials"
-                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                ? activeHighlightClass
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
             }`}
             title="Material Library & Shader Studio"
           >
@@ -505,8 +515,8 @@ export default function ToolRightPanel({
             onClick={() => setPropTab("settings")}
             className={`flex items-center justify-center gap-1.5 py-1 px-1 rounded-md text-[11px] font-bold transition-all min-w-0 ${
               propTab === "settings"
-                ? `${activeAccent.bgClass} !text-zinc-950 shadow-sm`
-                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                ? activeHighlightClass
+                : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
             }`}
             title="Studio Settings & Workspace Preferences"
           >
@@ -534,7 +544,7 @@ export default function ToolRightPanel({
                 style={{ height: propHeight, minHeight: 120 }}
               >
                 <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${activeAccent.textClass} flex items-center gap-1.5 truncate`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${activeTextClass} flex items-center gap-1.5 truncate`}>
                     <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
                     {propertiesTitle}
                   </span>
@@ -545,16 +555,15 @@ export default function ToolRightPanel({
                         selectedDoor ||
                         selectedWindow ||
                         selectedSlab) && (
-                        <UnifiedButton
-                          size="xs"
-                          variant="primary"
+                        <button
+                          type="button"
                           onClick={() => setEditTypeMode(true)}
-                          icon={<LuSlidersHorizontal className="h-2.5 w-2.5" />}
-                          className={`${activeAccent.bgClass} !text-zinc-950 font-bold`}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${activeHighlightClass} transition-all`}
                           title="Edit Type Parameters (Esc to return)"
                         >
-                          Edit Type
-                        </UnifiedButton>
+                          <LuSlidersHorizontal className="h-2.5 w-2.5" />
+                          <span>Edit Type</span>
+                        </button>
                       )}
                   </div>
                 </div>

@@ -164,17 +164,18 @@ export default function ToolPropertiesDock() {
   const wallArea = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2) : "0.00";
   const wallVol = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000) * selectedWall.thicknessMm) / 1_000_000_000).toFixed(2) : "0.00";
 
-  const isMepSelection = false; // Architecture mode default
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const activeAccent = syncArchMep
     ? STUDIO_ACCENTS[accent]
-    : isMepSelection
+    : mepModeActive
     ? STUDIO_ACCENTS.vblue
     : STUDIO_ACCENTS.vyellow;
 
   const accentColor = activeAccent.textClass;
   const accentBg = activeAccent.bgClass;
-
-  const cardStyle = "rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-card)] overflow-hidden shadow-sm";
+  const activeHighlightClass = mepModeActive
+    ? "btn-v-blue btn-liquid-hover shadow-md shadow-sky-400/30 !text-slate-950 font-bold"
+    : "btn-v-yellow btn-liquid-hover shadow-md shadow-yellow-400/30 !text-zinc-950 font-bold";
 
   return (
     <aside
@@ -217,8 +218,8 @@ export default function ToolPropertiesDock() {
               }}
               className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "properties"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                  ? activeHighlightClass
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
               }`}
               title="Default: Element Properties & Type Editing"
             >
@@ -231,8 +232,8 @@ export default function ToolPropertiesDock() {
               onClick={() => setDockTab("materials")}
               className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "materials"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                  ? activeHighlightClass
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
               }`}
               title="Material Library & Shader Studio"
             >
@@ -245,8 +246,8 @@ export default function ToolPropertiesDock() {
               onClick={() => setDockTab("settings")}
               className={`flex items-center justify-center gap-1 py-1 px-1 rounded-md text-[10px] font-bold transition-all min-w-0 ${
                 dockTab === "settings"
-                  ? `${accentBg} !text-zinc-950 shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)]"
+                  ? activeHighlightClass
+                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--glass-inset-bg)] btn-yellow-border-hover"
               }`}
               title="Studio Settings & Workspace Preferences"
             >

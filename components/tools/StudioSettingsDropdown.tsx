@@ -16,6 +16,7 @@ import {
   LuChevronDown,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import {
   useStudioSettingsStore,
   STUDIO_ACCENTS,
@@ -46,6 +47,7 @@ export default function StudioSettingsDropdown({
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const isDark = colorTheme === "dark";
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   const {
     accent,
@@ -102,9 +104,9 @@ export default function StudioSettingsDropdown({
 
   const menuRowIdle =
     "box-border border border-transparent transition-[background-color,border-color,box-shadow,color] duration-150";
-  const menuRowHighlight = isDark
-    ? "amber-gloss-surface border border-amber-300/80 bg-gradient-to-br from-amber-300/92 via-yellow-200/82 to-amber-400/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_16px_rgba(251,191,36,0.4)] text-amber-950 font-semibold"
-    : "amber-gloss-surface border border-amber-200/70 bg-gradient-to-br from-amber-200/90 via-yellow-300/70 to-amber-400/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_14px_rgba(251,191,36,0.28)] text-amber-950 font-semibold";
+  const menuRowHighlight = mepModeActive
+    ? "btn-v-blue btn-liquid-hover !text-slate-950 font-bold shadow-md shadow-sky-400/30"
+    : "btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold shadow-md shadow-yellow-400/30";
 
   return (
     <GsapPopMenu
@@ -360,7 +362,9 @@ export default function StudioSettingsDropdown({
                 onClick={() => setShow3DGrid(!show3DGrid)}
                 className={`flex items-center justify-center gap-1 py-1 rounded border text-[10px] font-semibold transition-all ${
                   show3DGrid
-                    ? "border-yellow-400/60 bg-[var(--surface-card)] text-[var(--text-strong)] font-bold"
+                    ? mepModeActive
+                      ? "btn-v-blue btn-liquid-hover !text-slate-950 font-bold shadow-sm"
+                      : "btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold shadow-sm"
                     : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
                 }`}
               >

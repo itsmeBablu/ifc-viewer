@@ -326,8 +326,8 @@ function ToggleBtn({
       className={`flex flex-col items-center justify-center gap-0.5 rounded-lg p-1 min-w-[38px] border transition-all ${
         active
           ? mepModeActive
-            ? "border-sky-400 bg-sky-400/20 text-sky-500 dark:text-sky-400 font-bold"
-            : "border-yellow-400 bg-yellow-400/20 text-yellow-500 dark:text-yellow-400 font-bold"
+            ? "btn-v-blue btn-liquid-hover !text-slate-950 font-bold shadow-sm"
+            : "btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold shadow-sm"
           : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] text-[var(--text-muted)]"
       }`}
     >

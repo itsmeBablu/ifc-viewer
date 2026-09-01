@@ -12,6 +12,7 @@ import {
   LuCheck,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import {
   useStudioSettingsStore,
   STUDIO_ACCENTS,
@@ -37,6 +38,12 @@ export default function EmbeddedSettingsTab() {
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
   const show3DGrid = useAppStore((s) => s.show3dgrid);
   const setShow3DGrid = useAppStore((s) => s.setShow3DGrid);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+
+  const activeHighlightClass = mepModeActive
+    ? "btn-v-blue btn-liquid-hover !text-slate-950 font-bold shadow-md shadow-sky-400/30"
+    : "btn-v-yellow btn-liquid-hover !text-zinc-950 font-bold shadow-md shadow-yellow-400/30";
+  const activeTextClass = mepModeActive ? "text-sky-400" : "text-yellow-400";
 
   const currentAccent = STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow;
 
@@ -44,7 +51,7 @@ export default function EmbeddedSettingsTab() {
     <div className="flex flex-col h-full overflow-y-auto p-2 space-y-2 thin-scroll text-xs select-none">
       {/* Header */}
       <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-1 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400 flex items-center gap-1.5 truncate">
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${activeTextClass} flex items-center gap-1.5 truncate`}>
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: currentAccent.hex }} />
           Studio Settings
         </span>
@@ -68,11 +75,11 @@ export default function EmbeddedSettingsTab() {
             onClick={() => setColorTheme("light")}
             className={`flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md border text-[10px] font-bold transition-all ${
               !isDark
-                ? "bg-white text-zinc-900 border-yellow-400 shadow-sm"
+                ? activeHighlightClass
                 : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
             }`}
           >
-            <LuSun className="h-3 w-3 text-yellow-500" />
+            <LuSun className="h-3 w-3" />
             <span>Light</span>
           </button>
           <button
@@ -80,11 +87,11 @@ export default function EmbeddedSettingsTab() {
             onClick={() => setColorTheme("dark")}
             className={`flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md border text-[10px] font-bold transition-all ${
               isDark
-                ? "bg-slate-900 text-white border-yellow-400 shadow-sm"
+                ? activeHighlightClass
                 : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
             }`}
           >
-            <LuMoon className="h-3 w-3 text-yellow-400" />
+            <LuMoon className="h-3 w-3" />
             <span>Dark</span>
           </button>
         </div>
@@ -159,7 +166,7 @@ export default function EmbeddedSettingsTab() {
               onClick={() => setFont(f.id as StudioFont)}
               className={`p-1 rounded-md border text-center text-[9px] font-bold transition-all truncate ${
                 font === f.id
-                  ? "border-yellow-400/80 bg-[var(--surface-card)] text-[var(--text-strong)] shadow-sm"
+                  ? activeHighlightClass
                   : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
             >
@@ -178,7 +185,7 @@ export default function EmbeddedSettingsTab() {
                 onClick={() => setFontScale(scale)}
                 className={`px-1.5 py-0.5 rounded text-[8px] font-semibold uppercase border transition-all ${
                   fontScale === scale
-                    ? "bg-yellow-400 text-zinc-950 font-bold border-yellow-400"
+                    ? activeHighlightClass
                     : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
                 }`}
               >
@@ -210,8 +217,8 @@ export default function EmbeddedSettingsTab() {
               onClick={() => setUiLanguage(lang.code as any)}
               className={`py-1 px-1 rounded-md border text-center text-[9px] font-bold transition-all ${
                 uiLanguage === lang.code
-                  ? "border-yellow-400/80 bg-[var(--surface-card)] text-[var(--text-strong)] shadow-sm"
-                : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                  ? activeHighlightClass
+                  : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
               }`}
             >
               {lang.label}
@@ -249,7 +256,7 @@ export default function EmbeddedSettingsTab() {
           onClick={() => setShow3DGrid(!show3DGrid)}
           className={`flex items-center justify-center gap-1 py-1 px-1 rounded border text-[9px] font-semibold transition-all ${
             show3DGrid
-              ? "border-yellow-400/60 bg-[var(--surface-card)] text-[var(--text-strong)] font-bold"
+              ? activeHighlightClass
               : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)]"
           }`}
         >
