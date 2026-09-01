@@ -396,9 +396,9 @@ function VYellowDropdown({
         className={`flex h-7 w-full items-center justify-between rounded-lg border px-2 text-[11px] font-semibold transition-all ${
           open
             ? isMep
-              ? "border-sky-400 bg-sky-500/15 text-[var(--text-strong)] ring-1 ring-sky-400/40"
-              : "border-yellow-400 bg-yellow-500/15 text-[var(--text-strong)] ring-1 ring-yellow-400/40"
-            : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] hover:border-yellow-400/50"
+              ? "border-[#2460FF] bg-[#2460FF]/15 text-[var(--text-strong)] ring-1 ring-[#2460FF]/40"
+              : "border-[#FFC73D] bg-[#FFC73D]/15 text-[var(--text-strong)] ring-1 ring-[#FFC73D]/40"
+            : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-strong)] hover:border-[#FFC73D]/50"
         }`}
       >
         <span className="truncate">{currentLabel}</span>
@@ -422,8 +422,8 @@ function VYellowDropdown({
                 className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[10.5px] transition-colors ${
                   isSelected
                     ? isMep
-                      ? "bg-sky-400 text-zinc-950 font-black"
-                      : "bg-yellow-400 text-zinc-950 font-black"
+                      ? "btn-v-blue !text-white font-bold"
+                      : "btn-v-yellow !text-zinc-950 font-bold"
                     : "text-[var(--text-strong)] hover:bg-[var(--surface-overlay)]"
                 }`}
               >
@@ -541,8 +541,8 @@ export default function MaterialEditorPanel({
   if (!isOpen) return null;
 
   const isMep = selected.category === "MEP" || category === "MEP";
-  const accentColor = isMep ? "text-[#0018B2] dark:text-sky-400" : "text-yellow-400";
-  const accentBg = isMep ? "bg-[#0018B2]" : "bg-yellow-400";
+  const accentColor = isMep ? "text-[#2460FF]" : "text-[#FFC73D]";
+  const accentBg = isMep ? "bg-[#2460FF]" : "bg-[#FFC73D]";
 
   const patch = (p: Partial<MaterialDefinition>) => {
     update(selected.id, p);
@@ -735,7 +735,7 @@ export default function MaterialEditorPanel({
                 onClick={() => setCategory(c)}
                 className={`shrink-0 rounded px-2 py-0.5 text-[9px] font-semibold transition-all ${
                   category === c
-                    ? `${isMep ? "btn-v-blue" : "btn-v-yellow"} btn-liquid-hover !text-zinc-950 font-bold shadow-sm`
+                    ? `${isMep ? "btn-v-blue !text-white" : "btn-v-yellow !text-zinc-950"} btn-liquid-hover font-bold shadow-sm`
                     : "btn-yellow-border-hover border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)]"
                 }`}
               >
@@ -773,9 +773,9 @@ export default function MaterialEditorPanel({
                   className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
                     m.id === selected.id
                       ? isMep
-                        ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-overlay)]"
-                        : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-overlay)]"
-                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
+                        ? "border-[#2460FF] ring-2 ring-[#2460FF] shadow-[0_0_16px_rgba(36,96,255,0.35)] bg-[var(--surface-overlay)]"
+                        : "border-[#FFC73D] ring-2 ring-[#FFC73D] shadow-[0_0_16px_rgba(255,199,61,0.35)] bg-[var(--surface-overlay)]"
+                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-[#FFC73D]/60 shadow-sm"
                   }`}
                   title={`${m.name} (${m.category})`}
                 >
