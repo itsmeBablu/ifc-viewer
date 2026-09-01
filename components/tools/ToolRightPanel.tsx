@@ -128,7 +128,11 @@ export default function ToolRightPanel({
   const activeDotClass = mepModeActive
     ? "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]"
     : "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]";
-  const activeAccent = STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow;
+  const activeAccent = syncArchMep
+    ? (STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow)
+    : mepModeActive
+    ? STUDIO_ACCENTS.vblue
+    : STUDIO_ACCENTS.vyellow;
 
   // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
@@ -300,11 +304,6 @@ export default function ToolRightPanel({
   const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
 
   const isMepActive = Boolean(selectedDuct || selectedPipe || selectedCableTray || selectedEquipment);
-  const activeAccent = syncArchMep
-    ? (STUDIO_ACCENTS[accent] || STUDIO_ACCENTS.vyellow)
-    : isMepActive
-    ? STUDIO_ACCENTS.vblue
-    : STUDIO_ACCENTS.vyellow;
 
   const handleTypeChange = (typeId: string) => {
     const tDef = types[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
