@@ -744,7 +744,7 @@ export default function ToolRibbon({
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)] text-amber-400 font-bold"
               onClick={() => {
                 const secLines = useLayoutDrawingStore.getState().sectionLines;
-                const newSec = useLayoutDrawingStore.getState().addSectionLine({
+                useLayoutDrawingStore.getState().addSectionLine({
                   name: `Schnitt ${String.fromCharCode(65 + secLines.length)}-${String.fromCharCode(65 + secLines.length)}`,
                   levelId: "level-1",
                   startXmm: -4000,
@@ -753,7 +753,6 @@ export default function ToolRibbon({
                   endYmm: 0,
                   active: true,
                 });
-                useLayoutDrawingStore.getState().setActiveSectionId(newSec.id);
                 setActiveDropdown(null);
               }}
             >
