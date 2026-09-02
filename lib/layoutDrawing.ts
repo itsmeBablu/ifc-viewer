@@ -2100,12 +2100,13 @@ export function solveWallJunctions(
       }
     }
 
-    // Flag T-junction stem wall endpoints as joined
+    // Flag T-junction stem wall endpoints as joined and calculate trim offsets so 3D meshes do not overlap
     for (const w of levelWalls) {
       for (const other of levelWalls) {
         if (w.id === other.id) continue;
         const off = offsets.get(w.id);
         if (!off) continue;
+        const halfThickOther = (other.thicknessMm || 200) / 2;
         const joinTol = Math.max(w.thicknessMm || 200, other.thicknessMm || 200) * 1.2 + 50;
 
         const distStart = distPointSeg(
@@ -2118,6 +2119,23 @@ export function solveWallJunctions(
         );
         if (distStart.dist <= joinTol && distStart.t >= 0.001 && distStart.t <= 0.999) {
           off.startJoined = true;
+          const dxW = w.endXmm - w.startXmm;
+          const dyW = w.endYmm - w.startYmm;
+          const lenW = Math.hypot(dxW, dyW) || 1;
+          const uxW = dxW / lenW;
+          const uyW = dyW / lenW;
+
+          const dxO = other.endXmm - other.startXmm;
+          const dyO = other.endYmm - other.startYmm;
+          const lenO = Math.hypot(dxO, dyO) || 1;
+          const uxO = dxO / lenO;
+          const uyO = dyO / lenO;
+
+          const sinAngle = Math.abs(uxW * uyO - uyW * uxO);
+          const trimDist = sinAngle > 0.1 ? halfThickOther / sinAngle : halfThickOther;
+
+          off.startOffsetLeftMm = Math.max(off.startOffsetLeftMm, trimDist);
+          off.startOffsetRightMm = Math.max(off.startOffsetRightMm, trimDist);
         }
 
         const distEnd = distPointSeg(
@@ -2130,6 +2148,23 @@ export function solveWallJunctions(
         );
         if (distEnd.dist <= joinTol && distEnd.t >= 0.001 && distEnd.t <= 0.999) {
           off.endJoined = true;
+          const dxW = w.startXmm - w.endXmm;
+          const dyW = w.startYmm - w.endYmm;
+          const lenW = Math.hypot(dxW, dyW) || 1;
+          const uxW = dxW / lenW;
+          const uyW = dyW / lenW;
+
+          const dxO = other.endXmm - other.startXmm;
+          const dyO = other.endYmm - other.startYmm;
+          const lenO = Math.hypot(dxO, dyO) || 1;
+          const uxO = dxO / lenO;
+          const uyO = dyO / lenO;
+
+          const sinAngle = Math.abs(uxW * uyO - uyW * uxO);
+          const trimDist = sinAngle > 0.1 ? halfThickOther / sinAngle : halfThickOther;
+
+          off.endOffsetLeftMm = Math.max(off.endOffsetLeftMm, trimDist);
+          off.endOffsetRightMm = Math.max(off.endOffsetRightMm, trimDist);
         }
       }
     }
