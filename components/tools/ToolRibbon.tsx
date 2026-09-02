@@ -739,6 +739,26 @@ export default function ToolRibbon({
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("lines"); setActiveDropdown(null); }}>
               <LuPencil className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Lines (L)</span>
             </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)] text-amber-400 font-bold"
+              onClick={() => {
+                const secLines = useLayoutDrawingStore.getState().sectionLines;
+                const newSec = useLayoutDrawingStore.getState().addSectionLine({
+                  name: `Schnitt ${String.fromCharCode(65 + secLines.length)}-${String.fromCharCode(65 + secLines.length)}`,
+                  levelId: "level-1",
+                  startXmm: -4000,
+                  startYmm: 0,
+                  endXmm: 4000,
+                  endYmm: 0,
+                  active: true,
+                });
+                useLayoutDrawingStore.getState().setActiveSectionId(newSec.id);
+                setActiveDropdown(null);
+              }}
+            >
+              <LuScissors className="h-4 w-4 text-amber-400" /> <span className="text-xs">Schnitt / Section Cut</span>
+            </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("trim"); setActiveDropdown(null); }}>
               <LuScissors className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Trim / Extend (TR)</span>
             </button>
