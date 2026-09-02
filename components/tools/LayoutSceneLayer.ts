@@ -4275,20 +4275,31 @@ export default class LayoutSceneLayer {
         group.add(pochéMesh);
 
         // Dark perimeter cut lines
-        const linePts = [
-          new THREE.Vector3(p0x, 0.002, p0z),
-          new THREE.Vector3(p1x, 0.002, p1z),
-          new THREE.Vector3(p1x, 0.002, p1z),
-          new THREE.Vector3(p2x, 0.002, p2z),
-          new THREE.Vector3(p2x, 0.002, p2z),
-          new THREE.Vector3(p3x, 0.002, p3z),
-          new THREE.Vector3(p3x, 0.002, p3z),
-          new THREE.Vector3(p0x, 0.002, p0z),
-        ];
-        const edgeGeo = new THREE.BufferGeometry().setFromPoints(linePts);
-        const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
-        edgeLines.renderOrder = 35;
-        group.add(edgeLines);
+        const linePts: THREE.Vector3[] = [];
+        // Long edge 1 (p0 -> p1)
+        linePts.push(new THREE.Vector3(p0x, 0.002, p0z), new THREE.Vector3(p1x, 0.002, p1z));
+
+        // End cap (p1 -> p2) - draw if NOT at a joined wall end
+        const shouldDrawEndCap = !isWallEnd || !miter?.endJoined;
+        if (shouldDrawEndCap) {
+          linePts.push(new THREE.Vector3(p1x, 0.002, p1z), new THREE.Vector3(p2x, 0.002, p2z));
+        }
+
+        // Long edge 2 (p2 -> p3)
+        linePts.push(new THREE.Vector3(p2x, 0.002, p2z), new THREE.Vector3(p3x, 0.002, p3z));
+
+        // Start cap (p3 -> p0) - draw if NOT at a joined wall start
+        const shouldDrawStartCap = !isWallStart || !miter?.startJoined;
+        if (shouldDrawStartCap) {
+          linePts.push(new THREE.Vector3(p3x, 0.002, p3z), new THREE.Vector3(p0x, 0.002, p0z));
+        }
+
+        if (linePts.length > 0) {
+          const edgeGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+          const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+          edgeLines.renderOrder = 35;
+          group.add(edgeLines);
+        }
 
         layerOffsetM += layerThickM;
       }

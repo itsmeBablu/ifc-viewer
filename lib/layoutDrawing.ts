@@ -1922,6 +1922,8 @@ export type WallMiterOffsets = {
   startOffsetRightMm: number;
   endOffsetLeftMm: number;
   endOffsetRightMm: number;
+  startJoined?: boolean;
+  endJoined?: boolean;
 };
 
 /**
@@ -1939,6 +1941,8 @@ export function solveWallJunctions(
       startOffsetRightMm: 0,
       endOffsetLeftMm: 0,
       endOffsetRightMm: 0,
+      startJoined: false,
+      endJoined: false,
     });
   }
 
@@ -2030,6 +2034,14 @@ export function solveWallJunctions(
 
       if (cluster.length < 2) continue;
 
+      for (const item of cluster) {
+        const off = offsets.get(item.wall.id);
+        if (off) {
+          if (item.end === "start") off.startJoined = true;
+          else off.endJoined = true;
+        }
+      }
+
       // Sort cluster radially by angle
       cluster.sort((a, b) => a.angle - b.angle);
 
@@ -2084,6 +2096,40 @@ export function solveWallJunctions(
               offNext.endOffsetLeftMm = clampedNext;
             }
           }
+        }
+      }
+    }
+
+    // Flag T-junction stem wall endpoints as joined
+    for (const w of levelWalls) {
+      for (const other of levelWalls) {
+        if (w.id === other.id) continue;
+        const off = offsets.get(w.id);
+        if (!off) continue;
+        const joinTol = Math.max(w.thicknessMm || 200, other.thicknessMm || 200) * 1.2 + 50;
+
+        const distStart = distPointSeg(
+          w.startXmm,
+          w.startYmm,
+          other.startXmm,
+          other.startYmm,
+          other.endXmm,
+          other.endYmm,
+        );
+        if (distStart.dist <= joinTol && distStart.t >= 0.001 && distStart.t <= 0.999) {
+          off.startJoined = true;
+        }
+
+        const distEnd = distPointSeg(
+          w.endXmm,
+          w.endYmm,
+          other.startXmm,
+          other.startYmm,
+          other.endXmm,
+          other.endYmm,
+        );
+        if (distEnd.dist <= joinTol && distEnd.t >= 0.001 && distEnd.t <= 0.999) {
+          off.endJoined = true;
         }
       }
     }
