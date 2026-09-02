@@ -207,6 +207,18 @@ export type RampDrawState = {
   thicknessMm: number;
 } | null;
 
+export type LayoutSectionLine = {
+  id: string;
+  name: string;
+  levelId: string;
+  startXmm: number;
+  startYmm: number;
+  endXmm: number;
+  endYmm: number;
+  flipDirection?: boolean;
+  active?: boolean;
+};
+
 export type DuctDrawState = {
   levelId: string;
   start: { xMm: number; yMm: number } | null;
@@ -285,6 +297,8 @@ type LayoutDrawingState = {
   unitSystem: "metric" | "imperial";
   underlays: ReferenceUnderlay[];
   presets: LayoutPresets;
+  sectionLines: LayoutSectionLine[];
+  activeSectionId: string | null;
   draftDrawMode: "line" | "arc";
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
@@ -443,6 +457,10 @@ type LayoutDrawingState = {
   addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
+  addSectionLine: (line: Omit<LayoutSectionLine, "id">) => void;
+  updateSectionLine: (id: string, patch: Partial<LayoutSectionLine>) => void;
+  deleteSectionLine: (id: string) => void;
+  setActiveSectionId: (id: string | null) => void;
 
   setDraftDrawMode: (mode: "line" | "arc") => void;
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
@@ -1039,6 +1057,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   unitSystem: typeof window !== "undefined" ? (localStorage.getItem("vstudio:unitSystem") as "metric" | "imperial") || "metric" : "metric",
   underlays: [],
   presets: { ...EMPTY_LAYOUT_PRESETS },
+  sectionLines: [
+    {
+      id: "sec-default-a",
+      name: "Schnitt A-A",
+      levelId: "level-1",
+      startXmm: -5000,
+      startYmm: 0,
+      endXmm: 5000,
+      endYmm: 0,
+      active: false,
+    },
+  ],
+  activeSectionId: null,
   draftDrawMode: "line",
   armedLayoutTool: null,
   wallDraw: null,
@@ -2500,6 +2531,43 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         lastMutatedAt: Date.now(),
       });
     }
+  },
+
+  addSectionLine: (line) => {
+    pushWerkzeugHistory();
+    const count = get().sectionLines.length + 1;
+    const letter = String.fromCharCode(64 + count);
+    const newSection: LayoutSectionLine = {
+      id: `sec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: line.name || `Schnitt ${letter}-${letter}`,
+      ...line,
+    };
+    set({
+      sectionLines: [...get().sectionLines, newSection],
+      activeSectionId: newSection.id,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  updateSectionLine: (id, patch) => {
+    pushWerkzeugHistory();
+    set({
+      sectionLines: get().sectionLines.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  deleteSectionLine: (id) => {
+    pushWerkzeugHistory();
+    set({
+      sectionLines: get().sectionLines.filter((s) => s.id !== id),
+      activeSectionId: get().activeSectionId === id ? null : get().activeSectionId,
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  setActiveSectionId: (id) => {
+    set({ activeSectionId: id, lastMutatedAt: Date.now() });
   },
 
   updateWalls: async (ids, patch) => {

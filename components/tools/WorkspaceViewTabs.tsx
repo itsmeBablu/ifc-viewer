@@ -25,28 +25,37 @@ const ELEVATIONS: Array<{ id: MarkupViewPreset; label: string }> = [
 export default function WorkspaceViewTabs() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [elevationsOpen, setElevationsOpen] = useState(false);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
-  const sectionCutMode = useAppStore((s) => s.sliceProgress < 100);
-  const setSliceProgress = useAppStore((s) => s.setSliceProgress);
   const levels = useLayoutDrawingStore((s) => s.levels);
   const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
 
+  const sectionLines = useLayoutDrawingStore((s) => s.sectionLines);
+  const activeSectionId = useLayoutDrawingStore((s) => s.activeSectionId);
+  const addSectionLine = useLayoutDrawingStore((s) => s.addSectionLine);
+  const updateSectionLine = useLayoutDrawingStore((s) => s.updateSectionLine);
+  const setActiveSectionId = useLayoutDrawingStore((s) => s.setActiveSectionId);
+
+  const activeSection = sectionLines.find((s) => s.id === activeSectionId);
   const activeLevel =
     levels.find((level) => level.id === (activeLevelId ?? selectedFloor)) ?? levels[0];
   const isElevation = ELEVATIONS.some((view) => view.id === viewPreset) && !quadView;
 
   useEffect(() => {
-    if (!elevationsOpen) return;
+    if (!elevationsOpen && !sectionsOpen) return;
     const close = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setElevationsOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setElevationsOpen(false);
+        setSectionsOpen(false);
+      }
     };
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
-  }, [elevationsOpen]);
+  }, [elevationsOpen, sectionsOpen]);
 
   const openView = (preset: MarkupViewPreset) => {
     setQuadView(false);
@@ -115,13 +124,70 @@ export default function WorkspaceViewTabs() {
         )}
       </div>
 
-      <ViewTab
-        active={sectionCutMode}
-        icon={<LuScissors />}
-        label="Section"
-        title="Toggle vertical/horizontal cutting plane section view"
-        onClick={toggleSectionCut}
-      />
+      <div className="relative">
+        <button
+          type="button"
+          aria-expanded={sectionsOpen}
+          aria-haspopup="menu"
+          className={`werkzeug-view-tab ${activeSection ? "is-active" : ""}`}
+          title="Schnitte / Project Sections"
+          onClick={() => setSectionsOpen((open) => !open)}
+        >
+          <LuScissors />
+          <span>{activeSection ? activeSection.name : "Schnitte"}</span>
+          <LuChevronDown className={`h-3 w-3 transition-transform ${sectionsOpen ? "rotate-180" : ""}`} />
+        </button>
+        {sectionsOpen && (
+          <div role="menu" className="absolute left-1/2 top-[calc(100%+8px)] w-52 -translate-x-1/2 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl space-y-1">
+            <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+              Schnitte / Sections
+            </div>
+            {sectionLines.map((sec) => (
+              <div key={sec.id} className="flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 hover:bg-[var(--glass-inset-bg)]">
+                <button
+                  type="button"
+                  className={`flex-1 text-left text-[11px] font-semibold ${activeSectionId === sec.id ? "text-yellow-500 font-bold" : "text-[var(--text-body)]"}`}
+                  onClick={() => {
+                    setActiveSectionId(sec.id);
+                    updateSectionLine(sec.id, { active: true });
+                    openView("south");
+                    setSectionsOpen(false);
+                  }}
+                >
+                  {sec.name}
+                </button>
+                <button
+                  type="button"
+                  title="Winkel spiegeln / Flip direction"
+                  onClick={() => updateSectionLine(sec.id, { flipDirection: !sec.flipDirection })}
+                  className="px-1 text-[10px] text-[var(--text-muted)] hover:text-yellow-400"
+                >
+                  Flip
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="w-full text-left rounded-lg px-2 py-1.5 text-[10px] font-bold text-yellow-400 hover:bg-yellow-400/10 flex items-center gap-1 border-t border-[var(--panel-divider)]/40 mt-1"
+              onClick={() => {
+                const newSec = addSectionLine({
+                  name: `Schnitt ${String.fromCharCode(65 + sectionLines.length)}-${String.fromCharCode(65 + sectionLines.length)}`,
+                  levelId: activeLevel?.id ?? "level-1",
+                  startXmm: -4000,
+                  startYmm: 0,
+                  endXmm: 4000,
+                  endYmm: 0,
+                  active: true,
+                });
+                setActiveSectionId(newSec.id);
+                setSectionsOpen(false);
+              }}
+            >
+              <span>+ Neuer Schnitt (New Section)</span>
+            </button>
+          </div>
+        )}
+      </div>
 
       <span className="mx-0.5 h-5 w-px bg-[var(--panel-divider)]" aria-hidden />
       <ViewTab

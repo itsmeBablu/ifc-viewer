@@ -103,6 +103,8 @@ export default class LayoutSceneLayer {
   private structuralPreview = new THREE.Group();
   private mepPreview = new THREE.Group();
 
+  private sectionGroup = new THREE.Group();
+
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
   onWindowClick: ((id: string) => void) | null = null;
@@ -114,11 +116,95 @@ export default class LayoutSceneLayer {
     this.structuralPreview.name = "layout-structural-preview";
     this.mepPreview.name = "layout-mep-preview";
     this.workPlaneGroup.name = "layout-workplane-group";
+    this.sectionGroup.name = "layout-section-group";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
     this.group.add(this.structuralPreview);
     this.group.add(this.mepPreview);
     this.group.add(this.workPlaneGroup);
+    this.group.add(this.sectionGroup);
+  }
+
+  syncSectionLines(
+    sectionLines: any[],
+    levels: any[],
+    activeSectionId: string | null,
+  ) {
+    this.clearGroupContents(this.sectionGroup);
+    if (!sectionLines || sectionLines.length === 0) return;
+
+    for (const sec of sectionLines) {
+      const level = levels.find((l) => l.id === sec.levelId) || levels[0];
+      const yElev = fromMm(level?.elevationMm || 0) + 0.005;
+
+      const p1x = fromMm(sec.startXmm);
+      const p1z = fromMm(sec.startYmm);
+      const p2x = fromMm(sec.endXmm);
+      const p2z = fromMm(sec.endYmm);
+
+      const isActive = sec.id === activeSectionId || sec.active;
+      const lineColor = isActive ? 0xeab308 : 0x3b82f6;
+
+      const linePts = [
+        new THREE.Vector3(p1x, yElev, p1z),
+        new THREE.Vector3(p2x, yElev, p2z),
+      ];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+      const lineMat = new THREE.LineDashedMaterial({
+        color: lineColor,
+        dashSize: 0.2,
+        gapSize: 0.1,
+        linewidth: 2,
+        depthTest: false,
+      });
+      const secLine = new THREE.Line(lineGeo, lineMat);
+      secLine.computeLineDistances();
+      secLine.renderOrder = 150;
+      this.sectionGroup.add(secLine);
+
+      const headMat = new THREE.MeshBasicMaterial({
+        color: lineColor,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+      const circleGeo = new THREE.CircleGeometry(0.25, 24);
+
+      const h1 = new THREE.Mesh(circleGeo, headMat);
+      h1.position.set(p1x, yElev + 0.001, p1z);
+      h1.rotation.x = -Math.PI / 2;
+      h1.renderOrder = 155;
+      this.sectionGroup.add(h1);
+
+      const h2 = new THREE.Mesh(circleGeo, headMat);
+      h2.position.set(p2x, yElev + 0.001, p2z);
+      h2.rotation.x = -Math.PI / 2;
+      h2.renderOrder = 155;
+      this.sectionGroup.add(h2);
+
+      const dx = p2x - p1x;
+      const dz = p2z - p1z;
+      const len = Math.hypot(dx, dz) || 1;
+      const flip = sec.flipDirection ? -1 : 1;
+      const nx = (-dz / len) * flip;
+      const nz = (dx / len) * flip;
+
+      const midX = (p1x + p2x) / 2;
+      const midZ = (p1z + p2z) / 2;
+
+      const arrowShape = new THREE.Shape();
+      arrowShape.moveTo(0, 0.2);
+      arrowShape.lineTo(-0.15, -0.15);
+      arrowShape.lineTo(0.15, -0.15);
+      arrowShape.closePath();
+
+      const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+      const arrowMesh = new THREE.Mesh(arrowGeo, headMat);
+      arrowMesh.position.set(midX + nx * 0.35, yElev + 0.001, midZ + nz * 0.35);
+      arrowMesh.rotation.x = -Math.PI / 2;
+      arrowMesh.rotation.z = Math.atan2(-nz, nx) - Math.PI / 2;
+      arrowMesh.renderOrder = 155;
+      this.sectionGroup.add(arrowMesh);
+    }
   }
 
   setStructuralPreview(

@@ -856,6 +856,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const notePinToken = useToolMarkupStore((s) => s.notePinToken);
   const markupFloorIdForLayout = useToolMarkupStore((s) => s.markupFloorId);
 
+  const sectionLines = useLayoutDrawingStore((s) => s.sectionLines);
+  const activeSectionId = useLayoutDrawingStore((s) => s.activeSectionId);
+
+  // Dynamic Section Tool clipping plane (Schnittlinie 3D live clip)
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const activeSec = sectionLines.find((s) => s.id === activeSectionId || s.active);
+    if (!activeSec) {
+      renderer.clippingPlanes = [];
+      return;
+    }
+
+    const dx = (activeSec.endXmm - activeSec.startXmm) / 1000;
+    const dz = (activeSec.endYmm - activeSec.startYmm) / 1000;
+    const len = Math.hypot(dx, dz) || 1;
+    const flip = activeSec.flipDirection ? -1 : 1;
+    const nx = (-dz / len) * flip;
+    const nz = (dx / len) * flip;
+    const midX = ((activeSec.startXmm + activeSec.endXmm) / 2) / 1000;
+    const midZ = ((activeSec.startYmm + activeSec.endYmm) / 2) / 1000;
+
+    const normal = new THREE.Vector3(nx, 0, nz);
+    const point = new THREE.Vector3(midX, 0, midZ);
+    const sectionPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point);
+
+    renderer.clippingPlanes = [sectionPlane];
+    renderer.localClippingEnabled = true;
+  }, [sectionLines, activeSectionId]);
+
   const fitToVisible = (durationMs = 850) => {
     const controls = controlsRef.current;
     const overlays = overlaysRef.current;
@@ -2659,6 +2689,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       } else {
         layer.setRampPreview(null, null, 0, 3000, 1200, 150);
       }
+      // Sync Section Lines layer
+      layer.syncSectionLines(
+        s.sectionLines || [],
+        s.levels || [],
+        s.activeSectionId,
+      );
       // Sync Lines sketch layer
       layer.syncSketch(
         s.sketchLines || [],
