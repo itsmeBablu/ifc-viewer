@@ -135,7 +135,7 @@ export default class LayoutSceneLayer {
 
     for (const sec of sectionLines) {
       const level = levels.find((l) => l.id === sec.levelId) || levels[0];
-      const yElev = fromMm(level?.elevationMm || 0) + 0.005;
+      const yElev = fromMm(level?.elevationMm || 0) + 0.008;
 
       const p1x = fromMm(sec.startXmm);
       const p1z = fromMm(sec.startYmm);
@@ -143,47 +143,14 @@ export default class LayoutSceneLayer {
       const p2z = fromMm(sec.endYmm);
 
       const isActive = sec.id === activeSectionId || sec.active;
-      const lineColor = isActive ? 0xeab308 : 0x3b82f6;
-
-      const linePts = [
-        new THREE.Vector3(p1x, yElev, p1z),
-        new THREE.Vector3(p2x, yElev, p2z),
-      ];
-      const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
-      const lineMat = new THREE.LineDashedMaterial({
-        color: lineColor,
-        dashSize: 0.2,
-        gapSize: 0.1,
-        linewidth: 2,
-        depthTest: false,
-      });
-      const secLine = new THREE.Line(lineGeo, lineMat);
-      secLine.computeLineDistances();
-      secLine.renderOrder = 150;
-      this.sectionGroup.add(secLine);
-
-      const headMat = new THREE.MeshBasicMaterial({
-        color: lineColor,
-        side: THREE.DoubleSide,
-        depthTest: false,
-      });
-      const circleGeo = new THREE.CircleGeometry(0.25, 24);
-
-      const h1 = new THREE.Mesh(circleGeo, headMat);
-      h1.position.set(p1x, yElev + 0.001, p1z);
-      h1.rotation.x = -Math.PI / 2;
-      h1.renderOrder = 155;
-      this.sectionGroup.add(h1);
-
-      const h2 = new THREE.Mesh(circleGeo, headMat);
-      h2.position.set(p2x, yElev + 0.001, p2z);
-      h2.rotation.x = -Math.PI / 2;
-      h2.renderOrder = 155;
-      this.sectionGroup.add(h2);
+      const lineColorHex = isActive ? 0xf59e0b : 0x2563eb;
+      const darkBorderHex = 0x09090b;
 
       const dx = p2x - p1x;
       const dz = p2z - p1z;
       const len = Math.hypot(dx, dz) || 1;
+      const angle = Math.atan2(dz, dx);
+
       const flip = sec.flipDirection ? -1 : 1;
       const nx = (-dz / len) * flip;
       const nz = (dx / len) * flip;
@@ -191,19 +158,119 @@ export default class LayoutSceneLayer {
       const midX = (p1x + p2x) / 2;
       const midZ = (p1z + p2z) / 2;
 
+      // 1. Sharp Outer Dark Border Line (Width: 0.14m)
+      const borderGeo = new THREE.PlaneGeometry(len, 0.14);
+      const borderMat = new THREE.MeshBasicMaterial({
+        color: darkBorderHex,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+      const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+      borderMesh.position.set(midX, yElev, midZ);
+      borderMesh.rotation.x = -Math.PI / 2;
+      borderMesh.rotation.z = -angle;
+      borderMesh.renderOrder = 180;
+      borderMesh.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(borderMesh);
+
+      // 2. Sharp Inner Color Line (Width: 0.09m)
+      const lineGeo = new THREE.PlaneGeometry(len, 0.09);
+      const lineMat = new THREE.MeshBasicMaterial({
+        color: lineColorHex,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+      const lineMesh = new THREE.Mesh(lineGeo, lineMat);
+      lineMesh.position.set(midX, yElev + 0.001, midZ);
+      lineMesh.rotation.x = -Math.PI / 2;
+      lineMesh.rotation.z = -angle;
+      lineMesh.renderOrder = 182;
+      lineMesh.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(lineMesh);
+
+      // 3. Sharp Circular Section Head Badges at P1 & P2
+      const outerCircleGeo = new THREE.CircleGeometry(0.32, 32);
+      const innerCircleGeo = new THREE.CircleGeometry(0.26, 32);
+
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: darkBorderHex,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+      const innerMat = new THREE.MeshBasicMaterial({
+        color: lineColorHex,
+        side: THREE.DoubleSide,
+        depthTest: false,
+      });
+
+      // Head P1 (Start)
+      const b1Outer = new THREE.Mesh(outerCircleGeo, outerMat);
+      b1Outer.position.set(p1x, yElev + 0.001, p1z);
+      b1Outer.rotation.x = -Math.PI / 2;
+      b1Outer.renderOrder = 185;
+      b1Outer.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(b1Outer);
+
+      const b1Inner = new THREE.Mesh(innerCircleGeo, innerMat);
+      b1Inner.position.set(p1x, yElev + 0.002, p1z);
+      b1Inner.rotation.x = -Math.PI / 2;
+      b1Inner.renderOrder = 186;
+      b1Inner.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(b1Inner);
+
+      // Head P2 (End)
+      const b2Outer = new THREE.Mesh(outerCircleGeo, outerMat);
+      b2Outer.position.set(p2x, yElev + 0.001, p2z);
+      b2Outer.rotation.x = -Math.PI / 2;
+      b2Outer.renderOrder = 185;
+      b2Outer.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(b2Outer);
+
+      const b2Inner = new THREE.Mesh(innerCircleGeo, innerMat);
+      b2Inner.position.set(p2x, yElev + 0.002, p2z);
+      b2Inner.rotation.x = -Math.PI / 2;
+      b2Inner.renderOrder = 186;
+      b2Inner.userData = { layoutSectionId: sec.id };
+      this.sectionGroup.add(b2Inner);
+
+      // 4. Sharp Viewing Direction Arrow
       const arrowShape = new THREE.Shape();
-      arrowShape.moveTo(0, 0.2);
-      arrowShape.lineTo(-0.15, -0.15);
-      arrowShape.lineTo(0.15, -0.15);
+      arrowShape.moveTo(0, 0.28);
+      arrowShape.lineTo(-0.2, -0.15);
+      arrowShape.lineTo(0.2, -0.15);
       arrowShape.closePath();
 
       const arrowGeo = new THREE.ShapeGeometry(arrowShape);
-      const arrowMesh = new THREE.Mesh(arrowGeo, headMat);
-      arrowMesh.position.set(midX + nx * 0.35, yElev + 0.001, midZ + nz * 0.35);
+      const arrowMesh = new THREE.Mesh(arrowGeo, innerMat);
+      arrowMesh.position.set(midX + nx * 0.45, yElev + 0.002, midZ + nz * 0.45);
       arrowMesh.rotation.x = -Math.PI / 2;
       arrowMesh.rotation.z = Math.atan2(-nz, nx) - Math.PI / 2;
-      arrowMesh.renderOrder = 155;
+      arrowMesh.renderOrder = 186;
+      arrowMesh.userData = { layoutSectionId: sec.id };
       this.sectionGroup.add(arrowMesh);
+
+      // 5. Interactive End Readjust Drag Handles (Grip Handles for Active Section)
+      if (isActive) {
+        const handleBoxGeo = new THREE.BoxGeometry(0.35, 0.05, 0.35);
+        const handleMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8, // Bright cyan grip handle
+          depthTest: false,
+        });
+
+        // Start Grip Handle P1
+        const hStart = new THREE.Mesh(handleBoxGeo, handleMat);
+        hStart.position.set(p1x, yElev + 0.01, p1z);
+        hStart.renderOrder = 200;
+        hStart.userData = { isSectionHandle: true, sectionId: sec.id, handleType: "start" };
+        this.sectionGroup.add(hStart);
+
+        // End Grip Handle P2
+        const hEnd = new THREE.Mesh(handleBoxGeo, handleMat);
+        hEnd.position.set(p2x, yElev + 0.01, p2z);
+        hEnd.renderOrder = 200;
+        hEnd.userData = { isSectionHandle: true, sectionId: sec.id, handleType: "end" };
+        this.sectionGroup.add(hEnd);
+      }
     }
   }
 
@@ -2896,6 +2963,17 @@ export default class LayoutSceneLayer {
             return { kind: "stair", id: o.userData.layoutStairId as string };
           if (o.userData.layoutRampId)
             return { kind: "ramp", id: o.userData.layoutRampId as string };
+        }
+
+        if (o.userData.isSectionHandle && o.userData.sectionId) {
+          return {
+            kind: "section-handle",
+            id: o.userData.sectionId as string,
+            end: o.userData.handleType as "start" | "end",
+          } as any;
+        }
+        if (o.userData.layoutSectionId) {
+          return { kind: "section", id: o.userData.layoutSectionId as string } as any;
         }
 
         if (o.userData.layoutGridId)

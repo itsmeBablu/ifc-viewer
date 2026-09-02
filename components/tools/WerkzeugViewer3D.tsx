@@ -6316,6 +6316,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(layoutHit.id);
                 return;
               }
+              if (layoutHit.kind === "section" || (layoutHit as any).kind === "section-handle") {
+                layoutStore.setActiveSectionId(layoutHit.id);
+                layoutStore.updateSectionLine(layoutHit.id, { active: true });
+                return;
+              }
               if (layoutHit.kind === "wall") {
                 if (markupStore.armedTool === "note") {
                   const wall = layoutStore.walls.find(
