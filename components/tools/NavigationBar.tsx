@@ -3,7 +3,7 @@
 import {
   LuCompass,
   LuHand,
-  LuHome,
+  LuHouse,
   LuMaximize2,
   LuMinus,
   LuPlus,
@@ -55,7 +55,7 @@ export default function NavigationBar({
         aria-label="Home view"
         className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-body)] transition-colors hover:bg-[var(--glass-inset-bg)] hover:text-yellow-400 active:scale-95 cursor-pointer"
       >
-        <LuHome className="h-5 w-5" />
+        <LuHouse className="h-5 w-5" />
       </button>
 
       <span className="h-px w-7 bg-[var(--panel-divider)]" />
