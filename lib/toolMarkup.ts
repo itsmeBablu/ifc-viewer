@@ -20,7 +20,8 @@ export type MarkupViewPreset =
   | "north"
   | "south"
   | "east"
-  | "west";
+  | "west"
+  | "section";
 
 export type MarkupPlacement = {
   id: string;

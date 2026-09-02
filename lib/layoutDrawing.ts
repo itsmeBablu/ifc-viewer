@@ -988,6 +988,7 @@ export type LayoutToolId =
   | "trim"
   | "stair"
   | "ramp"
+  | "section"
   | "duct"
   | "flex_duct"
   | "mep_placeholder"

@@ -3290,6 +3290,27 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         } else if (preset === "east") {
           ortho.position.set(center.x + dist, eyeY, center.z);
           ortho.up.set(0, 1, 0);
+        } else if (preset === "section") {
+          const secLines = useLayoutDrawingStore.getState().sectionLines;
+          const activeSecId = useLayoutDrawingStore.getState().activeSectionId;
+          const sec = secLines.find((s) => s.id === activeSecId || s.active) || secLines[0];
+          if (sec) {
+            const dx = (sec.endXmm - sec.startXmm) / 1000;
+            const dz = (sec.endYmm - sec.startYmm) / 1000;
+            const len = Math.hypot(dx, dz) || 1;
+            const flip = sec.flipDirection ? -1 : 1;
+            const nx = (-dz / len) * flip;
+            const nz = (dx / len) * flip;
+            const midX = ((sec.startXmm + sec.endXmm) / 2) / 1000;
+            const midZ = ((sec.startYmm + sec.endYmm) / 2) / 1000;
+
+            ortho.position.set(midX - nx * dist, eyeY, midZ - nz * dist);
+            ortho.up.set(0, 1, 0);
+            center.set(midX, eyeY, midZ);
+          } else {
+            ortho.position.set(center.x, eyeY, center.z - dist);
+            ortho.up.set(0, 1, 0);
+          }
         } else {
           ortho.position.set(center.x - dist, eyeY, center.z);
           ortho.up.set(0, 1, 0);

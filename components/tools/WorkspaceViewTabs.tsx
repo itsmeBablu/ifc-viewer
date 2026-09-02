@@ -91,6 +91,16 @@ export default function WorkspaceViewTabs() {
         onClick={() => openView("free")}
       />
 
+      {activeSection && (
+        <ViewTab
+          active={!quadView && viewPreset === "section"}
+          icon={<LuScissors className="text-amber-400" />}
+          label={`Schnitt · ${activeSection.name}`}
+          title={`View orthographic section cut (${activeSection.name})`}
+          onClick={() => openView("section")}
+        />
+      )}
+
       <div className="relative">
         <button
           type="button"
