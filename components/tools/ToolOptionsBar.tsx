@@ -208,6 +208,15 @@ export default function ToolOptionsBar() {
               />
             </div>
 
+            <button
+              type="button"
+              onClick={() => useAppStore.getState().setRightPanelOpen(true)}
+              className="flex items-center gap-1.5 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-400 hover:bg-amber-500 hover:text-zinc-950 transition-all shadow-sm"
+              title="Open Type Editor (Layers, Dimensions, Materials, Ratings)"
+            >
+              <span>Edit Type (Typ bearbeiten)</span>
+            </button>
+
             <div className="h-4 w-px bg-[var(--panel-divider)]" />
 
             <label className="flex items-center gap-1 text-[11px] text-[var(--text-muted)]">

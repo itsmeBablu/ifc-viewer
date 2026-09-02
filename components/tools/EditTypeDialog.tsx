@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { LuX, LuCheck, LuSlidersHorizontal, LuInfo, LuPlus, LuTrash2, LuLayers } from "react-icons/lu";
+import { LuX, LuCheck, LuPlus, LuTrash2, LuCopy } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
 import UnifiedButton from "@/components/common/UnifiedButton";
@@ -419,10 +419,7 @@ export default function EditTypeDialog({
   const isDark = useAppStore((s) => s.colorTheme === "dark");
   const [formData, setFormData] = useState<ElementTypeDefinition>({ ...typeDef });
   const [dialogWidth, setDialogWidth] = useState<number>(480);
-  const [activeTab, setActiveTab] = useState<"layers" | "dimensions" | "materials" | "physics">(
-    typeDef.category === "Wall" ? "layers" : "dimensions"
-  );
-  
+
   const isResizingRef = useRef(false);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(480);
@@ -430,11 +427,6 @@ export default function EditTypeDialog({
   // Update form state live in place when selection changes
   useEffect(() => {
     setFormData({ ...typeDef });
-    if (typeDef.category === "Wall") {
-      setActiveTab("layers");
-    } else {
-      setActiveTab("dimensions");
-    }
   }, [typeDef]);
 
   // Esc key listener to dismiss
@@ -525,469 +517,348 @@ export default function EditTypeDialog({
           </button>
         </div>
 
-        {/* Compact Tab Switcher */}
-        <div className="px-2 pt-1.5 pb-1 border-b border-[var(--panel-divider)]/40 bg-[var(--surface-overlay)]/30">
-          <div className="flex gap-1 p-0.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]">
-            {formData.category === "Wall" && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("layers")}
-                className={`flex-1 py-1 px-2 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 truncate ${
-                  activeTab === "layers"
-                    ? `${accentBg} text-zinc-950 font-bold shadow-sm`
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-              >
-                <LuLayers className="h-3 w-3 shrink-0" />
-                <span className="truncate">Layers...</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setActiveTab("dimensions")}
-              className={`flex-1 py-1 px-2 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 truncate ${
-                activeTab === "dimensions"
-                  ? `${accentBg} text-zinc-950 font-bold shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
-            >
-              <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
-              <span className="truncate">Dimensions...</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("materials")}
-              className={`flex-1 py-1 px-2 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 truncate ${
-                activeTab === "materials"
-                  ? `${accentBg} text-zinc-950 font-bold shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
-            >
-              <LuCheck className="h-3 w-3 shrink-0" />
-              <span className="truncate">Materials...</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("physics")}
-              className={`flex-1 py-1 px-2 rounded text-[10px] font-semibold transition-all flex items-center justify-center gap-1 truncate ${
-                activeTab === "physics"
-                  ? `${accentBg} text-zinc-950 font-bold shadow-sm`
-                  : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-              }`}
-            >
-              <LuInfo className="h-3 w-3 shrink-0" />
-              <span className="truncate">Ratings...</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Compact Form Content */}
+        {/* Single Unified Form Content - All properties in one view without sub-tabs */}
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto p-2.5 space-y-2 thin-scroll text-xs"
+          className="flex-1 overflow-y-auto p-2.5 space-y-3 thin-scroll text-xs"
         >
-          {/* TAB 1: Compound Layers (Wall) */}
-          {activeTab === "layers" && formData.category === "Wall" && (
-            <div className="space-y-2">
-              {/* Type Name */}
-              <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1">
-                <label className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                  Type Name:
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className={`w-full h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:outline-none ${
-                    isMep ? "focus:border-sky-400" : "focus:border-yellow-400"
-                  }`}
-                />
+          {/* SECTION 1: Type Identity & Name */}
+          <div className="rounded-lg border border-[var(--panel-divider)] p-2.5 bg-[var(--surface-overlay)]/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                Type Definition & Identity:
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const dupId = `type-custom-${Date.now()}`;
+                  const dupName = `${formData.name} (Kopie)`;
+                  const dupDef = { ...formData, id: dupId, name: dupName };
+                  if (onDuplicate) {
+                    onDuplicate();
+                  } else {
+                    setFormData(dupDef);
+                  }
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded border border-[var(--panel-divider)] text-[10px] font-bold hover:bg-yellow-400 hover:text-zinc-950 transition-all text-yellow-400"
+              >
+                <LuCopy className="h-3 w-3" />
+                <span>Duplizieren (Duplicate)</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className={`w-full h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:outline-none ${
+                  isMep ? "focus:border-sky-400" : "focus:border-yellow-400"
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* SECTION 2: Compound Layers (Wall / Slab / Roof) */}
+          {formData.category === "Wall" && (
+            <div className="rounded-lg border border-[var(--panel-divider)] p-2.5 bg-[var(--surface-overlay)]/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                  Schichtenaufbau / Layers ({formData.thicknessMm || 200} mm total)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newLayer: WallLayer = {
+                      id: `l-${Date.now()}`,
+                      name: "Dämmung / Insulation",
+                      function: "insulation",
+                      material: "thermal-insulation",
+                      thicknessMm: 50,
+                      color: "#fef08a",
+                    };
+                    const updatedLayers = [...(formData.layers || []), newLayer];
+                    const total = updatedLayers.reduce((s, l) => s + l.thicknessMm, 0);
+                    setFormData({
+                      ...formData,
+                      layers: updatedLayers,
+                      thicknessMm: total,
+                    });
+                  }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--panel-divider)] text-[10px] font-bold hover:${accentBg} hover:text-zinc-950 transition-all`}
+                >
+                  <LuPlus className="h-3 w-3" />
+                  <span>+ Schicht hinzufügen</span>
+                </button>
               </div>
 
-              {/* Cross-Section Visualizer */}
-              <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                    Compound Structure ({formData.thicknessMm || 200} mm)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newLayer: WallLayer = {
-                        id: `l-${Date.now()}`,
-                        name: "Thermal Insulation",
-                        function: "insulation",
-                        material: "thermal-insulation",
-                        thicknessMm: 50,
-                        color: "#fef08a",
-                      };
-                      const updatedLayers = [...(formData.layers || []), newLayer];
-                      const total = updatedLayers.reduce((s, l) => s + l.thicknessMm, 0);
-                      setFormData({
-                        ...formData,
-                        layers: updatedLayers,
-                        thicknessMm: total,
-                      });
-                    }}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--panel-divider)] text-[10px] font-bold hover:${accentBg} hover:text-zinc-950 transition-all`}
-                  >
-                    <LuPlus className="h-3 w-3" />
-                    <span>Add Layer</span>
-                  </button>
-                </div>
-
-                {/* Layer Cross-Section Bar */}
-                {formData.layers && formData.layers.length > 0 && (
-                  <div className="relative flex h-5 w-full overflow-hidden rounded border border-[var(--panel-divider)] p-0.5 gap-0.5 bg-[var(--glass-inset-bg)]">
-                    {formData.layers.map((l, i) => (
-                      <div
-                        key={l.id || i}
-                        style={{
-                          width: `${(l.thicknessMm / Math.max(1, formData.thicknessMm || 1)) * 100}%`,
-                          backgroundColor:
-                            l.color ||
-                            (l.function === "insulation"
-                              ? "#facc15"
-                              : l.function === "structure"
-                              ? "#64748b"
-                              : l.function === "finish1"
-                              ? "#f1f5f9"
-                              : "#94a3b8"),
-                        }}
-                        title={`${l.name} (${l.function}): ${l.thicknessMm}mm`}
-                        className="h-full rounded-sm flex items-center justify-center overflow-hidden text-[8px] font-mono text-zinc-950 font-bold"
-                      >
-                        {l.thicknessMm >= 25 ? `${l.thicknessMm}` : ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Compact Layer Rows */}
-                <div className="space-y-1 pt-1">
-                  {(formData.layers || []).map((layer, idx) => (
+              {/* Layer Cross-Section Bar */}
+              {formData.layers && formData.layers.length > 0 && (
+                <div className="relative flex h-5 w-full overflow-hidden rounded border border-[var(--panel-divider)] p-0.5 gap-0.5 bg-[var(--glass-inset-bg)]">
+                  {formData.layers.map((l, i) => (
                     <div
-                      key={layer.id || idx}
-                      className="rounded border border-[var(--panel-divider)] p-1.5 space-y-1 bg-[var(--surface-overlay)]/70"
+                      key={l.id || i}
+                      style={{
+                        width: `${(l.thicknessMm / Math.max(1, formData.thicknessMm || 1)) * 100}%`,
+                        backgroundColor:
+                          l.color ||
+                          (l.function === "insulation"
+                            ? "#facc15"
+                            : l.function === "structure"
+                            ? "#64748b"
+                            : l.function === "finish1"
+                            ? "#f1f5f9"
+                            : "#94a3b8"),
+                      }}
+                      title={`${l.name} (${l.function}): ${l.thicknessMm}mm`}
+                      className="h-full rounded-sm flex items-center justify-center overflow-hidden text-[8px] font-mono text-zinc-950 font-bold"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={layer.function}
-                          onChange={(e) => {
-                            const fn = e.target.value as WallLayerFunction;
-                            const defaultColor =
-                              fn === "insulation"
-                                ? "#fef08a"
-                                : fn === "structure"
-                                ? "#8e9196"
-                                : fn === "finish1"
-                                ? "#f8fafc"
-                                : fn === "finish2"
-                                ? "#e2e8f0"
-                                : fn === "substrate"
-                                ? "#cbd5e1"
-                                : "#94a3b8";
-                            const updated = (formData.layers || []).map((l, i) =>
-                              i === idx ? { ...l, function: fn, color: l.color || defaultColor } : l
-                            );
-                            setFormData({ ...formData, layers: updated });
-                          }}
-                          className="h-6 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-1.5 text-[10px] text-[var(--text-strong)] flex-1 min-w-0"
-                        >
-                          <option value="finish1">Finish 1 (Interior)</option>
-                          <option value="substrate">Substrate</option>
-                          <option value="structure">Structure Core</option>
-                          <option value="core">Core Cavity</option>
-                          <option value="insulation">Thermal Insulation</option>
-                          <option value="finish2">Finish 2 (Exterior)</option>
-                        </select>
-
-                        <div className="flex items-center rounded border border-[var(--panel-divider)] overflow-hidden h-6 bg-[var(--surface-card)]">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const val = Math.max(5, layer.thicknessMm - 5);
-                              const updated = (formData.layers || []).map((l, i) =>
-                                i === idx ? { ...l, thicknessMm: val } : l
-                              );
-                              const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
-                              setFormData({ ...formData, layers: updated, thicknessMm: total });
-                            }}
-                            className="px-1.5 h-full text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            value={layer.thicknessMm}
-                            min={1}
-                            max={1000}
-                            onChange={(e) => {
-                              const val = Math.max(1, Number(e.target.value));
-                              const updated = (formData.layers || []).map((l, i) =>
-                                i === idx ? { ...l, thicknessMm: val } : l
-                              );
-                              const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
-                              setFormData({ ...formData, layers: updated, thicknessMm: total });
-                            }}
-                            className={`w-10 bg-transparent text-center font-mono text-[10px] font-bold ${accentColor}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const val = Math.min(1000, layer.thicknessMm + 5);
-                              const updated = (formData.layers || []).map((l, i) =>
-                                i === idx ? { ...l, thicknessMm: val } : l
-                              );
-                              const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
-                              setFormData({ ...formData, layers: updated, thicknessMm: total });
-                            }}
-                            className="px-1.5 h-full text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                          >
-                            +
-                          </button>
-                          <span className="text-[9px] text-[var(--text-muted)] font-mono pr-1">mm</span>
-                        </div>
-
-                        <input
-                          type="color"
-                          value={layer.color || "#94a3b8"}
-                          onChange={(e) => {
-                            const updated = (formData.layers || []).map((l, i) =>
-                              i === idx ? { ...l, color: e.target.value } : l
-                            );
-                            setFormData({ ...formData, layers: updated });
-                          }}
-                          className="h-6 w-6 rounded border border-[var(--panel-divider)] bg-transparent p-0 cursor-pointer shrink-0"
-                          title="Layer Poche Color"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = (formData.layers || []).filter((_, i) => i !== idx);
-                            const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
-                            setFormData({ ...formData, layers: updated, thicknessMm: total });
-                          }}
-                          className="h-6 w-6 rounded flex items-center justify-center text-zinc-400 hover:text-red-500 transition-colors shrink-0"
-                          title="Remove Layer"
-                        >
-                          <LuTrash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-
-                      <input
-                        type="text"
-                        value={layer.material}
-                        onChange={(e) => {
-                          const updated = (formData.layers || []).map((l, i) =>
-                            i === idx ? { ...l, material: e.target.value, name: e.target.value } : l
-                          );
-                          setFormData({ ...formData, layers: updated });
-                        }}
-                        placeholder="Material name..."
-                        className="w-full h-6 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-2 text-[10px] text-[var(--text-strong)] truncate"
-                      />
+                      {l.thicknessMm >= 25 ? `${l.thicknessMm}` : ""}
                     </div>
                   ))}
                 </div>
+              )}
+
+              {/* Compact Layer Rows */}
+              <div className="space-y-1.5 pt-1">
+                {(formData.layers || []).map((layer, idx) => (
+                  <div
+                    key={layer.id || idx}
+                    className="rounded border border-[var(--panel-divider)] p-1.5 space-y-1 bg-[var(--surface-overlay)]/70"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={layer.function}
+                        onChange={(e) => {
+                          const fn = e.target.value as WallLayerFunction;
+                          const defaultColor =
+                            fn === "insulation"
+                              ? "#fef08a"
+                              : fn === "structure"
+                              ? "#8e9196"
+                              : fn === "finish1"
+                              ? "#f8fafc"
+                              : fn === "finish2"
+                              ? "#e2e8f0"
+                              : fn === "substrate"
+                              ? "#cbd5e1"
+                              : "#94a3b8";
+                          const updated = (formData.layers || []).map((l, i) =>
+                            i === idx ? { ...l, function: fn, color: l.color || defaultColor } : l
+                          );
+                          setFormData({ ...formData, layers: updated });
+                        }}
+                        className="h-6 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-1.5 text-[10px] text-[var(--text-strong)] flex-1 min-w-0"
+                      >
+                        <option value="finish1">Finish 1 (Interior)</option>
+                        <option value="substrate">Substrate</option>
+                        <option value="structure">Structure Core</option>
+                        <option value="core">Core Cavity</option>
+                        <option value="insulation">Thermal Insulation</option>
+                        <option value="finish2">Finish 2 (Exterior)</option>
+                      </select>
+
+                      <div className="flex items-center rounded border border-[var(--panel-divider)] overflow-hidden h-6 bg-[var(--surface-card)]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = Math.max(5, layer.thicknessMm - 5);
+                            const updated = (formData.layers || []).map((l, i) =>
+                              i === idx ? { ...l, thicknessMm: val } : l
+                            );
+                            const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                            setFormData({ ...formData, layers: updated, thicknessMm: total });
+                          }}
+                          className="px-1.5 h-full text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          value={layer.thicknessMm}
+                          min={1}
+                          max={1000}
+                          onChange={(e) => {
+                            const val = Math.max(1, Number(e.target.value));
+                            const updated = (formData.layers || []).map((l, i) =>
+                              i === idx ? { ...l, thicknessMm: val } : l
+                            );
+                            const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                            setFormData({ ...formData, layers: updated, thicknessMm: total });
+                          }}
+                          className={`w-10 bg-transparent text-center font-mono text-[10px] font-bold ${accentColor}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = Math.min(1000, layer.thicknessMm + 5);
+                            const updated = (formData.layers || []).map((l, i) =>
+                              i === idx ? { ...l, thicknessMm: val } : l
+                            );
+                            const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                            setFormData({ ...formData, layers: updated, thicknessMm: total });
+                          }}
+                          className="px-1.5 h-full text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                        >
+                          +
+                        </button>
+                        <span className="text-[9px] text-[var(--text-muted)] font-mono pr-1">mm</span>
+                      </div>
+
+                      <input
+                        type="color"
+                        value={layer.color || "#94a3b8"}
+                        onChange={(e) => {
+                          const updated = (formData.layers || []).map((l, i) =>
+                            i === idx ? { ...l, color: e.target.value } : l
+                          );
+                          setFormData({ ...formData, layers: updated });
+                        }}
+                        className="h-6 w-6 rounded border border-[var(--panel-divider)] bg-transparent p-0 cursor-pointer shrink-0"
+                        title="Layer Color"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (formData.layers || []).filter((_, i) => i !== idx);
+                          const total = updated.reduce((s, l) => s + l.thicknessMm, 0);
+                          setFormData({ ...formData, layers: updated, thicknessMm: total });
+                        }}
+                        className="h-6 w-6 rounded flex items-center justify-center text-zinc-400 hover:text-red-500 transition-colors shrink-0"
+                        title="Remove Layer"
+                      >
+                        <LuTrash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={layer.material}
+                      onChange={(e) => {
+                        const updated = (formData.layers || []).map((l, i) =>
+                          i === idx ? { ...l, material: e.target.value, name: e.target.value } : l
+                        );
+                        setFormData({ ...formData, layers: updated });
+                      }}
+                      placeholder="Material description..."
+                      className="w-full h-6 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-2 text-[10px] text-[var(--text-strong)] truncate"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* TAB 2: Dimensions */}
-          {activeTab === "dimensions" && (
-            <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1.5">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
-                Dimensional Parameters:
-              </div>
-
-              {formData.thicknessMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]" title="Wall / Slab Thickness">
-                    Thickness:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.thicknessMm}
-                      disabled={formData.category === "Wall" && Boolean(formData.layers && formData.layers.length > 0)}
-                      onChange={(e) => setFormData({ ...formData, thicknessMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.widthMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Width:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.widthMm}
-                      onChange={(e) => setFormData({ ...formData, widthMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.heightMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Height:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.heightMm}
-                      onChange={(e) => setFormData({ ...formData, heightMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.depthMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Depth:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.depthMm}
-                      onChange={(e) => setFormData({ ...formData, depthMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.diameterMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Diameter (Ø):</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.diameterMm}
-                      onChange={(e) => setFormData({ ...formData, diameterMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.sillHeightMm !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Sill Height:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.sillHeightMm}
-                      onChange={(e) => setFormData({ ...formData, sillHeightMm: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.powerWatts !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Heating Power:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.powerWatts}
-                      onChange={(e) => setFormData({ ...formData, powerWatts: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">W</span>
-                  </div>
-                </div>
-              )}
-
-              {formData.coolingWatts !== undefined && (
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Cooling Capacity:</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={formData.coolingWatts}
-                      onChange={(e) => setFormData({ ...formData, coolingWatts: Number(e.target.value) })}
-                      className={`${inputClass} w-20 text-right ${accentColor}`}
-                    />
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">W</span>
-                  </div>
-                </div>
-              )}
+          {/* SECTION 3: Dimensions */}
+          <div className="rounded-lg border border-[var(--panel-divider)] p-2.5 bg-[var(--surface-overlay)]/40 space-y-1.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
+              Abmessungen / Dimensions:
             </div>
-          )}
 
-          {/* TAB 3: Material & Function */}
-          {activeTab === "materials" && (
-            <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
-                Material & Function:
+            {formData.thicknessMm !== undefined && (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Overall Thickness:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={formData.thicknessMm}
+                    disabled={formData.category === "Wall" && Boolean(formData.layers && formData.layers.length > 0)}
+                    onChange={(e) => setFormData({ ...formData, thicknessMm: Number(e.target.value) })}
+                    className={`${inputClass} w-20 text-right ${accentColor}`}
+                  />
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+                </div>
               </div>
+            )}
 
-              <div className="flex items-center justify-between py-1">
-                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[120px]">Material:</span>
-                <input
-                  type="text"
-                  value={formData.material}
-                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                  className="h-7 w-44 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)] truncate text-right"
-                />
+            {formData.widthMm !== undefined && (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Width:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={formData.widthMm}
+                    onChange={(e) => setFormData({ ...formData, widthMm: Number(e.target.value) })}
+                    className={`${inputClass} w-20 text-right ${accentColor}`}
+                  />
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+                </div>
               </div>
+            )}
 
-              <div className="flex items-center justify-between py-1">
-                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[120px]">Function:</span>
-                <select
-                  value={formData.functionType}
-                  onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
-                  className="h-7 min-w-36 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)]"
-                >
-                  <option value="Interior">Interior</option>
-                  <option value="Exterior">Exterior</option>
-                  <option value="Structural">Structural</option>
-                  <option value="Non-Bearing">Non-Bearing</option>
-                </select>
+            {formData.heightMm !== undefined && (
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Default Height:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={formData.heightMm}
+                    onChange={(e) => setFormData({ ...formData, heightMm: Number(e.target.value) })}
+                    className={`${inputClass} w-20 text-right ${accentColor}`}
+                  />
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">mm</span>
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* SECTION 4: Material & Function */}
+          <div className="rounded-lg border border-[var(--panel-divider)] p-2.5 bg-[var(--surface-overlay)]/40 space-y-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
+              Material & Funktion:
             </div>
-          )}
 
-          {/* TAB 4: Physics & Ratings */}
-          {activeTab === "physics" && (
-            <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
-                Physical Specifications & Ratings:
-              </div>
-
-              <div className="flex items-center justify-between py-1">
-                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Thermal U/K:</span>
-                <input
-                  type="text"
-                  value={formData.thermalConductivity || "0.35 W/mK"}
-                  onChange={(e) => setFormData({ ...formData, thermalConductivity: e.target.value })}
-                  className="h-7 w-32 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-right font-mono text-[11px] text-[var(--text-strong)] truncate"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-1">
-                <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Fire Rating:</span>
-                <input
-                  type="text"
-                  value={formData.fireRating || "F90"}
-                  onChange={(e) => setFormData({ ...formData, fireRating: e.target.value })}
-                  className="h-7 w-28 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-right font-mono text-[11px] text-[var(--text-strong)] truncate"
-                />
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[11px] text-[var(--text-body)] truncate max-w-[120px]">Core Material:</span>
+              <input
+                type="text"
+                value={formData.material}
+                onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                className="h-7 w-44 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)] truncate text-right"
+              />
             </div>
-          )}
+
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[11px] text-[var(--text-body)] truncate max-w-[120px]">Function Type:</span>
+              <select
+                value={formData.functionType}
+                onChange={(e) => setFormData({ ...formData, functionType: e.target.value as any })}
+                className="h-7 min-w-36 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)]"
+              >
+                <option value="Interior">Interior</option>
+                <option value="Exterior">Exterior</option>
+                <option value="Structural">Structural</option>
+                <option value="Non-Bearing">Non-Bearing</option>
+              </select>
+            </div>
+          </div>
+
+          {/* SECTION 5: Ratings & Thermal Specifications */}
+          <div className="rounded-lg border border-[var(--panel-divider)] p-2.5 bg-[var(--surface-overlay)]/40 space-y-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] pb-1 border-b border-[var(--panel-divider)]/40">
+              Physikalische Werte & Brandschutz:
+            </div>
+
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">U-Wert / Conductivity:</span>
+              <input
+                type="text"
+                value={formData.thermalConductivity || "0.18 W/m²K (U)"}
+                onChange={(e) => setFormData({ ...formData, thermalConductivity: e.target.value })}
+                className="h-7 w-36 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-right font-mono text-[11px] text-[var(--text-strong)] truncate"
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[11px] text-[var(--text-body)] truncate max-w-[140px]">Brandschutzklasse:</span>
+              <input
+                type="text"
+                value={formData.fireRating || "F90-A"}
+                onChange={(e) => setFormData({ ...formData, fireRating: e.target.value })}
+                className="h-7 w-28 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-right font-mono text-[11px] text-[var(--text-strong)] truncate"
+              />
+            </div>
+          </div>
 
           {/* Action Footer */}
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--panel-divider)]">
