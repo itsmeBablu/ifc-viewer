@@ -151,8 +151,9 @@ html[data-studio-font-scale="spacious"] {
 
 @utility liquid-glass-panel {
   background-color: var(--glass-tint);
-  backdrop-filter: blur(48px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(48px) saturate(var(--glass-saturate));
+  /* Reduced blur for sharper text rendering — 24px is crisp, 48px smears text */
+  backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 var(--glass-specular), 0 20px 50px rgba(0, 0, 0, 0.35);
   border-radius: 2rem;
@@ -160,16 +161,16 @@ html[data-studio-font-scale="spacious"] {
 
 @utility liquid-glass-dock {
   background-color: var(--glass-tint);
-  backdrop-filter: blur(48px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(48px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
   border-left: 1px solid var(--glass-border);
   box-shadow: inset 1px 0 0 var(--glass-specular), -8px 0 32px rgba(0, 0, 0, 0.25);
 }
 
 @utility liquid-glass-pill {
   background-color: var(--glass-tint);
-  backdrop-filter: blur(36px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(36px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 var(--glass-specular), 0 8px 24px rgba(0, 0, 0, 0.20);
   border-radius: 9999px;
@@ -183,11 +184,67 @@ html[data-studio-font-scale="spacious"] {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 20px rgba(250, 204, 21, 0.45);
 }
 
+/* ─── Global sharp text & pixel-perfect vector rendering ─────────────────── */
+*, *::before, *::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   transition: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  /* Prevent sub-pixel rounding artifacts */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* GPU-composited text isolation layer — prevents backdrop-filter blur bleeding into text */
+.ui-text-sharp {
+  position: relative;
+  z-index: 1;
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  will-change: contents;
+}
+
+/* Crisp vector icon utility — SVG icons never blurred */
+.ui-icon-sharp svg,
+.ui-icon-sharp {
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+  image-rendering: pixelated;
+}
+
+/* Pixel-perfect 1px borders — prevent browser anti-aliasing rounding */
+.ui-border-sharp {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
+/* Force GPU layer for elements that need sharpness over blur effects */
+.ui-gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* ─── Liquid Glass: crisp text isolation fix ─────────────────────────────── */
+/* Text inside glass panels must render above the blur stacking context */
+.glass-text-layer {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 /* Shared thin glass slider — components/ui/Slider.tsx */
@@ -335,9 +392,9 @@ body {
   box-shadow:
     inset 0 1px 0 var(--glass-specular),
     inset 0 -0.5px 0 rgba(255, 255, 255, 0.14);
-  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate))
     blur(var(--glass-blur-panel)) brightness(1.08);
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-panel))
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate)) blur(var(--glass-blur-panel))
     brightness(1.08);
 }
 
@@ -352,23 +409,24 @@ body {
   box-shadow:
     inset 0 1.5px 0 var(--glass-specular),
     inset 0 -0.5px 0 rgba(255, 255, 255, 0.18);
-  -webkit-backdrop-filter: saturate(var(--glass-saturate))
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate))
     blur(var(--glass-blur-menu)) brightness(1.08);
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-menu))
+  backdrop-filter: blur(14px) saturate(var(--glass-saturate)) blur(var(--glass-blur-menu))
     brightness(1.08);
+}
 }
 
 .ios-glass--control {
   -webkit-backdrop-filter: saturate(var(--glass-saturate))
-    blur(var(--glass-blur-control)) brightness(1.06);
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-control))
+    blur(10px) brightness(1.06);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(10px)
     brightness(1.06);
 }
 
 .ios-glass--chip {
   -webkit-backdrop-filter: saturate(var(--glass-saturate))
-    blur(var(--glass-blur-chip)) brightness(1.05);
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur-chip))
+    blur(8px) brightness(1.05);
+  backdrop-filter: saturate(var(--glass-saturate)) blur(8px)
     brightness(1.05);
 }
 
@@ -407,8 +465,9 @@ body {
     inset 0 -1.5px 0 rgba(255, 255, 255, 0.25),
     inset 1px 0 0 rgba(255, 255, 255, 0.45),
     inset -1px 0 0 rgba(255, 255, 255, 0.45);
-  -webkit-backdrop-filter: blur(52px) saturate(220%) brightness(1.08);
-  backdrop-filter: blur(52px) saturate(220%) brightness(1.08);
+  -webkit-backdrop-filter: blur(28px) saturate(220%) brightness(1.08);
+  backdrop-filter: blur(28px) saturate(220%) brightness(1.08);
+}
 }
 
 [data-theme="dark"] .liquid-entry-glass {
@@ -446,8 +505,9 @@ body {
   box-shadow:
     0 8px 28px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  -webkit-backdrop-filter: saturate(180%) blur(16px) brightness(1.06);
-  backdrop-filter: saturate(180%) blur(16px) brightness(1.06);
+  /* Reduced blur: 10px keeps glass feel but text stays crisp */
+  -webkit-backdrop-filter: saturate(180%) blur(10px) brightness(1.06);
+  backdrop-filter: saturate(180%) blur(10px) brightness(1.06);
 }
 
 [data-theme="dark"] .tool-glass {
@@ -530,15 +590,14 @@ body {
   border: 1px solid var(--glass-border);
   background: var(--glass-inset-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  -webkit-backdrop-filter: saturate(170%) blur(16px) brightness(1.04);
-  backdrop-filter: saturate(170%) blur(16px) brightness(1.04);
+  /* No nested blur — children inherit parent blur stacking context */
+  /* Nested backdrop-filter causes compounded blurriness on text */
 }
 
 .glass-input {
   border: 1px solid var(--glass-border);
   background: var(--glass-inset-bg);
-  -webkit-backdrop-filter: saturate(165%) blur(14px) brightness(1.03);
-  backdrop-filter: saturate(165%) blur(14px) brightness(1.03);
+  /* No backdrop-filter on inputs — text must be pixel-perfect */
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -3100,3 +3159,380 @@ body.werkzeug-active .material-editor-embedded button:hover:not(.btn-liquid-ambe
     width: 38px !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VECTOR UI SYSTEM — Sharp, Crisp, Zero-Blur Interface Primitives
+   All elements use vector-exact rendering: SVG patterns, pixel-locked lines,
+   geometric shapes. No raster blurs on critical content layers.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── SVG Background Hatch Patterns for 2D Plan View ───────────────────── */
+/* These CSS background-image patterns use SVG data URIs — always vector,
+   always crisp at any resolution, no Canvas API or raster texture needed. */
+
+.plan-hatch-concrete {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='%23d1d5db'/%3E%3Ccircle cx='8' cy='8' r='1.5' fill='%236b7280' opacity='.7'/%3E%3Ccircle cx='22' cy='6' r='1' fill='%236b7280' opacity='.6'/%3E%3Ccircle cx='14' cy='20' r='2' fill='%236b7280' opacity='.7'/%3E%3Ccircle cx='28' cy='24' r='1.5' fill='%236b7280' opacity='.5'/%3E%3Ccircle cx='5' cy='26' r='1' fill='%236b7280' opacity='.6'/%3E%3C/svg%3E");
+  background-size: 32px 32px;
+}
+
+.plan-hatch-brick {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='16'%3E%3Crect width='32' height='16' fill='%23fca5a5'/%3E%3Cline x1='0' y1='0' x2='32' y2='0' stroke='%237f1d1d' stroke-width='1.5'/%3E%3Cline x1='0' y1='8' x2='32' y2='8' stroke='%237f1d1d' stroke-width='1.5'/%3E%3Cline x1='16' y1='0' x2='16' y2='8' stroke='%237f1d1d' stroke-width='1.5'/%3E%3Cline x1='0' y1='8' x2='0' y2='16' stroke='%237f1d1d' stroke-width='1.5'/%3E%3Cline x1='32' y1='8' x2='32' y2='16' stroke='%237f1d1d' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 32px 16px;
+}
+
+.plan-hatch-insulation {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='24'%3E%3Crect width='48' height='24' fill='%23fef08a'/%3E%3Cpath d='M0,12 C12,0 12,24 24,12 C36,0 36,24 48,12' stroke='%23713f12' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-size: 48px 24px;
+}
+
+.plan-hatch-wood {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23fde68a'/%3E%3Cpath d='M0,10 Q16,18 48,8' stroke='%2392400e' stroke-width='1.5' fill='none'/%3E%3Cpath d='M0,24 Q20,32 48,20' stroke='%2392400e' stroke-width='1.5' fill='none'/%3E%3Cpath d='M0,38 Q14,46 48,34' stroke='%2392400e' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-size: 48px 48px;
+}
+
+.plan-hatch-steel {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23e2e8f0'/%3E%3Cline x1='0' y1='0' x2='16' y2='16' stroke='%2364748b' stroke-width='1.5'/%3E%3Cline x1='16' y1='0' x2='0' y2='16' stroke='%2364748b' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
+}
+
+.plan-hatch-diagonal {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23f1f5f9'/%3E%3Cline x1='0' y1='0' x2='16' y2='16' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
+}
+
+.plan-hatch-stone {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect width='64' height='64' fill='%23e7e5e4'/%3E%3Crect x='2' y='2' width='28' height='24' fill='none' stroke='%2557534e' stroke-width='2'/%3E%3Crect x='34' y='2' width='28' height='24' fill='none' stroke='%2557534e' stroke-width='2'/%3E%3Crect x='2' y='30' width='60' height='24' fill='none' stroke='%2557534e' stroke-width='2'/%3E%3C/svg%3E");
+  background-size: 64px 64px;
+}
+
+/* ─── 2D Plan Poché Fill Patterns ─────────────────────────────────────── */
+/* Wall cross-section hatch fill using pure CSS/SVG — no canvas needed.
+   These replace Three.js canvas texture fills for 2D plan views. */
+
+.plan-wall-poché {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%23374151'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
+}
+
+.plan-wall-poché-concrete {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect width='24' height='24' fill='%23d1d5db'/%3E%3Ccircle cx='5' cy='6' r='1.2' fill='%236b7280'/%3E%3Ccircle cx='16' cy='4' r='.8' fill='%236b7280'/%3E%3Ccircle cx='10' cy='15' r='1.5' fill='%236b7280'/%3E%3Ccircle cx='20' cy='18' r='1' fill='%236b7280'/%3E%3C/svg%3E");
+  background-size: 24px 24px;
+}
+
+/* ─── Sharp 2D Plan UI Elements ─────────────────────────────────────── */
+
+/* Plan wall element — crisp 1px CAD border */
+.plan-wall-line {
+  position: absolute;
+  background: #374151;
+  shape-rendering: geometricPrecision;
+  image-rendering: pixelated;
+}
+
+/* Plan room fill with thin outline */
+.plan-room-fill {
+  position: absolute;
+  border: 1.5px solid rgba(55, 65, 81, 0.6);
+  shape-rendering: geometricPrecision;
+}
+
+/* Plan dimension annotation — crisp monospaced text */
+.plan-dimension-label {
+  font-family: var(--font-geist-mono), 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #374151;
+  line-height: 1;
+  white-space: nowrap;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  shape-rendering: geometricPrecision;
+  transform: translateZ(0);
+}
+
+[data-theme="dark"] .plan-dimension-label {
+  color: #d1d5db;
+}
+
+/* ─── Werkzeug Ribbon / Toolbar ─────────────────────────────────────────── */
+
+/* Tool button — pixel-perfect hover, no blur on child text */
+.tool-btn-sharp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  isolation: isolate;
+  /* GPU promote so button chrome doesn't inherit parent blur */
+  transform: translateZ(0);
+}
+
+.tool-btn-sharp:hover {
+  border-color: var(--panel-divider);
+  background: var(--glass-inset-bg);
+}
+
+.tool-btn-sharp.is-active {
+  border-color: rgba(250, 204, 21, 0.6);
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.tool-btn-sharp > svg {
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+  flex-shrink: 0;
+}
+
+/* ─── Liquid Glass with Guaranteed Crisp Text ────────────────────────────── */
+
+/* The pattern: blur layer behind, content above via z-index isolation */
+.liquid-glass-crisp {
+  position: relative;
+  isolation: isolate;
+  /* thin background tint fills, blur via pseudo-element only */
+  background: var(--glass-tint);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-specular), 0 8px 24px rgba(0,0,0,0.15);
+}
+
+/* Blur lives ONLY on the pseudo-element — never bleeds to child text */
+.liquid-glass-crisp::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+}
+
+/* All content sits above the blur layer */
+.liquid-glass-crisp > * {
+  position: relative;
+  z-index: 1;
+}
+
+.liquid-glass-crisp .label,
+.liquid-glass-crisp span,
+.liquid-glass-crisp p,
+.liquid-glass-crisp h1,
+.liquid-glass-crisp h2,
+.liquid-glass-crisp h3,
+.liquid-glass-crisp button {
+  position: relative;
+  z-index: 1;
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* ─── SVG Pattern Backgrounds for UI Panels ──────────────────────────────── */
+
+/* Fine grid — used as panel background for design feel */
+.bg-grid-subtle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M 24 0 L 0 0 0 24' fill='none' stroke='rgba(148,163,184,0.12)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 24px 24px;
+  background-position: 0 0;
+}
+
+.bg-dot-subtle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='1' cy='1' r='1' fill='rgba(148,163,184,0.25)'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
+}
+
+[data-theme="dark"] .bg-grid-subtle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M 24 0 L 0 0 0 24' fill='none' stroke='rgba(255,255,255,0.05)' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .bg-dot-subtle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='1' cy='1' r='1' fill='rgba(255,255,255,0.1)'/%3E%3C/svg%3E");
+}
+
+/* Diagonal stripe pattern — used on disabled/inactive zones */
+.bg-stripe-muted {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M-1,1 L1,-1 M0,8 L8,0 M7,9 L9,7' stroke='rgba(148,163,184,0.2)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
+}
+
+/* ─── Sharp Typography Scale ─────────────────────────────────────────────── */
+
+/* Crisp BIM / CAD label text — used in property panels, dimension annotations */
+.text-bim-xs {
+  font-family: var(--font-geist-mono), 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+.text-bim-sm {
+  font-family: var(--font-geist-mono), 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Panel section label */
+.text-panel-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sharp numeric readout — used in dimension/property displays */
+.text-numeric {
+  font-family: var(--font-geist-mono), 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Property Panel Rows ──────────────────────────────────────────────── */
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.1s ease;
+}
+
+.prop-row:hover {
+  background: var(--glass-inset-bg);
+}
+
+.prop-row__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  flex-shrink: 0;
+}
+
+.prop-row__value {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── 2D Layout Canvas Overlay Utilities ──────────────────────────────── */
+
+/* Wrapper for the 2D canvas overlays — establishes pixel-perfect context */
+.canvas-2d-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* SVG overlay for 2D annotations drawn on top of the Three.js canvas */
+.svg-2d-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+  overflow: visible;
+}
+
+.svg-2d-overlay text {
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--text-strong);
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Sharp Select & Input Controls ──────────────────────────────────── */
+
+/* Native selects in tool panels — crisp, no blur */
+.tool-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--glass-inset-bg);
+  border: 1px solid var(--panel-divider);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-strong);
+  padding: 3px 22px 3px 8px;
+  line-height: 1.4;
+  cursor: pointer;
+  outline: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2371717a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+}
+
+.tool-select:focus {
+  border-color: rgba(250, 204, 21, 0.6);
+  background-color: var(--glass-inset-bg);
+}
+
+/* Tool number input */
+.tool-number-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--glass-inset-bg);
+  border: 1px solid var(--panel-divider);
+  border-radius: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-strong);
+  padding: 3px 6px;
+  text-align: right;
+  width: 56px;
+  outline: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  transition: border-color 0.12s ease;
+}
+
+.tool-number-input:focus {
+  border-color: rgba(250, 204, 21, 0.6);
+}
+
+.tool-number-input::-webkit-inner-spin-button,
+.tool-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
