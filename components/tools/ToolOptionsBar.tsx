@@ -3,6 +3,7 @@
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
+import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import {
   LuTrash2,
