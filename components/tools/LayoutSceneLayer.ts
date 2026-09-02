@@ -3882,23 +3882,22 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    // 2. Full Color (Shaded) mode: ONE unified thick architectural Lambert style with subtle layer value differences
+    // 2. Full Color (Shaded) mode: Pure architectural Lambert default gray for ALL materials & layers
     if (renderMode === "fullColor") {
-      mat.roughness = 0.95;
+      mat.roughness = 0.92;
       mat.metalness = 0.0;
-      if (layer.color && layer.color !== "#94a3b8") {
-        mat.color.setStyle(layer.color);
-      } else {
-        // Subtle tonal variations of thick architectural Lambert gray
-        const shadedTone =
-          layer.function === "structure" ? 0x8e95a0 :
-          layer.function === "insulation" ? 0xb4bac5 :
-          layer.function === "finish1" ? 0xcbd0d9 :
-          layer.function === "finish2" ? 0x747b87 :
-          layer.function === "core" ? 0x848b96 :
-          0x9fa6b2;
-        mat.color.setHex(shadedTone);
-      }
+      mat.map = null;
+      // All walls & materials in gray like default lambert material
+      const shadedTone =
+        layer.function === "structure" ? 0x8e95a0 :
+        layer.function === "insulation" ? 0xa8b0bc :
+        layer.function === "finish1" ? 0xbac2ce :
+        layer.function === "finish2" ? 0x7c8390 :
+        layer.function === "core" ? 0x868d99 :
+        0x94a3b8; // Default architectural gray
+      mat.color.setHex(shadedTone);
+      mat.transparent = false;
+      mat.opacity = 1.0;
       return;
     }
 
