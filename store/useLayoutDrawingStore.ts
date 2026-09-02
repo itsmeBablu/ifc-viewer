@@ -334,6 +334,8 @@ type LayoutDrawingState = {
   calibratePoints: { xMm: number; yMm: number }[];
   /** Active draw thickness (mm) — remembered after draw. */
   draftWallThicknessMm: number;
+  draftWallTypeId: string | null;
+  setDraftWallTypeId: (typeId: string | null) => void;
   draftWallHeightMm: number;
   draftWallBaseLevelId: string | null;
   draftWallTopLevelId: string | null;
@@ -1071,6 +1073,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   ],
   activeSectionId: null,
   draftDrawMode: "line",
+  draftWallTypeId: "wall-de-aw-wdvs-300",
   armedLayoutTool: null,
   wallDraw: null,
   stairDraw: null,
@@ -2531,6 +2534,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         lastMutatedAt: Date.now(),
       });
     }
+  },
+
+  setDraftWallTypeId: (typeId) => {
+    set({ draftWallTypeId: typeId, lastMutatedAt: Date.now() });
   },
 
   addSectionLine: (line) => {

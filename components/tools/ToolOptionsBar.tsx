@@ -22,6 +22,8 @@ export default function ToolOptionsBar() {
   const setDraftDrawMode = useLayoutDrawingStore((s) => s.setDraftDrawMode);
   const draftWallThicknessMm = useLayoutDrawingStore((s) => s.draftWallThicknessMm);
   const setDraftWallThicknessMm = useLayoutDrawingStore((s) => s.setDraftWallThicknessMm);
+  const draftWallTypeId = useLayoutDrawingStore((s) => s.draftWallTypeId);
+  const setDraftWallTypeId = useLayoutDrawingStore((s) => s.setDraftWallTypeId);
   const levels = useLayoutDrawingStore((s) => s.levels);
   const sketchLines = useLayoutDrawingStore((s) => s.sketchLines);
   const selectedSketchLineId = useLayoutDrawingStore((s) => s.selectedSketchLineId);
