@@ -3612,11 +3612,20 @@ export default class LayoutSceneLayer {
 
     const customMat = useMaterialStore.getState().getMaterial(matType);
 
-    // 2. Full Color (Shaded) mode: ONE thick gray color for all materials like thick Lambert style
+    // 2. Full Color / Shaded mode: Show ALL mesh in consistent default architectural gray
     if (this.currentRenderMode === "fullColor") {
-      mat.roughness = 0.95;
+      mat.roughness = 0.92;
       mat.metalness = 0.0;
-      mat.color.setHex(0x8e95a0); // Consistent thick architectural Lambert gray
+      mat.map = null;
+      if (matType === "glass") {
+        mat.color.setHex(0xa0c4df);
+        mat.transparent = true;
+        mat.opacity = 0.45;
+      } else {
+        mat.color.setHex(0x94a3b8); // Uniform default architectural gray mesh
+        mat.transparent = false;
+        mat.opacity = 1.0;
+      }
       return;
     }
 

@@ -659,6 +659,31 @@ function applyRenderMode(
           mat.emissive.setHex(0x000000);
           mat.emissiveIntensity = 0;
           mat.opacity = 1;
+        }
+        mat.needsUpdate = true;
+        return;
+      }
+
+      if (mode === "fullColor") {
+        // Shaded mode: show ALL mesh in gray like default mesh to all
+        mat.wireframe = false;
+        mat.flatShading = false;
+        mat.depthTest = true;
+        mat.map = null;
+        const isGlass = surface?.surfaceClass === "glass" || rawOpacity < 0.92;
+        if (isGlass) {
+          mat.color.setHex(0xa0c4df);
+          mat.roughness = 0.1;
+          mat.metalness = 0.0;
+          mat.opacity = 0.45;
+          mat.transparent = true;
+          mat.depthWrite = false;
+          mat.side = THREE.DoubleSide;
+        } else {
+          mat.color.setHex(0x94a3b8);
+          mat.roughness = 0.88;
+          mat.metalness = 0.0;
+          mat.opacity = 1.0;
           mat.transparent = false;
           mat.depthWrite = true;
           mat.side = THREE.FrontSide;
