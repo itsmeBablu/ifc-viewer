@@ -36,6 +36,7 @@ import WerkzeugViewer3D, {
 import VStudioErrorBoundary from "./VStudioErrorBoundary";
 import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
+import { GlassButton, IconAlert } from "@/components/common/ui";
 import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
