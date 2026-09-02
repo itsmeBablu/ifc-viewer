@@ -335,7 +335,7 @@ export default function ToolRightPanel({
     ? (selectedSlab.kind === "roof" ? "slab-roof-300" : "slab-floor-200")
     : "wall-generic-200";
 
-  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-generic-200"];
+  const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-300"] || Object.values(DEFAULT_ELEMENT_TYPES)[0];
 
   const isMepActive = Boolean(selectedDuct || selectedPipe || selectedCableTray || selectedEquipment);
 
