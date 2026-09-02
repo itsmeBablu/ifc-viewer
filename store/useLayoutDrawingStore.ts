@@ -2566,6 +2566,18 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
+  customElementTypes: {},
+  saveElementType: (typeDef: any) => {
+    if (!typeDef || !typeDef.id) return;
+    set((s: any) => ({
+      customElementTypes: {
+        [typeDef.id]: typeDef,
+        ...s.customElementTypes,
+      },
+      lastMutatedAt: Date.now(),
+    }));
+  },
+
   setActiveSectionId: (id) => {
     set({ activeSectionId: id, lastMutatedAt: Date.now() });
   },

@@ -183,6 +183,41 @@ export default function ToolOptionsBar() {
 
             <div className="h-4 w-px bg-[var(--panel-divider)]" />
 
+            {/* Wall Type Selector */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)] font-medium">Type:</span>
+              <select
+                value={draftWallTypeId ?? "wall-de-aw-wdvs-300"}
+                onChange={(e) => {
+                  const typeId = e.target.value;
+                  setDraftWallTypeId(typeId);
+                  const customTypes = (useLayoutDrawingStore.getState() as any).customElementTypes || {};
+                  const tDef = customTypes[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
+                  if (tDef?.thicknessMm) setDraftWallThicknessMm(tDef.thicknessMm);
+                }}
+                className="rounded-md border border-amber-500/50 bg-[var(--surface-overlay)] px-2 py-0.5 text-[11px] font-bold text-amber-400 focus:outline-none max-w-[210px] truncate"
+              >
+                {Object.keys((useLayoutDrawingStore.getState() as any).customElementTypes || {}).length > 0 && (
+                  <optgroup label="★ Custom / Edited Types">
+                    {Object.values((useLayoutDrawingStore.getState() as any).customElementTypes || {}).map((t: any) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Standard Wall Types">
+                  {Object.values(DEFAULT_ELEMENT_TYPES)
+                    .filter((t) => t.category === "Wall")
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+            </div>
+
             {/* Thickness presets */}
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-[var(--text-muted)] font-medium">Thickness:</span>

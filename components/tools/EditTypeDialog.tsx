@@ -41,88 +41,111 @@ export type ElementTypeDefinition = {
   layers?: WallLayer[];
 };
 
+export function formatWallTypeName(
+  functionType: string = "Exterior",
+  material: string = "Bricks",
+  thicknessMm: number = 300
+): string {
+  const cleanMat = (material || "Bricks")
+    .replace(/ (T\d+|KS \d+|EPS|WDVS|C\d+\/\d+|T8|KS|12|20|Schwer|Rigid Board|Mauerwerk|Dämmung|Standard|Putz|Stucco|Board)/gi, "")
+    .trim() || "Bricks";
+  const shortMat = cleanMat.split(/[\/&,-]/)[0].trim() || "Bricks";
+  return `${functionType || "Exterior"} - ${shortMat} - ${thicknessMm} mm`;
+}
+
 export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
-  // German Standard Wall Types (Bauteile: GEG & Altbau)
-  "wall-de-aw-365": {
-    id: "wall-de-aw-365",
-    name: "AW 36.5cm Poroton / Porenbeton (GEG Standard)",
-    category: "Wall",
-    thicknessMm: 365,
-    heightMm: 3000,
-    material: "Poroton T8 / Porenbeton",
-    functionType: "Exterior",
-    thermalConductivity: "0.18 W/m²K (U)",
-    fireRating: "F90-A",
-    layers: [
-      { id: "l1", name: "Gips-Innenputz", function: "finish1", material: "Gipsputz", thicknessMm: 15, color: "#f8fafc" },
-      { id: "l2", name: "Poroton T8 Mauerwerk", function: "structure", material: "Poroton Brick", thicknessMm: 335, color: "#ea580c" },
-      { id: "l3", name: "Kalk-Zement-Außenputz", function: "finish2", material: "Außenputz", thicknessMm: 15, color: "#e2e8f0" },
-    ],
-  },
+  // Revit & GEG Standard Wall Types
   "wall-de-aw-wdvs-300": {
     id: "wall-de-aw-wdvs-300",
-    name: "AW 30cm WDVS EPS + Kalksandstein (Modern)",
+    name: "Exterior - Bricks - 300 mm",
     category: "Wall",
     thicknessMm: 300,
     heightMm: 3000,
-    material: "Kalksandstein & EPS Dämmung",
+    material: "Bricks",
     functionType: "Exterior",
     thermalConductivity: "0.16 W/m²K (U)",
     fireRating: "F90-A",
     layers: [
       { id: "l1", name: "Gipsputz Innen", function: "finish1", material: "Gipsputz", thicknessMm: 15, color: "#f8fafc" },
-      { id: "l2", name: "Kalksandstein KS 12", function: "structure", material: "Kalksandstein", thicknessMm: 175, color: "#cbd5e1" },
-      { id: "l3", name: "EPS WDVS Dämmung", function: "insulation", material: "EPS Rigid Board", thicknessMm: 100, color: "#fef08a" },
-      { id: "l4", name: "Armierungsputz / Stucco", function: "finish2", material: "Außenputz", thicknessMm: 10, color: "#94a3b8" },
+      { id: "l2", name: "Kalksandstein Mauerwerk", function: "structure", material: "Bricks", thicknessMm: 175, color: "#cbd5e1" },
+      { id: "l3", name: "EPS Dämmung", function: "insulation", material: "Rigid Insulation", thicknessMm: 100, color: "#fef08a" },
+      { id: "l4", name: "Außenputz", function: "finish2", material: "Außenputz", thicknessMm: 10, color: "#94a3b8" },
+    ],
+  },
+  "wall-de-aw-365": {
+    id: "wall-de-aw-365",
+    name: "Exterior - Poroton - 365 mm",
+    category: "Wall",
+    thicknessMm: 365,
+    heightMm: 3000,
+    material: "Poroton",
+    functionType: "Exterior",
+    thermalConductivity: "0.18 W/m²K (U)",
+    fireRating: "F90-A",
+    layers: [
+      { id: "l1", name: "Gips-Innenputz", function: "finish1", material: "Gipsputz", thicknessMm: 15, color: "#f8fafc" },
+      { id: "l2", name: "Poroton T8 Mauerwerk", function: "structure", material: "Poroton", thicknessMm: 335, color: "#ea580c" },
+      { id: "l3", name: "Kalk-Außenputz", function: "finish2", material: "Außenputz", thicknessMm: 15, color: "#e2e8f0" },
     ],
   },
   "wall-de-iw-240": {
     id: "wall-de-iw-240",
-    name: "IW 24cm Tragsystem Kalksandstein (Schallschutz)",
+    name: "Interior - Concrete - 240 mm",
     category: "Wall",
     thicknessMm: 240,
     heightMm: 3000,
-    material: "Kalksandstein KS 20",
+    material: "Concrete",
     functionType: "Interior",
     thermalConductivity: "1.10 W/m²K (U)",
     fireRating: "F180-A",
     layers: [
       { id: "l1", name: "Gipsputz Links", function: "finish1", material: "Gipsputz", thicknessMm: 15, color: "#f8fafc" },
-      { id: "l2", name: "Kalksandstein Schwer", function: "structure", material: "Kalksandstein", thicknessMm: 210, color: "#cbd5e1" },
+      { id: "l2", name: "Kalksandstein Schwer", function: "structure", material: "Concrete", thicknessMm: 210, color: "#cbd5e1" },
       { id: "l3", name: "Gipsputz Rechts", function: "finish2", material: "Gipsputz", thicknessMm: 15, color: "#f8fafc" },
     ],
   },
   "wall-de-iw-115": {
     id: "wall-de-iw-115",
-    name: "IW 11.5cm Nichttragende Zwischenwand",
+    name: "Interior - Gypsum - 115 mm",
     category: "Wall",
     thicknessMm: 115,
     heightMm: 3000,
-    material: "Porenbeton / Gips-Wandbauplatte",
+    material: "Gypsum",
     functionType: "Interior",
     thermalConductivity: "0.85 W/m²K (U)",
     fireRating: "F60",
     layers: [
-      { id: "l1", name: "Dünnbettputz", function: "finish1", material: "Gipsputz", thicknessMm: 5, color: "#f8fafc" },
-      { id: "l2", name: "Porenbeton Wandbauplatte", function: "structure", material: "Porenbeton", thicknessMm: 105, color: "#e2e8f0" },
-      { id: "l3", name: "Dünnbettputz", function: "finish2", material: "Gipsputz", thicknessMm: 5, color: "#f8fafc" },
+      { id: "l1", name: "Dünnbettputz", function: "finish1", material: "Gypsum", thicknessMm: 5, color: "#f8fafc" },
+      { id: "l2", name: "Gips Wandbauplatte", function: "structure", material: "Gypsum", thicknessMm: 105, color: "#e2e8f0" },
+      { id: "l3", name: "Dünnbettputz", function: "finish2", material: "Gypsum", thicknessMm: 5, color: "#f8fafc" },
     ],
   },
   "wall-de-kw-300": {
     id: "wall-de-kw-300",
-    name: "KW 30cm Kellerwand Beton C30/37 + Perimeterdämmung",
+    name: "Exterior - Concrete - 300 mm",
     category: "Wall",
     thicknessMm: 300,
     heightMm: 3000,
-    material: "Stahlbeton & XPS Perimeterdämmung",
+    material: "Concrete",
     functionType: "Exterior",
     thermalConductivity: "0.22 W/m²K (U)",
     fireRating: "F120-A",
     layers: [
-      { id: "l1", name: "Stahlbeton WU-Beton", function: "structure", material: "Reinforced Concrete", thicknessMm: 240, color: "#64748b" },
-      { id: "l2", name: "Bitumen Dickbeschichtung", function: "membrane", material: "Bitumen Membrane", thicknessMm: 10, color: "#1e293b" },
-      { id: "l3", name: "XPS Perimeterdämmung", function: "insulation", material: "XPS Rigid Insulation", thicknessMm: 50, color: "#38bdf8" },
+      { id: "l1", name: "Stahlbeton WU-Beton", function: "structure", material: "Concrete", thicknessMm: 240, color: "#64748b" },
+      { id: "l2", name: "Bitumen Dickbeschichtung", function: "membrane", material: "Bitumen", thicknessMm: 10, color: "#1e293b" },
+      { id: "l3", name: "XPS Dämmung", function: "insulation", material: "XPS Insulation", thicknessMm: 50, color: "#38bdf8" },
     ],
+  },
+  "wall-300": {
+    id: "wall-300",
+    name: "Exterior - Generic - 300 mm",
+    category: "Wall",
+    thicknessMm: 300,
+    heightMm: 3000,
+    material: "Generic",
+    functionType: "Exterior",
+    thermalConductivity: "0.20 W/m²K (U)",
+    fireRating: "F90-A",
   },
   "wall-de-altbau-380": {
     id: "wall-de-altbau-380",
