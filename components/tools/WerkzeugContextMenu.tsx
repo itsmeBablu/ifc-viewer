@@ -130,6 +130,7 @@ export default function WerkzeugContextMenu({
   const addSavedView = useAppStore((s) => s.addSavedView);
   const toolMode = useAppStore((s) => s.toolMode);
 
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
