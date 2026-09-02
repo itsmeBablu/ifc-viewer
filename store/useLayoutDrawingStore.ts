@@ -505,9 +505,13 @@ type LayoutDrawingState = {
         | "arcEndAngleDeg"
         | "color"
         | "material"
+        | "wallTypeId"
+        | "layers"
       >
     >,
   ) => Promise<void>;
+  updateWalls: (ids: string[], patch: Partial<LayoutWall>) => Promise<void>;
+  selectAllSimilar: (ref?: { kind: string; id: string } | null) => void;
   deleteWall: (id: string) => Promise<void>;
   selectWall: (id: string | null) => void;
   duplicateWall: (id: string) => Promise<LayoutWall | null>;
@@ -2494,6 +2498,70 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         presets,
         draftWallThicknessMm: patch.thicknessMm,
         lastMutatedAt: Date.now(),
+      });
+    }
+  },
+
+  updateWalls: async (ids, patch) => {
+    if (!ids.length) return;
+    pushWerkzeugHistory();
+    const unlockedIds = ids.filter((id) => !get().lockedElementKeys.includes(`wall:${id}`));
+    if (!unlockedIds.length) return;
+    const idSet = new Set(unlockedIds);
+    const nextWalls = get().walls.map((w) => (idSet.has(w.id) ? { ...w, ...patch } : w));
+    const nextSlabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
+    set({
+      walls: nextWalls,
+      slabs: nextSlabs,
+      lastMutatedAt: Date.now(),
+    });
+    await Promise.all(nextWalls.filter((w) => idSet.has(w.id)).map((w) => idbPutWall(w)));
+    await Promise.all(
+      nextSlabs
+        .filter((slab) => slab.autoBoundaryFromWalls)
+        .map((slab) => idbPutSlab(slab)),
+    );
+  },
+
+  selectAllSimilar: (ref) => {
+    const state = get();
+    const targetRef = ref ?? state.selectedElements[state.selectedElements.length - 1];
+    if (!targetRef) return;
+
+    if (targetRef.kind === "wall") {
+      const target = state.walls.find((w) => w.id === targetRef.id);
+      if (!target) return;
+      const matching = state.walls.filter((w) =>
+        (target.wallTypeId && w.wallTypeId === target.wallTypeId) ||
+        (w.thicknessMm === target.thicknessMm && (!target.material || w.material === target.material))
+      );
+      set({
+        selectedElements: matching.map((w) => ({ kind: "wall", id: w.id })),
+        selectedWallId: target.id,
+      });
+    } else if (targetRef.kind === "door") {
+      const target = state.doors.find((d) => d.id === targetRef.id);
+      if (!target) return;
+      const matching = state.doors.filter((d) => d.widthMm === target.widthMm && d.heightMm === target.heightMm);
+      set({
+        selectedElements: matching.map((d) => ({ kind: "door", id: d.id })),
+        selectedDoorId: target.id,
+      });
+    } else if (targetRef.kind === "window") {
+      const target = state.windows.find((w) => w.id === targetRef.id);
+      if (!target) return;
+      const matching = state.windows.filter((w) => w.widthMm === target.widthMm && w.heightMm === target.heightMm);
+      set({
+        selectedElements: matching.map((w) => ({ kind: "window", id: w.id })),
+        selectedWindowId: target.id,
+      });
+    } else if (targetRef.kind === "slab") {
+      const target = state.slabs.find((s) => s.id === targetRef.id);
+      if (!target) return;
+      const matching = state.slabs.filter((s) => (s.kind ?? "floor") === (target.kind ?? "floor") && s.thicknessMm === target.thicknessMm);
+      set({
+        selectedElements: matching.map((s) => ({ kind: "slab", id: s.id })),
+        selectedSlabId: target.id,
       });
     }
   },

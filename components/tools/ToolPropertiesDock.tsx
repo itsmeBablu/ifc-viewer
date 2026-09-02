@@ -67,7 +67,9 @@ export default function ToolPropertiesDock() {
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
+  const updateWalls = useLayoutDrawingStore((s) => s.updateWalls);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
   const updateWindow = useLayoutDrawingStore((s) => s.updateWindow);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
@@ -125,7 +127,19 @@ export default function ToolPropertiesDock() {
     const selectedDef = types[newTypeId] || DEFAULT_ELEMENT_TYPES[newTypeId];
     if (!selectedDef) return;
 
-    if (selectedWall) {
+    const wallRefs = selectedElements.filter((e) => e.kind === "wall");
+    if (wallRefs.length > 1) {
+      void updateWalls(
+        wallRefs.map((r) => r.id),
+        {
+          wallTypeId: selectedDef.id,
+          thicknessMm: selectedDef.thicknessMm,
+          heightMm: selectedDef.heightMm,
+          material: selectedDef.material,
+          layers: selectedDef.layers,
+        },
+      );
+    } else if (selectedWall) {
       void updateWall(selectedWall.id, {
         wallTypeId: selectedDef.id,
         thicknessMm: selectedDef.thicknessMm || selectedWall.thicknessMm,

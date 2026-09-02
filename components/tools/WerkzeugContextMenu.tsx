@@ -146,6 +146,7 @@ export default function WerkzeugContextMenu({
   const defaultColor = useToolMarkupStore((s) => s.defaultColor);
 
   const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
+  const selectAllSimilar = useLayoutDrawingStore((s) => s.selectAllSimilar);
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
@@ -475,6 +476,18 @@ export default function WerkzeugContextMenu({
                       >
                         <span>Properties</span>
                         <span className="text-[9px] text-zinc-400">Edit all</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={itemCls()}
+                        onClick={() => {
+                          selectAllSimilar(primaryLayoutSelection);
+                          close();
+                        }}
+                      >
+                        <span>Select All Similar</span>
+                        <span className="text-[9px] text-zinc-400">By Type/Name</span>
                       </button>
                       <div className="px-2 pb-1 pt-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
                         Move · 100 mm
