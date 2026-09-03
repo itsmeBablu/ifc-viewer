@@ -576,11 +576,14 @@ export default function DesktopIsland() {
       return;
     }
 
+    clearSelection();
     useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
+    useAppStore.getState().setRightPanelOpen(true);
   };
 
   const chooseElementType = (toolId: string, typeDef: ElementTypeDefinition) => {
     const layout = useLayoutDrawingStore.getState();
+    clearSelection();
     if (toolId === "wall") {
       layout.setDraftWallTypeId(typeDef.id);
       if (typeDef.thicknessMm) layout.setDraftWallThicknessMm(typeDef.thicknessMm);
@@ -593,6 +596,7 @@ export default function DesktopIsland() {
       layout.setDraftSlabThicknessMm(typeDef.thicknessMm);
     }
     layout.setArmedLayoutTool(toolId as LayoutToolId);
+    useAppStore.getState().setRightPanelOpen(true);
     useToolMarkupStore.getState().setArmedTool(null);
     setTypeMenu(null);
   };

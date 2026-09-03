@@ -1096,7 +1096,7 @@ export default function ToolRightPanel({
                 )}
               </>
             ) : armedLayoutTool ? (
-              <DraftToolProperties tool={armedLayoutTool} />
+              <DraftToolProperties key={armedLayoutTool} tool={armedLayoutTool} />
             ) : (
               /* Persistent Empty State when nothing is selected */
               <div className="flex flex-col items-center justify-center p-6 text-center h-full min-h-[160px] text-[var(--text-muted)] space-y-2 select-none">
@@ -1497,12 +1497,52 @@ function WallConstraintFields({
 function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
   const store = useLayoutDrawingStore();
   const markup = useToolMarkupStore();
+  const typeCategory: ElementTypeDefinition["category"] | null =
+    tool === "wall" ? "Wall" : tool === "door" ? "Door" : tool === "window" ? "Window" :
+    tool === "floor" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
+    tool === "ramp" ? "Ramp" : null;
+  const availableTypes = Object.values(DEFAULT_ELEMENT_TYPES).filter((item) => item.category === typeCategory);
+  const [draftType, setDraftType] = useState<ElementTypeDefinition | null>(availableTypes[0] ?? null);
+  const [editingType, setEditingType] = useState(false);
   const fieldClass = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
   const labelClass = "space-y-1 text-[10px] font-semibold text-[var(--text-muted)]";
   const baseLevelId = store.draftWallBaseLevelId ?? markup.markupFloorId ?? store.levels[0]?.id ?? "";
   const base = store.levels.find((level) => level.id === baseLevelId);
   const top = store.levels.find((level) => level.id === store.draftWallTopLevelId);
   const wallHeight = base && top ? top.elevationMm - base.elevationMm : store.draftWallHeightMm;
+
+  const applyDraftType = (typeDef: ElementTypeDefinition) => {
+    setDraftType(typeDef);
+    if (tool === "wall") {
+      store.setDraftWallTypeId(typeDef.id);
+      if (typeDef.thicknessMm) store.setDraftWallThicknessMm(typeDef.thicknessMm);
+      if (typeDef.heightMm) store.setDraftWallHeightMm(typeDef.heightMm);
+    } else if (tool === "door" && typeDef.widthMm && typeDef.heightMm) {
+      store.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
+    } else if (tool === "window" && typeDef.widthMm && typeDef.heightMm) {
+      store.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? store.draftWindowSillMm);
+    } else if ((tool === "floor" || tool === "roof") && typeDef.thicknessMm) {
+      store.setDraftSlabThicknessMm(typeDef.thicknessMm);
+    } else if (tool === "stair") {
+      if (typeDef.widthMm) store.setDraftStairWidthMm(typeDef.widthMm);
+      const stairType = typeDef.id.includes("spiral") ? "spiral" : typeDef.id.includes("ushape") ? "u-shape" : typeDef.id.includes("lshape") ? "l-shape" : "straight";
+      store.setDraftStairType(stairType);
+    } else if (tool === "ramp") {
+      if (typeDef.widthMm) store.setDraftRampWidthMm(typeDef.widthMm);
+      if (typeDef.thicknessMm) store.setDraftRampThicknessMm(typeDef.thicknessMm);
+    }
+  };
+
+  if (editingType && draftType) {
+    return (
+      <EditTypeEmbeddedPanel
+        typeDef={draftType}
+        onBack={() => setEditingType(false)}
+        onSave={applyDraftType}
+        onOpenMaterialPicker={() => undefined}
+      />
+    );
+  }
 
   const heading = tool === "lines" ? "New drawing line" : `New ${tool}`;
   return (
@@ -1511,6 +1551,26 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
         <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">{heading} properties</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Set these values before drawing. New elements will use them.</p>
       </div>
+
+      {typeCategory && draftType && (
+        <div className="space-y-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 p-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-500">{typeCategory} type</span>
+            <button type="button" onClick={() => setEditingType(true)} className="btn-yellow-border-hover rounded-md border border-[var(--panel-divider)] px-2 py-1 text-[9px] font-bold">Edit type</button>
+          </div>
+          <select
+            className={fieldClass}
+            value={draftType.id}
+            onChange={(event) => {
+              const next = availableTypes.find((item) => item.id === event.target.value);
+              if (next) applyDraftType(next);
+            }}
+          >
+            {availableTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <p className="text-[9px] leading-relaxed text-[var(--text-muted)]">{draftType.functionType} · {draftType.material}</p>
+        </div>
+      )}
 
       {tool === "wall" && (
         <div className="grid grid-cols-2 gap-2">
@@ -1551,6 +1611,24 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
 
       {(tool === "floor" || tool === "roof") && (
         <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={20} value={store.draftSlabThicknessMm} onChange={(event) => store.setDraftSlabThicknessMm(Number(event.target.value))} /></label>
+      )}
+
+      {tool === "stair" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Shape<select className={fieldClass} value={store.draftStairType} onChange={(event) => store.setDraftStairType(event.target.value as typeof store.draftStairType)}><option value="straight">Straight</option><option value="l-shape">L-shape</option><option value="u-shape">U-shape</option><option value="spiral">Spiral</option></select></label>
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={500} value={store.draftStairWidthMm} onChange={(event) => store.setDraftStairWidthMm(Number(event.target.value))} /></label>
+          <label className={labelClass}>Riser (mm)<input className={fieldClass} type="number" min={100} max={220} value={store.draftStairTargetRiserMm} onChange={(event) => store.setDraftStairTargetRiserMm(Number(event.target.value))} /></label>
+          <label className={labelClass}>Tread (mm)<input className={fieldClass} type="number" min={200} max={450} value={store.draftStairTreadDepthMm} onChange={(event) => store.setDraftStairTreadDepthMm(Number(event.target.value))} /></label>
+          <label className="col-span-2 flex items-center gap-3 text-[10px] font-semibold text-[var(--text-muted)]"><input type="checkbox" checked={store.draftStairRailingLeft} onChange={(event) => store.setDraftStairRailingLeft(event.target.checked)} />Left railing<input type="checkbox" checked={store.draftStairRailingRight} onChange={(event) => store.setDraftStairRailingRight(event.target.checked)} />Right railing</label>
+        </div>
+      )}
+
+      {tool === "ramp" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={900} value={store.draftRampWidthMm} onChange={(event) => store.setDraftRampWidthMm(Number(event.target.value))} /></label>
+          <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={100} value={store.draftRampThicknessMm} onChange={(event) => store.setDraftRampThicknessMm(Number(event.target.value))} /></label>
+          <label className="col-span-2 flex items-center gap-3 text-[10px] font-semibold text-[var(--text-muted)]"><input type="checkbox" checked={store.draftRampRailingLeft} onChange={(event) => store.setDraftRampRailingLeft(event.target.checked)} />Left railing<input type="checkbox" checked={store.draftRampRailingRight} onChange={(event) => store.setDraftRampRailingRight(event.target.checked)} />Right railing</label>
+        </div>
       )}
 
       {tool === "duct" && (
@@ -1620,7 +1698,15 @@ function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
   const line = lineId ? store.sketchLines.find((item) => item.id === lineId) : null;
   const style = line ?? store.draftSketchLineStyle;
   const update = (patch: Parameters<typeof store.setDraftSketchLineStyle>[0]) => lineId ? store.updateSketchLine(lineId, patch) : store.setDraftSketchLineStyle(patch);
-  return <div className="space-y-2 rounded-lg border border-[var(--panel-divider)] p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Line style</p><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></div>;
+  const presets = [
+    { name: "Thin solid", pattern: "solid" as const, thicknessPx: 1 },
+    { name: "Medium solid", pattern: "solid" as const, thicknessPx: 2 },
+    { name: "Thick solid", pattern: "solid" as const, thicknessPx: 4 },
+    { name: "Dashed", pattern: "dashed" as const, thicknessPx: 2, dashSizeMm: 250, gapSizeMm: 140 },
+    { name: "Dotted", pattern: "dotted" as const, thicknessPx: 2, dashSizeMm: 40, gapSizeMm: 100 },
+    { name: "Dash dot", pattern: "dash-dot" as const, thicknessPx: 2, dashSizeMm: 300, gapSizeMm: 100 },
+  ];
+  return <div className="space-y-2 rounded-lg border border-[var(--panel-divider)] p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Line type</p><div className="grid grid-cols-2 gap-1">{presets.map((preset) => <button key={preset.name} type="button" onClick={() => update(preset)} className={`btn-yellow-border-hover rounded-md border px-2 py-1.5 text-left text-[9px] font-semibold ${style.pattern === preset.pattern && style.thicknessPx === preset.thicknessPx ? "border-yellow-400 bg-yellow-400/15 text-yellow-500" : "border-[var(--panel-divider)]"}`}><span className="block">{preset.name}</span><span className="mt-1 block border-t border-current opacity-60" style={{ borderTopStyle: preset.pattern === "dotted" ? "dotted" : preset.pattern === "solid" ? "solid" : "dashed", borderTopWidth: preset.thicknessPx }} /></button>)}</div><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></div>;
 }
 
 function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
