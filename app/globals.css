@@ -3598,6 +3598,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 }
 
 .desktop-center-tabs-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -3613,6 +3614,8 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 }
 
 .desktop-center-tab-btn {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3624,7 +3627,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
-  transition: all 0.15s ease;
+  transition: color 0.18s ease;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
@@ -3632,20 +3635,19 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 
 .desktop-center-tab-btn:hover {
   color: var(--text-strong);
-  background: var(--glass-inset-bg);
 }
 
 .desktop-center-tab-btn.is-active {
-  color: #18181b;
-  background: rgba(250, 204, 21, 0.95);
-  box-shadow: 0 0 12px rgba(250, 204, 21, 0.35);
+  color: #18181b !important;
   font-weight: 700;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 body.mep-mode-active .desktop-center-tab-btn.is-active {
-  color: #0f172a;
-  background: rgba(56, 189, 248, 0.95);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+  color: #0f172a !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .desktop-capsules-container {
@@ -3682,10 +3684,10 @@ body.mep-mode-active .desktop-center-tab-btn.is-active {
   color: var(--text-strong);
   background: var(--surface-panel);
   border: 1px solid var(--panel-divider);
-  box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: none !important;
   -webkit-backdrop-filter: blur(12px) saturate(180%);
   backdrop-filter: blur(12px) saturate(180%);
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
   white-space: nowrap;
   cursor: pointer;
   outline: none;
@@ -3695,24 +3697,24 @@ body.mep-mode-active .desktop-center-tab-btn.is-active {
 .desktop-capsule-btn:hover {
   background: var(--glass-hover-bg);
   border-color: rgba(250, 204, 21, 0.4);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.16);
+  box-shadow: none !important;
+  transform: none;
 }
 
 .desktop-capsule-btn:active {
-  transform: translateY(0);
+  transform: none;
 }
 
 .desktop-capsule-btn.is-active {
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.95), rgba(245, 158, 11, 0.92));
+  background: rgba(250, 204, 21, 0.95);
   color: #18181b;
   border-color: rgba(250, 204, 21, 1);
-  box-shadow: 0 0 16px rgba(250, 204, 21, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow: none !important;
 }
 
 .desktop-capsule-btn.is-active:hover {
-  background: linear-gradient(135deg, rgba(250, 204, 21, 1), rgba(245, 158, 11, 0.98));
-  box-shadow: 0 0 20px rgba(250, 204, 21, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: rgba(250, 204, 21, 1);
+  box-shadow: none !important;
 }
 
 .desktop-capsule-btn.is-active :is(svg, span) {
@@ -3721,15 +3723,15 @@ body.mep-mode-active .desktop-center-tab-btn.is-active {
 
 /* In MEP mode, active capsule buttons glow sky-blue */
 body.mep-mode-active .desktop-capsule-btn.is-active {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(14, 165, 233, 0.92));
+  background: rgba(56, 189, 248, 0.95);
   color: #0f172a;
   border-color: rgba(56, 189, 248, 1);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow: none !important;
 }
 
 body.mep-mode-active .desktop-capsule-btn.is-active:hover {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(14, 165, 233, 0.98));
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  background: rgba(56, 189, 248, 1);
+  box-shadow: none !important;
 }
 
 body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
@@ -3740,13 +3742,14 @@ body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
 .desktop-capsule-btn.is-danger {
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.25);
+  box-shadow: none !important;
 }
 
 .desktop-capsule-btn.is-danger:hover {
   background: rgba(239, 68, 68, 0.12);
   border-color: rgba(239, 68, 68, 0.5);
   color: #dc2626;
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+  box-shadow: none !important;
 }
 
 .desktop-capsule-btn-icon {

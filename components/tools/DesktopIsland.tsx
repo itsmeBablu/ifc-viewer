@@ -3,22 +3,22 @@
 /**
  * DesktopIsland — unified central fixed workspace header & contextual capsule row for desktop /werkzeug.
  *
- * Requirements:
- *  1. Header IBV logo: contains the Arch ↔ MEP discipline switch (HeaderDisciplineToggle in ToolRibbon).
- *  2. Center top header: stable (NOT movable) category tabs:
- *     - In Arch: Build (default), Structure, Annotate (extensible for future tabs).
+ * Features:
+ *  1. Center top header: stable category tabs with GSAP smooth sliding yellow thumb:
+ *     - In Arch: Build (default), Structure, Annotate, Insert.
  *     - In MEP: All, HVAC, Piping, Electrical.
  *     - Selection: Modify status badge + Deselect (Esc) button.
- *  3. Directly below header: related capsules:
- *     - Outer row: transparent (no overarching background card).
- *     - Individual capsules: have their own liquid-glass pill background.
- *     - Compact height & padding.
- *     - Colorful icons for every tool.
- *     - Contextual modify swap when an element is selected in 3D.
- *     - Liquid glass hover tooltip (GlassTooltip) explaining each tool.
+ *  2. Directly below header: related capsules:
+ *     - Distinct top-60px padding to avoid any overlap with header.
+ *     - Outer row: transparent, no shadow.
+ *     - Individual capsules: clean glass pill, no blurry shadows.
+ *     - Micro-stagger animation on tab/category switch.
+ *     - 3D Shapes dropdown portaled to document.body (z-[9999]) to avoid overflow clipping.
  */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useLayoutEffect, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import gsap from "gsap";
 import {
   LuAlignCenterHorizontal,
   LuBox,
@@ -180,6 +180,7 @@ export default function DesktopIsland() {
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
+  const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
 
   const archCategory = useLayoutDrawingStore((s) => s.desktopArchCategory);
   const setArchCategory = useLayoutDrawingStore((s) => s.setDesktopArchCategory);
@@ -187,27 +188,21 @@ export default function DesktopIsland() {
   const setMepCategory = useLayoutDrawingStore((s) => s.setDesktopMepCategory);
 
   const armedMarkupTool = useToolMarkupStore((s) => s.armedTool);
-  const [shapesDropdownOpen, setShapesDropdownOpen] = React.useState(false);
-  const shapesMenuRef = React.useRef<HTMLDivElement>(null);
+  const transformMode = useToolMarkupStore((s) => s.transformMode);
 
-  // Close dropdown on click outside or Escape
-  React.useEffect(() => {
-    if (!shapesDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (shapesMenuRef.current && !shapesMenuRef.current.contains(e.target as Node)) {
-        setShapesDropdownOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShapesDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [shapesDropdownOpen]);
+  /* ── Tab thumb refs & animations ──────────────────────── */
+  const tabThumbRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  const tabThumbReadyRef = useRef(false);
+
+  /* ── Capsules animation ref ──────────────────────────── */
+  const capsulesRowRef = useRef<HTMLDivElement>(null);
+
+  /* ── Shapes dropdown refs & state ────────────────────── */
+  const [shapesDropdownOpen, setShapesDropdownOpen] = useState(false);
+  const shapesButtonRef = useRef<HTMLButtonElement>(null);
+  const shapesMenuRef = useRef<HTMLDivElement>(null);
+  const [shapesMenuPos, setShapesMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   /* ── context selection detection ─────────────────────── */
   const hasContextSelection = useMemo(() => {
@@ -230,6 +225,115 @@ export default function DesktopIsland() {
     selectedRampId,
   ]);
 
+  /* ── 1. GSAP smooth sliding yellow thumb between category tabs ── */
+  useLayoutEffect(() => {
+    const thumb = tabThumbRef.current;
+    if (!thumb) return;
+
+    if (hasContextSelection) {
+      gsap.to(thumb, { opacity: 0, duration: 0.18, overwrite: true });
+      return;
+    }
+
+    const activeId = mepModeActive ? mepCategory : archCategory;
+    const target = tabRefs.current[activeId];
+    if (!target) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const properties = {
+      x: target.offsetLeft,
+      width: target.offsetWidth,
+      opacity: 1,
+      backgroundColor: mepModeActive ? "rgba(56, 189, 248, 0.95)" : "rgba(250, 204, 21, 0.95)",
+    };
+
+    if (!tabThumbReadyRef.current || reduceMotion) {
+      gsap.set(thumb, properties);
+      tabThumbReadyRef.current = true;
+      return;
+    }
+
+    gsap.to(thumb, {
+      ...properties,
+      duration: 0.28,
+      ease: "power3.out",
+      overwrite: true,
+    });
+  }, [archCategory, mepCategory, mepModeActive, hasContextSelection]);
+
+  // Keep thumb aligned on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (hasContextSelection) return;
+      const activeId = mepModeActive ? mepCategory : archCategory;
+      const target = tabRefs.current[activeId];
+      const thumb = tabThumbRef.current;
+      if (!target || !thumb) return;
+      gsap.set(thumb, { x: target.offsetLeft, width: target.offsetWidth });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [archCategory, mepCategory, mepModeActive, hasContextSelection]);
+
+  /* ── 2. Position & click outside for Shapes dropdown ──── */
+  const toggleShapesDropdown = () => {
+    if (!shapesDropdownOpen) {
+      if (shapesButtonRef.current) {
+        const rect = shapesButtonRef.current.getBoundingClientRect();
+        const menuWidth = 220;
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+        setShapesMenuPos({ top: rect.bottom + 8, left });
+      }
+      setShapesDropdownOpen(true);
+    } else {
+      setShapesDropdownOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!shapesDropdownOpen) return;
+    const updatePos = () => {
+      if (shapesButtonRef.current) {
+        const rect = shapesButtonRef.current.getBoundingClientRect();
+        const menuWidth = 220;
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+        setShapesMenuPos({ top: rect.bottom + 8, left });
+      }
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        shapesMenuRef.current &&
+        !shapesMenuRef.current.contains(target) &&
+        shapesButtonRef.current &&
+        !shapesButtonRef.current.contains(target)
+      ) {
+        setShapesDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShapesDropdownOpen(false);
+    };
+
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [shapesDropdownOpen]);
+
+  const handleSelectShape = (shapeId: MarkupShapeType) => {
+    useToolMarkupStore.getState().setArmedTool(shapeId);
+    useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+    setShapesDropdownOpen(false);
+  };
+
+  /* ── modify title label ──────────────────────────────── */
   const modifyTitle = useMemo(() => {
     if (selectedWallId) return "Modify · Wall";
     if (selectedDoorId) return "Modify · Door";
@@ -237,8 +341,8 @@ export default function DesktopIsland() {
     if (selectedSlabId) return "Modify · Slab";
     if (selectedStairId) return "Modify · Stair";
     if (selectedRampId) return "Modify · Ramp";
-    if (selectedElements && selectedElements.length > 1) {
-      return `Modify · ${selectedElements.length} Items`;
+    if (selectedElements && selectedElements.length > 0) {
+      return `Modify (${selectedElements.length})`;
     }
     return "Modify";
   }, [
@@ -251,69 +355,112 @@ export default function DesktopIsland() {
     selectedRampId,
   ]);
 
-  /* ── active capsule set ──────────────────────────────── */
-  const activeCapsules = useMemo(() => {
+  /* ── active capsules list ────────────────────────────── */
+  const activeCapsules: CapsuleItem[] = useMemo(() => {
     if (hasContextSelection) {
-      return MODIFY_ITEMS;
+      return MODIFY_ITEMS.map((item) =>
+        item.id === "align"
+          ? { ...item, label: `Align ${alignAxis.toUpperCase()}` }
+          : item,
+      );
     }
-    if (mepModeActive) {
-      return MEP_ALL_ITEMS;
-    }
-    switch (archCategory) {
-      case "structure":
-        return ARCH_STRUCTURE_ITEMS;
-      case "annotate":
-        return ARCH_ANNOTATE_ITEMS;
-      case "insert":
-        return ARCH_INSERT_ITEMS;
-      case "build":
-      default:
-        return ARCH_BUILD_ITEMS;
-    }
-  }, [hasContextSelection, mepModeActive, archCategory]);
 
-  const [alignAxis, setAlignAxis] = React.useState<"x" | "y">("x");
+    if (!mepModeActive) {
+      switch (archCategory) {
+        case "structure":
+          return ARCH_STRUCTURE_ITEMS;
+        case "annotate":
+          return ARCH_ANNOTATE_ITEMS;
+        case "insert":
+          return ARCH_INSERT_ITEMS;
+        case "build":
+        default:
+          return ARCH_BUILD_ITEMS;
+      }
+    } else {
+      switch (mepCategory) {
+        case "hvac":
+          return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "duct" || i.id === "equipment");
+        case "piping":
+          return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "pipe" || i.id === "equipment");
+        case "electrical":
+          return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "cabletray" || i.id === "wire" || i.id === "equipment");
+        case "all":
+        default:
+          return MEP_ALL_ITEMS;
+      }
+    }
+  }, [hasContextSelection, alignAxis, mepModeActive, archCategory, mepCategory]);
 
-  /* ── handlers ────────────────────────────────────────── */
+  /* ── 3. Smooth entrance animation for capsules on tab/selection switch ── */
+  useLayoutEffect(() => {
+    if (!capsulesRowRef.current) return;
+    const buttons = capsulesRowRef.current.querySelectorAll(".desktop-capsule-btn");
+    if (!buttons || buttons.length === 0) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+
+    gsap.fromTo(
+      buttons,
+      { opacity: 0, y: 5, scale: 0.96 },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.22,
+        stagger: 0.015,
+        ease: "power2.out",
+        overwrite: true,
+      }
+    );
+  }, [activeCapsules, hasContextSelection]);
+
+  /* ── actions ─────────────────────────────────────────── */
   const clearSelection = () => {
     useLayoutDrawingStore.getState().clearSelection();
     useToolMarkupStore.getState().clearSelection();
-  };
-
-  const handleSelectShape = (shapeId: MarkupShapeType) => {
-    useLayoutDrawingStore.getState().setArmedLayoutTool(null);
-    useToolMarkupStore.getState().setArmedTool(shapeId);
-    setShapesDropdownOpen(false);
   };
 
   const handleCapsuleClick = (id: string) => {
     if (id === "select") {
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
       useToolMarkupStore.getState().setArmedTool(null);
-      setShapesDropdownOpen(false);
+      clearSelection();
       return;
     }
+
     if (id === "shapes") {
-      setShapesDropdownOpen((prev) => !prev);
+      toggleShapesDropdown();
       return;
     }
+
     if (id === "note") {
+      const active = armedMarkupTool === "note";
+      useToolMarkupStore.getState().setArmedTool(active ? null : "note");
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
-      useToolMarkupStore.getState().setArmedTool("note");
-      setShapesDropdownOpen(false);
       return;
     }
+
+    if (id === "materials" || id === "levels") {
+      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+      useToolMarkupStore.getState().setArmedTool(null);
+      useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
+
+    // Modify actions
     if (id === "deselect") {
       clearSelection();
       return;
     }
-    if (id === "materials") {
-      useAppStore.getState().setRightPanelOpen(true);
-      return;
-    }
     if (id === "delete") {
-      void useLayoutDrawingStore.getState().deleteSelected();
-      clearSelection();
+      const markup = useToolMarkupStore.getState();
+      if (markup.selectedPlacementId) {
+        markup.deletePlacement(markup.selectedPlacementId);
+      } else {
+        void useLayoutDrawingStore.getState().deleteSelected();
+      }
       return;
     }
     if (id === "move") {
@@ -333,23 +480,23 @@ export default function DesktopIsland() {
     }
     if (id === "mirror") {
       const store = useLayoutDrawingStore.getState();
-      const wall = store.walls.find((item) => item.id === store.selectedWallId);
+      const wall = store.walls.find((w) => w.id === store.selectedWallId);
       if (wall) {
         void store.mirrorSelected(
           { xMm: wall.startXmm, yMm: wall.startYmm },
           { xMm: wall.endXmm, yMm: wall.endYmm },
         );
-        return;
+      } else {
+        const column = store.columns.find((c) =>
+          store.selectedElements.some((ref) => ref.kind === "column" && ref.id === c.id)
+        );
+        const slab = store.slabs.find((s) => s.id === store.selectedSlabId);
+        const centerX = column?.xMm ?? (slab ? (slab.minXmm + slab.maxXmm) / 2 : 0);
+        void store.mirrorSelected(
+          { xMm: centerX, yMm: -1_000_000 },
+          { xMm: centerX, yMm: 1_000_000 },
+        );
       }
-      const column = store.columns.find((item) =>
-        store.selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id),
-      );
-      const slab = store.slabs.find((item) => item.id === store.selectedSlabId);
-      const centerX = column?.xMm ?? (slab ? (slab.minXmm + slab.maxXmm) / 2 : 0);
-      void store.mirrorSelected(
-        { xMm: centerX, yMm: -1_000_000 },
-        { xMm: centerX, yMm: 1_000_000 },
-      );
       return;
     }
     if (id === "copy") {
@@ -373,10 +520,10 @@ export default function DesktopIsland() {
   const isCapsuleActive = (id: string) => {
     if (id === "deselect" || id === "delete" || id === "mirror" || id === "copy" || id === "align") return false;
     if (id === "move") {
-      return useToolMarkupStore.getState().transformMode === "translate";
+      return transformMode === "translate";
     }
     if (id === "rotate") {
-      return useToolMarkupStore.getState().transformMode === "rotate";
+      return transformMode === "rotate";
     }
     if (id === "trim") {
       return armed === "trim";
@@ -393,11 +540,20 @@ export default function DesktopIsland() {
 
   return (
     <>
-      {/* ── 1. Center Top Header: Stable Category Tabs (NOT movable) ── */}
+      {/* ── 1. Center Top Header: Stable Category Tabs with Moving Thumb ── */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center select-none">
         <div className="desktop-center-tabs-pill">
+          {/* Animated sliding thumb */}
+          {!hasContextSelection && (
+            <div
+              ref={tabThumbRef}
+              className="pointer-events-none absolute top-0.5 left-0 h-[calc(100%-4px)] rounded-full z-[1]"
+              aria-hidden="true"
+            />
+          )}
+
           {hasContextSelection ? (
-            <div className="flex items-center gap-1.5 px-2">
+            <div className="flex items-center gap-1.5 px-2 relative z-[2]">
               <span className="flex items-center gap-1 text-[11px] font-bold text-yellow-500 dark:text-yellow-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
                 <span>{modifyTitle}</span>
@@ -412,10 +568,11 @@ export default function DesktopIsland() {
               </button>
             </div>
           ) : !mepModeActive ? (
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 relative z-[2]">
               {ARCH_TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
                   onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert")}
                   className={`desktop-center-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
@@ -425,10 +582,11 @@ export default function DesktopIsland() {
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 relative z-[2]">
               {MEP_TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
                   onClick={() => setMepCategory(tab.id as "all" | "hvac" | "piping" | "electrical")}
                   className={`desktop-center-tab-btn ${mepCategory === tab.id ? "is-active" : ""}`}
@@ -441,14 +599,17 @@ export default function DesktopIsland() {
         </div>
       </div>
 
-      {/* ── 2. Directly Below Header: Related Capsules ─────────────── */}
+      {/* ── 2. Directly Below Header: Related Capsules (top-[60px] padding) ── */}
       <div
-        className="desktop-capsules-container fixed top-[54px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none"
+        className="desktop-capsules-container fixed top-[60px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none"
         style={{
           maxWidth: rightPanelOpen ? "calc(100vw - 360px)" : "calc(100vw - 48px)",
         }}
       >
-        <div className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full">
+        <div
+          ref={capsulesRowRef}
+          className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full"
+        >
           {activeCapsules.map((item) => {
             const active = isCapsuleActive(item.id);
             const isShapes = item.id === "shapes";
@@ -458,6 +619,7 @@ export default function DesktopIsland() {
 
             const buttonContent = (
               <button
+                ref={isShapes ? shapesButtonRef : undefined}
                 type="button"
                 onClick={() => handleCapsuleClick(item.id)}
                 className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
@@ -478,76 +640,13 @@ export default function DesktopIsland() {
               </button>
             );
 
-            if (isShapes) {
-              return (
-                <div key={item.id} ref={shapesMenuRef} className="relative shrink-0">
-                  <GlassTooltip
-                    label={item.label}
-                    hint={item.hint}
-                    className="shrink-0"
-                    disabled={shapesDropdownOpen}
-                  >
-                    {buttonContent}
-                  </GlassTooltip>
-
-                  {shapesDropdownOpen && (
-                    <div
-                      className="desktop-shapes-dropdown absolute top-[calc(100%+6px)] left-0 z-[120] min-w-[210px] p-1.5 rounded-xl animate-in fade-in zoom-in-95 duration-150"
-                      role="menu"
-                      aria-label="Pick a 3D Shape"
-                    >
-                      <div className="px-2 py-1 mb-1 border-b border-[var(--panel-divider)] flex items-center justify-between">
-                        <span className="text-[10px] font-bold tracking-wide uppercase text-[var(--text-muted)]">
-                          Pick a 3D Shape
-                        </span>
-                        <span className="text-[9px] text-[var(--text-muted)] font-medium">7 Shapes</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto thin-scroll">
-                        {SHAPE_ITEMS.map((shape) => {
-                          const isSelected = armedMarkupTool === shape.id;
-                          return (
-                            <button
-                              key={shape.id}
-                              type="button"
-                              role="menuitem"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectShape(shape.id);
-                              }}
-                              className={`desktop-shape-option flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-left text-xs transition-colors ${
-                                isSelected ? "is-active" : ""
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span className="shrink-0">{shape.icon}</span>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-semibold text-[11px] leading-tight text-[var(--text-strong)]">
-                                    {shape.label}
-                                  </span>
-                                  <span className="text-[9px] text-[var(--text-muted)] truncate">
-                                    {shape.hint}
-                                  </span>
-                                </div>
-                              </div>
-                              {isSelected && (
-                                <LuCheck className="text-yellow-400 h-3.5 w-3.5 shrink-0 ml-1" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
             return (
               <GlassTooltip
                 key={item.id}
                 label={item.label}
                 hint={item.hint}
                 className="shrink-0"
+                disabled={isShapes && shapesDropdownOpen}
               >
                 {buttonContent}
               </GlassTooltip>
@@ -555,6 +654,59 @@ export default function DesktopIsland() {
           })}
         </div>
       </div>
+
+      {/* ── 3. Portaled Shapes Dropdown Menu (immune to overflow clipping) ── */}
+      {shapesDropdownOpen && typeof document !== "undefined" && createPortal(
+        <div
+          ref={shapesMenuRef}
+          style={{ top: shapesMenuPos.top, left: shapesMenuPos.left }}
+          className="desktop-shapes-dropdown fixed z-[9999] min-w-[210px] p-1.5 rounded-xl animate-in fade-in zoom-in-95 duration-150"
+          role="menu"
+          aria-label="Pick a 3D Shape"
+        >
+          <div className="px-2 py-1 mb-1 border-b border-[var(--panel-divider)] flex items-center justify-between">
+            <span className="text-[10px] font-bold tracking-wide uppercase text-[var(--text-muted)]">
+              Pick a 3D Shape
+            </span>
+            <span className="text-[9px] text-[var(--text-muted)] font-medium">7 Shapes</span>
+          </div>
+          <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto thin-scroll">
+            {SHAPE_ITEMS.map((shape) => {
+              const isSelected = armedMarkupTool === shape.id;
+              return (
+                <button
+                  key={shape.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectShape(shape.id);
+                  }}
+                  className={`desktop-shape-option flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-left text-xs transition-colors ${
+                    isSelected ? "is-active" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="shrink-0">{shape.icon}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-semibold text-[11px] leading-tight text-[var(--text-strong)]">
+                        {shape.label}
+                      </span>
+                      <span className="text-[9px] text-[var(--text-muted)] truncate">
+                        {shape.hint}
+                      </span>
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <LuCheck className="text-yellow-400 h-3.5 w-3.5 shrink-0 ml-1" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
