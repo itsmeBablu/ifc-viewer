@@ -486,7 +486,6 @@ export default function MaterialEditorPanel({
 
   const [category, setCategory] = useState<string>("All");
   const [search, setSearch] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
   const [shape, setShape] = useState<MaterialPreviewShape>("sphere");
   const [panelWidth, setPanelWidth] = useState<number>(340);
 
@@ -735,64 +734,62 @@ export default function MaterialEditorPanel({
             ))}
           </div>
 
-          {isLoading ? (
-            <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 p-1">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="aspect-square w-full rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)] animate-pulse flex flex-col justify-between p-2"
-                >
-                  <div className="flex justify-end">
-                    <div className="h-2.5 w-2.5 rounded bg-zinc-400/20" />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="h-2 w-3/4 rounded bg-zinc-400/20" />
-                    <div className="h-1.5 w-1/2 rounded bg-zinc-400/15" />
-                  </div>
-                </div>
-              ))}
+          {filtered.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--panel-divider)] p-4 text-center">
+              <span className="text-xs font-semibold text-[var(--text-strong)]">No materials found</span>
+              <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Try a different search or category filter</span>
             </div>
           ) : (
-            <div className="grid max-h-56 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
-              {filtered.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  draggable
-                  onDragStart={(e) => drag(e, m)}
-                  onClick={() => select(m.id)}
-                  className={`group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] ${
-                    m.id === selected.id
-                      ? isMep
-                        ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-overlay)]"
-                        : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-overlay)]"
-                      : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
-                  }`}
-                  title={`${m.name} (${m.category})`}
-                >
-                  {/* Full Square High-Texture Preview */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    draggable={false}
-                    src={renderMaterialPreview(m, "sphere", 128)}
-                    alt=""
-                    className="h-full w-full object-contain p-1.5 transition-transform duration-300 group-hover:scale-110"
-                  />
+            <div className="grid max-h-72 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
+              {filtered.map((m) => {
+                const isSel = m.id === selected.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    draggable
+                    onDragStart={(e) => drag(e, m)}
+                    onClick={() => select(m.id)}
+                    className={`group relative flex flex-col w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                      isSel
+                        ? isMep
+                          ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-card)]"
+                          : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-card)]"
+                        : "border-[var(--panel-divider)] bg-[var(--surface-card)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
+                    }`}
+                    title={`${m.name} (${m.category})`}
+                  >
+                    {/* Top: 3D Material Sphere Preview */}
+                    <div className="relative aspect-square w-full flex items-center justify-center p-2 bg-[var(--glass-inset-bg)] overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        draggable={false}
+                        src={renderMaterialPreview(m, "sphere", 96)}
+                        alt={m.name}
+                        className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-108 drop-shadow-md"
+                      />
+                      <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
+                    </div>
 
-                  {/* Grip Icon */}
-                  <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
-
-                  {/* Bottom Overlay Label */}
-                  <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end bg-gradient-to-t from-[var(--surface-card)] via-[var(--surface-card)]/80 to-transparent p-1.5 pt-4 pointer-events-none">
-                    <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-tight">
-                      {m.name}
-                    </span>
-                    <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
-                      {m.category}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                    {/* Bottom: Solid high-contrast label footer */}
+                    <div className="flex flex-col justify-center border-t border-[var(--panel-divider)]/50 bg-[var(--surface-overlay)] px-2 py-1.5 min-w-0">
+                      <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-snug" title={m.name}>
+                        {m.name}
+                      </span>
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
+                          {m.category}
+                        </span>
+                        <span
+                          className="h-2 w-2 rounded-full border border-black/20 shrink-0"
+                          style={{ backgroundColor: m.color || "#888888" }}
+                          title={`Color: ${m.color || "#888888"}`}
+                        />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
           <p className="flex items-center gap-1 text-[9px] text-[var(--text-muted)]">

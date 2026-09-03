@@ -27,6 +27,8 @@
   --chip-active-text: #18181b;
   --popover-bg: rgba(255, 255, 255, 0.55);
   --surface-muted: #f4f4f5;
+  --surface-card: #ffffff;
+  --surface-overlay: #f4f4f5;
   --accent-yellow: #facc15;
   --accent-yellow-hover: #fde047;
   --accent-yellow-glow: rgba(250, 204, 21, 0.40);
@@ -106,6 +108,8 @@ body.werkzeug-active.mep-mode-active .werkzeug-view-tab.is-active {
   --chip-active-text: #facc15;
   --popover-bg: rgba(12, 15, 22, 0.68);
   --surface-muted: rgba(255, 255, 255, 0.05);
+  --surface-card: #181920;
+  --surface-overlay: #222533;
   --accent-yellow: #facc15;
   --accent-yellow-hover: #fde047;
   --accent-yellow-glow: rgba(250, 204, 21, 0.45);
