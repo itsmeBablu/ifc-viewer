@@ -3543,6 +3543,12 @@ body.werkzeug-active .material-editor-embedded button:hover:not(.btn-liquid-ambe
    Desktop Floating Island & Capsule Row
    ───────────────────────────────────────────────────────────── */
 
+.desktop-island-container {
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+}
+
 .desktop-island {
   user-select: none;
   cursor: grab;

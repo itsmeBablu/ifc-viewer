@@ -140,10 +140,17 @@ export default function DesktopIsland() {
   const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
 
   /* ── drag position state ─────────────────────────────── */
-  const [pos, setPos] = useState<{ x: number; y: number }>(() => ({
-    x: typeof window !== "undefined" ? Math.round(window.innerWidth / 2) : 640,
-    y: 12,
-  }));
+  const [hasManuallyMoved, setHasManuallyMoved] = useState(false);
+  const [manualPos, setManualPos] = useState<{ x: number; y: number }>({ x: 0, y: 12 });
+
+  const rightReserved = rightPanelOpen ? 336 : 24;
+  const leftReserved = 64;
+  const defaultCenterX = typeof window !== "undefined"
+    ? Math.round((leftReserved + (window.innerWidth - rightReserved)) / 2)
+    : 560;
+
+  const currentX = hasManuallyMoved ? manualPos.x : defaultCenterX;
+  const currentY = hasManuallyMoved ? manualPos.y : 12;
 
   /* ── refs for animated toggle thumb ──────────────────── */
   const thumbRef = useRef<HTMLSpanElement>(null);
@@ -181,12 +188,13 @@ export default function DesktopIsland() {
   const beginDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button, input, select, a")) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    const start = { cx: e.clientX, cy: e.clientY, px: pos.x, py: pos.y };
+    const start = { cx: e.clientX, cy: e.clientY, px: currentX, py: currentY };
 
     const move = (ev: PointerEvent) => {
       const nextX = Math.max(160, Math.min(window.innerWidth - 160, start.px + ev.clientX - start.cx));
       const nextY = Math.max(8, Math.min(window.innerHeight - 80, start.py + ev.clientY - start.cy));
-      setPos({ x: nextX, y: nextY });
+      setHasManuallyMoved(true);
+      setManualPos({ x: nextX, y: nextY });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -383,11 +391,11 @@ export default function DesktopIsland() {
     <div
       className="desktop-movable-island pointer-events-auto fixed z-[75] flex flex-col items-center select-none"
       style={{
-        left: pos.x,
-        top: pos.y,
+        left: currentX,
+        top: currentY,
         transform: "translateX(-50%)",
-        width: "min(1240px, calc(100vw - 32px))",
-        maxWidth: rightPanelOpen ? "calc(100vw - 336px)" : "calc(100vw - 32px)",
+        width: "max-content",
+        maxWidth: rightPanelOpen ? "calc(100vw - 360px)" : "calc(100vw - 48px)",
       }}
     >
       {/* ── Top Bar: Movable Island Pill ─────────────────── */}

@@ -391,6 +391,10 @@ type LayoutDrawingState = {
   setMepModeActive: (active: boolean) => void;
   mepArchitectureLocked: boolean;
   setMepArchitectureLocked: (locked: boolean) => void;
+  desktopArchCategory: "build" | "structure" | "annotate";
+  setDesktopArchCategory: (category: "build" | "structure" | "annotate") => void;
+  desktopMepCategory: "all" | "hvac" | "piping" | "electrical";
+  setDesktopMepCategory: (category: "all" | "hvac" | "piping" | "electrical") => void;
   ductDraw: DuctDrawState;
   pipeDraw: PipeDrawState;
   cableTrayDraw: CableTrayDrawState;
@@ -915,6 +919,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   activeWorkPlane: null,
   mepModeActive: false,
   mepArchitectureLocked: true,
+  desktopArchCategory: "build",
+  setDesktopArchCategory: (cat) => set({ desktopArchCategory: cat }),
+  desktopMepCategory: "all",
+  setDesktopMepCategory: (cat) => set({ desktopMepCategory: cat }),
 
   // Visibility / Eye Mode state
   hiddenElementIds: new Set<string>(),
