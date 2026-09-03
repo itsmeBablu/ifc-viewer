@@ -3597,15 +3597,68 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
 }
 
-.desktop-capsule-row {
-  user-select: none;
-  transition: right 0.2s ease, left 0.2s ease;
-}
-
-.desktop-capsule-row-glass {
+.desktop-center-tabs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 2px 4px;
+  border-radius: 9999px;
   background: var(--surface-panel);
   border: 1px solid var(--panel-divider);
-  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.28), 0 2px 8px -2px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  user-select: none;
+}
+
+.desktop-center-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.desktop-center-tab-btn:hover {
+  color: var(--text-strong);
+  background: var(--glass-inset-bg);
+}
+
+.desktop-center-tab-btn.is-active {
+  color: #18181b;
+  background: rgba(250, 204, 21, 0.95);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.35);
+  font-weight: 700;
+}
+
+body.mep-mode-active .desktop-center-tab-btn.is-active {
+  color: #0f172a;
+  background: rgba(56, 189, 248, 0.95);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.desktop-capsules-container {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.desktop-capsule-row {
+  user-select: none;
 }
 
 .desktop-capsule-row-inner {
@@ -3620,26 +3673,30 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 .desktop-capsule-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 12px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-strong);
-  background: var(--glass-inset-bg);
+  background: var(--surface-panel);
   border: 1px solid var(--panel-divider);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(180%);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
   cursor: pointer;
   outline: none;
+  flex-shrink: 0;
 }
 
 .desktop-capsule-btn:hover {
   background: var(--glass-hover-bg);
   border-color: rgba(250, 204, 21, 0.4);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.16);
 }
 
 .desktop-capsule-btn:active {

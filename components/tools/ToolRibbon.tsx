@@ -91,6 +91,7 @@ import type { MarkupShapeType, MarkupViewPreset } from "@/lib/toolMarkup";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { RenderMode } from "@/lib/types";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
+import HeaderDisciplineToggle from "./HeaderDisciplineToggle";
 
 // Primary tabs plus MEP and contextual modify
 export type RibbonTab = "vstudio" | "mep" | "manage" | "modify";
@@ -1604,7 +1605,10 @@ export default function ToolRibbon({
           <Image src="/ibv_logo.svg" alt="IBV" width={100} height={24} className="h-6 w-auto object-contain" priority />
         </Link>
 
-        <div className="h-4 w-px bg-[var(--panel-divider)] mx-1" />
+        {/* Arch ↔ MEP Mode Toggle directly in header next to IBV Logo */}
+        <HeaderDisciplineToggle />
+
+        <div className="h-4 w-px bg-[var(--panel-divider)] mx-0.5" />
 
           {/* Open IFC */}
           <input
