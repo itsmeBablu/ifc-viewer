@@ -3,6 +3,8 @@
  * data, independent of IFC shell but shareable under the same project key.
  */
 
+import { type ReferenceUnderlay, underlayUvToWorld } from "./referenceUnderlay";
+
 export const DEFAULT_LEVEL_HEIGHT_MM = 3000;
 export const DEFAULT_WALL_THICKNESS_MM = 200;
 export const DEFAULT_DOOR_WIDTH_MM = 900;
@@ -158,7 +160,7 @@ export type LayoutSketchLine = {
   arcEndAngleDeg?: number;
 };
 
-export type WallLayerFunction = "finish1" | "substrate" | "insulation" | "structure" | "core" | "finish2";
+export type WallLayerFunction = "finish1" | "substrate" | "insulation" | "structure" | "core" | "finish2" | "membrane";
 
 export type WallLayer = {
   id: string;
@@ -285,12 +287,12 @@ export type LayoutRamp = {
 };
 
 export type DuctShape = "rectangular" | "round" | "oval";
-export type DuctSystemType = "supply" | "extract" | "exhaust" | "outdoor";
+export type DuctSystemType = "supply" | "extract" | "exhaust" | "outdoor" | "return";
 
 export interface MepConnector {
   id: string;
   name: string;
-  type: "duct" | "pipe" | "electrical";
+  type: "duct" | "pipe" | "electrical" | "data";
   systemType?: string;
   relXmm: number; // offset relative to equipment center along width
   relYmm: number; // offset relative to equipment center along depth

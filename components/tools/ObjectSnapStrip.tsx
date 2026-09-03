@@ -47,6 +47,7 @@ export default function ObjectSnapStrip({ compact = false, iconOnly = false, sho
         <div className="werkzeug-snap-menu-grid">
           {SNAP_ITEMS.map(([mode, label, Icon]) => {
             const active = modes[mode];
+            return (
               <button
                 key={mode}
                 type="button"
@@ -66,6 +67,7 @@ export default function ObjectSnapStrip({ compact = false, iconOnly = false, sho
                 </div>
                 <LuCheck className={`werkzeug-snap-check h-3.5 w-3.5 ${active ? "opacity-100" : "opacity-0"}`} aria-hidden="true" />
               </button>
+            );
           })}
         </div>
       </div>}

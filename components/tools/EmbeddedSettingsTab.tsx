@@ -36,7 +36,7 @@ export default function EmbeddedSettingsTab() {
   const isDark = colorTheme === "dark";
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
-  const show3DGrid = useAppStore((s) => s.show3dgrid);
+  const show3DGrid = useAppStore((s) => s.show3DGrid);
   const setShow3DGrid = useAppStore((s) => s.setShow3DGrid);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 

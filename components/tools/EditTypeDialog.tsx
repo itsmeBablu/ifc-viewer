@@ -431,6 +431,7 @@ interface EditTypeDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (updated: ElementTypeDefinition) => void;
+  onDuplicate?: (duplicated?: ElementTypeDefinition) => void;
 }
 
 export default function EditTypeDialog({
@@ -438,6 +439,7 @@ export default function EditTypeDialog({
   isOpen,
   onClose,
   onSave,
+  onDuplicate,
 }: EditTypeDialogProps) {
   const isDark = useAppStore((s) => s.colorTheme === "dark");
   const [formData, setFormData] = useState<ElementTypeDefinition>({ ...typeDef });

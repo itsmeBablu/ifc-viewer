@@ -10,7 +10,6 @@ import {
   LuCylinder,
   LuGrip,
   LuLayers,
-  LuLoader2,
   LuMousePointer2,
   LuPalette,
   LuPlus,

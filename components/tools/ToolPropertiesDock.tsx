@@ -191,6 +191,9 @@ export default function ToolPropertiesDock() {
     ? "btn-v-blue btn-liquid-hover shadow-md shadow-sky-400/30 !text-slate-950 font-bold"
     : "btn-v-yellow btn-liquid-hover shadow-md shadow-yellow-400/30 !text-zinc-950 font-bold";
 
+  const cardStyle =
+    "rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 overflow-hidden shadow-sm";
+
   return (
     <aside
       ref={dockRef}
@@ -312,7 +315,7 @@ export default function ToolPropertiesDock() {
                           if (selectedWall) return t.category === "Wall";
                           if (selectedDoor) return t.category === "Door";
                           if (selectedWindow) return t.category === "Window";
-                          if (selectedSlab) return t.category === "Slab" || t.category === "Roof";
+                          if (selectedSlab) return t.category === "Floor" || t.category === "Roof";
                           return false;
                         })
                         .map((t) => (

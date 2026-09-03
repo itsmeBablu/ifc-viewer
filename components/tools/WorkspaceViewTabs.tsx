@@ -62,14 +62,6 @@ export default function WorkspaceViewTabs() {
     setViewPreset(preset);
   };
 
-  const toggleSectionCut = () => {
-    if (sectionCutMode) {
-      setSliceProgress(100);
-    } else {
-      setSliceProgress(50);
-    }
-  };
-
   return (
     <nav
       ref={rootRef}

@@ -37,6 +37,7 @@ import {
   snapWallEndpointMm,
   trimWallPair,
   getEquipmentConnectors,
+  computeArcFromThreePoints,
   type CableTrayType,
   type DuctShape,
   type DuctSystemType,
@@ -459,7 +460,7 @@ type LayoutDrawingState = {
   addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
-  addSectionLine: (line: Omit<LayoutSectionLine, "id">) => void;
+  addSectionLine: (line: Omit<LayoutSectionLine, "id">) => LayoutSectionLine;
   updateSectionLine: (id: string, patch: Partial<LayoutSectionLine>) => void;
   deleteSectionLine: (id: string) => void;
   setActiveSectionId: (id: string | null) => void;
@@ -627,6 +628,7 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutSlab,
+        | "kind"
         | "minXmm"
         | "minYmm"
         | "maxXmm"
@@ -1040,6 +1042,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   selectedCableTrayId: null,
   selectedEquipmentId: null,
   selectedWireId: null,
+  editingSlabId: null,
   gridLines: [],
   groups: [],
   wallTypes: [],
@@ -1152,6 +1155,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setDraftDuctDiameterMm: (d) => set({ draftDuctDiameterMm: Math.max(20, d) }),
   setDraftDuctSystem: (sys) => set({ draftDuctSystem: sys }),
   setDraftDuctElevationMm: (elev) => set({ draftDuctElevationMm: elev }),
+  setDraftDuctFlowM3h: (flow) => set({ draftDuctFlowM3h: flow }),
   setDraftPipeDiameterMm: (d) => set({ draftPipeDiameterMm: Math.max(10, d) }),
   setDraftPipeSystem: (sys) => set({ draftPipeSystem: sys }),
   setDraftPipeElevationMm: (elev) => set({ draftPipeElevationMm: elev }),
@@ -2546,14 +2550,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const letter = String.fromCharCode(64 + count);
     const newSection: LayoutSectionLine = {
       id: `sec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: line.name || `Schnitt ${letter}-${letter}`,
       ...line,
+      name: line.name || `Schnitt ${letter}-${letter}`,
     };
     set({
       sectionLines: [...get().sectionLines, newSection],
       activeSectionId: newSection.id,
       lastMutatedAt: Date.now(),
     });
+    return newSection;
   },
 
   updateSectionLine: (id, patch) => {

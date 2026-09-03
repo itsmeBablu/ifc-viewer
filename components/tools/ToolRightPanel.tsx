@@ -1286,39 +1286,8 @@ export default function ToolRightPanel({
                 </>
               ) : (
                 /* IFC Spatial Hierarchy */
-                <div className="space-y-1">
-                  {loading && (
-                    <div className="p-4 text-center text-xs text-[var(--text-muted)]">
-                      Loading IFC structure...
-                    </div>
-                  )}
-                  {!loading && !structure && (
-                    <div className="p-4 text-center text-xs text-[var(--text-muted)]">
-                      No IFC model loaded or no structure found.
-                    </div>
-                  )}
-                  {structure && (
-                    <div className="font-mono text-[10px] space-y-1">
-                      <div className="font-bold text-yellow-400 truncate">
-                        Project: {structure.name || "IFC Project"}
-                      </div>
-                      {structure.sites?.map((site, sIdx) => (
-                        <div key={sIdx} className="pl-2 border-l border-[var(--panel-divider)] space-y-1">
-                          <div className="text-[var(--text-strong)]">Site: {site.name || "Site"}</div>
-                          {site.buildings?.map((bldg, bIdx) => (
-                            <div key={bIdx} className="pl-2 border-l border-[var(--panel-divider)] space-y-1">
-                              <div className="text-[var(--text-strong)]">Building: {bldg.name || "Building"}</div>
-                              {bldg.storeys?.map((storey, stIdx) => (
-                                <div key={stIdx} className="pl-2 border-l border-[var(--panel-divider)]">
-                                  <span className="text-yellow-400">Level: {storey.name}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="h-full flex-1 min-h-[200px]">
+                  <IfcStructureTree structure={structure} loading={loading} />
                 </div>
               )}
             </div>

@@ -899,6 +899,7 @@ export default class LayoutSceneLayer {
       activeLevelId: string | null;
       selectedDuctIds: Set<string>;
       showAllLevels: boolean;
+      fallbackElevMm?: number;
       hiddenElementIds?: Set<string>;
       hiddenCategories?: Set<string>;
       isolatedElementIds?: Set<string> | null;
@@ -985,6 +986,7 @@ export default class LayoutSceneLayer {
       activeLevelId: string | null;
       selectedPipeIds: Set<string>;
       showAllLevels: boolean;
+      fallbackElevMm?: number;
       hiddenElementIds?: Set<string>;
       hiddenCategories?: Set<string>;
       isolatedElementIds?: Set<string> | null;
@@ -1063,6 +1065,7 @@ export default class LayoutSceneLayer {
       activeLevelId: string | null;
       selectedCableTrayIds: Set<string>;
       showAllLevels: boolean;
+      fallbackElevMm?: number;
       hiddenElementIds?: Set<string>;
       hiddenCategories?: Set<string>;
       isolatedElementIds?: Set<string> | null;
@@ -3077,6 +3080,8 @@ export default class LayoutSceneLayer {
       const col = isSelected ? selectedYellow : targetKind ? boundaryYellow : parsed;
       const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
       const y = fromMm(elevMm) + 0.08;
+      const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
+      const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
 
       if (l.curved && l.arcCenterXmm != null && l.arcCenterYmm != null && l.arcRadiusMm != null && l.arcStartAngleDeg != null && l.arcEndAngleDeg != null) {
         const cx = fromMm(l.arcCenterXmm);
@@ -3509,7 +3514,7 @@ export default class LayoutSceneLayer {
 
     for (const [id, grp] of this.wallMeshes) {
       const wall = state.walls.find((w) => w.id === id);
-      const isSelected = wall ? (wall.id === state.selectedWallId || Boolean(state.selectedWallIds?.has(wall.id))) : false;
+      const isSelected = wall ? (wall.id === state.selectedWallId || state.selectedElements.some((e) => e.kind === "wall" && e.id === wall.id)) : false;
       if (wall) {
         const layers = this.resolveWallLayers(wall);
         let layerIdx = 0;
@@ -3611,7 +3616,7 @@ export default class LayoutSceneLayer {
       if (!isWireframe) {
         if (edges) edges.visible = false;
         if (mesh.material instanceof THREE.Material) {
-          mesh.material.wireframe = false;
+          if ("wireframe" in mesh.material) (mesh.material as any).wireframe = false;
           mesh.material.visible = true;
         }
         return;
@@ -3635,7 +3640,7 @@ export default class LayoutSceneLayer {
       }
       edges.visible = true;
       if (mesh.material instanceof THREE.Material) {
-        mesh.material.wireframe = false;
+        if ("wireframe" in mesh.material) (mesh.material as any).wireframe = false;
         mesh.material.transparent = true;
         mesh.material.opacity = 0.12;
       }
@@ -3670,6 +3675,8 @@ export default class LayoutSceneLayer {
     }
     mat.wireframe = this.currentRenderMode === "wireframe";
 
+    const customMat = useMaterialStore.getState().getMaterial(matType);
+
     // 1. Light (Clay / Pastel tint) mode: clean soft matte materials tinted with material colors
     if (this.currentRenderMode === "light") {
       mat.roughness = 0.96;
@@ -3687,8 +3694,6 @@ export default class LayoutSceneLayer {
       mat.color.setStyle(lightCol);
       return;
     }
-
-    const customMat = useMaterialStore.getState().getMaterial(matType);
 
     // 2. Full Color / Shaded mode: Show ALL mesh in consistent default architectural gray
     if (this.currentRenderMode === "fullColor") {
@@ -4738,6 +4743,28 @@ export default class LayoutSceneLayer {
       return { frameMat, panelMat };
     }
 
+    if (this.currentRenderMode === "fullColor") {
+      frameMat.roughness = 0.92;
+      frameMat.metalness = 0;
+      frameMat.color.setHex(0x94a3b8);
+      if (category === "window" || style === "glass") {
+        panelMat = new THREE.MeshPhysicalMaterial({
+          color: 0xa0c4df,
+          transparent: true,
+          opacity: 0.45,
+          roughness: 0.92,
+          metalness: 0,
+        });
+      } else {
+        (panelMat as THREE.MeshPhysicalMaterial).color.setHex(0x868d99);
+        (panelMat as THREE.MeshPhysicalMaterial).roughness = 0.92;
+        (panelMat as THREE.MeshPhysicalMaterial).metalness = 0;
+        (panelMat as THREE.MeshPhysicalMaterial).transparent = false;
+        (panelMat as THREE.MeshPhysicalMaterial).opacity = 1.0;
+      }
+      return { frameMat, panelMat };
+    }
+
     const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
     if (customFrame) {
       frameMat.roughness = customFrame.roughness;
@@ -5108,221 +5135,6 @@ export default class LayoutSceneLayer {
     return g;
   }
 
-  syncDucts(
-    ducts: LayoutDuct[],
-    levels: LayoutLevel[],
-    opts: {
-      activeLevelId: string | null;
-      selectedDuctIds: Set<string>;
-      showAllLevels: boolean;
-      fallbackElevMm: number;
-    },
-  ) {
-    const keep = new Set(ducts.map((d) => d.id));
-    for (const [id, mesh] of this.ductMeshes) {
-      if (!keep.has(id)) {
-        this.group.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        this.ductMeshes.delete(id);
-      }
-    }
-
-    for (const duct of ducts) {
-      const isSelected = opts.selectedDuctIds.has(duct.id);
-      const level = levels.find((l) => l.id === duct.levelId);
-      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = duct.elevationMm ?? duct.elevationOffsetMm ?? 2600;
-      const centerY = fromMm(baseElev + elevOffset);
-
-      const dx = fromMm(duct.endXmm - duct.startXmm);
-      const dz = fromMm(duct.endYmm - duct.startYmm);
-      const len = Math.hypot(dx, dz);
-      if (len < 0.001) continue;
-
-      const midX = fromMm((duct.startXmm + duct.endXmm) / 2);
-      const midZ = fromMm((duct.startYmm + duct.endYmm) / 2);
-      const angle = Math.atan2(dz, dx);
-
-      const systemType = duct.systemType ?? (duct as LayoutDuct & { system?: LayoutDuct["systemType"] }).system ?? "supply";
-      const systemColor = MEP_SYSTEM_COLORS[`duct_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
-      const hexColor = duct.color
-        ? parseInt(duct.color.replace("#", ""), 16)
-        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : 0x06b6d4;
-
-      let mesh = this.ductMeshes.get(duct.id);
-      const isFlex = Boolean(duct.isFlex);
-      const isPlaceholder = Boolean(duct.isPlaceholder);
-      const isRound = (duct.shape === "round" || isFlex);
-      const isOval = duct.shape === "oval" && !isFlex;
-      const w = fromMm(duct.widthMm ?? 300);
-      const h = fromMm(duct.heightMm ?? 200);
-      const r = fromMm((duct.diameterMm ?? 200) / 2);
-
-      const geoKey = isPlaceholder
-        ? `placeholder:${len}`
-        : isFlex
-        ? `flex:${r}:${len}`
-        : isRound
-        ? `round:${r}:${len}`
-        : isOval
-        ? `oval:${w}:${h}:${len}`
-        : `rect:${w}:${h}:${len}`;
-
-      const buildDuctGeo = () => {
-        if (isPlaceholder) {
-          const g = new THREE.CylinderGeometry(0.015, 0.015, len, 8);
-          g.rotateZ(Math.PI / 2);
-          return g;
-        } else if (isFlex) {
-          const g = new THREE.CylinderGeometry(r, r, len, 16, Math.max(6, Math.round(len * 15)));
-          g.rotateZ(Math.PI / 2);
-          return g;
-        } else if (isRound) {
-          const g = new THREE.CylinderGeometry(r, r, len, 16);
-          g.rotateZ(Math.PI / 2);
-          return g;
-        } else if (isOval) {
-          // Flat oval cross-section extruded along duct length
-          const sh = new THREE.Shape();
-          const rad = Math.min(h / 2, w / 2);
-          const straightW = Math.max(0.001, (w - 2 * rad) / 2);
-          sh.moveTo(-straightW, -rad);
-          sh.lineTo(straightW, -rad);
-          sh.absarc(straightW, 0, rad, -Math.PI / 2, Math.PI / 2, false);
-          sh.lineTo(-straightW, rad);
-          sh.absarc(-straightW, 0, rad, Math.PI / 2, (3 * Math.PI) / 2, false);
-          const g = new THREE.ExtrudeGeometry(sh, { depth: len, bevelEnabled: false });
-          g.translate(0, 0, -len / 2);
-          g.rotateY(Math.PI / 2);
-          return g;
-        } else {
-          return new THREE.BoxGeometry(len, h, w);
-        }
-      };
-
-      if (!mesh) {
-        const geo = buildDuctGeo();
-        const mat = new THREE.MeshStandardMaterial({
-          color: isPlaceholder ? 0x38bdf8 : hexColor,
-          roughness: isFlex ? 0.5 : 0.35,
-          metalness: isFlex ? 0.6 : 0.5,
-          wireframe: isPlaceholder,
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.userData.layoutDuctId = duct.id;
-        mesh.userData.kind = "duct";
-        mesh.userData.geometryKey = geoKey;
-        this.ductMeshes.set(duct.id, mesh);
-        this.group.add(mesh);
-      } else if (mesh.userData.geometryKey !== geoKey) {
-        mesh.geometry.dispose();
-        mesh.geometry = buildDuctGeo();
-        mesh.userData.geometryKey = geoKey;
-      }
-
-      mesh.position.set(midX, centerY, midZ);
-      mesh.rotation.y = -angle;
-      mesh.visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        duct.levelId == null ||
-        duct.levelId === "default-level" ||
-        duct.levelId === opts.activeLevelId;
-
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.setHex(isPlaceholder ? 0x38bdf8 : hexColor);
-      mat.wireframe = isPlaceholder;
-      this.setMeshSelectionOutline(mesh, isSelected);
-    }
-  }
-
-  syncPipes(
-    pipes: LayoutPipe[],
-    levels: LayoutLevel[],
-    opts: {
-      activeLevelId: string | null;
-      selectedPipeIds: Set<string>;
-      showAllLevels: boolean;
-      fallbackElevMm: number;
-    },
-  ) {
-    const keep = new Set(pipes.map((p) => p.id));
-    for (const [id, mesh] of this.pipeMeshes) {
-      if (!keep.has(id)) {
-        this.group.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        this.pipeMeshes.delete(id);
-      }
-    }
-
-    for (const pipe of pipes) {
-      const isSelected = opts.selectedPipeIds.has(pipe.id);
-      const isPlaceholder = Boolean(pipe.isPlaceholder);
-      const level = levels.find((l) => l.id === pipe.levelId);
-      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700;
-      const centerY = fromMm(baseElev + elevOffset);
-
-      const dx = fromMm(pipe.endXmm - pipe.startXmm);
-      const dz = fromMm(pipe.endYmm - pipe.startYmm);
-      const len = Math.hypot(dx, dz);
-      if (len < 0.001) continue;
-
-      const midX = fromMm((pipe.startXmm + pipe.endXmm) / 2);
-      const midZ = fromMm((pipe.startYmm + pipe.endYmm) / 2);
-      const angle = Math.atan2(dz, dx);
-
-      const systemType = pipe.systemType ?? (pipe as LayoutPipe & { system?: LayoutPipe["systemType"] }).system ?? "hydronic_supply";
-      const systemColor = MEP_SYSTEM_COLORS[`pipe_${systemType}` as keyof typeof MEP_SYSTEM_COLORS];
-      const hexColor = pipe.color
-        ? parseInt(pipe.color.replace("#", ""), 16)
-        : systemColor ? parseInt(systemColor.replace("#", ""), 16) : (systemType === "fire_protection" ? 0xef4444 : 0x3b82f6);
-
-      const r = isPlaceholder ? 0.012 : fromMm((pipe.diameterMm ?? 28) / 2);
-      const geoKey = `pipe:${isPlaceholder ? "ph" : r}:${len}`;
-
-      let mesh = this.pipeMeshes.get(pipe.id);
-      if (!mesh) {
-        const geo = new THREE.CylinderGeometry(r, r, len, isPlaceholder ? 8 : 12);
-        geo.rotateZ(Math.PI / 2);
-        const mat = new THREE.MeshStandardMaterial({
-          color: hexColor,
-          roughness: 0.25,
-          metalness: 0.8,
-          wireframe: isPlaceholder,
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.userData.layoutPipeId = pipe.id;
-        mesh.userData.kind = "pipe";
-        mesh.userData.geometryKey = geoKey;
-        this.pipeMeshes.set(pipe.id, mesh);
-        this.group.add(mesh);
-      } else if (mesh.userData.geometryKey !== geoKey) {
-        mesh.geometry.dispose();
-        const geo = new THREE.CylinderGeometry(r, r, len, isPlaceholder ? 8 : 12);
-        geo.rotateZ(Math.PI / 2);
-        mesh.geometry = geo;
-        mesh.userData.geometryKey = geoKey;
-      }
-
-      mesh.position.set(midX, centerY, midZ);
-      mesh.rotation.y = -angle;
-      mesh.visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        pipe.levelId == null ||
-        pipe.levelId === "default-level" ||
-        pipe.levelId === opts.activeLevelId;
-
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.setHex(hexColor);
-      mat.wireframe = isPlaceholder;
-      this.setMeshSelectionOutline(mesh, isSelected);
-    }
-  }
-
   syncWires(
     wires: LayoutWire[],
     levels: LayoutLevel[],
@@ -5433,81 +5245,6 @@ export default class LayoutSceneLayer {
 
     this.workPlaneGroup.add(grid);
     this.workPlaneGroup.add(planeMesh);
-  }
-
-  syncCableTrays(
-    cableTrays: LayoutCableTray[],
-    levels: LayoutLevel[],
-    opts: {
-      activeLevelId: string | null;
-      selectedCableTrayIds: Set<string>;
-      showAllLevels: boolean;
-      fallbackElevMm: number;
-    },
-  ) {
-    const keep = new Set(cableTrays.map((t) => t.id));
-    for (const [id, mesh] of this.cableTrayMeshes) {
-      if (!keep.has(id)) {
-        this.group.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        this.cableTrayMeshes.delete(id);
-      }
-    }
-
-    for (const tray of cableTrays) {
-      const isSelected = opts.selectedCableTrayIds.has(tray.id);
-      const level = levels.find((l) => l.id === tray.levelId);
-      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const elevOffset = tray.elevationMm ?? tray.elevationOffsetMm ?? 2800;
-      const centerY = fromMm(baseElev + elevOffset);
-
-      const dx = fromMm(tray.endXmm - tray.startXmm);
-      const dz = fromMm(tray.endYmm - tray.startYmm);
-      const len = Math.hypot(dx, dz);
-      if (len < 0.001) continue;
-
-      const midX = fromMm((tray.startXmm + tray.endXmm) / 2);
-      const midZ = fromMm((tray.startYmm + tray.endYmm) / 2);
-      const angle = Math.atan2(dz, dx);
-
-      const w = fromMm(tray.widthMm ?? 200);
-      const h = fromMm(tray.heightMm ?? 60);
-      const geoKey = `tray:${w}:${h}:${len}:${tray.trayType}`;
-
-      let mesh = this.cableTrayMeshes.get(tray.id);
-      if (!mesh) {
-        const geo = new THREE.BoxGeometry(len, h, w);
-        const mat = new THREE.MeshStandardMaterial({
-          color: 0x94a3b8,
-          roughness: 0.4,
-          metalness: 0.7,
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        mesh.userData.layoutCableTrayId = tray.id;
-        mesh.userData.kind = "cabletray";
-        mesh.userData.geometryKey = geoKey;
-        this.cableTrayMeshes.set(tray.id, mesh);
-        this.group.add(mesh);
-      } else if (mesh.userData.geometryKey !== geoKey) {
-        mesh.geometry.dispose();
-        mesh.geometry = new THREE.BoxGeometry(len, h, w);
-        mesh.userData.geometryKey = geoKey;
-      }
-
-      mesh.position.set(midX, centerY, midZ);
-      mesh.rotation.y = -angle;
-      mesh.visible =
-        opts.showAllLevels ||
-        opts.activeLevelId == null ||
-        tray.levelId == null ||
-        tray.levelId === "default-level" ||
-        tray.levelId === opts.activeLevelId;
-
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.setHex(tray.trayType === "conduit" ? 0xd97706 : 0x94a3b8);
-      this.setMeshSelectionOutline(mesh, isSelected);
-    }
   }
 
   syncMepEquipment(

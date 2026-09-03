@@ -1138,7 +1138,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       }
     },
     zoomFit: () => {
-      fitVisibleRef.current?.();
+      fitToVisible();
     },
     goHome: () => {
       useToolMarkupStore.getState().setQuadView(false);
@@ -6316,9 +6316,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(layoutHit.id);
                 return;
               }
-              if (layoutHit.kind === "section" || (layoutHit as any).kind === "section-handle") {
-                layoutStore.setActiveSectionId(layoutHit.id);
-                layoutStore.updateSectionLine(layoutHit.id, { active: true });
+              if ((layoutHit as any).kind === "section" || (layoutHit as any).kind === "section-handle") {
+                const secId = (layoutHit as any).id;
+                if (secId) {
+                  layoutStore.setActiveSectionId(secId);
+                  layoutStore.updateSectionLine(secId, { active: true });
+                }
                 return;
               }
               if (layoutHit.kind === "wall") {

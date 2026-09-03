@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import {
   LuX,
-  LuSliders,
   LuSun,
   LuMoon,
   LuPalette,
@@ -43,7 +42,7 @@ export default function StudioSettingsModal() {
   const isDark = colorTheme === "dark";
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
-  const show3DGrid = useAppStore((s) => s.show3dgrid);
+  const show3DGrid = useAppStore((s) => s.show3DGrid);
   const setShow3DGrid = useAppStore((s) => s.setShow3DGrid);
 
   // Esc key listener to close
