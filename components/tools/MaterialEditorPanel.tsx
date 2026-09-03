@@ -21,7 +21,11 @@ import {
 } from "react-icons/lu";
 import UnifiedButton from "@/components/common/UnifiedButton";
 import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
-import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
+import {
+  getHatchCanvasTexture,
+  getHatchSvgDataUri,
+  HATCH_PRESETS_METADATA,
+} from "@/lib/hatchPatterns";
 import { renderMaterialPreview } from "@/lib/materialSpherePreview";
 import {
   MATERIAL_DRAG_MIME,
@@ -35,24 +39,9 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import type { WallType } from "@/lib/layoutDrawing";
 import DuplicateOrApplyTypeDialog from "./DuplicateOrApplyTypeDialog";
 
-const HATCHES: { id: HatchStyle; label: string; glyph: string }[] = [
-  ["solid", "Solid / none", "■"],
-  ["horizontal", "Horizontal lines", "≡"],
-  ["vertical", "Vertical lines", "|||"],
-  ["diagonal", "Diagonal 45°", "///"],
-  ["cross", "Diagonal cross", "XXX"],
-  ["grid", "Square grid", "▦"],
-  ["brick", "Running bond brick", "▤"],
-  ["tile", "Ceramic tile", "▦"],
-  ["checker", "Checker plate", "▩"],
-  ["concrete", "Concrete aggregate", "∴"],
-  ["dots", "Regular dots", "⠿"],
-  ["sand", "Sand", "⠂"],
-  ["earth", "Earth / fill", "≋"],
-  ["steel", "Steel section", "╳"],
-  ["zigzag", "Insulation", "〽"],
-  ["wood", "Wood grain", "≋"],
-].map(([id, label, glyph]) => ({ id: id as HatchStyle, label, glyph }));
+const HATCHES: { id: HatchStyle; label: string; glyph: string }[] = HATCH_PRESETS_METADATA.map(
+  (h) => ({ id: h.id, label: h.label, glyph: h.glyph })
+);
 
 const CATEGORIES = [
   "All",
@@ -629,17 +618,10 @@ export default function MaterialEditorPanel({
   const preview = renderMaterialPreview(selected, shape, 112);
   const hasSelection = Boolean(wallId || slabId || doorId || windowId || columnId || beamId);
 
-  const hatchTexture = getHatchCanvasTexture(
-    selected.hatchStyle,
-    "#334155",
-    selected.color,
-    selected.hatchScaleMm ?? 200
-  );
-  const hatchCanvas =
-    typeof HTMLCanvasElement !== "undefined" && hatchTexture?.image instanceof HTMLCanvasElement
-      ? hatchTexture.image
+  const hatchUrl =
+    selected.hatchStyle && selected.hatchStyle !== "solid"
+      ? getHatchSvgDataUri(selected.hatchStyle, "#334155", selected.color)
       : null;
-  const hatchUrl = hatchCanvas?.toDataURL() ?? null;
   const sampleSizePx = Math.max(
     12,
     Math.min(96, (selected.hatchScaleMm ?? 200) / Math.max(0.1, selected.tilingScale ?? 1) / 4)

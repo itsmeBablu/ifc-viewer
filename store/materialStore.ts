@@ -17,6 +17,7 @@ export type HatchStyle =
   | "earth"
   | "brick"
   | "tile"
+  | "subway-tile"
   | "checker"
   | "steel"
   | "zigzag"
@@ -29,7 +30,25 @@ export type HatchStyle =
   | "timber-cut"
   | "glass"
   | "gravel"
-  | "membrane";
+  | "membrane"
+  // High-End Architectural Patterns
+  | "herringbone"
+  | "chevron"
+  | "hex-tile"
+  | "terrazzo"
+  | "marble"
+  | "fluted-wood"
+  | "acoustic-slat"
+  | "perforated-metal"
+  | "expanded-mesh"
+  | "diamond-plate"
+  | "basketweave"
+  | "reeded-glass"
+  | "standing-seam"
+  | "stucco"
+  | "granite"
+  | "fish-scale"
+  | "penny-round";
 
 export type MaterialPreviewShape = "sphere" | "cube" | "cylinder" | "fabric";
 
@@ -55,6 +74,206 @@ export type MaterialDefinition = {
 };
 
 export const SEED_MATERIALS: MaterialDefinition[] = [
+  // ==========================================
+  // 0. HIGH-END ARCHITECTURAL & INTERIOR SPEC
+  // ==========================================
+  {
+    id: "marble-calacatta-gold",
+    name: "Italian Calacatta Gold Marble",
+    category: "Masonry",
+    color: "#f8fafc",
+    roughness: 0.15,
+    metalness: 0.05,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.1,
+    ior: 1.55,
+    opacity: 1.0,
+    hatchStyle: "marble",
+    hatchScaleMm: 400,
+    bumpScale: 0.2,
+    isPreset: true,
+  },
+  {
+    id: "marble-nero-marquina",
+    name: "Nero Marquina Black Marble",
+    category: "Masonry",
+    color: "#18181b",
+    roughness: 0.12,
+    metalness: 0.08,
+    clearcoat: 0.95,
+    clearcoatRoughness: 0.08,
+    ior: 1.56,
+    opacity: 1.0,
+    hatchStyle: "marble",
+    hatchScaleMm: 350,
+    bumpScale: 0.2,
+    isPreset: true,
+  },
+  {
+    id: "terrazzo-venetian-white",
+    name: "Venetian Micro-Terrazzo (Bianco)",
+    category: "Flooring",
+    color: "#f1f5f9",
+    roughness: 0.22,
+    metalness: 0.02,
+    clearcoat: 0.8,
+    opacity: 1.0,
+    hatchStyle: "terrazzo",
+    hatchScaleMm: 240,
+    bumpScale: 0.25,
+    isPreset: true,
+  },
+  {
+    id: "parquet-french-herringbone",
+    name: "French Oak Herringbone Parquet",
+    category: "Wood",
+    color: "#c29b68",
+    roughness: 0.52,
+    metalness: 0.0,
+    clearcoat: 0.25,
+    opacity: 1.0,
+    hatchStyle: "herringbone",
+    hatchScaleMm: 180,
+    bumpScale: 0.35,
+    isPreset: true,
+  },
+  {
+    id: "parquet-smoked-chevron",
+    name: "Smoked Walnut Chevron Parquet",
+    category: "Wood",
+    color: "#5c4033",
+    roughness: 0.48,
+    metalness: 0.0,
+    clearcoat: 0.3,
+    opacity: 1.0,
+    hatchStyle: "chevron",
+    hatchScaleMm: 200,
+    bumpScale: 0.35,
+    isPreset: true,
+  },
+  {
+    id: "tile-hex-mosaic-carrara",
+    name: "Carrara Hexagonal Honeycomb Tile",
+    category: "Finishes",
+    color: "#e2e8f0",
+    roughness: 0.25,
+    metalness: 0.02,
+    clearcoat: 0.65,
+    opacity: 1.0,
+    hatchStyle: "hex-tile",
+    hatchScaleMm: 120,
+    bumpScale: 0.4,
+    isPreset: true,
+  },
+  {
+    id: "tile-subway-artisan",
+    name: "Artisan Handcrafted Subway Tile",
+    category: "Finishes",
+    color: "#f8fafc",
+    roughness: 0.18,
+    metalness: 0.0,
+    clearcoat: 0.85,
+    opacity: 1.0,
+    hatchStyle: "subway-tile",
+    hatchScaleMm: 150,
+    bumpScale: 0.45,
+    isPreset: true,
+  },
+  {
+    id: "acoustic-wood-slat-panel",
+    name: "Fluted Oak Acoustic Slat Panel",
+    category: "Wood",
+    color: "#b4824d",
+    roughness: 0.65,
+    metalness: 0.0,
+    opacity: 1.0,
+    hatchStyle: "acoustic-slat",
+    hatchScaleMm: 140,
+    bumpScale: 0.6,
+    isPreset: true,
+  },
+  {
+    id: "facade-perforated-bronze",
+    name: "Architectural Perforated Bronze Panel",
+    category: "Metal",
+    color: "#a16207",
+    roughness: 0.32,
+    metalness: 0.88,
+    opacity: 1.0,
+    hatchStyle: "perforated-metal",
+    hatchScaleMm: 90,
+    bumpScale: 0.4,
+    isPreset: true,
+  },
+  {
+    id: "facade-standing-seam-zinc",
+    name: "Anthracite Standing Seam Zinc",
+    category: "Roofing",
+    color: "#334155",
+    roughness: 0.45,
+    metalness: 0.65,
+    opacity: 1.0,
+    hatchStyle: "standing-seam",
+    hatchScaleMm: 300,
+    bumpScale: 0.5,
+    isPreset: true,
+  },
+  {
+    id: "glass-fluted-reeded",
+    name: "Architectural Reeded / Fluted Glass",
+    category: "Glass",
+    color: "#e2e8f0",
+    roughness: 0.1,
+    metalness: 0.05,
+    opacity: 0.55,
+    transmission: 0.88,
+    ior: 1.52,
+    hatchStyle: "reeded-glass",
+    hatchScaleMm: 80,
+    bumpScale: 0.55,
+    isPreset: true,
+  },
+  {
+    id: "metal-expanded-diamond-mesh",
+    name: "Expanded Steel Diamond Mesh",
+    category: "Metal",
+    color: "#27272a",
+    roughness: 0.5,
+    metalness: 0.85,
+    opacity: 1.0,
+    hatchStyle: "expanded-mesh",
+    hatchScaleMm: 100,
+    bumpScale: 0.5,
+    isPreset: true,
+  },
+  {
+    id: "tile-fish-scale-emerald",
+    name: "Emerald Scallop / Fish Scale Tile",
+    category: "Finishes",
+    color: "#065f46",
+    roughness: 0.16,
+    metalness: 0.05,
+    clearcoat: 0.9,
+    opacity: 1.0,
+    hatchStyle: "fish-scale",
+    hatchScaleMm: 130,
+    bumpScale: 0.45,
+    isPreset: true,
+  },
+  {
+    id: "plaster-stucco-mediterranean",
+    name: "Fine Mediterranean Scraped Stucco",
+    category: "Finishes",
+    color: "#fef3c7",
+    roughness: 0.95,
+    metalness: 0.0,
+    opacity: 1.0,
+    hatchStyle: "stucco",
+    hatchScaleMm: 160,
+    bumpScale: 0.4,
+    isPreset: true,
+  },
+
   // ==========================================
   // 1. MASONRY & STONE
   // ==========================================

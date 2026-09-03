@@ -160,6 +160,83 @@ export function renderMaterialSphere(mat: MaterialDefinition, size = 64): string
         } else if (hatchStyle === "steel") {
           const brush = Math.sin(v * 140) * 0.12 + 0.94;
           baseR = rgb.r * brush; baseG = rgb.g * brush; baseB = rgb.b * brush;
+        } else if (hatchStyle === "herringbone" || hatchStyle === "chevron" || hatchStyle === "basketweave") {
+          const hu = (u * 16) % 1;
+          const hv = (v * 16) % 1;
+          const isJoint = hu < 0.06 || hv < 0.06;
+          if (isJoint) {
+            baseR = Math.max(0, rgb.r * 0.5);
+            baseG = Math.max(0, rgb.g * 0.5);
+            baseB = Math.max(0, rgb.b * 0.5);
+          } else {
+            const tone = ((Math.floor(u * 16) + Math.floor(v * 16)) % 2 === 0) ? 1.08 : 0.92;
+            baseR = Math.min(255, rgb.r * tone);
+            baseG = Math.min(255, rgb.g * tone);
+            baseB = Math.min(255, rgb.b * tone);
+          }
+        } else if (hatchStyle === "marble") {
+          const turb = Math.sin(u * 18 + Math.sin(v * 24 + u * 12) * 2.8);
+          const isVein = Math.abs(turb) < 0.22;
+          if (isVein) {
+            const veinDark = 0.35 + Math.abs(turb) * 2.5;
+            baseR = Math.max(0, rgb.r * veinDark);
+            baseG = Math.max(0, rgb.g * veinDark);
+            baseB = Math.max(0, rgb.b * veinDark);
+          }
+        } else if (hatchStyle === "terrazzo") {
+          const chipNoise = Math.sin(u * 55 + v * 43);
+          if (Math.abs(chipNoise) > 0.75) {
+            baseR = Math.min(255, rgb.r * 1.35 + 40);
+            baseG = Math.min(255, rgb.g * 1.35 + 40);
+            baseB = Math.min(255, rgb.b * 1.35 + 40);
+          } else if (Math.abs(chipNoise) < 0.15) {
+            baseR = rgb.r * 0.45;
+            baseG = rgb.g * 0.45;
+            baseB = rgb.b * 0.45;
+          }
+        } else if (hatchStyle === "acoustic-slat" || hatchStyle === "fluted-wood" || hatchStyle === "standing-seam" || hatchStyle === "reeded-glass") {
+          const su = (u * 20) % 1;
+          const isGap = su < 0.25;
+          if (isGap) {
+            baseR = rgb.r * 0.3; baseG = rgb.g * 0.3; baseB = rgb.b * 0.3;
+          } else {
+            const highlight = Math.sin(su * Math.PI) * 0.2 + 0.9;
+            baseR = Math.min(255, rgb.r * highlight);
+            baseG = Math.min(255, rgb.g * highlight);
+            baseB = Math.min(255, rgb.b * highlight);
+          }
+        } else if (hatchStyle === "perforated-metal") {
+          const pu = (u * 18) % 1 - 0.5;
+          const pv = (v * 18) % 1 - 0.5;
+          const isHole = (pu * pu + pv * pv) < 0.08;
+          if (isHole) {
+            baseR = 15; baseG = 15; baseB = 20;
+          }
+        } else if (hatchStyle === "hex-tile" || hatchStyle === "fish-scale" || hatchStyle === "penny-round") {
+          const tu = (u * 14) % 1 - 0.5;
+          const tv = (v * 14) % 1 - 0.5;
+          const isGrout = (tu * tu + tv * tv) > 0.18;
+          if (isGrout) {
+            baseR = Math.max(0, rgb.r * 0.55);
+            baseG = Math.max(0, rgb.g * 0.55);
+            baseB = Math.max(0, rgb.b * 0.55);
+          }
+        } else if (hatchStyle === "subway-tile") {
+          const row = Math.floor(v * 14);
+          const uShift = (row % 2) * 0.5;
+          const col = Math.floor(u * 14 + uShift);
+          const fu = (u * 14 + uShift) - col;
+          const fv = (v * 14) - row;
+          const isGrout = fu < 0.08 || fv < 0.12;
+          const isBevel = !isGrout && (fu < 0.18 || fu > 0.82 || fv < 0.22 || fv > 0.78);
+          if (isGrout) {
+            baseR = 210; baseG = 210; baseB = 205;
+          } else if (isBevel) {
+            const bevelLight = (fu < 0.18 || fv < 0.22) ? 1.2 : 0.85;
+            baseR = Math.min(255, rgb.r * bevelLight);
+            baseG = Math.min(255, rgb.g * bevelLight);
+            baseB = Math.min(255, rgb.b * bevelLight);
+          }
         }
 
         // Diffuse Lambertian
