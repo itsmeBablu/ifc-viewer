@@ -531,6 +531,8 @@ export default class LayoutSceneLayer {
       });
       this.applyGhostMaterial(grp, vis.isGhosted);
       this.setMeshSelectionOutline(grp, isWallSelected);
+      const showWallEdges = this.currentRenderMode === "wireframe" || this.currentRenderMode === "fullColor";
+      this.updateWireframeEdges(grp, showWallEdges, this.currentRenderMode === "wireframe");
     }
 
     const doorKeep = new Set(doors.map((d) => d.id));
@@ -635,6 +637,8 @@ export default class LayoutSceneLayer {
       }
       this.applyGhostMaterial(mesh, vis.isGhosted);
       this.setMeshSelectionOutline(mesh, isSlabSelected);
+      const showSlabEdges = this.currentRenderMode === "wireframe" || this.currentRenderMode === "fullColor";
+      this.updateWireframeEdges(mesh, showSlabEdges, this.currentRenderMode === "wireframe");
     }
 
     this.syncEndpointHandles(
@@ -3511,6 +3515,8 @@ export default class LayoutSceneLayer {
     const mode = this.currentRenderMode;
 
     const isWireframe = mode === "wireframe";
+    const showEdgesInShaded = mode === "fullColor";
+    const showEdges = isWireframe || showEdgesInShaded;
 
     for (const [id, grp] of this.wallMeshes) {
       const wall = state.walls.find((w) => w.id === id);
@@ -3534,7 +3540,7 @@ export default class LayoutSceneLayer {
           }
         });
       }
-      this.updateWireframeEdges(grp, isWireframe);
+      this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
     for (const [id, mesh] of this.slabMeshes) {
       const slab = state.slabs.find((s) => s.id === id);
@@ -3550,7 +3556,7 @@ export default class LayoutSceneLayer {
         }
         mesh.material.needsUpdate = true;
       }
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const [id, mesh] of this.columnMeshes) {
       const column = state.columns.find((item) => item.id === id);
@@ -3559,7 +3565,7 @@ export default class LayoutSceneLayer {
         if (!column.color && !column.material) mesh.material.color.setHex(0x94a3b8);
         mesh.material.needsUpdate = true;
       }
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const [id, mesh] of this.beamMeshes) {
       const beam = state.beams.find((item) => item.id === id);
@@ -3568,7 +3574,7 @@ export default class LayoutSceneLayer {
         if (!beam.color && !beam.material) mesh.material.color.setHex(0x64748b);
         mesh.material.needsUpdate = true;
       }
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const [id, g] of this.doorMeshes) {
       const door = state.doors.find((d) => d.id === id);
@@ -3578,7 +3584,7 @@ export default class LayoutSceneLayer {
         const elev = level?.elevationMm ?? 0;
         this.placeOpening(g, wall, door.positionMm, door.widthMm, door.heightMm, elev, 0);
       }
-      this.updateWireframeEdges(g, isWireframe);
+      this.updateWireframeEdges(g, showEdges, isWireframe);
     }
     for (const [id, g] of this.windowMeshes) {
       const win = state.windows.find((w) => w.id === id);
@@ -3588,35 +3594,36 @@ export default class LayoutSceneLayer {
         const elev = level?.elevationMm ?? 0;
         this.placeOpening(g, wall, win.positionMm, win.widthMm, win.heightMm, elev, win.sillHeightMm);
       }
-      this.updateWireframeEdges(g, isWireframe);
+      this.updateWireframeEdges(g, showEdges, isWireframe);
     }
     for (const grp of this.equipmentMeshes.values()) {
-      this.updateWireframeEdges(grp, isWireframe);
+      this.updateWireframeEdges(grp, isWireframe, isWireframe);
     }
     for (const mesh of this.ductMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
     }
     for (const mesh of this.pipeMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
     }
     for (const mesh of this.cableTrayMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe);
+      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
     }
     for (const grp of this.stairMeshes.values()) {
-      this.updateWireframeEdges(grp, isWireframe);
+      this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
     for (const grp of this.rampMeshes.values()) {
-      this.updateWireframeEdges(grp, isWireframe);
+      this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
   }
 
-  private updateWireframeEdges(mesh: THREE.Object3D, isWireframe: boolean) {
+  private updateWireframeEdges(mesh: THREE.Object3D, showEdges: boolean, isWireframe: boolean = false) {
     if (mesh instanceof THREE.Mesh) {
       let edges = mesh.getObjectByName("quad-edges") as THREE.LineSegments | undefined;
-      if (!isWireframe) {
+      if (!showEdges) {
         if (edges) edges.visible = false;
         if (mesh.material instanceof THREE.Material) {
           if ("wireframe" in mesh.material) (mesh.material as any).wireframe = false;
+          (mesh.material as any).polygonOffset = false;
           mesh.material.visible = true;
         }
         return;
@@ -3630,24 +3637,44 @@ export default class LayoutSceneLayer {
         }
         const edgeGeo = new THREE.EdgesGeometry(mesh.geometry, 20);
         const edgeMat = new THREE.LineBasicMaterial({
-          color: 0x0f172a,
+          color: 0x0f172a, // High-contrast crisp architectural edge
           depthTest: true,
+          polygonOffset: true,
+          polygonOffsetFactor: -1.0,
+          polygonOffsetUnits: -1.0,
         });
         edges = new THREE.LineSegments(edgeGeo, edgeMat);
         edges.name = "quad-edges";
         edges.userData.geometryKey = mesh.geometry.uuid;
+        edges.renderOrder = (mesh.renderOrder ?? 0) + 1;
+        edges.raycast = () => undefined;
         mesh.add(edges);
       }
       edges.visible = true;
       if (mesh.material instanceof THREE.Material) {
         if ("wireframe" in mesh.material) (mesh.material as any).wireframe = false;
-        mesh.material.transparent = true;
-        mesh.material.opacity = 0.12;
+        if (isWireframe) {
+          mesh.material.transparent = true;
+          mesh.material.opacity = 0.12;
+          (mesh.material as any).polygonOffset = false;
+        } else {
+          // Shaded with edges view: opaque solid surface with polygonOffset so lines never z-fight
+          (mesh.material as any).polygonOffset = true;
+          (mesh.material as any).polygonOffsetFactor = 1.0;
+          (mesh.material as any).polygonOffsetUnits = 1.0;
+          mesh.material.transparent = false;
+          mesh.material.opacity = 1.0;
+        }
       }
     } else if (mesh instanceof THREE.Group) {
       mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.name !== "quad-edges") {
-          this.updateWireframeEdges(child, isWireframe);
+        if (
+          child instanceof THREE.Mesh &&
+          child.name !== "quad-edges" &&
+          child.name !== "layout-selection-outline" &&
+          child.name !== "wall-plan-cut"
+        ) {
+          this.updateWireframeEdges(child, showEdges, isWireframe);
         }
       });
     }
@@ -4570,11 +4597,9 @@ export default class LayoutSceneLayer {
     planGroup.visible = this.isPlanModeActive;
     grp.add(planGroup);
 
-    // Apply wireframe mode state if active
-    const isWireframe = this.currentRenderMode === "wireframe";
-    if (isWireframe) {
-      this.updateWireframeEdges(grp, true);
-    }
+    // Apply wireframe / shaded edges
+    const showEdges = this.currentRenderMode === "wireframe" || this.currentRenderMode === "fullColor";
+    this.updateWireframeEdges(grp, showEdges, this.currentRenderMode === "wireframe");
   }
 
   setPlanMode(planMode: boolean) {
