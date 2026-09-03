@@ -4,7 +4,7 @@
  * DesktopIsland — unified central fixed workspace header & contextual capsule row for desktop /werkzeug.
  *
  * Features:
- *  1. Center top header: stable category tabs with GSAP smooth sliding yellow thumb:
+ *  1. Center top header: stable category tabs with GSAP animated underline:
  *     - In Arch: Build (default), Structure, Annotate, Insert.
  *     - In MEP: All, HVAC, Piping, Electrical.
  *     - Selection: Modify status badge + Deselect (Esc) button.
@@ -225,7 +225,7 @@ export default function DesktopIsland() {
     selectedRampId,
   ]);
 
-  /* ── 1. GSAP smooth sliding yellow thumb between category tabs ── */
+  /* ── 1. GSAP squeeze-and-release underline, shared with Floors / Attributes ── */
   useLayoutEffect(() => {
     const thumb = tabThumbRef.current;
     if (!thumb) return;
@@ -240,9 +240,12 @@ export default function DesktopIsland() {
     if (!target) return;
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const insetX = 10;
+    const toX = target.offsetLeft + insetX;
+    const toW = Math.max(target.offsetWidth - insetX * 2, 12);
     const properties = {
-      x: target.offsetLeft,
-      width: target.offsetWidth,
+      x: toX,
+      width: toW,
       opacity: 1,
       backgroundColor: mepModeActive ? "rgba(56, 189, 248, 0.95)" : "rgba(250, 204, 21, 0.95)",
     };
@@ -253,12 +256,25 @@ export default function DesktopIsland() {
       return;
     }
 
-    gsap.to(thumb, {
-      ...properties,
-      duration: 0.28,
-      ease: "power3.out",
-      overwrite: true,
-    });
+    const fromX = Number(gsap.getProperty(thumb, "x"));
+    const fromW = Number(gsap.getProperty(thumb, "width"));
+    const midX = fromX + (toX - fromX) * 0.5;
+    const midW = Math.max(18, Math.min(fromW, toW) * 0.45);
+    gsap.timeline({ overwrite: true })
+      .to(thumb, {
+        x: midX + (fromW - midW) / 2,
+        width: midW,
+        opacity: 1,
+        backgroundColor: properties.backgroundColor,
+        duration: 0.18,
+        ease: "power2.in",
+      })
+      .to(thumb, {
+        x: toX,
+        width: toW,
+        duration: 0.26,
+        ease: "power3.out",
+      });
   }, [archCategory, mepCategory, mepModeActive, hasContextSelection]);
 
   // Keep thumb aligned on resize
@@ -269,7 +285,11 @@ export default function DesktopIsland() {
       const target = tabRefs.current[activeId];
       const thumb = tabThumbRef.current;
       if (!target || !thumb) return;
-      gsap.set(thumb, { x: target.offsetLeft, width: target.offsetWidth });
+      const insetX = 10;
+      gsap.set(thumb, {
+        x: target.offsetLeft + insetX,
+        width: Math.max(target.offsetWidth - insetX * 2, 12),
+      });
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -392,7 +412,7 @@ export default function DesktopIsland() {
     }
   }, [hasContextSelection, alignAxis, mepModeActive, archCategory, mepCategory]);
 
-  /* ── 3. Smooth entrance animation for capsules on tab/selection switch ── */
+  /* ── 3. Refractive liquid-glass transition on category switch ── */
   useLayoutEffect(() => {
     if (!capsulesRowRef.current) return;
     const buttons = capsulesRowRef.current.querySelectorAll(".desktop-capsule-btn");
@@ -401,19 +421,18 @@ export default function DesktopIsland() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduceMotion) return;
 
-    gsap.fromTo(
-      buttons,
-      { opacity: 0, y: 5, scale: 0.96 },
-      {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        duration: 0.22,
-        stagger: 0.015,
-        ease: "power2.out",
-        overwrite: true,
-      }
-    );
+    const row = capsulesRowRef.current;
+    const context = gsap.context(() => {
+      gsap.fromTo(row,
+        { autoAlpha: 0.55, scaleX: 0.94, filter: "blur(6px) saturate(1.35)" },
+        { autoAlpha: 1, scaleX: 1, filter: "blur(0px) saturate(1)", duration: 0.42, ease: "power3.out", overwrite: true },
+      );
+      gsap.fromTo(buttons,
+        { autoAlpha: 0, x: (index) => (index - (buttons.length - 1) / 2) * -7, y: 7, scale: 0.9, rotateX: -18 },
+        { autoAlpha: 1, x: 0, y: 0, scale: 1, rotateX: 0, duration: 0.46, stagger: 0.025, ease: "back.out(1.5)", overwrite: true },
+      );
+    }, row);
+    return () => context.revert();
   }, [activeCapsules, hasContextSelection]);
 
   /* ── actions ─────────────────────────────────────────── */
@@ -542,12 +561,12 @@ export default function DesktopIsland() {
     <>
       {/* ── 1. Center Top Header: Stable Category Tabs with Moving Thumb ── */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center select-none">
-        <div className="desktop-center-tabs-pill">
-          {/* Animated sliding thumb */}
+        <div className="desktop-clean-tabs-row">
+          {/* Animated V-Yellow underline */}
           {!hasContextSelection && (
             <div
               ref={tabThumbRef}
-              className="pointer-events-none absolute top-0.5 left-0 h-[calc(100%-4px)] rounded-full z-[1]"
+              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full z-[1]"
               aria-hidden="true"
             />
           )}
@@ -575,7 +594,7 @@ export default function DesktopIsland() {
                   ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
                   onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert")}
-                  className={`desktop-center-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
+                  className={`desktop-clean-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
                 </button>
@@ -589,7 +608,7 @@ export default function DesktopIsland() {
                   ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
                   onClick={() => setMepCategory(tab.id as "all" | "hvac" | "piping" | "electrical")}
-                  className={`desktop-center-tab-btn ${mepCategory === tab.id ? "is-active" : ""}`}
+                  className={`desktop-clean-tab-btn ${mepCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
                 </button>

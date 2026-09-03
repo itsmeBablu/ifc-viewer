@@ -1630,7 +1630,6 @@ export default function ToolRibbon({
             className="flex items-center gap-1 rounded-md px-2 py-1 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors disabled:opacity-40"
           >
             <LuFolderOpen className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline text-[11px]">Open</span>
           </button>
 
           {/* Save Dropdown */}
@@ -1642,8 +1641,6 @@ export default function ToolRibbon({
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
             >
               <LuSave className="h-3.5 w-3.5 text-yellow-400" />
-              <span className="hidden sm:inline text-[11px]">Save</span>
-              <LuChevronDown className="h-3 w-3 text-[var(--text-muted)]" />
             </button>
 
             {saveMenuOpen && (
