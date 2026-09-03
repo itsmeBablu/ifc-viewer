@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
   LuChevronLeft,
   LuChevronRight,
@@ -173,10 +173,34 @@ export default function ToolPropertiesDock() {
     handleTypeChange(updated.id);
   };
 
-  // Dimensions Helpers
   const wallLen = selectedWall ? Math.round(wallLengthMm(selectedWall)) : 0;
   const wallArea = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000)) / 1_000_000).toFixed(2) : "0.00";
   const wallVol = selectedWall ? ((wallLen * (selectedWall.heightMm || 3000) * selectedWall.thicknessMm) / 1_000_000_000).toFixed(2) : "0.00";
+
+  const slabAreaM2 = useMemo(() => {
+    if (!selectedSlab) return "0.00";
+    if (selectedSlab.boundary && selectedSlab.boundary.length >= 3) {
+      const polygonArea = (pts: { xMm: number; yMm: number }[]) => {
+        let a = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          a += pts[i].xMm * pts[j].yMm - pts[j].xMm * pts[i].yMm;
+        }
+        return Math.abs(a) / 2;
+      };
+      let totalAreaMm2 = polygonArea(selectedSlab.boundary);
+      if (selectedSlab.holes) {
+        for (const h of selectedSlab.holes) {
+          if (h.length >= 3) {
+            totalAreaMm2 -= polygonArea(h);
+          }
+        }
+      }
+      return Math.max(0, totalAreaMm2 / 1_000_000).toFixed(2);
+    }
+    const aabbArea = Math.abs((selectedSlab.maxXmm - selectedSlab.minXmm) * (selectedSlab.maxYmm - selectedSlab.minYmm));
+    return (aabbArea / 1_000_000).toFixed(2);
+  }, [selectedSlab]);
 
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const activeAccent = syncArchMep
@@ -404,6 +428,44 @@ export default function ToolPropertiesDock() {
                                 <span className="text-[var(--text-muted)] truncate max-w-[80px]">Height:</span>
                                 <span className="font-mono font-bold text-[var(--text-strong)]">{selectedDoor.heightMm} mm</span>
                               </div>
+                            </>
+                          )}
+                          {selectedWindow && (
+                            <>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Width:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{selectedWindow.widthMm} mm</span>
+                              </div>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Height:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{selectedWindow.heightMm} mm</span>
+                              </div>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Sill Height:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{selectedWindow.sillHeightMm ?? 900} mm</span>
+                              </div>
+                            </>
+                          )}
+                          {selectedSlab && (
+                            <>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Thickness:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{selectedSlab.thicknessMm} mm</span>
+                              </div>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Area:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{slabAreaM2} m²</span>
+                              </div>
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="text-[var(--text-muted)] truncate max-w-[80px]">Elevation:</span>
+                                <span className="font-mono font-bold text-[var(--text-strong)]">{selectedSlab.elevationOffsetMm ?? 0} mm</span>
+                              </div>
+                              {selectedSlab.holes && selectedSlab.holes.length > 0 && (
+                                <div className="flex items-center justify-between py-0.5">
+                                  <span className="text-[var(--text-muted)] truncate max-w-[80px]">Openings:</span>
+                                  <span className="font-mono font-bold text-[var(--text-strong)]">{selectedSlab.holes.length}</span>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>

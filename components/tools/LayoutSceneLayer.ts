@@ -1928,72 +1928,31 @@ export default class LayoutSceneLayer {
     elevationMm: number,
     thicknessMm: number,
     kind: "floor" | "roof",
+    outerPoints?: { xMm: number; yMm: number }[],
+    holes?: { xMm: number; yMm: number }[][],
+    activeHolePoints?: { xMm: number; yMm: number }[] | null,
+    phase?: "outer" | "hole",
   ) {
     if (this.slabPreview) {
       this.disposeGroup(this.slabPreview);
       this.group.remove(this.slabPreview);
       this.slabPreview = null;
     }
-    if (!start || !cursor) return;
-    const minX = Math.min(start.xMm, cursor.xMm);
-    const maxX = Math.max(start.xMm, cursor.xMm);
-    const minY = Math.min(start.yMm, cursor.yMm);
-    const maxY = Math.max(start.yMm, cursor.yMm);
-    if (maxX - minX < 10 || maxY - minY < 10) return;
+    if (!cursor && (!outerPoints || outerPoints.length === 0)) return;
 
     const g = new THREE.Group();
     g.name = "layout-slab-preview";
+    g.userData.isLayoutPreview = true;
 
-    const x1 = fromMm(minX);
-    const x2 = fromMm(maxX);
-    const z1 = fromMm(minY);
-    const z2 = fromMm(maxY);
-    const w = x2 - x1;
-    const d = z2 - z1;
     const t = fromMm(Math.max(50, thicknessMm));
     const topY = fromMm(elevationMm) + (kind === "roof" ? 0 : t) + 0.02;
-
-    // 1. Semi-transparent volume box
-    const geo = new THREE.BoxGeometry(w, t, d);
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
-      transparent: true,
-      opacity: 0.45,
-      depthWrite: false,
-    });
-    const boxMesh = new THREE.Mesh(geo, mat);
-    boxMesh.position.set(
-      (x1 + x2) / 2,
-      fromMm(elevationMm) + (kind === "roof" ? -t / 2 : t / 2),
-      (z1 + z2) / 2,
-    );
-    boxMesh.userData.isLayoutPreview = true;
-    g.add(boxMesh);
-
-    // 2. Bright yellow perimeter drawing line on the top surface
-    const perimeterPts = [
-      new THREE.Vector3(x1, topY, z1),
-      new THREE.Vector3(x2, topY, z1),
-      new THREE.Vector3(x2, topY, z2),
-      new THREE.Vector3(x1, topY, z2),
-      new THREE.Vector3(x1, topY, z1),
-    ];
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(perimeterPts);
-    const lineMat = new THREE.LineBasicMaterial({
-      color: 0xfacc15,
-      linewidth: 2,
-    });
-    const lineMesh = new THREE.Line(lineGeo, lineMat);
-    lineMesh.renderOrder = 150;
-    lineMesh.frustumCulled = false;
-    g.add(lineMesh);
-
-    // 3. Thick flat boundary ribbons for top view visibility
-    const col = 0xfacc15;
+    const boundaryYellow = 0xfacc15;
+    const holeCyan = 0x06b6d4;
+    const autoCloseGreen = 0x22c55e;
     const RIBBON_W = 0.06;
     const RIBBON_H = 0.02;
 
-    const makeRibbonSegment = (p1: THREE.Vector3, p2: THREE.Vector3) => {
+    const makeRibbonSegment = (p1: THREE.Vector3, p2: THREE.Vector3, col: number, dashed = false) => {
       const dx = p2.x - p1.x;
       const dz = p2.z - p1.z;
       const len = Math.hypot(dx, dz);
@@ -2002,7 +1961,7 @@ export default class LayoutSceneLayer {
       const segMat = new THREE.MeshBasicMaterial({
         color: col,
         transparent: true,
-        opacity: 0.95,
+        opacity: dashed ? 0.65 : 0.95,
         depthTest: false,
       });
       const segMesh = new THREE.Mesh(segGeo, segMat);
@@ -2013,20 +1972,15 @@ export default class LayoutSceneLayer {
       g.add(segMesh);
     };
 
-    makeRibbonSegment(perimeterPts[0], perimeterPts[1]);
-    makeRibbonSegment(perimeterPts[1], perimeterPts[2]);
-    makeRibbonSegment(perimeterPts[2], perimeterPts[3]);
-    makeRibbonSegment(perimeterPts[3], perimeterPts[4]);
-
-    // 4. Corner dots (discs in XZ plane at 4 corners)
-    for (const pt of [perimeterPts[0], perimeterPts[1], perimeterPts[2], perimeterPts[3]]) {
-      const discGeo = new THREE.CircleGeometry(0.08, 16);
+    const makeDisc = (pt: THREE.Vector3, col: number, radius = 0.08) => {
+      const discGeo = new THREE.CircleGeometry(radius, 16);
       discGeo.rotateX(-Math.PI / 2);
       const discMat = new THREE.MeshBasicMaterial({
         color: col,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.95,
+        depthTest: false,
       });
       const disc = new THREE.Mesh(discGeo, discMat);
       disc.position.copy(pt);
@@ -2034,6 +1988,133 @@ export default class LayoutSceneLayer {
       disc.renderOrder = 152;
       disc.frustumCulled = false;
       g.add(disc);
+    };
+
+    const outer = outerPoints && outerPoints.length > 0 ? outerPoints : (start ? [start] : []);
+    if (outer.length > 0) {
+      const pts3d = outer.map((p) => new THREE.Vector3(fromMm(p.xMm), topY, fromMm(p.yMm)));
+      for (let i = 0; i < pts3d.length - 1; i++) {
+        makeRibbonSegment(pts3d[i], pts3d[i + 1], boundaryYellow);
+      }
+      for (const p of pts3d) {
+        makeDisc(p, boundaryYellow);
+      }
+
+      if (holes) {
+        for (const h of holes) {
+          if (h.length < 2) continue;
+          const hPts = h.map((p) => new THREE.Vector3(fromMm(p.xMm), topY, fromMm(p.yMm)));
+          for (let i = 0; i < hPts.length; i++) {
+            makeRibbonSegment(hPts[i], hPts[(i + 1) % hPts.length], holeCyan);
+            makeDisc(hPts[i], holeCyan, 0.06);
+          }
+        }
+      }
+
+      if (cursor) {
+        const cur3d = new THREE.Vector3(fromMm(cursor.xMm), topY, fromMm(cursor.yMm));
+
+        if (phase === "hole") {
+          const actHoles = activeHolePoints && activeHolePoints.length > 0 ? activeHolePoints : [];
+          if (actHoles.length > 0) {
+            const hPts = actHoles.map((p) => new THREE.Vector3(fromMm(p.xMm), topY, fromMm(p.yMm)));
+            for (let i = 0; i < hPts.length - 1; i++) {
+              makeRibbonSegment(hPts[i], hPts[i + 1], holeCyan);
+            }
+            for (const p of hPts) makeDisc(p, holeCyan, 0.06);
+            makeRibbonSegment(hPts[hPts.length - 1], cur3d, holeCyan, true);
+
+            const firstPt = hPts[0];
+            const dist = Math.hypot(cursor.xMm - actHoles[0].xMm, cursor.yMm - actHoles[0].yMm);
+            if (actHoles.length >= 3 && dist < 350) {
+              makeDisc(firstPt, autoCloseGreen, 0.16);
+            }
+          }
+        } else {
+          makeRibbonSegment(pts3d[pts3d.length - 1], cur3d, boundaryYellow, true);
+
+          const firstPt = pts3d[0];
+          const dist = Math.hypot(cursor.xMm - outer[0].xMm, cursor.yMm - outer[0].yMm);
+          if (outer.length >= 3 && dist < 350) {
+            makeDisc(firstPt, autoCloseGreen, 0.16);
+          }
+        }
+      }
+
+      if (outer.length >= 3) {
+        try {
+          const shape = new THREE.Shape();
+          shape.moveTo(fromMm(outer[0].xMm), fromMm(outer[0].yMm));
+          for (let i = 1; i < outer.length; i++) {
+            shape.lineTo(fromMm(outer[i].xMm), fromMm(outer[i].yMm));
+          }
+          shape.closePath();
+
+          if (holes) {
+            for (const h of holes) {
+              if (h.length < 3) continue;
+              const hp = new THREE.Path();
+              hp.moveTo(fromMm(h[0].xMm), fromMm(h[0].yMm));
+              for (let i = 1; i < h.length; i++) hp.lineTo(fromMm(h[i].xMm), fromMm(h[i].yMm));
+              hp.closePath();
+              shape.holes.push(hp);
+            }
+          }
+
+          const volGeo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
+          const volMat = new THREE.MeshPhysicalMaterial({
+            color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          });
+          const volMesh = new THREE.Mesh(volGeo, volMat);
+          volMesh.rotation.x = -Math.PI / 2;
+          volMesh.position.y = topY;
+          volMesh.userData.isLayoutPreview = true;
+          g.add(volMesh);
+        } catch {
+          // ignore degenerate polygon geometry while drafting
+        }
+      }
+    } else if (start && cursor) {
+      const minX = Math.min(start.xMm, cursor.xMm);
+      const maxX = Math.max(start.xMm, cursor.xMm);
+      const minY = Math.min(start.yMm, cursor.yMm);
+      const maxY = Math.max(start.yMm, cursor.yMm);
+      if (maxX - minX >= 10 && maxY - minY >= 10) {
+        const x1 = fromMm(minX);
+        const x2 = fromMm(maxX);
+        const z1 = fromMm(minY);
+        const z2 = fromMm(maxY);
+        const w = x2 - x1;
+        const d = z2 - z1;
+        const geo = new THREE.BoxGeometry(w, t, d);
+        const mat = new THREE.MeshPhysicalMaterial({
+          color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
+          transparent: true,
+          opacity: 0.45,
+          depthWrite: false,
+        });
+        const boxMesh = new THREE.Mesh(geo, mat);
+        boxMesh.position.set(
+          (x1 + x2) / 2,
+          fromMm(elevationMm) + (kind === "roof" ? -t / 2 : t / 2),
+          (z1 + z2) / 2,
+        );
+        boxMesh.userData.isLayoutPreview = true;
+        g.add(boxMesh);
+
+        const p0 = new THREE.Vector3(x1, topY, z1);
+        const p1 = new THREE.Vector3(x2, topY, z1);
+        const p2 = new THREE.Vector3(x2, topY, z2);
+        const p3 = new THREE.Vector3(x1, topY, z2);
+        makeRibbonSegment(p0, p1, boundaryYellow);
+        makeRibbonSegment(p1, p2, boundaryYellow);
+        makeRibbonSegment(p2, p3, boundaryYellow);
+        makeRibbonSegment(p3, p0, boundaryYellow);
+        for (const pt of [p0, p1, p2, p3]) makeDisc(pt, boundaryYellow);
+      }
     }
 
     this.slabPreview = g;

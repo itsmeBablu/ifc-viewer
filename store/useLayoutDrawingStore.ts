@@ -186,6 +186,16 @@ export type SlabDrawState = {
   cursor: { xMm: number; yMm: number } | null;
   /** Existing slab whose footprint is being redrawn. */
   replaceSlabId?: string;
+  /** Vector polygon points committed so far */
+  outerPoints?: { xMm: number; yMm: number }[];
+  /** Completed inner hole loops */
+  holes?: { xMm: number; yMm: number }[][];
+  /** Active hole points being drawn */
+  activeHolePoints?: { xMm: number; yMm: number }[] | null;
+  /** Drawing phase: "outer" or "hole" */
+  phase?: "outer" | "hole";
+  /** Target slab ID if editing or adding holes to an existing slab */
+  targetSlabId?: string | null;
 } | null;
 
 export type StairDrawState = {
@@ -649,8 +659,13 @@ type LayoutDrawingState = {
   deleteSlab: (id: string) => Promise<void>;
   selectSlab: (id: string | null) => void;
   duplicateSlab: (id: string) => Promise<LayoutSlab | null>;
+  rotateSlab: (id: string, angleDeg?: number) => Promise<void>;
+  moveSlab: (id: string, deltaXmm: number, deltaYmm: number) => Promise<void>;
+  beginFloorHole: (slabId: string) => void;
   beginSlabBoundaryEdit: (id: string) => void;
   updateSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
+  insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
+  deleteSlabBoundaryVertex: (index: number) => void;
   commitSlabBoundaryEdit: () => Promise<void>;
   cancelSlabBoundaryEdit: () => void;
   toggleElementLock: (ref: SelectedElementRef) => void;
@@ -2083,17 +2098,53 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   finishWallDraw: () => set({ wallDraw: null }),
   cancelWallDraw: () => set({ wallDraw: null, armedLayoutTool: null }),
 
-  beginSlabDraw: (kind, levelId) =>
+  beginSlabDraw: (kind, levelId, targetSlabId?: string | null) =>
     set({
-      slabDraw: { kind, levelId, start: null, cursor: null },
+      slabDraw: {
+        kind,
+        levelId,
+        start: null,
+        cursor: null,
+        outerPoints: [],
+        holes: [],
+        activeHolePoints: null,
+        phase: "outer",
+        targetSlabId: targetSlabId ?? null,
+      },
       wallDraw: null,
       armedLayoutTool: kind,
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
-      selectedSlabId: null,
+      selectedSlabId: targetSlabId ?? null,
       selectedUnderlayId: null,
     }),
+
+  beginFloorHole: (slabId: string) => {
+    const slab = get().slabs.find((s) => s.id === slabId);
+    if (!slab) return;
+    const boundary = slab.boundary?.length ? slab.boundary : [
+      { xMm: slab.minXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.maxYmm },
+      { xMm: slab.minXmm, yMm: slab.maxYmm },
+    ];
+    set({
+      slabDraw: {
+        kind: slab.kind,
+        levelId: slab.levelId,
+        start: null,
+        cursor: null,
+        outerPoints: boundary.map((p) => ({ ...p })),
+        holes: slab.holes ? slab.holes.map((h) => h.map((p) => ({ ...p }))) : [],
+        activeHolePoints: [],
+        phase: "hole",
+        targetSlabId: slabId,
+      },
+      armedLayoutTool: slab.kind,
+      selectedSlabId: slabId,
+    });
+  },
 
   beginSlabRedraw: (id) => {
     if (get().lockedElementKeys.includes(`slab:${id}`)) return;
@@ -2105,7 +2156,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         levelId: slab.levelId,
         start: null,
         cursor: null,
+        outerPoints: [],
+        holes: [],
+        activeHolePoints: null,
+        phase: "outer",
         replaceSlabId: id,
+        targetSlabId: id,
       },
       slabBoundaryEdit: null,
       armedLayoutTool: slab.kind,
@@ -2159,7 +2215,76 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       140,
       get().planSnapModes,
     ).point;
-    if (!draw.start) {
+
+    const level = get().levels.find((l) => l.id === draw.levelId);
+    const thicknessMm = get().draftSlabThicknessMm;
+    const elevationOffsetMm =
+      draw.kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+
+    // --- CASE A: DRAWING A HOLE INSIDE A FLOOR ---
+    if (draw.phase === "hole") {
+      const activeHoles = draw.activeHolePoints ? [...draw.activeHolePoints] : [];
+      if (activeHoles.length === 0) {
+        set({
+          slabDraw: {
+            ...draw,
+            activeHolePoints: [pt],
+            cursor: pt,
+          },
+        });
+        return null;
+      }
+
+      // Check auto-close on first vertex of hole
+      const firstHolePt = activeHoles[0];
+      const distToStart = Math.hypot(pt.xMm - firstHolePt.xMm, pt.yMm - firstHolePt.yMm);
+      if (activeHoles.length >= 3 && distToStart < 350) {
+        const nextHoles = [...(draw.holes ?? []), activeHoles];
+        if (draw.targetSlabId) {
+          const curSlab = get().slabs.find((s) => s.id === draw.targetSlabId);
+          if (curSlab) {
+            pushWerkzeugHistory();
+            const updated: LayoutSlab = {
+              ...curSlab,
+              holes: nextHoles,
+            };
+            await idbPutSlab(updated);
+            set({
+              slabs: get().slabs.map((s) => (s.id === updated.id ? updated : s)),
+              slabDraw: null,
+              armedLayoutTool: null,
+              selectedSlabId: updated.id,
+              lastMutatedAt: Date.now(),
+            });
+            return updated;
+          }
+        }
+        set({
+          slabDraw: {
+            ...draw,
+            holes: nextHoles,
+            activeHolePoints: null,
+            phase: "outer",
+          },
+        });
+        return null;
+      }
+
+      set({
+        slabDraw: {
+          ...draw,
+          activeHolePoints: [...activeHoles, pt],
+          cursor: pt,
+        },
+      });
+      return null;
+    }
+
+    // --- CASE B: DRAWING OUTER BOUNDARY ---
+    const outer = draw.outerPoints ? [...draw.outerPoints] : [];
+
+    if (outer.length === 0) {
+      // Room floor fill on single click inside walls
       const region =
         draw.kind === "floor"
           ? wallRegionAtPoint(get().walls, draw.levelId, pt)
@@ -2178,7 +2303,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           maxYmm: Math.max(...ys),
           boundary: region.points,
           autoBoundaryFromWalls: true,
-          thicknessMm: get().draftSlabThicknessMm,
+          thicknessMm,
           elevationOffsetMm: 0,
           createdAt: Date.now(),
         };
@@ -2187,67 +2312,190 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         set({
           slabs: [...get().slabs, slab],
           selectedSlabId: slab.id,
+          slabDraw: null,
+          armedLayoutTool: null,
           lastMutatedAt: Date.now(),
         });
         return slab;
       }
+
       set({
-        slabDraw: { ...draw, start: pt, cursor: pt },
+        slabDraw: {
+          ...draw,
+          start: pt,
+          outerPoints: [pt],
+          cursor: pt,
+        },
       });
       return null;
     }
-    const minXmm = Math.min(draw.start.xMm, pt.xMm);
-    const maxXmm = Math.max(draw.start.xMm, pt.xMm);
-    const minYmm = Math.min(draw.start.yMm, pt.yMm);
-    const maxYmm = Math.max(draw.start.yMm, pt.yMm);
-    if (maxXmm - minXmm < 100 || maxYmm - minYmm < 100) return null;
 
-    const level = get().levels.find((l) => l.id === draw.levelId);
-    const thicknessMm = get().draftSlabThicknessMm;
-    const elevationOffsetMm =
-      draw.kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
-    const replaced = draw.replaceSlabId
-      ? get().slabs.find((item) => item.id === draw.replaceSlabId)
-      : null;
-    const slab: LayoutSlab = {
-      ...(replaced ?? {} as LayoutSlab),
-      id: newLayoutId(draw.kind === "roof" ? "roof" : "floor"),
-      projectId,
-      levelId: draw.levelId,
-      kind: draw.kind,
-      minXmm,
-      minYmm,
-      maxXmm,
-      maxYmm,
-      thicknessMm,
-      elevationOffsetMm,
-      createdAt: Date.now(),
-    };
-    if (replaced) {
-      slab.id = replaced.id;
-      slab.projectId = replaced.projectId;
-      slab.thicknessMm = replaced.thicknessMm;
-      slab.elevationOffsetMm = replaced.elevationOffsetMm;
-      slab.createdAt = replaced.createdAt;
-      slab.boundary = undefined;
-      slab.autoBoundaryFromWalls = false;
+    // Check auto-close on first vertex of outer boundary
+    const startPt = outer[0];
+    const distToStart = Math.hypot(pt.xMm - startPt.xMm, pt.yMm - startPt.yMm);
+    if (outer.length >= 3 && distToStart < 350) {
+      const xs = outer.map((p) => p.xMm);
+      const ys = outer.map((p) => p.yMm);
+      const replaced = draw.replaceSlabId
+        ? get().slabs.find((item) => item.id === draw.replaceSlabId)
+        : null;
+      const slab: LayoutSlab = {
+        ...(replaced ?? ({} as LayoutSlab)),
+        id: replaced ? replaced.id : newLayoutId(draw.kind === "roof" ? "roof" : "floor"),
+        projectId,
+        levelId: draw.levelId,
+        kind: draw.kind,
+        minXmm: Math.min(...xs),
+        minYmm: Math.min(...ys),
+        maxXmm: Math.max(...xs),
+        maxYmm: Math.max(...ys),
+        boundary: outer,
+        holes: draw.holes ?? [],
+        thicknessMm,
+        elevationOffsetMm,
+        createdAt: replaced ? replaced.createdAt : Date.now(),
+      };
+      pushWerkzeugHistory();
+      await idbPutSlab(slab);
+      set({
+        slabs: replaced
+          ? get().slabs.map((item) => (item.id === slab.id ? slab : item))
+          : [...get().slabs, slab],
+        slabDraw: null,
+        armedLayoutTool: null,
+        selectedSlabId: slab.id,
+        selectedWallId: null,
+        selectedDoorId: null,
+        selectedWindowId: null,
+        selectedUnderlayId: null,
+        lastMutatedAt: Date.now(),
+      });
+      return slab;
     }
-    pushWerkzeugHistory();
-    await idbPutSlab(slab);
+
     set({
-      slabs: replaced
-        ? get().slabs.map((item) => item.id === slab.id ? slab : item)
-        : [...get().slabs, slab],
-      slabDraw: replaced ? null : { ...draw, start: null, cursor: pt },
-      armedLayoutTool: replaced ? null : get().armedLayoutTool,
-      selectedSlabId: slab.id,
-      selectedWallId: null,
-      selectedDoorId: null,
-      selectedWindowId: null,
-      selectedUnderlayId: null,
+      slabDraw: {
+        ...draw,
+        outerPoints: [...outer, pt],
+        cursor: pt,
+      },
+    });
+    return null;
+  },
+
+  rotateSlab: async (id: string, angleDeg = 90) => {
+    const slab = get().slabs.find((s) => s.id === id);
+    if (!slab) return;
+    pushWerkzeugHistory();
+    const cx = (slab.minXmm + slab.maxXmm) / 2;
+    const cy = (slab.minYmm + slab.maxYmm) / 2;
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const rotatePt = (p: { xMm: number; yMm: number }) => {
+      const dx = p.xMm - cx;
+      const dy = p.yMm - cy;
+      return {
+        xMm: Math.round(cx + dx * cos - dy * sin),
+        yMm: Math.round(cy + dx * sin + dy * cos),
+      };
+    };
+    const boundary = (slab.boundary?.length ? slab.boundary : [
+      { xMm: slab.minXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.maxYmm },
+      { xMm: slab.minXmm, yMm: slab.maxYmm },
+    ]).map(rotatePt);
+    const holes = slab.holes?.map((h) => h.map(rotatePt));
+    const xs = boundary.map((p) => p.xMm);
+    const ys = boundary.map((p) => p.yMm);
+    const updated: LayoutSlab = {
+      ...slab,
+      boundary,
+      holes,
+      minXmm: Math.min(...xs),
+      minYmm: Math.min(...ys),
+      maxXmm: Math.max(...xs),
+      maxYmm: Math.max(...ys),
+      autoBoundaryFromWalls: false,
+    };
+    await idbPutSlab(updated);
+    set({
+      slabs: get().slabs.map((s) => (s.id === id ? updated : s)),
       lastMutatedAt: Date.now(),
     });
-    return slab;
+  },
+
+  moveSlab: async (id: string, deltaXmm: number, deltaYmm: number) => {
+    const slab = get().slabs.find((s) => s.id === id);
+    if (!slab) return;
+    pushWerkzeugHistory();
+    const shiftPt = (p: { xMm: number; yMm: number }) => ({
+      xMm: Math.round(p.xMm + deltaXmm),
+      yMm: Math.round(p.yMm + deltaYmm),
+    });
+    const boundary = slab.boundary?.map(shiftPt);
+    const holes = slab.holes?.map((h) => h.map(shiftPt));
+    const updated: LayoutSlab = {
+      ...slab,
+      minXmm: Math.round(slab.minXmm + deltaXmm),
+      maxXmm: Math.round(slab.maxXmm + deltaXmm),
+      minYmm: Math.round(slab.minYmm + deltaYmm),
+      maxYmm: Math.round(slab.maxYmm + deltaYmm),
+      boundary,
+      holes,
+      autoBoundaryFromWalls: false,
+    };
+    await idbPutSlab(updated);
+    set({
+      slabs: get().slabs.map((s) => (s.id === id ? updated : s)),
+      lastMutatedAt: Date.now(),
+    });
+  },
+
+  insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit || edit.phase !== "editing") return;
+    const slab = get().slabs.find((s) => s.id === edit.slabId);
+    if (!slab) return;
+    const current = slab.boundary?.length ? [...slab.boundary] : [...edit.originalBoundary];
+    current.splice(index + 1, 0, { ...point });
+    const xs = current.map((p) => p.xMm);
+    const ys = current.map((p) => p.yMm);
+    set({
+      slabs: get().slabs.map((s) => (s.id === slab.id ? {
+        ...s,
+        boundary: current,
+        minXmm: Math.min(...xs),
+        minYmm: Math.min(...ys),
+        maxXmm: Math.max(...xs),
+        maxYmm: Math.max(...ys),
+        autoBoundaryFromWalls: false,
+      } : s)),
+    });
+  },
+
+  deleteSlabBoundaryVertex: (index: number) => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit || edit.phase !== "editing") return;
+    const slab = get().slabs.find((s) => s.id === edit.slabId);
+    if (!slab) return;
+    const current = slab.boundary?.length ? [...slab.boundary] : [...edit.originalBoundary];
+    if (current.length <= 3) return;
+    current.splice(index, 1);
+    const xs = current.map((p) => p.xMm);
+    const ys = current.map((p) => p.yMm);
+    set({
+      slabs: get().slabs.map((s) => (s.id === slab.id ? {
+        ...s,
+        boundary: current,
+        minXmm: Math.min(...xs),
+        minYmm: Math.min(...ys),
+        maxXmm: Math.max(...xs),
+        maxYmm: Math.max(...ys),
+        autoBoundaryFromWalls: false,
+      } : s)),
+    });
   },
 
   cancelSlabDraw: () => set({ slabDraw: null, armedLayoutTool: null }),
@@ -2329,6 +2577,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const slab = get().slabs.find((s) => s.id === id);
     if (!slab) return null;
     pushWerkzeugHistory();
+    const shiftPt = (p: { xMm: number; yMm: number }) => ({ xMm: p.xMm + 500, yMm: p.yMm + 500 });
     const clone: LayoutSlab = {
       ...slab,
       id: newLayoutId(slab.kind === "roof" ? "roof" : "floor"),
@@ -2336,6 +2585,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       maxXmm: slab.maxXmm + 500,
       minYmm: slab.minYmm + 500,
       maxYmm: slab.maxYmm + 500,
+      boundary: slab.boundary?.map(shiftPt),
+      holes: slab.holes?.map((h) => h.map(shiftPt)),
       createdAt: Date.now(),
     };
     await idbPutSlab(clone);

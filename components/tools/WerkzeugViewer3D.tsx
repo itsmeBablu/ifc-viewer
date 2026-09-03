@@ -2674,7 +2674,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       } else {
         layer.setWallPreview([], null, 0);
       }
-      if (s.slabDraw?.start && s.slabDraw.cursor) {
+      if (s.slabDraw?.cursor && (s.slabDraw.start || (s.slabDraw.outerPoints && s.slabDraw.outerPoints.length > 0) || (s.slabDraw.activeHolePoints && s.slabDraw.activeHolePoints.length > 0))) {
         const lvl =
           s.levels.find((l) => l.id === s.slabDraw!.levelId) ?? activeLevel;
         const elev = lvl?.elevationMm ?? 0;
@@ -2688,6 +2688,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           elev + offset,
           s.draftSlabThicknessMm,
           s.slabDraw.kind,
+          s.slabDraw.outerPoints,
+          s.slabDraw.holes,
+          s.slabDraw.activeHolePoints,
+          s.slabDraw.phase,
         );
       } else {
         layer.setSlabPreview(null, null, 0, 200, "floor");
@@ -5193,14 +5197,31 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             if (layoutStore.slabDraw) {
               layoutStore.updateSlabCursor(plan);
               const draw = useLayoutDrawingStore.getState().slabDraw;
-              if (draw?.start && draw.cursor) {
-                const w = Math.abs(draw.cursor.xMm - draw.start.xMm);
-                const d = Math.abs(draw.cursor.yMm - draw.start.yMm);
-                ms.setDragSnapHint({
-                  text: `${Math.round(w)} × ${Math.round(d)} mm`,
-                  clientX: e.clientX,
-                  clientY: e.clientY,
-                });
+              if (draw?.cursor) {
+                const activePts = draw.phase === "hole" ? draw.activeHolePoints : draw.outerPoints;
+                const firstPt = activePts && activePts.length > 0 ? activePts[0] : draw.start;
+                const lastPt = activePts && activePts.length > 0 ? activePts[activePts.length - 1] : draw.start;
+                const distToFirst = firstPt ? Math.hypot(draw.cursor.xMm - firstPt.xMm, draw.cursor.yMm - firstPt.yMm) : Infinity;
+                const segLen = lastPt ? Math.hypot(draw.cursor.xMm - lastPt.xMm, draw.cursor.yMm - lastPt.yMm) : 0;
+                
+                let hintText = "";
+                if (firstPt && (activePts?.length ?? 0) >= 3 && distToFirst < 350) {
+                  hintText = `Snap: Click to close ${draw.phase === "hole" ? "hole" : "boundary"}`;
+                } else if (activePts && activePts.length > 0) {
+                  hintText = `${draw.phase === "hole" ? "Hole" : "Floor"} Pt ${activePts.length + 1} • ${Math.round(segLen)} mm (Click near start to close)`;
+                } else if (draw.start) {
+                  const w = Math.abs(draw.cursor.xMm - draw.start.xMm);
+                  const d = Math.abs(draw.cursor.yMm - draw.start.yMm);
+                  hintText = `${Math.round(w)} × ${Math.round(d)} mm`;
+                }
+
+                if (hintText) {
+                  ms.setDragSnapHint({
+                    text: hintText,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                  });
+                }
               }
             }
           }
