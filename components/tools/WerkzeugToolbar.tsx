@@ -11,7 +11,7 @@
  * `targetRef` (the app root) for the Fullscreen/Presentation API.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BsFullscreen, BsFullscreenExit } from "react-icons/bs";
 import { MdZoomInMap } from "react-icons/md";
@@ -29,7 +29,7 @@ import SearchFilterPanel from "./WerkzeugSearchFilterPanel";
 import Slider from "../common/ui/Slider";
 import SliceHeightSlider from "../common/SliceHeightSlider";
 import SeasonalBgToggle from "../common/SeasonalBgToggle";
-import { canHover, clampPopoverCenterX } from "@/lib/canHover";
+import { clampPopoverCenterX } from "@/lib/canHover";
 import { isLandscapeMobile as detectLandscapeMobile } from "@/lib/layoutTokens";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
 import type { RefObject } from "react";
@@ -77,93 +77,7 @@ function SliderRow({
   );
 }
 
-/** Hover popup above a toolbar control — portaled so glass/overflow can't clip it. */
-function ToolTipWrap({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [suppressed, setSuppressed] = useState(false);
-  const [pos, setPos] = useState({ bottom: 0, left: 0 });
-  const hoverCapable = canHover();
-
-  const updatePos = () => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({
-      bottom: window.innerHeight - r.top + 12,
-      left: r.left + r.width / 2,
-    });
-  };
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    updatePos();
-    window.addEventListener("resize", updatePos);
-    window.addEventListener("scroll", updatePos, true);
-    return () => {
-      window.removeEventListener("resize", updatePos);
-      window.removeEventListener("scroll", updatePos, true);
-    };
-  }, [open]);
-
-  return (
-    <div
-      ref={wrapRef}
-      className="relative flex items-center justify-center"
-      onMouseEnter={() => {
-        if (!hoverCapable || suppressed) return;
-        updatePos();
-        setOpen(true);
-      }}
-      onMouseLeave={() => {
-        setOpen(false);
-        setSuppressed(false);
-      }}
-      onFocus={() => {
-        if (!hoverCapable || suppressed) return;
-        updatePos();
-        setOpen(true);
-      }}
-      onBlur={() => setOpen(false)}
-      onClick={() => {
-        setOpen(false);
-        setSuppressed(true);
-      }}
-    >
-      {children}
-      {open &&
-        hoverCapable &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="tooltip"
-            className="pointer-events-none fixed z-[200] w-max max-w-[240px] -translate-x-1/2"
-            style={{ bottom: pos.bottom, left: pos.left }}
-          >
-            <GlassPanel variant="panel" zIndex={200}>
-              <div className="px-3.5 py-2.5 text-center">
-                <p className="text-[12px] font-semibold tracking-wide text-[var(--text-strong)]">
-                  {label}
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-[var(--text-body)]">
-                  {hint}
-                </p>
-              </div>
-            </GlassPanel>
-          </div>,
-          (document.fullscreenElement as HTMLElement | null) ?? document.body,
-        )}
-    </div>
-  );
-}
+import ToolTipWrap from "../common/GlassTooltip";
 
 export default function WerkzeugToolbar({ viewerRef, targetRef }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);

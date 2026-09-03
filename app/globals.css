@@ -3539,3 +3539,127 @@ body.werkzeug-active .material-editor-embedded button:hover:not(.btn-liquid-ambe
   margin: 0;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Desktop Floating Island & Capsule Row
+   ───────────────────────────────────────────────────────────── */
+
+.desktop-island {
+  user-select: none;
+  cursor: grab;
+}
+
+.desktop-island:active {
+  cursor: grabbing;
+}
+
+.desktop-island-toggle {
+  outline: none;
+}
+
+.desktop-capsule-row {
+  user-select: none;
+  transition: right 0.2s ease, left 0.2s ease;
+}
+
+.desktop-capsule-row-glass {
+  background: var(--surface-panel);
+  border: 1px solid var(--panel-divider);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.28), 0 2px 8px -2px rgba(0, 0, 0, 0.16);
+}
+
+.desktop-capsule-row-inner {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.desktop-capsule-row-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-capsule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-strong);
+  background: var(--glass-inset-bg);
+  border: 1px solid var(--panel-divider);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+
+.desktop-capsule-btn:hover {
+  background: var(--glass-hover-bg);
+  border-color: rgba(250, 204, 21, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12);
+}
+
+.desktop-capsule-btn:active {
+  transform: translateY(0);
+}
+
+.desktop-capsule-btn.is-active {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.95), rgba(245, 158, 11, 0.92));
+  color: #18181b;
+  border-color: rgba(250, 204, 21, 1);
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.desktop-capsule-btn.is-active:hover {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 1), rgba(245, 158, 11, 0.98));
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.desktop-capsule-btn.is-active :is(svg, span) {
+  color: #18181b !important;
+}
+
+/* In MEP mode, active capsule buttons glow sky-blue */
+body.mep-mode-active .desktop-capsule-btn.is-active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(14, 165, 233, 0.92));
+  color: #0f172a;
+  border-color: rgba(56, 189, 248, 1);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+body.mep-mode-active .desktop-capsule-btn.is-active:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(14, 165, 233, 0.98));
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
+  color: #0f172a !important;
+}
+
+/* Danger action (Delete) */
+.desktop-capsule-btn.is-danger {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.desktop-capsule-btn.is-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #dc2626;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+}
+
+.desktop-capsule-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.desktop-capsule-btn-label {
+  letter-spacing: -0.01em;
+}
+
+

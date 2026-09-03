@@ -1901,29 +1901,8 @@ export default function ToolRibbon({
             </div>
           )}
 
-          {/* Right: discipline and theme toggles */}
+          {/* Right: theme toggle */}
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                const nextMepMode = !mepModeActive;
-                setArmedLayoutTool(null);
-                setArmedTool(null);
-                setActiveDropdown(null);
-                setActiveTab(nextMepMode ? "mep" : "vstudio");
-                setMepModeActive(nextMepMode);
-              }}
-              title={mepModeActive ? "Switch to Architecture tools" : "Switch to MEP tools"}
-              aria-pressed={mepModeActive}
-              className={`flex min-h-8 items-center gap-1 rounded-lg border px-2 text-[10px] font-bold transition-colors ${
-                mepModeActive
-                  ? "border-sky-400/60 bg-sky-400/20 text-sky-500 dark:text-sky-300"
-                  : "border-yellow-400/60 bg-yellow-400/15 text-yellow-600 dark:text-yellow-300"
-              }`}
-            >
-              <span aria-hidden="true">{mepModeActive ? "⚡" : "⌂"}</span>
-              <span>{mepModeActive ? "MEP" : "Arch"}</span>
-            </button>
             <button
               type="button"
               onClick={() => setColorTheme(isDark ? "light" : "dark")}

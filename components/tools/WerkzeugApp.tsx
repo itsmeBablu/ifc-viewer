@@ -38,6 +38,8 @@ import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
 import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
+import DesktopIsland from "./DesktopIsland";
+import DesktopCapsuleRow from "./DesktopCapsuleRow";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
@@ -553,6 +555,7 @@ export default function WerkzeugApp() {
         <div className={`contents werkzeug-preproject-tools ${hasActiveWorkspace ? "" : "is-disabled"}`} aria-disabled={!hasActiveWorkspace}>
         {isDesktop ? (
           <>
+            <DesktopIsland />
             <ToolRibbon
               viewerRef={viewerRef}
               onFile={handleFile}
@@ -561,6 +564,7 @@ export default function WerkzeugApp() {
               onOpenSheet={() => setSheetViewOpen(true)}
             />
             <ToolOptionsBar />
+            <DesktopCapsuleRow />
           </>
         ) : (
           <WerkzeugWorkspaceChrome
