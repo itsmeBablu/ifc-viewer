@@ -965,7 +965,9 @@ export type SelectedElementRef = {
     | "duct"
     | "pipe"
     | "cabletray"
-    | "equipment";
+    | "equipment"
+    | "wire"
+    | "section";
   id: string;
 };
 

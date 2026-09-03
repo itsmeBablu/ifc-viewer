@@ -104,6 +104,7 @@ export default class LayoutSceneLayer {
   private mepPreview = new THREE.Group();
 
   private sectionGroup = new THREE.Group();
+  private sectionPreviewGroup = new THREE.Group();
 
   onWallClick: ((id: string) => void) | null = null;
   onDoorClick: ((id: string) => void) | null = null;
@@ -117,12 +118,14 @@ export default class LayoutSceneLayer {
     this.mepPreview.name = "layout-mep-preview";
     this.workPlaneGroup.name = "layout-workplane-group";
     this.sectionGroup.name = "layout-section-group";
+    this.sectionPreviewGroup.name = "layout-section-preview";
     this.group.add(this.endpointGroup);
     this.group.add(this.sketchGroup);
     this.group.add(this.structuralPreview);
     this.group.add(this.mepPreview);
     this.group.add(this.workPlaneGroup);
     this.group.add(this.sectionGroup);
+    this.group.add(this.sectionPreviewGroup);
   }
 
   syncSectionLines(
@@ -246,7 +249,7 @@ export default class LayoutSceneLayer {
       arrowMesh.rotation.x = -Math.PI / 2;
       arrowMesh.rotation.z = Math.atan2(-nz, nx) - Math.PI / 2;
       arrowMesh.renderOrder = 186;
-      arrowMesh.userData = { layoutSectionId: sec.id };
+      arrowMesh.userData = { isSectionFlip: true, sectionId: sec.id, layoutSectionId: sec.id };
       this.sectionGroup.add(arrowMesh);
 
       // 5. Interactive End Readjust Drag Handles (Grip Handles for Active Section)
@@ -270,8 +273,109 @@ export default class LayoutSceneLayer {
         hEnd.renderOrder = 200;
         hEnd.userData = { isSectionHandle: true, sectionId: sec.id, handleType: "end" };
         this.sectionGroup.add(hEnd);
+
+        // 6. Optional View Depth (Far Clip) Indicator Line
+        const depthM = sec.depthMm ? fromMm(sec.depthMm) : 0;
+        if (depthM > 0) {
+          const depthLineGeo = new THREE.PlaneGeometry(len, 0.04);
+          const depthLineMat = new THREE.MeshBasicMaterial({
+            color: 0x94a3b8,
+            transparent: true,
+            opacity: 0.65,
+            side: THREE.DoubleSide,
+            depthTest: false,
+          });
+          const depthMesh = new THREE.Mesh(depthLineGeo, depthLineMat);
+          depthMesh.position.set(midX + nx * depthM, yElev + 0.001, midZ + nz * depthM);
+          depthMesh.rotation.x = -Math.PI / 2;
+          depthMesh.rotation.z = -angle;
+          depthMesh.renderOrder = 175;
+          this.sectionGroup.add(depthMesh);
+        }
       }
     }
+  }
+
+  setSectionPreview(
+    start: { xMm: number; yMm: number } | null,
+    cursor: { xMm: number; yMm: number } | null,
+    levelElevMm = 0,
+  ) {
+    this.clearGroupContents(this.sectionPreviewGroup);
+    if (!start || !cursor) return;
+
+    const p1x = fromMm(start.xMm);
+    const p1z = fromMm(start.yMm);
+    const p2x = fromMm(cursor.xMm);
+    const p2z = fromMm(cursor.yMm);
+    const yElev = fromMm(levelElevMm) + 0.012;
+
+    const dx = p2x - p1x;
+    const dz = p2z - p1z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) return;
+    const angle = Math.atan2(dz, dx);
+
+    const nx = -dz / len;
+    const nz = dx / len;
+    const midX = (p1x + p2x) / 2;
+    const midZ = (p1z + p2z) / 2;
+
+    // Outer dark border line
+    const borderGeo = new THREE.PlaneGeometry(len, 0.12);
+    const borderMat = new THREE.MeshBasicMaterial({
+      color: 0x09090b,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+    borderMesh.position.set(midX, yElev, midZ);
+    borderMesh.rotation.x = -Math.PI / 2;
+    borderMesh.rotation.z = -angle;
+    borderMesh.renderOrder = 220;
+    this.sectionPreviewGroup.add(borderMesh);
+
+    // Inner bright amber preview line
+    const lineGeo = new THREE.PlaneGeometry(len, 0.08);
+    const lineMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const lineMesh = new THREE.Mesh(lineGeo, lineMat);
+    lineMesh.position.set(midX, yElev + 0.001, midZ);
+    lineMesh.rotation.x = -Math.PI / 2;
+    lineMesh.rotation.z = -angle;
+    lineMesh.renderOrder = 222;
+    this.sectionPreviewGroup.add(lineMesh);
+
+    // Head badges
+    const circleGeo = new THREE.CircleGeometry(0.3, 32);
+    const head1 = new THREE.Mesh(circleGeo, lineMat);
+    head1.position.set(p1x, yElev + 0.002, p1z);
+    head1.rotation.x = -Math.PI / 2;
+    head1.renderOrder = 225;
+    this.sectionPreviewGroup.add(head1);
+
+    const head2 = new THREE.Mesh(circleGeo, lineMat);
+    head2.position.set(p2x, yElev + 0.002, p2z);
+    head2.rotation.x = -Math.PI / 2;
+    head2.renderOrder = 225;
+    this.sectionPreviewGroup.add(head2);
+
+    // Viewing arrow
+    const arrowShape = new THREE.Shape();
+    arrowShape.moveTo(0, 0.28);
+    arrowShape.lineTo(-0.18, -0.12);
+    arrowShape.lineTo(0.18, -0.12);
+    arrowShape.closePath();
+    const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+    const arrowMesh = new THREE.Mesh(arrowGeo, lineMat);
+    arrowMesh.position.set(midX + nx * 0.4, yElev + 0.002, midZ + nz * 0.4);
+    arrowMesh.rotation.x = -Math.PI / 2;
+    arrowMesh.rotation.z = Math.atan2(-nz, nx) - Math.PI / 2;
+    arrowMesh.renderOrder = 226;
+    this.sectionPreviewGroup.add(arrowMesh);
   }
 
   setStructuralPreview(
@@ -2891,6 +2995,9 @@ export default class LayoutSceneLayer {
     | { kind: "beam"; id: string }
     | { kind: "grid"; id: string }
     | { kind: "sketch-line"; id: string }
+    | { kind: "section-handle"; id: string; end: "start" | "end" }
+    | { kind: "section-flip"; id: string }
+    | { kind: "section"; id: string }
     | { kind: "stair"; id: string }
     | { kind: "ramp"; id: string }
     | { kind: "duct"; id: string }
@@ -2977,10 +3084,16 @@ export default class LayoutSceneLayer {
             kind: "section-handle",
             id: o.userData.sectionId as string,
             end: o.userData.handleType as "start" | "end",
-          } as any;
+          };
+        }
+        if (o.userData.isSectionFlip && o.userData.sectionId) {
+          return {
+            kind: "section-flip",
+            id: o.userData.sectionId as string,
+          };
         }
         if (o.userData.layoutSectionId) {
-          return { kind: "section", id: o.userData.layoutSectionId as string } as any;
+          return { kind: "section", id: o.userData.layoutSectionId as string };
         }
 
         if (o.userData.layoutGridId)

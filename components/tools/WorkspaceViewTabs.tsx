@@ -36,7 +36,6 @@ export default function WorkspaceViewTabs() {
 
   const sectionLines = useLayoutDrawingStore((s) => s.sectionLines);
   const activeSectionId = useLayoutDrawingStore((s) => s.activeSectionId);
-  const addSectionLine = useLayoutDrawingStore((s) => s.addSectionLine);
   const updateSectionLine = useLayoutDrawingStore((s) => s.updateSectionLine);
   const setActiveSectionId = useLayoutDrawingStore((s) => s.setActiveSectionId);
 
@@ -83,15 +82,20 @@ export default function WorkspaceViewTabs() {
         onClick={() => openView("free")}
       />
 
-      {activeSection && (
+      {sectionLines.map((sec) => (
         <ViewTab
-          active={!quadView && viewPreset === "section"}
+          key={sec.id}
+          active={!quadView && viewPreset === "section" && activeSectionId === sec.id}
           icon={<LuScissors className="text-amber-400" />}
-          label={`Schnitt · ${activeSection.name}`}
-          title={`View orthographic section cut (${activeSection.name})`}
-          onClick={() => openView("section")}
+          label={sec.name}
+          title={`View orthographic section cut (${sec.name})`}
+          onClick={() => {
+            setActiveSectionId(sec.id);
+            updateSectionLine(sec.id, { active: true });
+            openView("section");
+          }}
         />
-      )}
+      ))}
 
       <div className="relative">
         <button
@@ -131,7 +135,7 @@ export default function WorkspaceViewTabs() {
           type="button"
           aria-expanded={sectionsOpen}
           aria-haspopup="menu"
-          className={`werkzeug-view-tab ${activeSection ? "is-active" : ""}`}
+          className={`werkzeug-view-tab ${viewPreset === "section" ? "is-active" : ""}`}
           title="Schnitte / Project Sections"
           onClick={() => setSectionsOpen((open) => !open)}
         >
@@ -142,7 +146,7 @@ export default function WorkspaceViewTabs() {
         {sectionsOpen && (
           <div role="menu" className="absolute left-1/2 top-[calc(100%+8px)] w-52 -translate-x-1/2 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl space-y-1">
             <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-              Schnitte / Sections
+              Schnitte / Sections ({sectionLines.length})
             </div>
             {sectionLines.map((sec) => (
               <div key={sec.id} className="flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 hover:bg-[var(--glass-inset-bg)]">
@@ -152,7 +156,7 @@ export default function WorkspaceViewTabs() {
                   onClick={() => {
                     setActiveSectionId(sec.id);
                     updateSectionLine(sec.id, { active: true });
-                    openView("south");
+                    openView("section");
                     setSectionsOpen(false);
                   }}
                 >
@@ -172,20 +176,15 @@ export default function WorkspaceViewTabs() {
               type="button"
               className="w-full text-left rounded-lg px-2 py-1.5 text-[10px] font-bold text-yellow-400 hover:bg-yellow-400/10 flex items-center gap-1 border-t border-[var(--panel-divider)]/40 mt-1"
               onClick={() => {
-                const newSec = addSectionLine({
-                  name: `Schnitt ${String.fromCharCode(65 + sectionLines.length)}-${String.fromCharCode(65 + sectionLines.length)}`,
-                  levelId: activeLevel?.id ?? "level-1",
-                  startXmm: -4000,
-                  startYmm: 0,
-                  endXmm: 4000,
-                  endYmm: 0,
-                  active: true,
-                });
-                setActiveSectionId(newSec.id);
+                const markupStore = useToolMarkupStore.getState();
+                if (markupStore.viewPreset !== "top") {
+                  markupStore.setViewPreset("top");
+                }
+                useLayoutDrawingStore.getState().setArmedLayoutTool("section");
                 setSectionsOpen(false);
               }}
             >
-              <span>+ Neuer Schnitt (New Section)</span>
+              <span>+ Schnitt zeichnen (Draw Section)</span>
             </button>
           </div>
         )}

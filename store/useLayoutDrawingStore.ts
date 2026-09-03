@@ -217,6 +217,7 @@ export type LayoutSectionLine = {
   endXmm: number;
   endYmm: number;
   flipDirection?: boolean;
+  depthMm?: number;
   active?: boolean;
 };
 
@@ -300,6 +301,7 @@ type LayoutDrawingState = {
   presets: LayoutPresets;
   sectionLines: LayoutSectionLine[];
   activeSectionId: string | null;
+  draftSectionStart: { xMm: number; yMm: number } | null;
   draftDrawMode: "line" | "arc";
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
@@ -464,6 +466,7 @@ type LayoutDrawingState = {
   updateSectionLine: (id: string, patch: Partial<LayoutSectionLine>) => void;
   deleteSectionLine: (id: string) => void;
   setActiveSectionId: (id: string | null) => void;
+  setDraftSectionStart: (pt: { xMm: number; yMm: number } | null) => void;
 
   setDraftDrawMode: (mode: "line" | "arc") => void;
   setArmedLayoutTool: (tool: LayoutToolId | null) => void;
@@ -1075,6 +1078,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     },
   ],
   activeSectionId: null,
+  draftSectionStart: null,
   draftDrawMode: "line",
   draftWallTypeId: "wall-de-aw-wdvs-300",
   armedLayoutTool: null,
@@ -2574,9 +2578,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({
       sectionLines: get().sectionLines.filter((s) => s.id !== id),
       activeSectionId: get().activeSectionId === id ? null : get().activeSectionId,
+      selectedElements: get().selectedElements.filter((e) => !(e.kind === "section" && e.id === id)),
       lastMutatedAt: Date.now(),
     });
   },
+
+  setDraftSectionStart: (pt) => set({ draftSectionStart: pt, lastMutatedAt: Date.now() }),
 
   customElementTypes: {},
   saveElementType: (typeDef: any) => {

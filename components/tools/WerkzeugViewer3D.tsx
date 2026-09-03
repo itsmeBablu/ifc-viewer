@@ -812,6 +812,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     lastXmm: number;
     lastYmm: number;
   } | null>(null);
+  /** Drag section line endpoint grip to extend/shorten section length. */
+  const sectionEditDragRef = useRef<{
+    sectionId: string;
+    end: "start" | "end";
+    lastXmm: number;
+    lastYmm: number;
+  } | null>(null);
   const orthoFrustumRef = useRef(20);
   const activeViewPresetRef = useRef<string>("free");
   const quadSlotsRef = useRef<QuadSlotPose[]>(createDefaultQuadSlots());
@@ -883,13 +890,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
   const sectionLines = useLayoutDrawingStore((s) => s.sectionLines);
   const activeSectionId = useLayoutDrawingStore((s) => s.activeSectionId);
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
 
   // Dynamic Section Tool clipping plane (Schnittlinie 3D live clip)
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
     const activeSec = sectionLines.find((s) => s.id === activeSectionId || s.active);
-    if (!activeSec) {
+    if (!activeSec || viewPreset === "top") {
       renderer.clippingPlanes = [];
       return;
     }
@@ -909,7 +917,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     renderer.clippingPlanes = [sectionPlane];
     renderer.localClippingEnabled = true;
-  }, [sectionLines, activeSectionId]);
+  }, [sectionLines, activeSectionId, viewPreset]);
 
   const fitToVisible = (durationMs = 850) => {
     const controls = controlsRef.current;
@@ -4160,6 +4168,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     let marqueeStartY = 0;
     let draftBeamStart: { xMm: number; yMm: number } | null = null;
     let draftGridStart: { xMm: number; yMm: number } | null = null;
+    let draftSectionStart: { xMm: number; yMm: number } | null = null;
     /** Selected wall / unlocked underlay — promote to move-drag after threshold. */
     let pendingWallMoveId: string | null = null;
     let pendingUnderlayMoveId: string | null = null;
@@ -4632,6 +4641,34 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         return;
       }
 
+      const sectionDrag = sectionEditDragRef.current;
+      if (sectionDrag && (e.buttons & 1) === 1) {
+        const plan = planMmFromPointer(e.clientX, e.clientY);
+        if (plan) {
+          const layout = useLayoutDrawingStore.getState();
+          const sec = layout.sectionLines.find((s) => s.id === sectionDrag.sectionId);
+          if (sec) {
+            const patch =
+              sectionDrag.end === "start"
+                ? { startXmm: plan.xMm, startYmm: plan.yMm }
+                : { endXmm: plan.xMm, endYmm: plan.yMm };
+            layout.updateSectionLine(sec.id, patch);
+            const sx = patch.startXmm ?? sec.startXmm;
+            const sy = patch.startYmm ?? sec.startYmm;
+            const ex = patch.endXmm ?? sec.endXmm;
+            const ey = patch.endYmm ?? sec.endYmm;
+            const len = Math.round(Math.hypot(ex - sx, ey - sy));
+            useToolMarkupStore.getState().setDragSnapHint({
+              text: `${sec.name} · ${len} mm`,
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
+          }
+        }
+        canvas.style.cursor = "crosshair";
+        return;
+      }
+
       onPointerMove?.(e.clientX, e.clientY);
       const cube = viewCubeRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
@@ -4796,6 +4833,49 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             const start = kind === "beam" ? draftBeamStart : kind === "grid" ? draftGridStart : null;
             ms.setDragSnapHint({
               text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to place` : kind === "column" ? "Click to place column" : "Click first point",
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
+          }
+          ms.setSceneHoverTip(null);
+          canvas.style.cursor = "crosshair";
+          return;
+        }
+
+        if (
+          layoutStore.armedLayoutTool === "section" &&
+          cam &&
+          layoutLayer
+        ) {
+          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
+          raycaster.current.setFromCamera(pointerNdc.current, camRay);
+          const hit = layoutLayer.pickLayout(raycaster.current);
+          let pt: THREE.Vector3 | null =
+            hit?.kind === "ground" || hit?.kind === "underlay" ? hit.point : null;
+          if (!pt) {
+            const roots: THREE.Object3D[] = [layoutLayer.group];
+            if (shellCloneRef.current) roots.push(shellCloneRef.current);
+            pt = pickMarkupSurface(raycaster.current, roots)?.point ?? null;
+          }
+          const ms = useToolMarkupStore.getState();
+          const level = layoutStore.levels.find((l) => l.id === ms.markupFloorId) ?? layoutStore.levels[0];
+          if (!pt) {
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+            const targetPt = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(plane, targetPt)) pt = targetPt;
+          }
+          if (pt) {
+            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
+            const cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+            layoutLayer.setSectionPreview(
+              draftSectionStart,
+              cursor,
+              level?.elevationMm ?? 0,
+            );
+            ms.setDragSnapHint({
+              text: draftSectionStart
+                ? `Schnitt: ${Math.round(Math.hypot(cursor.xMm - draftSectionStart.xMm, cursor.yMm - draftSectionStart.yMm))} mm · Klick für Endpunkt`
+                : "Schnittlinie: Klick für Startpunkt (2D Plan)",
               clientX: e.clientX,
               clientY: e.clientY,
             });
@@ -5948,6 +6028,61 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
+            if (layoutStore.armedLayoutTool === "section") {
+              if (markupStore.viewPreset !== "top") {
+                markupStore.setViewPreset("top");
+              }
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
+                plan = planPointFromHit(layoutHit.point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
+                }
+              }
+              if (plan) {
+                if (!draftSectionStart) {
+                  draftSectionStart = plan;
+                  layoutStore.setDraftSectionStart(plan);
+                } else {
+                  const dist = Math.hypot(plan.xMm - draftSectionStart.xMm, plan.yMm - draftSectionStart.yMm);
+                  if (dist > 150) {
+                    const count = layoutStore.sectionLines.length + 1;
+                    const letter = String.fromCharCode(64 + count);
+                    const newSec = layoutStore.addSectionLine({
+                      name: `Schnitt ${letter}-${letter}`,
+                      levelId: markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "level-1",
+                      startXmm: draftSectionStart.xMm,
+                      startYmm: draftSectionStart.yMm,
+                      endXmm: plan.xMm,
+                      endYmm: plan.yMm,
+                      depthMm: 5000,
+                      active: true,
+                    });
+                    layoutStore.setActiveSectionId(newSec.id);
+                    layoutStore.selectElement({ kind: "section", id: newSec.id });
+                    layoutLayer.setSectionPreview(null, null);
+                  }
+                  draftSectionStart = null;
+                  layoutStore.setDraftSectionStart(null);
+                  layoutStore.setArmedLayoutTool(null);
+                }
+                return;
+              }
+            }
+
             if (layoutStore.armedLayoutTool === "stair") {
               let plan: { xMm: number; yMm: number } | null = null;
               if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
@@ -6316,11 +6451,23 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 layoutStore.selectUnderlay(layoutHit.id);
                 return;
               }
-              if ((layoutHit as any).kind === "section" || (layoutHit as any).kind === "section-handle") {
-                const secId = (layoutHit as any).id;
+              if (
+                layoutHit.kind === "section" ||
+                layoutHit.kind === "section-handle" ||
+                layoutHit.kind === "section-flip"
+              ) {
+                const secId = layoutHit.id;
                 if (secId) {
+                  if (layoutHit.kind === "section-flip") {
+                    const sec = layoutStore.sectionLines.find((s) => s.id === secId);
+                    if (sec) {
+                      layoutStore.updateSectionLine(secId, { flipDirection: !sec.flipDirection, active: true });
+                    }
+                  } else {
+                    layoutStore.updateSectionLine(secId, { active: true });
+                  }
                   layoutStore.setActiveSectionId(secId);
-                  layoutStore.updateSectionLine(secId, { active: true });
+                  layoutStore.selectElement({ kind: "section", id: secId });
                 }
                 return;
               }
@@ -6836,7 +6983,36 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
               raycaster.current.setFromCamera(pointerNdc.current, cam);
               const hit = layoutLayer.pickLayout(raycaster.current);
-              if (hit?.kind === "wall-endpoint") {
+              if (hit?.kind === "section-handle") {
+                const plan = planMmFromPointer(e.clientX, e.clientY);
+                layoutStore.setActiveSectionId(hit.id);
+                layoutStore.selectElement({ kind: "section", id: hit.id });
+                pushWerkzeugHistory();
+                suspendWerkzeugHistory(true);
+                sectionEditDragRef.current = {
+                  sectionId: hit.id,
+                  end: hit.end,
+                  lastXmm: plan?.xMm ?? 0,
+                  lastYmm: plan?.yMm ?? 0,
+                };
+                const controls = controlsRef.current;
+                if (controls) controls.enabled = false;
+                suppressNextClick = true;
+                return;
+              } else if (hit?.kind === "section-flip") {
+                const sec = layoutStore.sectionLines.find((s) => s.id === hit.id);
+                if (sec) {
+                  layoutStore.updateSectionLine(hit.id, { flipDirection: !sec.flipDirection, active: true });
+                  layoutStore.setActiveSectionId(hit.id);
+                  layoutStore.selectElement({ kind: "section", id: hit.id });
+                }
+                suppressNextClick = true;
+                return;
+              } else if (hit?.kind === "section") {
+                layoutStore.setActiveSectionId(hit.id);
+                layoutStore.selectElement({ kind: "section", id: hit.id });
+                layoutStore.updateSectionLine(hit.id, { active: true });
+              } else if (hit?.kind === "wall-endpoint") {
                 const plan = planMmFromPointer(e.clientX, e.clientY);
                 layoutStore.selectWall(hit.id);
                 pushWerkzeugHistory();
@@ -6881,6 +7057,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       pendingWallMoveId = null;
       pendingUnderlayMoveId = null;
       if (wallEditDragRef.current) endWallEditDrag();
+      if (sectionEditDragRef.current) {
+        suspendWerkzeugHistory(false);
+        sectionEditDragRef.current = null;
+        const controls = controlsRef.current;
+        if (controls && !useAppStore.getState().viewerContextMenuOpen) {
+          controls.enabled = true;
+        }
+      }
 
       if (marqueeActive) {
         marqueeActive = false;
