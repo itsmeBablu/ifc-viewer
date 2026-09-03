@@ -379,9 +379,26 @@ export default function ToolRightPanel({
         heightMm: updated.heightMm || selectedWall.heightMm,
         wallTypeId: updated.id,
         layers: updated.layers ? [...updated.layers] : undefined,
+        material: updated.material,
       });
-    } else {
-      handleTypeChange(updated.id);
+    } else if (selectedDoor && updated.category === "Door") {
+      void updateDoor(selectedDoor.id, {
+        widthMm: updated.widthMm || selectedDoor.widthMm,
+        heightMm: updated.heightMm || selectedDoor.heightMm,
+        material: updated.material,
+      });
+    } else if (selectedWindow && updated.category === "Window") {
+      void updateWindow(selectedWindow.id, {
+        widthMm: updated.widthMm || selectedWindow.widthMm,
+        heightMm: updated.heightMm || selectedWindow.heightMm,
+        sillHeightMm: updated.sillHeightMm ?? selectedWindow.sillHeightMm,
+        material: updated.material,
+      });
+    } else if (selectedSlab && (updated.category === "Floor" || updated.category === "Roof")) {
+      void updateSlab(selectedSlab.id, {
+        thicknessMm: updated.thicknessMm || selectedSlab.thicknessMm,
+        material: updated.material,
+      });
     }
   };
 

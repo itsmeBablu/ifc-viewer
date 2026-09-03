@@ -16,6 +16,21 @@ interface EditTypeEmbeddedPanelProps {
   onOpenMaterialPicker?: (layerIdx: number) => void;
 }
 
+function automaticTypeName(typeDef: ElementTypeDefinition): string {
+  const material = typeDef.material?.trim() || "Generic";
+  if (typeDef.category === "Wall") {
+    return `${typeDef.functionType} - ${material} - ${typeDef.thicknessMm ?? 200} mm`;
+  }
+  if (typeDef.category === "Door" || typeDef.category === "Window") {
+    const style = typeDef.category === "Door" ? "Single Frame Door" : "Single Frame Window";
+    return `${style} - ${material} - ${typeDef.widthMm ?? 0} x ${typeDef.heightMm ?? 0} mm`;
+  }
+  if (typeDef.category === "Floor" || typeDef.category === "Roof") {
+    return `${typeDef.functionType} ${typeDef.category} - ${material} - ${typeDef.thicknessMm ?? 200} mm`;
+  }
+  return typeDef.name;
+}
+
 export default function EditTypeEmbeddedPanel({
   typeDef,
   onBack,
@@ -58,7 +73,9 @@ export default function EditTypeEmbeddedPanel({
   }, [onBack]);
 
   const handleUpdate = (patch: Partial<ElementTypeDefinition>) => {
-    const next = { ...formData, ...patch };
+    const draft = { ...formData, ...patch };
+    const name = patch.name !== undefined ? patch.name : automaticTypeName(draft);
+    const next = { ...draft, name };
     setFormData(next);
     onSave(next);
   };

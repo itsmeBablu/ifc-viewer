@@ -3603,7 +3603,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px 6px 6px;
+  padding: 2px 6px 3px;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -3683,7 +3683,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
+  height: 25px;
   padding: 0 11px;
   border-radius: 9999px;
   font-size: 11px;
@@ -3801,6 +3801,61 @@ body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
 
 .desktop-capsule-btn-label {
   letter-spacing: -0.01em;
+}
+
+/* Responsive desktop-to-iPad compression. The interactive desktop chrome stays
+   usable before Werkzeug switches to its dedicated touch layout. */
+@media (max-width: 1280px) {
+  .desktop-clean-tabs-row {
+    gap: 1px;
+    padding-inline: 3px;
+  }
+
+  .desktop-clean-tab-btn {
+    padding-inline: 11px;
+    font-size: 12px;
+  }
+
+  .desktop-capsule-row-inner {
+    gap: 3px !important;
+    padding-inline: 4px !important;
+  }
+
+  .desktop-capsule-btn {
+    height: 24px;
+    gap: 4px;
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .desktop-clean-tab-btn {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+
+  .desktop-capsule-row-inner {
+    gap: 2px !important;
+  }
+
+  .desktop-capsule-btn {
+    width: 29px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  .desktop-capsule-label {
+    display: none;
+  }
+
+  .desktop-capsule-btn > svg:last-child {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 7px;
+    height: 7px;
+    margin: 0;
+  }
 }
 
 /* Shapes dropdown popover */

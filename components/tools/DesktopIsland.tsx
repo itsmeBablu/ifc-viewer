@@ -33,7 +33,6 @@ import {
   LuMinus,
   LuMousePointer2,
   LuMove,
-  LuPalette,
   LuPencil,
   LuRotate3D,
   LuRuler,
@@ -62,6 +61,7 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { MarkupShapeType } from "@/lib/toolMarkup";
+import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 
 /* ───── types & tab definitions ──────────────────────────────────── */
 
@@ -110,27 +110,33 @@ export const SHAPE_ITEMS: Array<{
 
 const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
-  { id: "wall", label: "Wall", hint: "Draw architectural walls (W)", icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" /> },
-  { id: "window", label: "Window", hint: "Place windows on walls", icon: <IconMarkupWindow className="h-3.5 w-3.5 text-sky-400 shrink-0" /> },
-  { id: "door", label: "Door", hint: "Place doors on walls (D)", icon: <LuDoorOpen className="h-3 w-3 text-orange-500 shrink-0" /> },
-  { id: "floor", label: "Floor", hint: "Sketch floor slab boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
-  { id: "roof", label: "Roof", hint: "Sketch roof boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" /> },
+  { id: "wall", label: "Wall", hint: "Choose a wall type and draw (W)", icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" />, hasDropdown: true },
+  { id: "window", label: "Window", hint: "Choose a window type and place it", icon: <IconMarkupWindow className="h-3.5 w-3.5 text-sky-400 shrink-0" />, hasDropdown: true },
+  { id: "door", label: "Door", hint: "Choose a door type and place it (D)", icon: <LuDoorOpen className="h-3 w-3 text-orange-500 shrink-0" />, hasDropdown: true },
+  { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
+  { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
   { id: "column", label: "Column", hint: "Place structural column (C)", icon: <LuBox className="h-3 w-3 text-slate-300 shrink-0" /> },
   { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <LuMinus className="h-3.5 w-3.5 text-indigo-400 stroke-[3] shrink-0" /> },
   { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <LuLayers3 className="h-3 w-3 text-teal-400 shrink-0" /> },
   { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <LuLayers3 className="h-3 w-3 text-lime-400 shrink-0" /> },
-  { id: "materials", label: "Materials", hint: "Open material editor panel", icon: <LuPalette className="h-3 w-3 text-pink-400 shrink-0" /> },
-  { id: "levels", label: "Levels", hint: "Manage building storeys & elevations", icon: <LuLayers3 className="h-3 w-3 text-cyan-400 shrink-0" /> },
 ];
 
 const ARCH_STRUCTURE_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "column", label: "Column", hint: "Place structural column (C)", icon: <LuBox className="h-3 w-3 text-slate-300 shrink-0" /> },
   { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <LuMinus className="h-3.5 w-3.5 text-indigo-400 stroke-[3] shrink-0" /> },
-  { id: "floor", label: "Slab", hint: "Place structural concrete slab", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
+  { id: "floor", label: "Slab", hint: "Choose a structural slab type", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "grid", label: "Grid", hint: "Draw column grid lines (G)", icon: <LuGrid2X2 className="h-3 w-3 text-orange-400 shrink-0" /> },
 ];
+
+const TYPE_CATEGORY: Partial<Record<string, ElementTypeDefinition["category"]>> = {
+  wall: "Wall",
+  door: "Door",
+  window: "Window",
+  floor: "Floor",
+  roof: "Roof",
+};
 
 const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
@@ -203,6 +209,28 @@ export default function DesktopIsland() {
   const shapesButtonRef = useRef<HTMLButtonElement>(null);
   const shapesMenuRef = useRef<HTMLDivElement>(null);
   const [shapesMenuPos, setShapesMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const typeButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const typeMenuRef = useRef<HTMLDivElement>(null);
+  const [typeMenu, setTypeMenu] = useState<{ toolId: string; top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!typeMenu) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!typeMenuRef.current?.contains(target) && !typeButtonRefs.current[typeMenu.toolId]?.contains(target)) {
+        setTypeMenu(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTypeMenu(null);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [typeMenu]);
 
   /* ── context selection detection ─────────────────────── */
   const hasContextSelection = useMemo(() => {
@@ -454,6 +482,21 @@ export default function DesktopIsland() {
       return;
     }
 
+    if (TYPE_CATEGORY[id]) {
+      setShapesDropdownOpen(false);
+      const button = typeButtonRefs.current[id];
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        const menuWidth = 292;
+        setTypeMenu((current) => current?.toolId === id ? null : {
+          toolId: id,
+          top: rect.bottom + 8,
+          left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
+        });
+      }
+      return;
+    }
+
     if (id === "note") {
       const active = armedMarkupTool === "note";
       useToolMarkupStore.getState().setArmedTool(active ? null : "note");
@@ -536,6 +579,24 @@ export default function DesktopIsland() {
     useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
   };
 
+  const chooseElementType = (toolId: string, typeDef: ElementTypeDefinition) => {
+    const layout = useLayoutDrawingStore.getState();
+    if (toolId === "wall") {
+      layout.setDraftWallTypeId(typeDef.id);
+      if (typeDef.thicknessMm) layout.setDraftWallThicknessMm(typeDef.thicknessMm);
+      if (typeDef.heightMm) layout.setDraftWallHeightMm(typeDef.heightMm);
+    } else if (toolId === "door" && typeDef.widthMm && typeDef.heightMm) {
+      layout.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
+    } else if (toolId === "window" && typeDef.widthMm && typeDef.heightMm) {
+      layout.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? layout.draftWindowSillMm);
+    } else if ((toolId === "floor" || toolId === "roof") && typeDef.thicknessMm) {
+      layout.setDraftSlabThicknessMm(typeDef.thicknessMm);
+    }
+    layout.setArmedLayoutTool(toolId as LayoutToolId);
+    useToolMarkupStore.getState().setArmedTool(null);
+    setTypeMenu(null);
+  };
+
   const isCapsuleActive = (id: string) => {
     if (id === "deselect" || id === "delete" || id === "mirror" || id === "copy" || id === "align") return false;
     if (id === "move") {
@@ -566,7 +627,7 @@ export default function DesktopIsland() {
           {!hasContextSelection && (
             <div
               ref={tabThumbRef}
-              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full z-[1]"
+              className="pointer-events-none absolute bottom-0.5 left-0 h-0.5 rounded-full z-[1]"
               aria-hidden="true"
             />
           )}
@@ -620,7 +681,7 @@ export default function DesktopIsland() {
 
       {/* ── 2. Directly Below Header: Related Capsules (top-[60px] padding) ── */}
       <div
-        className="desktop-capsules-container fixed top-[60px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none"
+        className="desktop-capsules-container fixed top-[63px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none"
         style={{
           maxWidth: rightPanelOpen ? "calc(100vw - 360px)" : "calc(100vw - 48px)",
         }}
@@ -632,27 +693,31 @@ export default function DesktopIsland() {
           {activeCapsules.map((item) => {
             const active = isCapsuleActive(item.id);
             const isShapes = item.id === "shapes";
+            const isTypeSelector = Boolean(TYPE_CATEGORY[item.id]);
             const activeShape = isShapes ? SHAPE_ITEMS.find((s) => s.id === armedMarkupTool) : null;
             const displayIcon = activeShape ? activeShape.icon : item.icon;
             const displayLabel = activeShape ? `Shapes (${activeShape.label.split(" ")[0]})` : item.label;
 
             const buttonContent = (
               <button
-                ref={isShapes ? shapesButtonRef : undefined}
+                ref={(element) => {
+                  if (isShapes) shapesButtonRef.current = element;
+                  if (isTypeSelector) typeButtonRefs.current[item.id] = element;
+                }}
                 type="button"
                 onClick={() => handleCapsuleClick(item.id)}
                 className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
                 aria-pressed={active}
-                aria-haspopup={isShapes ? "menu" : undefined}
-                aria-expanded={isShapes ? shapesDropdownOpen : undefined}
+                aria-haspopup={item.hasDropdown ? "menu" : undefined}
+                aria-expanded={isShapes ? shapesDropdownOpen : isTypeSelector ? typeMenu?.toolId === item.id : undefined}
                 title={item.label}
               >
                 {displayIcon}
-                <span className="leading-none">{displayLabel}</span>
+                <span className="desktop-capsule-label leading-none">{displayLabel}</span>
                 {item.hasDropdown && (
                   <LuChevronDown
                     className={`h-2.5 w-2.5 opacity-60 ml-0.5 transition-transform duration-200 ${
-                      shapesDropdownOpen ? "rotate-180" : ""
+                      (isShapes ? shapesDropdownOpen : typeMenu?.toolId === item.id) ? "rotate-180" : ""
                     }`}
                   />
                 )}
@@ -673,6 +738,34 @@ export default function DesktopIsland() {
           })}
         </div>
       </div>
+
+      {typeMenu && typeof document !== "undefined" && createPortal(
+        <div
+          ref={typeMenuRef}
+          style={{ top: typeMenu.top, left: typeMenu.left }}
+          className="desktop-shapes-dropdown fixed z-[9999] w-[292px] rounded-2xl p-2"
+          role="menu"
+          aria-label={`Choose ${TYPE_CATEGORY[typeMenu.toolId]} type`}
+        >
+          <div className="mb-1.5 border-b border-[var(--panel-divider)] px-2 pb-1.5">
+            <strong className="block text-[10px] uppercase tracking-wider text-yellow-500">{TYPE_CATEGORY[typeMenu.toolId]} types</strong>
+            <span className="text-[9px] text-[var(--text-muted)]">Select a predefined type, then place it in the view.</span>
+          </div>
+          <div className="max-h-72 space-y-1 overflow-y-auto thin-scroll">
+            {Object.values(DEFAULT_ELEMENT_TYPES)
+              .filter((typeDef) => typeDef.category === TYPE_CATEGORY[typeMenu.toolId])
+              .map((typeDef) => (
+                <button key={typeDef.id} type="button" role="menuitem" onClick={() => chooseElementType(typeMenu.toolId, typeDef)} className="desktop-shape-option w-full rounded-xl px-2.5 py-2 text-left">
+                  <span className="block text-[11px] font-bold text-[var(--text-strong)]">{typeDef.name}</span>
+                  <span className="mt-0.5 block text-[9px] text-[var(--text-muted)]">
+                    {typeDef.functionType} · {typeDef.material}{typeDef.thicknessMm ? ` · ${typeDef.thicknessMm} mm` : ""}
+                  </span>
+                </button>
+              ))}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* ── 3. Portaled Shapes Dropdown Menu (immune to overflow clipping) ── */}
       {shapesDropdownOpen && typeof document !== "undefined" && createPortal(
