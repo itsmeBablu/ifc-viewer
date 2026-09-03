@@ -22,6 +22,8 @@ import React, { useMemo } from "react";
 import {
   LuAlignCenterHorizontal,
   LuBox,
+  LuCheck,
+  LuChevronDown,
   LuCopy,
   LuDoorOpen,
   LuFileText,
@@ -36,6 +38,7 @@ import {
   LuRotate3D,
   LuRuler,
   LuScissors,
+  LuShapes,
   LuTrash2,
   LuX,
   LuZap,
@@ -45,12 +48,20 @@ import {
   IconMarkupRoof,
   IconMarkupWall,
   IconMarkupWindow,
+  IconMarkupCube,
+  IconMarkupSphere,
+  IconMarkupCylinder,
+  IconMarkupCone,
+  IconMarkupTorus,
+  IconMarkupCapsule,
+  IconMarkupPyramid,
 } from "./MarkupIcons";
 import GlassTooltip from "@/components/common/GlassTooltip";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
+import type { MarkupShapeType } from "@/lib/toolMarkup";
 
 /* ───── types & tab definitions ──────────────────────────────────── */
 
@@ -63,7 +74,7 @@ export const ARCH_TABS: DesktopCategoryTab[] = [
   { id: "build", label: "Build" },
   { id: "structure", label: "Structure" },
   { id: "annotate", label: "Annotate" },
-  // Future tabs can easily be added here
+  { id: "insert", label: "Insert" },
 ];
 
 export const MEP_TABS: DesktopCategoryTab[] = [
@@ -71,7 +82,6 @@ export const MEP_TABS: DesktopCategoryTab[] = [
   { id: "hvac", label: "HVAC" },
   { id: "piping", label: "Piping" },
   { id: "electrical", label: "Electrical" },
-  // Future tabs can easily be added here
 ];
 
 type CapsuleItem = {
@@ -80,7 +90,23 @@ type CapsuleItem = {
   hint: string;
   icon: React.ReactNode;
   isDanger?: boolean;
+  hasDropdown?: boolean;
 };
+
+export const SHAPE_ITEMS: Array<{
+  id: MarkupShapeType;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+}> = [
+  { id: "cube", label: "Box / Cube", hint: "3D Box geometry", icon: <IconMarkupCube className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
+  { id: "sphere", label: "Sphere", hint: "3D Sphere geometry", icon: <IconMarkupSphere className="h-3.5 w-3.5 text-sky-400 shrink-0" /> },
+  { id: "cylinder", label: "Cylinder", hint: "3D Cylinder geometry", icon: <IconMarkupCylinder className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
+  { id: "cone", label: "Cone", hint: "3D Cone geometry", icon: <IconMarkupCone className="h-3.5 w-3.5 text-purple-400 shrink-0" /> },
+  { id: "torus", label: "Torus", hint: "3D Torus geometry", icon: <IconMarkupTorus className="h-3.5 w-3.5 text-orange-400 shrink-0" /> },
+  { id: "capsule", label: "Capsule", hint: "3D Capsule geometry", icon: <IconMarkupCapsule className="h-3.5 w-3.5 text-pink-400 shrink-0" /> },
+  { id: "pyramid", label: "Pyramid", hint: "3D Pyramid geometry", icon: <IconMarkupPyramid className="h-3.5 w-3.5 text-yellow-400 shrink-0" /> },
+];
 
 const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
@@ -111,6 +137,12 @@ const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
   { id: "lines", label: "Lines", hint: "Draw detail sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
   { id: "dimension", label: "Dimension", hint: "Measure distance between elements", icon: <LuRuler className="h-3 w-3 text-yellow-400 shrink-0" /> },
   { id: "note", label: "Note", hint: "Place text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
+];
+
+const ARCH_INSERT_ITEMS: CapsuleItem[] = [
+  { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
+  { id: "shapes", label: "Shapes", hint: "Pick and place 3D shape (Box, Sphere, Cylinder, etc.)", icon: <LuShapes className="h-3.5 w-3.5 text-pink-400 shrink-0" />, hasDropdown: true },
+  { id: "note", label: "Note", hint: "Insert 3D text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
 ];
 
 const MEP_ALL_ITEMS: CapsuleItem[] = [
@@ -153,6 +185,29 @@ export default function DesktopIsland() {
   const setArchCategory = useLayoutDrawingStore((s) => s.setDesktopArchCategory);
   const mepCategory = useLayoutDrawingStore((s) => s.desktopMepCategory);
   const setMepCategory = useLayoutDrawingStore((s) => s.setDesktopMepCategory);
+
+  const armedMarkupTool = useToolMarkupStore((s) => s.armedTool);
+  const [shapesDropdownOpen, setShapesDropdownOpen] = React.useState(false);
+  const shapesMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside or Escape
+  React.useEffect(() => {
+    if (!shapesDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (shapesMenuRef.current && !shapesMenuRef.current.contains(e.target as Node)) {
+        setShapesDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShapesDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [shapesDropdownOpen]);
 
   /* ── context selection detection ─────────────────────── */
   const hasContextSelection = useMemo(() => {
@@ -209,6 +264,8 @@ export default function DesktopIsland() {
         return ARCH_STRUCTURE_ITEMS;
       case "annotate":
         return ARCH_ANNOTATE_ITEMS;
+      case "insert":
+        return ARCH_INSERT_ITEMS;
       case "build":
       default:
         return ARCH_BUILD_ITEMS;
@@ -223,10 +280,27 @@ export default function DesktopIsland() {
     useToolMarkupStore.getState().clearSelection();
   };
 
+  const handleSelectShape = (shapeId: MarkupShapeType) => {
+    useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+    useToolMarkupStore.getState().setArmedTool(shapeId);
+    setShapesDropdownOpen(false);
+  };
+
   const handleCapsuleClick = (id: string) => {
     if (id === "select") {
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
       useToolMarkupStore.getState().setArmedTool(null);
+      setShapesDropdownOpen(false);
+      return;
+    }
+    if (id === "shapes") {
+      setShapesDropdownOpen((prev) => !prev);
+      return;
+    }
+    if (id === "note") {
+      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+      useToolMarkupStore.getState().setArmedTool("note");
+      setShapesDropdownOpen(false);
       return;
     }
     if (id === "deselect") {
@@ -307,7 +381,13 @@ export default function DesktopIsland() {
     if (id === "trim") {
       return armed === "trim";
     }
-    if (id === "select") return armed === null;
+    if (id === "shapes") {
+      return SHAPE_ITEMS.some((s) => s.id === armedMarkupTool) || shapesDropdownOpen;
+    }
+    if (id === "note") {
+      return armedMarkupTool === "note";
+    }
+    if (id === "select") return armed === null && armedMarkupTool === null;
     return armed === id;
   };
 
@@ -337,7 +417,7 @@ export default function DesktopIsland() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate")}
+                  onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert")}
                   className={`desktop-center-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
@@ -371,6 +451,97 @@ export default function DesktopIsland() {
         <div className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full">
           {activeCapsules.map((item) => {
             const active = isCapsuleActive(item.id);
+            const isShapes = item.id === "shapes";
+            const activeShape = isShapes ? SHAPE_ITEMS.find((s) => s.id === armedMarkupTool) : null;
+            const displayIcon = activeShape ? activeShape.icon : item.icon;
+            const displayLabel = activeShape ? `Shapes (${activeShape.label.split(" ")[0]})` : item.label;
+
+            const buttonContent = (
+              <button
+                type="button"
+                onClick={() => handleCapsuleClick(item.id)}
+                className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
+                aria-pressed={active}
+                aria-haspopup={isShapes ? "menu" : undefined}
+                aria-expanded={isShapes ? shapesDropdownOpen : undefined}
+                title={item.label}
+              >
+                {displayIcon}
+                <span className="leading-none">{displayLabel}</span>
+                {item.hasDropdown && (
+                  <LuChevronDown
+                    className={`h-2.5 w-2.5 opacity-60 ml-0.5 transition-transform duration-200 ${
+                      shapesDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </button>
+            );
+
+            if (isShapes) {
+              return (
+                <div key={item.id} ref={shapesMenuRef} className="relative shrink-0">
+                  <GlassTooltip
+                    label={item.label}
+                    hint={item.hint}
+                    className="shrink-0"
+                    disabled={shapesDropdownOpen}
+                  >
+                    {buttonContent}
+                  </GlassTooltip>
+
+                  {shapesDropdownOpen && (
+                    <div
+                      className="desktop-shapes-dropdown absolute top-[calc(100%+6px)] left-0 z-[120] min-w-[210px] p-1.5 rounded-xl animate-in fade-in zoom-in-95 duration-150"
+                      role="menu"
+                      aria-label="Pick a 3D Shape"
+                    >
+                      <div className="px-2 py-1 mb-1 border-b border-[var(--panel-divider)] flex items-center justify-between">
+                        <span className="text-[10px] font-bold tracking-wide uppercase text-[var(--text-muted)]">
+                          Pick a 3D Shape
+                        </span>
+                        <span className="text-[9px] text-[var(--text-muted)] font-medium">7 Shapes</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto thin-scroll">
+                        {SHAPE_ITEMS.map((shape) => {
+                          const isSelected = armedMarkupTool === shape.id;
+                          return (
+                            <button
+                              key={shape.id}
+                              type="button"
+                              role="menuitem"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectShape(shape.id);
+                              }}
+                              className={`desktop-shape-option flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-left text-xs transition-colors ${
+                                isSelected ? "is-active" : ""
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="shrink-0">{shape.icon}</span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-[11px] leading-tight text-[var(--text-strong)]">
+                                    {shape.label}
+                                  </span>
+                                  <span className="text-[9px] text-[var(--text-muted)] truncate">
+                                    {shape.hint}
+                                  </span>
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <LuCheck className="text-yellow-400 h-3.5 w-3.5 shrink-0 ml-1" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <GlassTooltip
                 key={item.id}
@@ -378,16 +549,7 @@ export default function DesktopIsland() {
                 hint={item.hint}
                 className="shrink-0"
               >
-                <button
-                  type="button"
-                  onClick={() => handleCapsuleClick(item.id)}
-                  className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
-                  aria-pressed={active}
-                  title={item.label}
-                >
-                  {item.icon}
-                  <span className="leading-none">{item.label}</span>
-                </button>
+                {buttonContent}
               </GlassTooltip>
             );
           })}

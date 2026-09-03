@@ -30,6 +30,8 @@ type Props = {
   className?: string;
   /** Prefer tooltip below the anchor instead of above. */
   preferBelow?: boolean;
+  /** Disable showing the tooltip (e.g. while a dropdown menu is open). */
+  disabled?: boolean;
 };
 
 export default function GlassTooltip({
@@ -38,6 +40,7 @@ export default function GlassTooltip({
   children,
   className = "",
   preferBelow = false,
+  disabled = false,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -90,7 +93,7 @@ export default function GlassTooltip({
       ref={wrapRef}
       className={`relative flex items-center justify-center ${className}`}
       onMouseEnter={() => {
-        if (!hoverCapable || suppressed) return;
+        if (!hoverCapable || suppressed || disabled) return;
         updatePos();
         setOpen(true);
       }}
@@ -99,7 +102,7 @@ export default function GlassTooltip({
         setSuppressed(false);
       }}
       onFocus={() => {
-        if (!hoverCapable || suppressed) return;
+        if (!hoverCapable || suppressed || disabled) return;
         updatePos();
         setOpen(true);
       }}
@@ -110,9 +113,7 @@ export default function GlassTooltip({
       }}
     >
       {children}
-      {open &&
-        hoverCapable &&
-        typeof document !== "undefined" &&
+      {open && hoverCapable && !disabled && typeof document !== "undefined" &&
         createPortal(
           <div
             role="tooltip"
