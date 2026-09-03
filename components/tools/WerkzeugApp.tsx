@@ -39,7 +39,6 @@ import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
 import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
 import DesktopIsland from "./DesktopIsland";
-import DesktopCapsuleRow from "./DesktopCapsuleRow";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
@@ -564,7 +563,6 @@ export default function WerkzeugApp() {
               onOpenSheet={() => setSheetViewOpen(true)}
             />
             <ToolOptionsBar />
-            <DesktopCapsuleRow />
           </>
         ) : (
           <WerkzeugWorkspaceChrome
