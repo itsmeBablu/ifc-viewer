@@ -4,6 +4,22 @@ import type { MarkupShapeType, MarkupToolId } from "@/lib/toolMarkup";
 
 type IconProps = { className?: string };
 
+export function IconMarkupStair({ className }: IconProps) {
+  return <Svg className={className}><path d="M3 20h5v-5h5v-5h5V5h3M3 20V4M3 4l3 3M3 4 0 7" /></Svg>;
+}
+
+export function IconMarkupRamp({ className }: IconProps) {
+  return <Svg className={className}><path d="M3 19 21 8v11H3ZM4 12 18 4m-4 0h4v4" /></Svg>;
+}
+
+export function IconMarkupColumn({ className }: IconProps) {
+  return <Svg className={className}><path d="M6 3h12v3H6zM8 6v12m8-12v12M6 18h12v3H6zM12 7v10" /></Svg>;
+}
+
+export function IconMarkupBeam({ className }: IconProps) {
+  return <Svg className={className}><path d="m3 8 13-5 5 2-13 5-5-2Zm0 0v3l2 1v4l-2-1v3l5 3 13-5v-3l-2-1V8l2-1V5M8 10v3l-2-1m2 9v-3l-2-2m2-3 11-4M8 18l11-4" /></Svg>;
+}
+
 const stroke = {
   fill: "none",
   stroke: "currentColor",
