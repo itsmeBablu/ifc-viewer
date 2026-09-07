@@ -56,6 +56,7 @@ import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
+import ComponentProperties from "./ComponentProperties";
 import {
   wallLengthMm,
   type LayoutLevel,
@@ -1487,13 +1488,14 @@ function WallConstraintFields({
   );
 }
 
-function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
+function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
   const store = useLayoutDrawingStore();
   const markup = useToolMarkupStore();
+
   const typeCategory: ElementTypeDefinition["category"] | null =
     tool === "wall" ? "Wall" : tool === "door" ? "Door" : tool === "window" ? "Window" :
     tool === "floor" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
-    tool === "ramp" ? "Ramp" : null;
+    tool === "ramp" ? "Ramp" : tool === "column" ? "Column" : tool === "beam" ? "Beam" : null;
   const availableTypes = Object.values(DEFAULT_ELEMENT_TYPES).filter((item) => item.category === typeCategory);
   const [draftType, setDraftType] = useState<ElementTypeDefinition | null>((tool === "wall" ? availableTypes.find((item) => item.id === store.draftWallTypeId) : null) ?? availableTypes[0] ?? null);
   const fieldClass = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
@@ -1511,7 +1513,9 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
     ...(tool === "floor" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
     ...(tool === "stair" ? { widthMm: store.draftStairWidthMm } : {}),
     ...(tool === "ramp" ? { widthMm: store.draftRampWidthMm, thicknessMm: store.draftRampThicknessMm } : {}),
-  } : null, [draftType, tool, wallHeight, store.draftWallThicknessMm, store.draftDoorWidthMm, store.draftDoorHeightMm, store.draftWindowWidthMm, store.draftWindowHeightMm, store.draftWindowSillMm, store.draftSlabThicknessMm, store.draftStairWidthMm, store.draftRampWidthMm, store.draftRampThicknessMm]);
+    ...(tool === "column" ? { widthMm: store.draftColumnWidthMm, depthMm: store.draftColumnDepthMm } : {}),
+    ...(tool === "beam" ? { widthMm: store.draftBeamWidthMm, depthMm: store.draftBeamDepthMm } : {}),
+  } : null, [draftType, tool, wallHeight, store.draftWallThicknessMm, store.draftDoorWidthMm, store.draftDoorHeightMm, store.draftWindowWidthMm, store.draftWindowHeightMm, store.draftWindowSillMm, store.draftSlabThicknessMm, store.draftStairWidthMm, store.draftRampWidthMm, store.draftRampThicknessMm, store.draftColumnWidthMm, store.draftColumnDepthMm, store.draftBeamWidthMm, store.draftBeamDepthMm]);
 
   const applyDraftType = (typeDef: ElementTypeDefinition) => {
     setDraftType(typeDef);
@@ -1532,6 +1536,10 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
     } else if (tool === "ramp") {
       if (typeDef.widthMm) store.setDraftRampWidthMm(typeDef.widthMm);
       if (typeDef.thicknessMm) store.setDraftRampThicknessMm(typeDef.thicknessMm);
+    } else if (tool === "column") {
+      if (typeDef.widthMm && typeDef.depthMm) store.setDraftColumnSize(typeDef.widthMm, typeDef.depthMm);
+    } else if (tool === "beam") {
+      if (typeDef.widthMm && typeDef.depthMm) store.setDraftBeamSize(typeDef.widthMm, typeDef.depthMm);
     }
   };
 
@@ -1621,6 +1629,21 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
         </div>
       )}
 
+      {tool === "column" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftColumnWidthMm} onChange={(event) => store.setDraftColumnSize(Math.max(50, Number(event.target.value)), store.draftColumnDepthMm)} /></label>
+          <label className={labelClass}>Depth (mm)<input className={fieldClass} type="number" min={50} value={store.draftColumnDepthMm} onChange={(event) => store.setDraftColumnSize(store.draftColumnWidthMm, Math.max(50, Number(event.target.value)))} /></label>
+        </div>
+      )}
+
+      {tool === "beam" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftBeamWidthMm} onChange={(event) => store.setDraftBeamSize(Math.max(50, Number(event.target.value)), store.draftBeamDepthMm)} /></label>
+          <label className={labelClass}>Depth (mm)<input className={fieldClass} type="number" min={50} value={store.draftBeamDepthMm} onChange={(event) => store.setDraftBeamSize(store.draftBeamWidthMm, Math.max(50, Number(event.target.value)))} /></label>
+        </div>
+      )}
+
+
       {tool === "duct" && (
         <div className="grid grid-cols-2 gap-2">
           <label className={labelClass}>Shape
@@ -1675,6 +1698,18 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
 
     </div>
   );
+}
+
+function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
+  if (tool === "equipment") {
+    return (
+      <div className="space-y-2 p-1">
+        <ComponentProperties />
+      </div>
+    );
+  }
+
+  return <GenericDraftToolProperties tool={tool} />;
 }
 
 function DraftSketchLineProperties() {

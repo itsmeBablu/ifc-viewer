@@ -27,6 +27,8 @@ import {
 } from "@/lib/layoutDrawing";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import ComponentProperties from "./ComponentProperties";
+import { isArchitecturalComponent } from "@/lib/componentCatalog";
 
 /**
  * Revit-style properties for the selected layout element.
@@ -1569,9 +1571,12 @@ export default function LayoutPropertiesPanel({
         );
       })()}
 
-      {/* -- MEP EQUIPMENT INSPECTOR ------------------------------------------- */}
-      {equip && (() => {
-        const connectors = getEquipmentConnectors(equip);
+      {/* -- MEP / ARCHITECTURAL EQUIPMENT INSPECTOR ------------------------------------------- */}
+      {equip && (
+        isArchitecturalComponent(equip.familyId) || equip.category === "furniture" ? (
+          <ComponentProperties item={equip} />
+        ) : (() => {
+          const connectors = getEquipmentConnectors(equip);
         const isRadiator = equip.category === "radiator";
         const isCooling = equip.category === "fan_coil" || equip.category === "ac_unit" || equip.category === "chiller";
         const defW = isRadiator ? 1000 : equip.category === "fan_coil" ? 900 : equip.category === "ac_unit" ? 850 : equip.category === "chiller" ? 1600 : 400;
@@ -1746,7 +1751,7 @@ export default function LayoutPropertiesPanel({
             </div>
           </>
         );
-      })()}
+      })())}
     </div>
   );
 }

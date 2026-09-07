@@ -27,6 +27,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import SliceHeightSlider from "../common/SliceHeightSlider";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
 import ModelText from "../common/ModelText";
+import ToolTypeChoices from "./ToolTypeChoices";
 
 type Props = {
   viewerRef: RefObject<WerkzeugViewer3DHandle | null>;
@@ -178,6 +179,8 @@ export default function WerkzeugContextMenu({
   const unhideElement = useLayoutDrawingStore((s) => s.unhideElement);
   const unhideAll = useLayoutDrawingStore((s) => s.unhideAll);
   const toggleRevealHiddenMode = useLayoutDrawingStore((s) => s.toggleRevealHiddenMode);
+  const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
@@ -660,6 +663,15 @@ export default function WerkzeugContextMenu({
                           </div>
                         );
                       })()}
+
+                      {/* Dynamic Type Switcher for selected element */}
+                      <div className="mt-1 border-t border-slate-200/80 p-1">
+                        <ToolTypeChoices
+                          tool={primaryLayoutSelection.kind === "slab" ? "floor" : (primaryLayoutSelection.kind as any)}
+                          selectedElement={primaryLayoutSelection}
+                          onChoose={close}
+                        />
+                      </div>
                     </div>
                   )}
                   {!primaryLayoutSelection && selectedPlacementId && (
@@ -679,6 +691,19 @@ export default function WerkzeugContextMenu({
                     </div>
                   )}
                   {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId == null && <>
+                    {armedLayoutTool && armedLayoutTool !== "select" && (
+                      <div className="mb-2 rounded-2xl border border-yellow-400/35 bg-yellow-50/80 p-2 shadow-[inset_0_1px_0_white] dark:bg-yellow-950/20">
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-700 dark:text-yellow-400">
+                            Active: {armedLayoutTool === "equipment" ? (mepModeActive ? "MEP Component" : "Architectural Component") : armedLayoutTool}
+                          </span>
+                          <span className="rounded-full bg-yellow-400/20 px-1.5 py-0.5 text-[8px] font-bold text-yellow-800 dark:text-yellow-300">
+                            Select Type
+                          </span>
+                        </div>
+                        <ToolTypeChoices tool={armedLayoutTool} onChoose={close} />
+                      </div>
+                    )}
                   {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null || revealHiddenMode) && (
                     <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1">
                       <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">

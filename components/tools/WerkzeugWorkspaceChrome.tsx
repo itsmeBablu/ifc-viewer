@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import {
@@ -529,7 +529,12 @@ export default function WerkzeugWorkspaceChrome({
   };
   return (
     <>
-      <div data-dock={dockEdge} data-panel-open={String(Boolean(panelKey && !panelHidden))} className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]">
+      <div
+        data-dock={dockEdge}
+        data-panel-open={String(Boolean(panelKey && !panelHidden))}
+        className="werkzeug-ipad-ribbons pointer-events-auto fixed z-[70]"
+        style={{ "--werkzeug-ipad-panel-width": `${landscapePanelWidth}px` } as CSSProperties}
+      >
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
         <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-snap-left"><ObjectSnapStrip compact iconOnly showCount={false} /></div>

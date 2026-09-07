@@ -1,5 +1,7 @@
 "use client";
 
+import { componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
+import { componentPreset } from "@/lib/componentCatalog";
 import { findGlobalSnap } from "@/lib/globalSnapping";
 import { snapMeshMeasurement } from "@/lib/measurementSnap";
 
@@ -785,6 +787,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const twinMaterialCacheRef = useRef(createOverlayMaterialCache());
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
+  const lastPointerClientPosRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const presentationCamRef = useRef<{
     position: [number, number, number];
     target: [number, number, number];
@@ -2815,6 +2818,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
+      if (e.code === "Space" && !typing && target?.tagName !== "SELECT" && target?.tagName !== "BUTTON" && !e.repeat) {
+        const layout = useLayoutDrawingStore.getState();
+        if (layout.armedLayoutTool === "equipment") {
+          e.preventDefault();
+          layout.setDraftEquipmentRotationDeg((layout.draftEquipmentRotationDeg + 90) % 360);
+          return;
+        }
+        const component = layout.mepEquipment.find((item) => item.id === layout.selectedEquipmentId);
+        if (component) { e.preventDefault(); void layout.updateEquipment(component.id, { rotationDeg: (component.rotationDeg + 90) % 360 }); return; }
+      }
       if (e.key === "Tab") {
         const layout = useLayoutDrawingStore.getState();
         if (
@@ -2947,6 +2960,43 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           return;
         }
       }
+      if (!typing && (e.code === "Space" || e.key === " ")) {
+        const layout = useLayoutDrawingStore.getState();
+        const selectedEquip = layout.selectedEquipmentId
+          ? layout.mepEquipment.find((eq) => eq.id === layout.selectedEquipmentId)
+          : layout.selectedElements.find((el) => el.kind === "equipment")
+          ? layout.mepEquipment.find((eq) => eq.id === layout.selectedElements.find((el) => el.kind === "equipment")?.id)
+          : null;
+        if (selectedEquip) {
+          e.preventDefault();
+          const nextRot = ((selectedEquip.rotationDeg ?? 0) + 90) % 360;
+          void layout.updateEquipment(selectedEquip.id, { rotationDeg: nextRot });
+          return;
+        }
+        if (layout.armedLayoutTool === "equipment") {
+          e.preventDefault();
+          const nextRot = (layout.draftEquipmentRotationDeg + 90) % 360;
+          layout.setDraftEquipmentRotationDeg(nextRot);
+          if (lastPointerClientPosRef.current && layoutLayerRef.current) {
+            const placement = componentPoint(lastPointerClientPosRef.current.clientX, lastPointerClientPosRef.current.clientY, false);
+            if (placement) {
+              layoutLayerRef.current.setMepPreview("equipment", null, placement.plan, {
+                baseElevMm: placement.level.elevationMm, elevationMm: layout.draftEquipmentElevationMm,
+                category: layout.draftEquipmentCategory, familyId: layout.draftComponentId,
+                widthMm: layout.draftComponentWidthMm, depthMm: layout.draftComponentDepthMm, heightMm: layout.draftComponentHeightMm,
+                moduleWidthMm: layout.draftComponentModuleMm, rotationDeg: nextRot,
+              });
+              useToolMarkupStore.getState().setDragSnapHint({
+                text: `${componentPreset(layout.draftComponentId)?.name ?? "Component"} · ${placement.label} · ${nextRot}° · Space: rotate`,
+                clientX: lastPointerClientPosRef.current.clientX,
+                clientY: lastPointerClientPosRef.current.clientY,
+              });
+            }
+          }
+          return;
+        }
+      }
+
       if (e.key === "i" || e.key === "I") {
         if (e.altKey || e.shiftKey) {
           e.preventDefault();
@@ -4210,6 +4260,30 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       useToolMarkupStore.getState().setDragSnapHint(null);
     };
 
+    const componentPoint = (clientX: number, clientY: number, bypass = false) => {
+      const camera = preparePointerRayRef.current(clientX, clientY);
+      if (!camera) return null;
+      const layout = useLayoutDrawingStore.getState(), markup = useToolMarkupStore.getState();
+      const isPlan = (markup.quadView ? markup.quadPresets[markup.quadActiveIndex] : markup.viewPreset) === "top";
+      const level = componentBaseLevel(layout.levels, isPlan, markup.markupFloorId, layout.componentPlacementLevelId);
+      if (!level) return null;
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+      const point = raycaster.current.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level.elevationMm)), new THREE.Vector3());
+      if (!point) return null;
+      let plan = { xMm: toMm(point.x), yMm: toMm(point.z) }, label = "Free placement";
+      if (!bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
+        const rect = canvas.getBoundingClientRect();
+        const snap = snapComponentFootprint(plan, layout.draftComponentWidthMm, layout.draftComponentDepthMm, layout.draftEquipmentRotationDeg,
+          layout.walls, layout.mepEquipment, level.id, (candidate) => projectedMoveDistance(point, new THREE.Vector3(fromMm(candidate.xMm), point.y, fromMm(candidate.yMm)), camera, rect.width / (markup.quadView ? 2 : 1), rect.height / (markup.quadView ? 2 : 1)));
+        plan = snap.point; label = snap.label;
+      }
+      if (!bypass && label === "Free placement" && markup.gridSnap) {
+        const snapped = applyGridSnap(new THREE.Vector3(fromMm(plan.xMm), point.y, fromMm(plan.yMm)), markup.gridSize, ["x", "z"]);
+        plan = { xMm: toMm(snapped.x), yMm: toMm(snapped.z) }; label = "Grid";
+      }
+      return { plan, level, label };
+    };
+
     const measurementPoint = (clientX: number, clientY: number, bypass = false) => {
       const camera = preparePointerRayRef.current(clientX, clientY);
       if (!camera) return null;
@@ -4732,10 +4806,29 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
       // Live cube footprint / note snap indicator while a tool is armed.
       if (useAppStore.getState().toolMode) {
+        lastPointerClientPosRef.current = { clientX: e.clientX, clientY: e.clientY };
         preparePointerRayRef.current(e.clientX, e.clientY);
         const layoutStore = useLayoutDrawingStore.getState();
         const layoutLayer = layoutLayerRef.current;
         const cam = cameraRef.current;
+        if (layoutStore.armedLayoutTool === "equipment" && layoutLayer) {
+          const placement = componentPoint(e.clientX, e.clientY, e.altKey);
+          const ms = useToolMarkupStore.getState();
+          if (placement) {
+            layoutLayer.setMepPreview("equipment", null, placement.plan, {
+              baseElevMm: placement.level.elevationMm, elevationMm: layoutStore.draftEquipmentElevationMm,
+              category: layoutStore.draftEquipmentCategory, familyId: layoutStore.draftComponentId,
+              widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
+              moduleWidthMm: layoutStore.draftComponentModuleMm, rotationDeg: layoutStore.draftEquipmentRotationDeg,
+            });
+            ms.setDragSnapHint({ text: `${componentPreset(layoutStore.draftComponentId)?.name ?? "Component"} ? ${placement.label} ? ${layoutStore.draftEquipmentRotationDeg}? ? Space: rotate`, clientX: e.clientX, clientY: e.clientY });
+          } else {
+            layoutLayer.setMepPreview(null, null, null);
+            ms.setDragSnapHint({ text: "Select a base level in Properties before placing in 3D", clientX: e.clientX, clientY: e.clientY });
+          }
+          canvas.style.cursor = placement ? "crosshair" : "not-allowed";
+          return;
+        }
         if (layoutStore.wallDraw && cam && layoutLayer) {
           const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
           if (!camRay) return;
@@ -5917,7 +6010,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   yMm: plan.yMm,
                   widthMm: layoutStore.draftColumnWidthMm,
                   depthMm: layoutStore.draftColumnDepthMm,
-                  profile: "rect",
+                  profile: layoutStore.draftElementTypes.column?.structuralProfile ?? "rect",
+                  material: layoutStore.draftElementTypes.column?.material,
                 });
                 return;
               }
@@ -5953,6 +6047,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   draftBeamStart = plan;
                 } else {
                   void layoutStore.addBeam({
+                    profile: layoutStore.draftElementTypes.beam?.structuralProfile === "i" ? "i" : "rect",
+                    material: layoutStore.draftElementTypes.beam?.material,
                     levelId,
                     startXmm: draftBeamStart.xMm,
                     startYmm: draftBeamStart.yMm,
@@ -6286,36 +6382,22 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             }
 
             if (layoutStore.armedLayoutTool === "equipment") {
-              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
-              if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
-              }
-              if (!plan) {
-                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
-              }
-              if (plan) {
-                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+              const placement = componentPoint(e.clientX, e.clientY, e.altKey);
+              if (placement) {
+                const preset = componentPreset(layoutStore.draftComponentId);
                 void layoutStore.placeEquipment({
-                  levelId,
-                  category: layoutStore.draftEquipmentCategory,
-                  name: layoutStore.draftEquipmentCategory,
-                  xMm: plan.xMm,
-                  yMm: plan.yMm,
-                  rotationDeg: layoutStore.draftEquipmentRotationDeg ?? 0,
+                  levelId: placement.level.id, category: layoutStore.draftEquipmentCategory,
+                  familyId: layoutStore.draftComponentId, name: preset?.name ?? layoutStore.draftEquipmentCategory,
+                  widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
+                  moduleWidthMm: layoutStore.draftComponentModuleMm,
+                  xMm: placement.plan.xMm, yMm: placement.plan.yMm,
+                  rotationDeg: layoutStore.draftEquipmentRotationDeg,
                   elevationMm: layoutStore.draftEquipmentElevationMm,
-                  flowM3h: layoutStore.draftEquipmentFlowM3h,
-                  airflowM3h: layoutStore.draftEquipmentFlowM3h,
-                  powerWatts: layoutStore.draftEquipmentHeatingWatts,
-                  coolingWatts: layoutStore.draftEquipmentCoolingWatts,
+                  flowM3h: layoutStore.draftEquipmentFlowM3h, airflowM3h: layoutStore.draftEquipmentFlowM3h,
+                  powerWatts: layoutStore.draftEquipmentHeatingWatts, coolingWatts: layoutStore.draftEquipmentCoolingWatts,
                 });
-                return;
-              }
+              } else useAppStore.getState().setRightPanelOpen(true);
+              return;
             }
 
             if (

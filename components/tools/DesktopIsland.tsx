@@ -18,7 +18,9 @@
 
 import React, { useMemo, useRef, useLayoutEffect, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { flushSync } from "react-dom";
 import gsap from "gsap";
+import { Flip } from "gsap/Flip";
 import {
   LuAlignCenterHorizontal,
   LuBox,
@@ -41,6 +43,7 @@ import {
   LuTrash2,
   LuX,
   LuZap,
+  LuArmchair,
 } from "react-icons/lu";
 import {
   IconMarkupStair,
@@ -65,7 +68,10 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { MarkupShapeType } from "@/lib/toolMarkup";
+import { groupCapsulesForMorph } from "@/lib/capsuleMorph";
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
+
+gsap.registerPlugin(Flip);
 
 /* ───── types & tab definitions ──────────────────────────────────── */
 
@@ -124,6 +130,7 @@ const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <IconMarkupBeam className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
   { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <IconMarkupStair className="h-3 w-3 text-teal-400 shrink-0" /> },
   { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <IconMarkupRamp className="h-3 w-3 text-lime-400 shrink-0" /> },
+  { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
 ];
 
 const ARCH_STRUCTURE_ITEMS: CapsuleItem[] = [
@@ -140,7 +147,12 @@ const TYPE_CATEGORY: Partial<Record<string, ElementTypeDefinition["category"]>> 
   window: "Window",
   floor: "Floor",
   roof: "Roof",
+  column: "Column",
+  beam: "Beam",
+  stair: "Stair",
+  ramp: "Ramp",
 };
+
 
 const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
@@ -151,6 +163,7 @@ const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
 
 const ARCH_INSERT_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
+  { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
   { id: "shapes", label: "Shapes", hint: "Pick and place 3D shape (Box, Sphere, Cylinder, etc.)", icon: <LuShapes className="h-3.5 w-3.5 text-pink-400 shrink-0" />, hasDropdown: true },
   { id: "note", label: "Note", hint: "Insert 3D text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
 ];
@@ -175,6 +188,143 @@ const MODIFY_ITEMS: CapsuleItem[] = [
   { id: "delete", label: "Delete", hint: "Delete selected elements (Del)", icon: <LuTrash2 className="h-3 w-3 text-red-500 shrink-0" />, isDanger: true },
   { id: "deselect", label: "Deselect", hint: "Clear active selection (Esc)", icon: <LuX className="h-3 w-3 text-zinc-400 shrink-0" /> },
 ];
+
+function appendCellularMorph(
+  timeline: gsap.core.Timeline,
+  outgoing: HTMLElement[],
+  incoming: HTMLElement[],
+  fusionLayer: HTMLElement,
+) {
+  const groupDelay = 0.045;
+  timeline.to(fusionLayer, {
+    filter: "blur(.65px) contrast(1.12) saturate(1.04)",
+    duration: 0.18,
+    ease: "power2.inOut",
+  }, 0.1);
+  timeline.to(fusionLayer, {
+    filter: "blur(0px) contrast(1) saturate(1)",
+    duration: 0.16,
+    ease: "power2.out",
+  }, 0.27);
+
+  if (outgoing.length === incoming.length) {
+    outgoing.forEach((source, index) => {
+      const target = incoming[index];
+      const first = source.getBoundingClientRect();
+      const last = target.getBoundingClientRect();
+      const offset = index * 0.018;
+      gsap.set(target, { autoAlpha: 0, scaleX: 0.94, filter: "blur(1px)" });
+      timeline.to(source, {
+        x: last.left - first.left, width: last.width, scaleY: 1.03,
+        borderRadius: 999, duration: 0.2, ease: "back.inOut(1.2)",
+      }, offset);
+      timeline.to(source.children, { autoAlpha: 0, duration: 0.08, ease: "power2.in" }, offset + 0.1);
+      timeline.to(source, { autoAlpha: 0, scaleY: 1, duration: 0.12 }, offset + 0.18);
+      timeline.to(target, {
+        autoAlpha: 1, scaleX: 1, filter: "blur(0px)", duration: 0.16, ease: "back.out(1.3)",
+      }, offset + 0.17);
+    });
+    return;
+  }
+
+  if (outgoing.length > incoming.length) {
+    const groups = groupCapsulesForMorph(outgoing, incoming.length);
+    incoming.forEach((target, groupIndex) => {
+      const group = groups[groupIndex] ?? [];
+      const targetRect = target.getBoundingClientRect();
+      const targetCenter = targetRect.left + targetRect.width / 2;
+      const offset = groupIndex * groupDelay;
+      const sourceCenter = group.reduce((sum, source) => {
+        const rect = source.getBoundingClientRect();
+        return sum + rect.left + rect.width / 2;
+      }, 0) / Math.max(group.length, 1);
+      const fusionCore = target.cloneNode(false) as HTMLElement;
+      fusionCore.removeAttribute("data-capsule-id");
+      fusionCore.removeAttribute("data-flip-id");
+      fusionCore.classList.add("desktop-capsule-morph-clone", "desktop-capsule-fusion-core");
+      Object.assign(fusionCore.style, {
+        position: "fixed",
+        left: `${targetCenter - 11}px`,
+        top: `${targetRect.top}px`,
+        width: "22px",
+        height: `${targetRect.height}px`,
+        opacity: "0",
+        margin: "0px",
+      });
+      fusionLayer.appendChild(fusionCore);
+      gsap.set(target, {
+        autoAlpha: 0, x: sourceCenter - targetCenter, scaleX: 0.36, scaleY: 1.06,
+        borderRadius: 999, filter: "blur(2px) drop-shadow(0 0 7px rgba(250,204,21,.28))",
+      });
+      group.forEach((source) => {
+        const rect = source.getBoundingClientRect();
+        const delta = targetCenter - (rect.left + rect.width / 2);
+        const fusedWidth = Math.max(22, targetRect.width * 0.72);
+        timeline.to(source, {
+          x: delta * 0.58, scaleX: 0.9, scaleY: 0.97, borderRadius: 999,
+          duration: 0.14, ease: "power2.inOut",
+        }, offset);
+        timeline.to(source, {
+          x: targetCenter - (rect.left + fusedWidth / 2), width: fusedWidth,
+          scaleX: 0.82, scaleY: 1.06, borderRadius: 999,
+          duration: 0.17, ease: "back.inOut(1.18)",
+        }, offset + 0.12);
+        timeline.to(source.children, { autoAlpha: 0, duration: 0.1, ease: "power2.in" }, offset + 0.2);
+        timeline.to(source, { autoAlpha: 0, scale: 0.5, duration: 0.12, ease: "power2.in" }, offset + 0.29);
+      });
+      timeline.to(fusionCore, {
+        autoAlpha: 0.92, width: Math.max(30, targetRect.width * 0.52),
+        x: -(Math.max(30, targetRect.width * 0.52) - 22) / 2,
+        scaleY: 1.08, duration: 0.17, ease: "back.out(1.22)",
+      }, offset + 0.15);
+      timeline.to(fusionCore, {
+        width: targetRect.width, x: -(targetRect.width - 22) / 2,
+        scaleY: 1, duration: 0.15, ease: "elastic.out(1, .8)",
+      }, offset + 0.29);
+      timeline.to(target, {
+        autoAlpha: 1, x: 0, scaleX: 1, scaleY: 1, borderRadius: 999,
+        filter: "blur(0px) drop-shadow(0 0 0 rgba(250,204,21,0))",
+        duration: 0.17, ease: "elastic.out(1, .78)",
+      }, offset + 0.35);
+      timeline.to(fusionCore, { autoAlpha: 0, duration: 0.12, ease: "power2.out" }, offset + 0.37);
+    });
+    return;
+  }
+
+  const targetGroups = groupCapsulesForMorph(incoming, outgoing.length);
+  outgoing.forEach((source, groupIndex) => {
+    const targets = targetGroups[groupIndex] ?? [];
+    const sourceRect = source.getBoundingClientRect();
+    const targetRects = targets.map((target) => target.getBoundingClientRect());
+    const left = Math.min(...targetRects.map((rect) => rect.left));
+    const right = Math.max(...targetRects.map((rect) => rect.right));
+    const splitCenter = (left + right) / 2;
+    const swollenWidth = Math.min(Math.max(sourceRect.width * 1.28, 38), 112);
+    const offset = groupIndex * groupDelay;
+    timeline.to(source, {
+      scaleX: 1.08, scaleY: 1.05, borderRadius: 999,
+      duration: 0.14, ease: "back.out(1.18)",
+    }, offset);
+    timeline.to(source, {
+      x: splitCenter - (sourceRect.left + swollenWidth / 2), width: swollenWidth,
+      scaleX: 1, scaleY: 0.94, borderRadius: 999,
+      duration: 0.17, ease: "back.inOut(1.16)",
+    }, offset + 0.12);
+    timeline.to(source.children, { autoAlpha: 0, duration: 0.1 }, offset + 0.23);
+    targets.forEach((target) => {
+      const targetRect = target.getBoundingClientRect();
+      gsap.set(target, {
+        autoAlpha: 0, x: splitCenter - (targetRect.left + targetRect.width / 2),
+        scaleX: 0.3, scaleY: 1.06, borderRadius: 999, filter: "blur(2px)",
+      });
+      timeline.to(target, {
+        autoAlpha: 1, x: 0, scaleX: 1, scaleY: 1, borderRadius: 999, filter: "blur(0px)",
+        duration: 0.2, ease: "elastic.out(1, .78)",
+      }, offset + 0.31);
+    });
+    timeline.to(source, { autoAlpha: 0, scaleY: 0.72, duration: 0.14, ease: "power2.out" }, offset + 0.31);
+  });
+}
 
 /* ───── component ───────────────────────────────────────────────── */
 
@@ -208,6 +358,12 @@ export default function DesktopIsland() {
 
   /* ── Capsules animation ref ──────────────────────────── */
   const capsulesRowRef = useRef<HTMLDivElement>(null);
+  const capsuleTransitionRef = useRef<gsap.core.Timeline | null>(null);
+  const selectFlipRef = useRef<gsap.core.Timeline | null>(null);
+  const morphGenerationRef = useRef(0);
+  const morphClonesRef = useRef<HTMLElement[]>([]);
+  const morphLayerRef = useRef<HTMLDivElement | null>(null);
+  const modifyLabelRef = useRef<HTMLDivElement>(null);
 
   /* ── Shapes dropdown refs & state ────────────────────── */
   const [shapesDropdownOpen, setShapesDropdownOpen] = useState(false);
@@ -445,28 +601,117 @@ export default function DesktopIsland() {
     }
   }, [hasContextSelection, alignAxis, mepModeActive, archCategory, mepCategory]);
 
-  /* ── 3. Refractive liquid-glass transition on category switch ── */
+  const [renderedCapsules, setRenderedCapsules] = useState(activeCapsules);
+  const renderedCapsulesRef = useRef(renderedCapsules);
+
+  /* FLIP + grouped many-to-few liquid-glass morph. Old buttons briefly live
+     as fixed clones while React renders and measures the destination row. */
   useLayoutEffect(() => {
-    if (!capsulesRowRef.current) return;
-    const buttons = capsulesRowRef.current.querySelectorAll(".desktop-capsule-btn");
-    if (!buttons || buttons.length === 0) return;
-
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) return;
-
     const row = capsulesRowRef.current;
-    const context = gsap.context(() => {
-      gsap.fromTo(row,
-        { autoAlpha: 0.55, scaleX: 0.94, filter: "blur(6px) saturate(1.35)" },
-        { autoAlpha: 1, scaleX: 1, filter: "blur(0px) saturate(1)", duration: 0.42, ease: "power3.out", overwrite: true },
-      );
-      gsap.fromTo(buttons,
-        { autoAlpha: 0, x: (index) => (index - (buttons.length - 1) / 2) * -7, y: 7, scale: 0.9, rotateX: -18 },
-        { autoAlpha: 1, x: 0, y: 0, scale: 1, rotateX: 0, duration: 0.46, stagger: 0.025, ease: "back.out(1.5)", overwrite: true },
-      );
-    }, row);
-    return () => context.revert();
-  }, [activeCapsules, hasContextSelection]);
+    if (!row) return;
+    const generation = ++morphGenerationRef.current;
+    const previous = renderedCapsulesRef.current;
+    const previousIds = previous.map((item) => item.id).join("|");
+    const nextIds = activeCapsules.map((item) => item.id).join("|");
+    if (previousIds === nextIds) {
+      renderedCapsulesRef.current = activeCapsules;
+      setRenderedCapsules(activeCapsules);
+      return;
+    }
+
+    capsuleTransitionRef.current?.kill();
+    selectFlipRef.current?.kill();
+    morphLayerRef.current?.remove();
+    morphLayerRef.current = null;
+    morphClonesRef.current.forEach((clone) => clone.remove());
+    morphClonesRef.current = [];
+    gsap.set(row.querySelectorAll(".desktop-capsule-btn"), { clearProps: "all" });
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      renderedCapsulesRef.current = activeCapsules;
+      queueMicrotask(() => {
+        if (generation === morphGenerationRef.current) {
+          flushSync(() => setRenderedCapsules(activeCapsules));
+        }
+      });
+      return;
+    }
+
+    const outgoingButtons = Array.from(row.querySelectorAll<HTMLElement>("[data-capsule-id]"));
+    const oldSelect = outgoingButtons.find((button) => button.dataset.capsuleId === "select");
+    const selectState = oldSelect ? Flip.getState(oldSelect) : null;
+    const fusionLayer = document.createElement("div");
+    fusionLayer.className = "desktop-capsule-morph-layer";
+    document.body.appendChild(fusionLayer);
+    morphLayerRef.current = fusionLayer;
+    const clones = outgoingButtons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      const clone = button.cloneNode(true) as HTMLElement;
+      clone.classList.add("desktop-capsule-morph-clone");
+      Object.assign(clone.style, {
+        position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`,
+        width: `${rect.width}px`, height: `${rect.height}px`, margin: "0px",
+      });
+      fusionLayer.appendChild(clone);
+      return clone;
+    });
+    morphClonesRef.current = clones;
+
+    queueMicrotask(() => {
+    if (generation !== morphGenerationRef.current || !row.isConnected) {
+      clones.forEach((clone) => clone.remove());
+      fusionLayer.remove();
+      if (morphLayerRef.current === fusionLayer) morphLayerRef.current = null;
+      return;
+    }
+    renderedCapsulesRef.current = activeCapsules;
+    flushSync(() => setRenderedCapsules(activeCapsules));
+    const incomingButtons = Array.from(row.querySelectorAll<HTMLElement>("[data-capsule-id]"));
+    gsap.set(incomingButtons, {
+      transition: "none",
+      backdropFilter: "none",
+      WebkitBackdropFilter: "none",
+    });
+    const incomingSelect = incomingButtons.find((button) => button.dataset.capsuleId === "select");
+    const outgoingMerge = clones.filter((clone) => clone.dataset.capsuleId !== "select");
+    const incomingMerge = incomingButtons.filter((button) => button.dataset.capsuleId !== "select");
+    const timeline = gsap.timeline({
+      defaults: { overwrite: true },
+      onComplete: () => {
+        clones.forEach((clone) => clone.remove());
+        fusionLayer.remove();
+        if (morphLayerRef.current === fusionLayer) morphLayerRef.current = null;
+        morphClonesRef.current = [];
+        gsap.set(incomingButtons, { clearProps: "all" });
+      },
+    });
+    capsuleTransitionRef.current = timeline;
+
+    appendCellularMorph(timeline, outgoingMerge, incomingMerge, fusionLayer);
+
+    const outgoingSelect = clones.find((clone) => clone.dataset.capsuleId === "select");
+    if (selectState && incomingSelect) {
+      selectFlipRef.current = Flip.from(selectState, { targets: incomingSelect, duration: 0.38, ease: "back.inOut(1.2)", absolute: true });
+      outgoingSelect?.remove();
+    } else if (outgoingSelect) {
+      timeline.to(outgoingSelect, { autoAlpha: 0, scale: 0.35, duration: 0.2, ease: "power3.in" }, 0);
+    } else if (incomingSelect) {
+      timeline.fromTo(incomingSelect, { autoAlpha: 0, scale: 0.4 }, { autoAlpha: 1, scale: 1, duration: 0.24, ease: "sine.out" }, 0.12);
+    }
+    });
+  }, [activeCapsules]);
+
+  useLayoutEffect(() => {
+    if (!hasContextSelection || !modifyLabelRef.current) return;
+    gsap.fromTo(modifyLabelRef.current, { autoAlpha: 0, y: -7 }, { autoAlpha: 1, y: 0, duration: 0.28, ease: "power3.out" });
+  }, [hasContextSelection, modifyTitle]);
+
+  useEffect(() => () => {
+    morphGenerationRef.current += 1;
+    capsuleTransitionRef.current?.kill();
+    selectFlipRef.current?.kill();
+    morphLayerRef.current?.remove();
+    morphClonesRef.current.forEach((clone) => clone.remove());
+  }, []);
 
   /* ── actions ─────────────────────────────────────────── */
   const clearSelection = () => {
@@ -651,7 +896,7 @@ export default function DesktopIsland() {
           )}
 
           {hasContextSelection ? (
-            <div className="flex items-center gap-1.5 px-2 relative z-[2]">
+            <div ref={modifyLabelRef} className="flex items-center gap-1.5 px-2 relative z-[2]">
               <span className="flex items-center gap-1 text-[11px] font-bold text-yellow-500 dark:text-yellow-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
                 <span>{modifyTitle}</span>
@@ -708,7 +953,7 @@ export default function DesktopIsland() {
           ref={capsulesRowRef}
           className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full"
         >
-          {activeCapsules.map((item) => {
+          {renderedCapsules.map((item) => {
             const active = isCapsuleActive(item.id);
             const isShapes = item.id === "shapes";
             const isTypeSelector = Boolean(TYPE_CATEGORY[item.id]);
@@ -723,6 +968,8 @@ export default function DesktopIsland() {
                   if (isTypeSelector) typeButtonRefs.current[item.id] = element;
                 }}
                 type="button"
+                data-capsule-id={item.id}
+                data-flip-id={item.id === "select" ? "desktop-capsule-select" : undefined}
                 onClick={() => handleCapsuleClick(item.id)}
                 className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
                 aria-pressed={active}

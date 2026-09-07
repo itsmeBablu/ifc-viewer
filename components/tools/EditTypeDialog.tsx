@@ -4,12 +4,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { LuX, LuCheck, LuPlus, LuTrash2, LuCopy } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import type { WallLayer, WallLayerFunction } from "@/lib/layoutDrawing";
+import { EXTRA_ELEMENT_TYPES } from "@/lib/bimTypeCatalog";
+import type { LayoutDoor, LayoutWindow, LayoutColumn, LayoutBeam } from "@/lib/layoutDrawing";
 import UnifiedButton from "@/components/common/UnifiedButton";
 
 export type ElementTypeDefinition = {
   id: string;
   name: string;
   category:
+    | "Column"
+    | "Beam"
     | "Wall"
     | "Door"
     | "Window"
@@ -24,6 +28,10 @@ export type ElementTypeDefinition = {
     | "Heater"
     | "Cooling"
     | "Equipment";
+  doorStyle?: LayoutDoor["style"];
+  headShape?: LayoutWindow["headShape"];
+  sashCount?: LayoutWindow["sashCount"];
+  structuralProfile?: LayoutColumn["profile"] | LayoutBeam["profile"];
   thicknessMm?: number;
   widthMm?: number;
   heightMm?: number;
@@ -54,6 +62,7 @@ export function formatWallTypeName(
 }
 
 export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
+  ...EXTRA_ELEMENT_TYPES,
   // Revit & GEG Standard Wall Types
   "wall-de-aw-wdvs-300": {
     id: "wall-de-aw-wdvs-300",
