@@ -22,7 +22,6 @@ import type { PageFormat } from "@/lib/presentationLayout";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import { MARKUP_TOOL_ORDER } from "../tools/MarkupIcons";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import SliceHeightSlider from "../common/SliceHeightSlider";
 import type { Viewer3DHandle } from "./Viewer3D";
 import ModelText from "../common/ModelText";
@@ -109,27 +108,9 @@ export default function ViewerContextMenu({
   const deletePlacement = useToolMarkupStore((s) => s.deletePlacement);
   const clearSelection = useToolMarkupStore((s) => s.clearSelection);
   const placements = useToolMarkupStore((s) => s.placements);
-  const beginNoteAt = useToolMarkupStore((s) => s.beginNoteAt);
   const updatePlacement = useToolMarkupStore((s) => s.updatePlacement);
   const placeShape = useToolMarkupStore((s) => s.placeShape);
   const defaultColor = useToolMarkupStore((s) => s.defaultColor);
-
-  const selectedWallId = useLayoutDrawingStore((s) => s.selectedWallId);
-  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
-  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
-  const deleteWall = useLayoutDrawingStore((s) => s.deleteWall);
-  const deleteDoor = useLayoutDrawingStore((s) => s.deleteDoor);
-  const deleteWindow = useLayoutDrawingStore((s) => s.deleteWindow);
-  const walls = useLayoutDrawingStore((s) => s.walls);
-  const doors = useLayoutDrawingStore((s) => s.doors);
-  const windows = useLayoutDrawingStore((s) => s.windows);
-  const clearLayoutSelection = useLayoutDrawingStore(
-    (s) => s.clearLayoutSelection,
-  );
-
-  const requestToolReveal = useAppStore((s) => s.requestToolReveal);
-  const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
-  const isolateElements = useAppStore((s) => s.isolateElements);
 
   const shapesBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -454,220 +435,77 @@ export default function ViewerContextMenu({
                     </span>
                   </button>
 
-                  <div className="my-1 border-t border-amber-200/45 dark:border-[var(--panel-divider)]" />
+                  {selectedPlacementId && (
+                    <div className="my-1 rounded-2xl border border-white/90 bg-white/55 p-1">
+                      <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">3D Shape</p>
+                      {(["translate", "rotate", "scale"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="menuitem"
+                          className={itemCls()}
+                          onClick={() => {
+                            setTransformMode(mode);
+                            close();
+                          }}
+                        >
+                          <span className="capitalize">{mode === "translate" ? "Move" : mode}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={itemCls()}
+                        onClick={() => {
+                          const p = placements.find((x) => x.id === selectedPlacementId);
+                          if (p) {
+                            void placeShape(p.type, { x: p.posX + 0.4, y: p.posY, z: p.posZ + 0.4 }, { floorId: p.floorId, rot: { x: p.rotX, y: p.rotY, z: p.rotZ }, sizeX: p.sizeX, sizeY: p.sizeY, sizeZ: p.sizeZ });
+                          }
+                          close();
+                        }}
+                      >
+                        <span>{t(uiLanguage, "layoutDuplicate")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={itemCls()}
+                        onClick={() => {
+                          if (selectedPlacementId) {
+                            void updatePlacement(selectedPlacementId, { color: defaultColor });
+                          }
+                          close();
+                        }}
+                      >
+                        <span>{t(uiLanguage, "markupColor")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`${itemCls()} text-red-600`}
+                        onClick={() => {
+                          if (selectedPlacementId) {
+                            void deletePlacement(selectedPlacementId);
+                            clearSelection();
+                          }
+                          close();
+                        }}
+                      >
+                        <span>{t(uiLanguage, "markupDelete")}</span>
+                      </button>
+                    </div>
+                  )}
 
                   <button
                     type="button"
                     role="menuitem"
                     className={itemCls()}
-                    disabled={!selectedPlacementId}
                     onClick={() => {
-                      setTransformMode("translate");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupMove")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      setTransformMode("scale");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupScale")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      setTransformMode("rotate");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupRotate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      if (selectedPlacementId) {
-                        void deletePlacement(selectedPlacementId);
-                        clearSelection();
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupDelete")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      const p = placements.find(
-                        (x) => x.id === selectedPlacementId,
-                      );
-                      if (p) {
-                        void placeShape(p.type, {
-                          x: p.posX + 0.4,
-                          y: p.posY,
-                          z: p.posZ + 0.4,
-                        }, {
-                          floorId: p.floorId,
-                          rot: { x: p.rotX, y: p.rotY, z: p.rotZ },
-                          sizeX: p.sizeX,
-                          sizeY: p.sizeY,
-                          sizeZ: p.sizeZ,
-                        });
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "layoutDuplicate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      if (selectedPlacementId) {
-                        void updatePlacement(selectedPlacementId, {
-                          color: defaultColor,
-                        });
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupColor")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={
-                      !selectedPlacementId &&
-                      !selectedWallId &&
-                      !selectedDoorId &&
-                      !selectedWindowId &&
-                      toolSelectedExpressId == null
-                    }
-                    onClick={() => {
-                      if (selectedWallId) {
-                        const w = walls.find((x) => x.id === selectedWallId);
-                        if (w) {
-                          beginNoteAt(
-                            {
-                              x: (w.startXmm + w.endXmm) / 2000,
-                              y: 1.2,
-                              z: (w.startYmm + w.endYmm) / 2000,
-                            },
-                            { wallId: w.id, elementName: "Wall", floorId: w.levelId },
-                          );
-                        }
-                      } else if (selectedDoorId) {
-                        const d = doors.find((x) => x.id === selectedDoorId);
-                        if (d) {
-                          beginNoteAt(
-                            { x: 0, y: 1, z: 0 },
-                            { doorId: d.id, elementName: "Door", wallId: d.wallId },
-                          );
-                        }
-                      } else if (selectedWindowId) {
-                        const w = windows.find((x) => x.id === selectedWindowId);
-                        if (w) {
-                          beginNoteAt(
-                            { x: 0, y: 1.2, z: 0 },
-                            {
-                              windowId: w.id,
-                              elementName: "Window",
-                              wallId: w.wallId,
-                            },
-                          );
-                        }
-                      } else if (selectedPlacementId) {
-                        const p = placements.find(
-                          (x) => x.id === selectedPlacementId,
-                        );
-                        if (p) {
-                          beginNoteAt(
-                            { x: p.posX, y: p.posY + 0.2, z: p.posZ },
-                            {
-                              placementId: p.id,
-                              elementName: p.label ?? p.type,
-                              floorId: p.floorId,
-                            },
-                          );
-                        }
-                      } else if (toolSelectedExpressId != null) {
-                        setArmedTool("note");
-                      }
+                      setArmedTool("note");
                       close();
                     }}
                   >
                     <span>{t(uiLanguage, "layoutAddNote")}</span>
-                  </button>
-                  {(selectedWallId || selectedDoorId || selectedWindowId) && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={itemCls()}
-                      onClick={() => {
-                        if (selectedWallId) void deleteWall(selectedWallId);
-                        if (selectedDoorId) void deleteDoor(selectedDoorId);
-                        if (selectedWindowId)
-                          void deleteWindow(selectedWindowId);
-                        clearLayoutSelection();
-                        close();
-                      }}
-                    >
-                      <span>{t(uiLanguage, "markupDelete")} (layout)</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={toolSelectedExpressId == null}
-                    onClick={() => {
-                      if (toolSelectedExpressId != null) {
-                        isolateElements([toolSelectedExpressId]);
-                        requestToolReveal(toolSelectedExpressId);
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "layoutIsolate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={
-                      !selectedPlacementId && toolSelectedExpressId == null
-                    }
-                    onClick={() => {
-                      if (toolSelectedExpressId != null) {
-                        requestToolReveal(toolSelectedExpressId);
-                      } else if (selectedPlacementId) {
-                        useToolMarkupStore
-                          .getState()
-                          .selectPlacement(selectedPlacementId);
-                        viewerRef.current?.fitVisible();
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupFocusSelected")}</span>
                   </button>
                 </>
               ) : (

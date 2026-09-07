@@ -529,7 +529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sceneBackground: initialBackground(),
   autoSceneBackground: initialAutoSceneBackground(),
   autoFocusSelection: initialAutoFocusSelection(),
-  show3DGrid: readBool(SHOW_3D_GRID_KEY, false),
+  show3DGrid: readBool(SHOW_3D_GRID_KEY, true),
   pdfCaptureActive: false,
   isPresentationView: false,
   presentationPrevFloor: null,

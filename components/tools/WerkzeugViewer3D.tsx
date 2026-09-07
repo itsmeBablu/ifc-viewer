@@ -67,6 +67,8 @@ import { fromMm, snapToNearbyAabb, toMm } from "@/lib/markupUnits";
 import { MarkupSceneLayer } from "@/components/tools/MarkupSceneLayer";
 import { FirstPersonWalkthroughController } from "@/lib/firstPersonWalkthrough";
 import QuadViewOverlays from "@/components/tools/QuadViewOverlays";
+import ViewportAxesGizmo from "@/components/tools/ViewportAxesGizmo";
+import { createEnhancedAxes } from "@/lib/axesHelper";
 import {
   applySlotToCameras,
   captureSlotFromCamera,
@@ -788,6 +790,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const raycaster = useRef(new THREE.Raycaster());
   const pointerNdc = useRef(new THREE.Vector2());
   const lastPointerClientPosRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const componentPointRef = useRef<
+    | ((clientX: number, clientY: number, bypass?: boolean) => {
+        plan: { xMm: number; yMm: number };
+        level: { id: string; name: string; elevationMm: number };
+        label: string;
+      } | null)
+    | null
+  >(null);
   const presentationCamRef = useRef<{
     position: [number, number, number];
     target: [number, number, number];
@@ -1297,9 +1307,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     grid.visible = useAppStore.getState().show3DGrid;
     helpers.add(grid);
 
-    const axes = new THREE.AxesHelper(4);
+    const axes = createEnhancedAxes(6);
     axes.name = "3d-axes";
-    axes.visible = useAppStore.getState().show3DGrid;
+    axes.visible = true; // XYZ axes always on
     helpers.add(axes);
     scene.add(helpers);
 
@@ -2662,7 +2672,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const g = helpersRef.current.getObjectByName("3d-grid");
         if (g) g.visible = useAppStore.getState().show3DGrid;
         const ax = helpersRef.current.getObjectByName("3d-axes");
-        if (ax) ax.visible = useAppStore.getState().show3DGrid;
+        if (ax) ax.visible = true;
       }
       if (s.wallDraw) {
         const lvl =
@@ -2968,7 +2978,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const nextRot = (layout.draftEquipmentRotationDeg + 90) % 360;
           layout.setDraftEquipmentRotationDeg(nextRot);
           if (lastPointerClientPosRef.current && layoutLayerRef.current) {
-            const placement = componentPoint(lastPointerClientPosRef.current.clientX, lastPointerClientPosRef.current.clientY, false);
+            const placement = componentPointRef.current?.(lastPointerClientPosRef.current.clientX, lastPointerClientPosRef.current.clientY, false);
             if (placement) {
               layoutLayerRef.current.setMepPreview(layout.armedLayoutTool, null, placement.plan, {
                 baseElevMm: placement.level.elevationMm, elevationMm: layout.draftEquipmentElevationMm,
@@ -3668,7 +3678,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     }
     const axes = helpersRef.current?.getObjectByName("3d-axes");
     if (axes) {
-      axes.visible = show3DGrid;
+      axes.visible = true;
     }
   }, [show3DGrid]);
 
@@ -4277,6 +4287,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       }
       return { plan, level, label };
     };
+    componentPointRef.current = componentPoint;
 
     const measurementPoint = (clientX: number, clientY: number, bypass = false) => {
       const camera = preparePointerRayRef.current(clientX, clientY);
@@ -7277,6 +7288,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     canvas.addEventListener("dblclick", onDblClick);
     canvas.addEventListener("werkzeug-context-pick", onContextPick);
     return () => {
+      componentPointRef.current = null;
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
       canvas.removeEventListener("pointerdown", onPointerDown);
@@ -7304,6 +7316,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      <ViewportAxesGizmo cameraRef={cameraRef} />
       {marqueeBox && (
         <div
           className="pointer-events-none fixed z-[999]"
