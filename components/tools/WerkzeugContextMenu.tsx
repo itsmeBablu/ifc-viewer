@@ -27,6 +27,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import SliceHeightSlider from "../common/SliceHeightSlider";
 import type { WerkzeugViewer3DHandle } from "./WerkzeugViewer3D";
 import ModelText from "../common/ModelText";
+import ToolTypeChoices from "./ToolTypeChoices";
 
 type Props = {
   viewerRef: RefObject<WerkzeugViewer3DHandle | null>;
@@ -178,6 +179,9 @@ export default function WerkzeugContextMenu({
   const unhideElement = useLayoutDrawingStore((s) => s.unhideElement);
   const unhideAll = useLayoutDrawingStore((s) => s.unhideAll);
   const toggleRevealHiddenMode = useLayoutDrawingStore((s) => s.toggleRevealHiddenMode);
+  const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+  const isPlacing = Boolean(armedLayoutTool && armedLayoutTool !== "select");
 
   const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
@@ -660,6 +664,15 @@ export default function WerkzeugContextMenu({
                           </div>
                         );
                       })()}
+
+                      {/* Dynamic Type Switcher for selected element */}
+                      <div className="mt-1 border-t border-slate-200/80 p-1">
+                        <ToolTypeChoices
+                          tool={primaryLayoutSelection.kind === "slab" ? "floor" : (primaryLayoutSelection.kind as any)}
+                          selectedElement={primaryLayoutSelection}
+                          onChoose={close}
+                        />
+                      </div>
                     </div>
                   )}
                   {!primaryLayoutSelection && selectedPlacementId && (
@@ -667,6 +680,7 @@ export default function WerkzeugContextMenu({
                       <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">3D shape</p>
                       {(["translate", "rotate", "scale"] as const).map((mode) => <button key={mode} type="button" className={itemCls()} onClick={() => { setTransformMode(mode); close(); }}><span className="capitalize">{mode === "translate" ? "Move" : mode}</span></button>)}
                       <button type="button" className={itemCls()} onClick={() => { const p = placements.find((item) => item.id === selectedPlacementId); if (p) void placeShape(p.type, { x: p.posX + .4, y: p.posY, z: p.posZ + .4 }, { floorId: p.floorId, rot: { x: p.rotX, y: p.rotY, z: p.rotZ }, sizeX: p.sizeX, sizeY: p.sizeY, sizeZ: p.sizeZ }); close(); }}><span>{t(uiLanguage, "layoutDuplicate")}</span></button>
+                      <button type="button" className={itemCls()} onClick={() => { if (selectedPlacementId) { void updatePlacement(selectedPlacementId, { color: defaultColor }); } close(); }}><span>{t(uiLanguage, "markupColor")}</span></button>
                       <button type="button" className={`${itemCls()} text-red-600`} onClick={() => { void deletePlacement(selectedPlacementId); clearSelection(); close(); }}><span>{t(uiLanguage, "markupDelete")}</span></button>
                     </div>
                   )}
@@ -678,327 +692,155 @@ export default function WerkzeugContextMenu({
                       <button type="button" className={itemCls()} onClick={() => { setArmedTool("note"); close(); }}><span>{t(uiLanguage, "layoutAddNote")}</span></button>
                     </div>
                   )}
-                  {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId == null && <>
-                  {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null || revealHiddenMode) && (
-                    <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1">
-                      <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                        <span>Visibility</span>
-                        {revealHiddenMode && <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[8px] font-bold text-white">Ghost Mode</span>}
-                      </div>
-                      <button
-                        type="button"
-                        className={itemCls()}
-                        onClick={() => {
-                          toggleRevealHiddenMode();
-                          close();
-                        }}
-                      >
-                        <span className="flex items-center gap-1.5 text-zinc-700">
-                          <LuEye className="h-3.5 w-3.5 text-pink-500" />
-                          <span>{revealHiddenMode ? "Exit Ghost Mode" : "Reveal Hidden (Ghost Mode)"}</span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`${itemCls()} text-amber-600 hover:text-amber-700`}
-                        onClick={() => {
-                          unhideAll();
-                          close();
-                        }}
-                      >
-                        <span className="flex items-center gap-1.5 font-medium">
-                          <LuRotateCcw className="h-3.5 w-3.5" />
-                          <span>Unhide All Elements</span>
-                        </span>
-                      </button>
-                    </div>
+                  {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId == null && (
+                    <>
+                      {isPlacing ? (
+                        <div className="rounded-2xl border border-yellow-400/35 bg-yellow-50/80 p-2 shadow-[inset_0_1px_0_white] dark:bg-yellow-950/20">
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-700 dark:text-yellow-400">
+                              Active: {armedLayoutTool === "equipment" || armedLayoutTool === "component" ? (mepModeActive ? "MEP Equipment" : "Architectural Furniture") : armedLayoutTool}
+                            </span>
+                            <span className="rounded-full bg-yellow-400/20 px-1.5 py-0.5 text-[8px] font-bold text-yellow-800 dark:text-yellow-300">
+                              Choose Type
+                            </span>
+                          </div>
+                          <ToolTypeChoices tool={armedLayoutTool} onChoose={close} />
+                          <div className="mt-2 border-t border-yellow-400/20 pt-1.5">
+                            <button
+                              type="button"
+                              className={`${itemCls()} text-zinc-600 dark:text-zinc-300 hover:text-zinc-900`}
+                              onClick={() => {
+                                useLayoutDrawingStore.getState().setArmedLayoutTool("select");
+                                close();
+                              }}
+                            >
+                              <span>Cancel {armedLayoutTool === "equipment" || armedLayoutTool === "component" ? "Placement" : armedLayoutTool}</span>
+                              <span className="text-[9px] font-medium text-zinc-400">Esc</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null || revealHiddenMode) && (
+                            <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1">
+                              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                                <span>Visibility</span>
+                                {revealHiddenMode && <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[8px] font-bold text-white">Ghost Mode</span>}
+                              </div>
+                              <button
+                                type="button"
+                                className={itemCls()}
+                                onClick={() => {
+                                  toggleRevealHiddenMode();
+                                  close();
+                                }}
+                              >
+                                <span className="flex items-center gap-1.5 text-zinc-700">
+                                  <LuEye className="h-3.5 w-3.5 text-pink-500" />
+                                  <span>{revealHiddenMode ? "Exit Ghost Mode" : "Reveal Hidden (Ghost Mode)"}</span>
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`${itemCls()} text-amber-600 hover:text-amber-700`}
+                                onClick={() => {
+                                  unhideAll();
+                                  close();
+                                }}
+                              >
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <LuRotateCcw className="h-3.5 w-3.5" />
+                                  <span>Unhide All Elements</span>
+                                </span>
+                              </button>
+                            </div>
+                          )}
+
+                          <p className={`mb-1 px-2 ${ctxLabel}`}>
+                            {t(uiLanguage, "markupViews")}
+                          </p>
+                          <div className="mb-1.5 flex flex-wrap gap-1 px-1">
+                            {TOOL_VIEWS.map((v) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                className={`${!quadView && viewPreset === v.id ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
+                                onClick={() => {
+                                  setQuadView(false);
+                                  setViewPreset(v.id);
+                                  close();
+                                }}
+                              >
+                                {v.label}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              className={`${quadView ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
+                              onClick={() => {
+                                setQuadView(!quadView);
+                                close();
+                              }}
+                            >
+                              4 Views
+                            </button>
+                          </div>
+
+                          <button
+                            ref={shapesBtnRef}
+                            type="button"
+                            role="menuitem"
+                            className={itemCls({ open: sidePanel === "shapes" })}
+                            onClick={() =>
+                              setSidePanel((p) => (p === "shapes" ? null : "shapes"))
+                            }
+                            aria-expanded={sidePanel === "shapes"}
+                          >
+                            <span>{t(uiLanguage, "markupShapesMenu")}</span>
+                            <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                          </button>
+
+                          <button
+                            type="button"
+                            role="menuitemcheckbox"
+                            aria-checked={show3DGrid}
+                            className={itemCls()}
+                            onClick={() => {
+                              setShow3DGrid(!show3DGrid);
+                              close();
+                            }}
+                          >
+                            <span>3D Graph & XYZ Axes</span>
+                            <span
+                              className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                                show3DGrid
+                                  ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                                  : "bg-zinc-300 dark:bg-zinc-600"
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                                  show3DGrid ? "translate-x-3.5" : "translate-x-0.5"
+                                }`}
+                              />
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className={itemCls()}
+                            onClick={() => {
+                              setArmedTool("note");
+                              close();
+                            }}
+                          >
+                            <span>{t(uiLanguage, "layoutAddNote")}</span>
+                          </button>
+                        </>
+                      )}
+                    </>
                   )}
-                  <p className={`mb-1 px-2 ${ctxLabel}`}>
-                    {t(uiLanguage, "markupViews")}
-                  </p>
-                  <div className="mb-1.5 flex flex-wrap gap-1 px-1">
-                    {TOOL_VIEWS.map((v) => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        className={`${!quadView && viewPreset === v.id ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
-                        onClick={() => {
-                          setQuadView(false);
-                          setViewPreset(v.id);
-                          close();
-                        }}
-                      >
-                        {v.label}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className={`${quadView ? ctxChipOn : ctxChipOff} px-2 py-1 text-[10px] font-bold`}
-                      onClick={() => {
-                        setQuadView(!quadView);
-                        close();
-                      }}
-                    >
-                      4 Views
-                    </button>
-                  </div>
-
-                  <button
-                    ref={shapesBtnRef}
-                    type="button"
-                    role="menuitem"
-                    className={itemCls({ open: sidePanel === "shapes" })}
-                    onClick={() =>
-                      setSidePanel((p) => (p === "shapes" ? null : "shapes"))
-                    }
-                    aria-expanded={sidePanel === "shapes"}
-                  >
-                    <span>{t(uiLanguage, "markupShapesMenu")}</span>
-                    <MdKeyboardArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={show3DGrid}
-                    className={itemCls()}
-                    onClick={() => {
-                      setShow3DGrid(!show3DGrid);
-                      close();
-                    }}
-                  >
-                    <span>3D Graph & XYZ Axes</span>
-                    <span
-                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-                        show3DGrid
-                          ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-                          : "bg-zinc-300 dark:bg-zinc-600"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                          show3DGrid ? "translate-x-3.5" : "translate-x-0.5"
-                        }`}
-                      />
-                    </span>
-                  </button>
-
-                  <div className="my-1 border-t border-amber-200/45 dark:border-[var(--panel-divider)]" />
-
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      setTransformMode("translate");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupMove")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      setTransformMode("scale");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupScale")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      setTransformMode("rotate");
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupRotate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      if (selectedPlacementId) {
-                        void deletePlacement(selectedPlacementId);
-                        clearSelection();
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupDelete")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      const p = placements.find(
-                        (x) => x.id === selectedPlacementId,
-                      );
-                      if (p) {
-                        void placeShape(p.type, {
-                          x: p.posX + 0.4,
-                          y: p.posY,
-                          z: p.posZ + 0.4,
-                        }, {
-                          floorId: p.floorId,
-                          rot: { x: p.rotX, y: p.rotY, z: p.rotZ },
-                          sizeX: p.sizeX,
-                          sizeY: p.sizeY,
-                          sizeZ: p.sizeZ,
-                        });
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "layoutDuplicate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={!selectedPlacementId}
-                    onClick={() => {
-                      if (selectedPlacementId) {
-                        void updatePlacement(selectedPlacementId, {
-                          color: defaultColor,
-                        });
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupColor")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={
-                      !selectedPlacementId &&
-                      !selectedWallId &&
-                      !selectedDoorId &&
-                      !selectedWindowId &&
-                      toolSelectedExpressId == null
-                    }
-                    onClick={() => {
-                      if (selectedWallId) {
-                        const w = walls.find((x) => x.id === selectedWallId);
-                        if (w) {
-                          beginNoteAt(
-                            {
-                              x: (w.startXmm + w.endXmm) / 2000,
-                              y: 1.2,
-                              z: (w.startYmm + w.endYmm) / 2000,
-                            },
-                            { wallId: w.id, elementName: "Wall", floorId: w.levelId },
-                          );
-                        }
-                      } else if (selectedDoorId) {
-                        const d = doors.find((x) => x.id === selectedDoorId);
-                        if (d) {
-                          beginNoteAt(
-                            { x: 0, y: 1, z: 0 },
-                            { doorId: d.id, elementName: "Door", wallId: d.wallId },
-                          );
-                        }
-                      } else if (selectedWindowId) {
-                        const w = windows.find((x) => x.id === selectedWindowId);
-                        if (w) {
-                          beginNoteAt(
-                            { x: 0, y: 1.2, z: 0 },
-                            {
-                              windowId: w.id,
-                              elementName: "Window",
-                              wallId: w.wallId,
-                            },
-                          );
-                        }
-                      } else if (selectedPlacementId) {
-                        const p = placements.find(
-                          (x) => x.id === selectedPlacementId,
-                        );
-                        if (p) {
-                          beginNoteAt(
-                            { x: p.posX, y: p.posY + 0.2, z: p.posZ },
-                            {
-                              placementId: p.id,
-                              elementName: p.label ?? p.type,
-                              floorId: p.floorId,
-                            },
-                          );
-                        }
-                      } else if (toolSelectedExpressId != null) {
-                        setArmedTool("note");
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "layoutAddNote")}</span>
-                  </button>
-                  {(selectedWallId || selectedDoorId || selectedWindowId) && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={itemCls()}
-                      onClick={() => {
-                        if (selectedWallId) void deleteWall(selectedWallId);
-                        if (selectedDoorId) void deleteDoor(selectedDoorId);
-                        if (selectedWindowId)
-                          void deleteWindow(selectedWindowId);
-                        clearLayoutSelection();
-                        close();
-                      }}
-                    >
-                      <span>{t(uiLanguage, "markupDelete")} (layout)</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={toolSelectedExpressId == null}
-                    onClick={() => {
-                      if (toolSelectedExpressId != null) {
-                        isolateElements([toolSelectedExpressId]);
-                        requestToolReveal(toolSelectedExpressId);
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "layoutIsolate")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={itemCls()}
-                    disabled={
-                      !selectedPlacementId && toolSelectedExpressId == null
-                    }
-                    onClick={() => {
-                      if (toolSelectedExpressId != null) {
-                        requestToolReveal(toolSelectedExpressId);
-                      } else if (selectedPlacementId) {
-                        useToolMarkupStore
-                          .getState()
-                          .selectPlacement(selectedPlacementId);
-                        viewerRef.current?.fitVisible();
-                      }
-                      close();
-                    }}
-                  >
-                    <span>{t(uiLanguage, "markupFocusSelected")}</span>
-                  </button>
-                  </>}
                 </>
               ) : (
                 <>

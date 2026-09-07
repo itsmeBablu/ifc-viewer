@@ -1,5 +1,8 @@
 "use client";
 
+import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
+import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
+
 import { create } from "zustand";
 import {
   DEFAULT_DOOR_HEIGHT_MM,
@@ -420,6 +423,15 @@ type LayoutDrawingState = {
   draftCableTrayHeightMm: number;
   draftCableTrayType: CableTrayType;
   draftCableTrayElevationMm: number;
+  draftElementTypes: Partial<Record<LayoutToolId, ElementTypeDefinition>>;
+  applyElementType: (tool: LayoutToolId, typeDef: ElementTypeDefinition) => void;
+  draftComponentId: string;
+  componentPlacementLevelId: string | null;
+  draftComponentWidthMm: number;
+  draftComponentDepthMm: number;
+  draftComponentHeightMm: number;
+  draftComponentModuleMm: number;
+  chooseComponent: (id: string) => void;
   draftEquipmentCategory: MepEquipmentCategory;
   draftEquipmentElevationMm: number;
   draftEquipmentRotationDeg: number;
@@ -1165,6 +1177,37 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftCableTrayHeightMm: DEFAULT_CABLE_TRAY_HEIGHT_MM,
   draftCableTrayType: "ladder",
   draftCableTrayElevationMm: DEFAULT_CABLE_TRAY_ELEVATION_MM,
+  draftElementTypes: {},
+  draftComponentId: "mep-air_terminal",
+  componentPlacementLevelId: null,
+  draftComponentWidthMm: 600,
+  draftComponentDepthMm: 600,
+  draftComponentHeightMm: 120,
+  draftComponentModuleMm: 600,
+  chooseComponent: (id) => {
+    const preset = componentPreset(id);
+    if (!preset) return;
+    set({ draftComponentId: id, draftEquipmentCategory: preset.category,
+      draftComponentWidthMm: preset.widthMm, draftComponentDepthMm: preset.depthMm, draftComponentHeightMm: preset.heightMm,
+      draftEquipmentElevationMm: id === "kitchen-wall" ? 1500 : preset.elevationMm,
+      draftComponentModuleMm: 600,
+    });
+  },
+  applyElementType: (tool, typeDef) => {
+    set((s) => ({ draftElementTypes: { ...s.draftElementTypes, [tool]: typeDef } }));
+    const s = get();
+    if (tool === "wall") { s.setDraftWallTypeId(typeDef.id); if (typeDef.thicknessMm) s.setDraftWallThicknessMm(typeDef.thicknessMm); if (typeDef.heightMm) s.setDraftWallHeightMm(typeDef.heightMm); }
+    if (tool === "door") s.setDraftDoorSize(typeDef.widthMm ?? s.draftDoorWidthMm, typeDef.heightMm ?? s.draftDoorHeightMm);
+    if (tool === "window") s.setDraftWindowSize(typeDef.widthMm ?? s.draftWindowWidthMm, typeDef.heightMm ?? s.draftWindowHeightMm, typeDef.sillHeightMm ?? s.draftWindowSillMm);
+    if (tool === "floor" || tool === "roof") s.setDraftSlabThicknessMm(typeDef.thicknessMm ?? s.draftSlabThicknessMm);
+    if (tool === "column") s.setDraftColumnSize(typeDef.widthMm ?? 300, typeDef.depthMm ?? 300);
+    if (tool === "beam") s.setDraftBeamSize(typeDef.widthMm ?? 200, typeDef.depthMm ?? 400);
+    if (tool === "stair") { s.setDraftStairWidthMm(typeDef.widthMm ?? 1000); s.setDraftStairType(typeDef.id.includes("spiral") ? "spiral" : typeDef.id.includes("ushape") ? "u-shape" : typeDef.id.includes("lshape") ? "l-shape" : "straight"); }
+    if (tool === "ramp") { s.setDraftRampWidthMm(typeDef.widthMm ?? 1200); s.setDraftRampThicknessMm(typeDef.thicknessMm ?? 150); }
+    if (["duct", "flex_duct", "mep_placeholder"].includes(tool)) { s.setDraftDuctShape(typeDef.profile ?? "rectangular"); s.setDraftDuctSize(typeDef.widthMm ?? 250, typeDef.heightMm ?? 150, typeDef.diameterMm ?? 250); }
+    if (tool === "pipe") s.setDraftPipeDiameterMm(typeDef.diameterMm ?? 28);
+    if (tool === "cabletray") { s.setDraftCableTrayWidthMm(typeDef.widthMm ?? 200); s.setDraftCableTrayHeightMm(typeDef.heightMm ?? 60); }
+  },
   draftEquipmentCategory: "air_terminal",
   draftEquipmentElevationMm: 2600,
   draftEquipmentRotationDeg: 0,
@@ -1191,7 +1234,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setDraftCableTrayHeightMm: (h) => set({ draftCableTrayHeightMm: Math.max(20, h) }),
   setDraftCableTrayType: (type) => set({ draftCableTrayType: type }),
   setDraftCableTrayElevationMm: (elev) => set({ draftCableTrayElevationMm: Math.round(elev) }),
-  setDraftEquipmentCategory: (cat) => set({ draftEquipmentCategory: cat }),
+  setDraftEquipmentCategory: (cat) => {
+    const preset = COMPONENT_CATALOG.find((p) => p.category === cat && p.id.startsWith("mep-"));
+    if (preset) get().chooseComponent(preset.id);
+    else set({ draftEquipmentCategory: cat });
+  },
   setDraftEquipmentElevationMm: (elev) => set({ draftEquipmentElevationMm: Math.round(elev) }),
   setDraftEquipmentRotationDeg: (deg) => set({ draftEquipmentRotationDeg: Math.round(deg) }),
   setDraftEquipmentFlowM3h: (flow) => set({ draftEquipmentFlowM3h: Math.max(0, Math.round(flow)) }),
@@ -1594,6 +1641,35 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setArmedLayoutTool: (tool) => {
+    if (tool === "component") {
+      const s = get();
+      const needsArchId = !isArchitecturalComponent(s.draftComponentId);
+      const nextId = needsArchId ? "sofa-3" : s.draftComponentId;
+      const preset = componentPreset(nextId);
+      set({
+        armedLayoutTool: "component",
+        sketchTargetKind: null,
+        wallDraw: null,
+        slabDraw: null,
+        tracePreview: null,
+        selectedWallId: null,
+        selectedDoorId: null,
+        selectedWindowId: null,
+        selectedSlabId: null,
+        selectedUnderlayId: null,
+        mepModeActive: false,
+        draftEquipmentCategory: "furniture",
+        draftComponentId: nextId,
+        ...(preset ? {
+          draftComponentWidthMm: preset.widthMm,
+          draftComponentDepthMm: preset.depthMm,
+          draftComponentHeightMm: preset.heightMm,
+          draftEquipmentElevationMm: preset.elevationMm,
+        } : {}),
+      });
+      return;
+    }
+
     const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
     const isMepTool =
       tool === "duct" ||
@@ -1602,7 +1678,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       tool === "pipe" ||
       tool === "cabletray" ||
       tool === "wire" ||
-      tool === "equipment" ||
+      (tool === "equipment" && get().draftEquipmentCategory !== "furniture" && !get().draftComponentId.startsWith("bath-")) ||
       tool === "workplane";
     set((s) => ({
       armedLayoutTool: boundaryKind ? "lines" : tool,
@@ -3078,7 +3154,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!projectId) return null;
     const widthMm = opts?.widthMm ?? get().draftDoorWidthMm;
     const heightMm = opts?.heightMm ?? get().draftDoorHeightMm;
+    const type = get().draftElementTypes.door;
     const door: LayoutDoor = {
+      typeId: type?.id,
+      style: type?.doorStyle ?? (type?.id.includes("double") ? "double" : "wood"),
+      headShape: type?.headShape === "round" ? "arched" : type?.headShape,
+      material: type?.material,
       id: newLayoutId("door"),
       projectId,
       wallId,
@@ -3219,7 +3300,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const widthMm = opts?.widthMm ?? get().draftWindowWidthMm;
     const heightMm = opts?.heightMm ?? get().draftWindowHeightMm;
     const sillHeightMm = opts?.sillHeightMm ?? get().draftWindowSillMm;
+    const type = get().draftElementTypes.window;
     const win: LayoutWindow = {
+      typeId: type?.id,
+      headShape: type?.headShape,
+      sashCount: type?.sashCount ?? 1,
+      material: type?.material,
       id: newLayoutId("win"),
       projectId,
       wallId,

@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { measurementGeometry, type MeasurementKind, type MeasurePoint } from "@/lib/measurementGeometry";
 import {
   DEFAULT_MARKUP_COLOR,
   DEFAULT_SHAPE_SIZES,
@@ -43,6 +44,8 @@ type CubeDrawState = {
 } | null;
 
 export type MarkupMeasurement = {
+  kind?: MeasurementKind;
+  third?: MeasurePoint;
   id: string;
   ax: number;
   ay: number;
@@ -123,6 +126,10 @@ type ToolMarkupState = {
   notePinToken: number;
   /** Tape-measure tool — click two points for a persistent dimension. */
   measureMode: boolean;
+  measurementKind: MeasurementKind;
+  measureSecond: MeasurePoint | null;
+  setMeasurementKind: (kind: MeasurementKind) => void;
+  removeMeasurement: (id: string) => void;
   measureDraft: { x: number; y: number; z: number } | null;
   measurements: MarkupMeasurement[];
 
@@ -282,7 +289,8 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   sceneHoverTip: null,
   notePinToken: 0,
   measureMode: false,
-  measureDraft: null,
+  measurementKind: "distance",
+  measureDraft: null, measureSecond: null,
   measurements: [],
 
   setNotePlaceHint: (msg) => set({ notePlaceHint: msg }),
@@ -296,7 +304,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       pendingNote: null,
       notePlaceHint: null,
       measureMode: false,
-      measureDraft: null,
+      measureDraft: null, measureSecond: null,
     })),
 
   setArmedTool: (tool) =>
@@ -308,13 +316,19 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       selectedNoteId: tool ? null : get().selectedNoteId,
       measureMode: tool ? false : get().measureMode,
       measureDraft: tool ? null : get().measureDraft,
+      measureSecond: tool ? null : get().measureSecond,
     }),
 
+  setMeasurementKind: (kind) => set({ measurementKind: kind, measureDraft: null, measureSecond: null }),
+  removeMeasurement: (id) => {
+    pushWerkzeugHistory();
+    set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id), contentTouchedAt: Date.now() }));
+  },
   setMeasureMode: (on) => {
     if (on) {
       set({
         measureMode: true,
-        measureDraft: null,
+        measureDraft: null, measureSecond: null,
         armedTool: null,
         cubeDraw: null,
         pendingNote: null,
@@ -322,7 +336,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       });
       return;
     }
-    set({ measureMode: false, measureDraft: null });
+    set({ measureMode: false, measureDraft: null, measureSecond: null, dragSnapHint: null });
   },
 
   addMeasurePoint: (pos) => {
@@ -331,18 +345,30 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       set({ measureDraft: { x: pos.x, y: pos.y, z: pos.z } });
       return;
     }
+    const { measurementKind: kind, measureSecond } = get();
+    if (Math.hypot(pos.x - draft.x, pos.y - draft.y, pos.z - draft.z) < 1e-6) return;
+    if (kind !== "distance" && !measureSecond) {
+      set({ measureSecond: { ...pos } });
+      return;
+    }
+    const points = measureSecond ? [draft, measureSecond, pos] : [draft, pos];
+    if (!measurementGeometry(kind, points)) return;
+    pushWerkzeugHistory();
+    const end = measureSecond ?? pos;
     const m: MarkupMeasurement = {
+      kind,
+      ...(measureSecond ? { third: { ...pos } } : {}),
       id: newMarkupId("meas"),
       ax: draft.x,
       ay: draft.y,
       az: draft.z,
-      bx: pos.x,
-      by: pos.y,
-      bz: pos.z,
+      bx: end.x,
+      by: end.y,
+      bz: end.z,
     };
     set((s) => ({
       measurements: [...s.measurements, m],
-      measureDraft: null,
+      measureDraft: null, measureSecond: null,
       contentTouchedAt: Date.now(),
     }));
   },
@@ -351,11 +377,11 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     pushWerkzeugHistory();
     set({
       measurements: [],
-      measureDraft: null,
+      measureDraft: null, measureSecond: null,
       contentTouchedAt: Date.now(),
     });
   },
-  clearMeasureDraft: () => set({ measureDraft: null }),
+  clearMeasureDraft: () => set({ measureDraft: null, measureSecond: null, dragSnapHint: null }),
 
   setTransformMode: (mode) => set({ transformMode: mode }),
 
@@ -445,7 +471,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         armedTool: null,
         markupFloorId: null,
         measureMode: false,
-        measureDraft: null,
+        measureDraft: null, measureSecond: null,
         measurements: [],
       });
       return;
@@ -465,7 +491,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         armedTool: null,
         markupFloorId: null,
         measureMode: false,
-        measureDraft: null,
+        measureDraft: null, measureSecond: null,
         measurements: [],
       });
     } catch {
@@ -479,7 +505,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         armedTool: null,
         markupFloorId: null,
         measureMode: false,
-        measureDraft: null,
+        measureDraft: null, measureSecond: null,
         measurements: [],
       });
     }

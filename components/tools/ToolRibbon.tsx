@@ -850,7 +850,9 @@ export default function ToolRibbon({
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]"
               onClick={() => {
                 setArmedLayoutTool(null);
-                setArmedTool(armedTool === "cube" ? null : "cube");
+                const markup = useToolMarkupStore.getState();
+                markup.setMeasureMode(!markup.measureMode);
+                useAppStore.getState().setRightPanelOpen(true);
                 setActiveDropdown(null);
               }}
             >

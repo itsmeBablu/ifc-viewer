@@ -2,6 +2,8 @@
  * Imperative Three.js layer for layout walls / doors / windows (live 3D).
  */
 
+import { createFurniture } from "@/lib/furnitureGeometry";
+import { isArchitecturalComponent } from "@/lib/componentCatalog";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
@@ -752,6 +754,35 @@ export default class LayoutSceneLayer {
     );
   }
 
+  private buildIProfileGeometry(w: number, d: number, len: number, axis: "vertical" | "horizontal"): THREE.BufferGeometry {
+    const flangeT = Math.max(0.008, d * 0.12);
+    const webT = Math.max(0.006, w * 0.1);
+    const s = new THREE.Shape();
+    const hw = w / 2, hd = d / 2, hwt = webT / 2;
+    s.moveTo(-hw, -hd);
+    s.lineTo(hw, -hd);
+    s.lineTo(hw, -hd + flangeT);
+    s.lineTo(hwt, -hd + flangeT);
+    s.lineTo(hwt, hd - flangeT);
+    s.lineTo(hw, hd - flangeT);
+    s.lineTo(hw, hd);
+    s.lineTo(-hw, hd);
+    s.lineTo(-hw, hd - flangeT);
+    s.lineTo(-hwt, hd - flangeT);
+    s.lineTo(-hwt, -hd + flangeT);
+    s.lineTo(-hw, -hd + flangeT);
+    s.closePath();
+    const geo = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
+    if (axis === "vertical") {
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, -len / 2, 0);
+    } else {
+      geo.rotateY(Math.PI / 2);
+      geo.translate(-len / 2, 0, 0);
+    }
+    return geo;
+  }
+
   syncColumns(
     columns: LayoutColumn[],
     levels: LayoutLevel[],
@@ -784,19 +815,21 @@ export default class LayoutSceneLayer {
       const w = fromMm(col.widthMm);
       const d = fromMm(col.depthMm);
 
+      const createGeo = () =>
+        col.profile === "circle"
+          ? new THREE.CylinderGeometry(w / 2, w / 2, height, 24)
+          : col.profile === "i"
+          ? this.buildIProfileGeometry(w, d, height, "vertical")
+          : new THREE.BoxGeometry(w, height, d);
+
       let mesh = this.columnMeshes.get(col.id);
       if (!mesh) {
-        const geo =
-          col.profile === "circle"
-            ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
-            : new THREE.BoxGeometry(w, height, d);
-
         const mat = new THREE.MeshPhysicalMaterial({
           color: 0x94a3b8,
           roughness: 0.5,
           metalness: 0.1,
         });
-        mesh = new THREE.Mesh(geo, mat);
+        mesh = new THREE.Mesh(createGeo(), mat);
         mesh.userData.layoutColumnId = col.id;
         mesh.userData.kind = "column";
         this.columnMeshes.set(col.id, mesh);
@@ -806,9 +839,7 @@ export default class LayoutSceneLayer {
       const geometryKey = `${col.profile}:${col.widthMm}:${col.depthMm}:${height}`;
       if (mesh.userData.geometryKey !== geometryKey) {
         mesh.geometry.dispose();
-        mesh.geometry = col.profile === "circle"
-          ? new THREE.CylinderGeometry(w / 2, w / 2, height, 20)
-          : new THREE.BoxGeometry(w, height, d);
+        mesh.geometry = createGeo();
         mesh.userData.geometryKey = geometryKey;
       }
 
@@ -822,7 +853,17 @@ export default class LayoutSceneLayer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       this.applyMaterialAndColor(mat, col.color, col.material);
-      if (!col.color && !col.material) mat.color.setHex(0x94a3b8);
+      if (!col.color && !col.material) {
+        if (col.profile === "i") {
+          mat.color.setHex(0x475569);
+          mat.metalness = 0.85;
+          mat.roughness = 0.35;
+        } else {
+          mat.color.setHex(0x94a3b8);
+          mat.roughness = 0.8;
+          mat.metalness = 0.05;
+        }
+      }
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
       this.applyGhostMaterial(mesh, vis.isGhosted);
@@ -867,25 +908,29 @@ export default class LayoutSceneLayer {
       const w = fromMm(beam.widthMm);
       const d = fromMm(beam.depthMm);
 
+      const createGeo = () =>
+        beam.profile === "i"
+          ? this.buildIProfileGeometry(w, d, len, "horizontal")
+          : new THREE.BoxGeometry(len, d, w);
+
       let mesh = this.beamMeshes.get(beam.id);
       if (!mesh) {
-        const geo = new THREE.BoxGeometry(len, d, w);
         const mat = new THREE.MeshPhysicalMaterial({
           color: 0x64748b,
           roughness: 0.4,
           metalness: 0.2,
         });
-        mesh = new THREE.Mesh(geo, mat);
+        mesh = new THREE.Mesh(createGeo(), mat);
         mesh.userData.layoutBeamId = beam.id;
         mesh.userData.kind = "beam";
         this.beamMeshes.set(beam.id, mesh);
         this.group.add(mesh);
       }
 
-      const geometryKey = `${len}:${beam.widthMm}:${beam.depthMm}`;
+      const geometryKey = `${beam.profile ?? "rect"}:${len}:${beam.widthMm}:${beam.depthMm}`;
       if (mesh.userData.geometryKey !== geometryKey) {
         mesh.geometry.dispose();
-        mesh.geometry = new THREE.BoxGeometry(len, d, w);
+        mesh.geometry = createGeo();
         mesh.userData.geometryKey = geometryKey;
       }
 
@@ -904,13 +949,24 @@ export default class LayoutSceneLayer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       this.applyMaterialAndColor(mat, beam.color, beam.material);
-      if (!beam.color && !beam.material) mat.color.setHex(0x64748b);
+      if (!beam.color && !beam.material) {
+        if (beam.profile === "i") {
+          mat.color.setHex(0x475569);
+          mat.metalness = 0.85;
+          mat.roughness = 0.35;
+        } else {
+          mat.color.setHex(0x64748b);
+          mat.roughness = 0.7;
+          mat.metalness = 0.1;
+        }
+      }
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
       this.applyGhostMaterial(mesh, vis.isGhosted);
       this.setMeshSelectionOutline(mesh, isSelected);
     }
   }
+
 
   syncGridLines(
     gridLines: LayoutGridLine[],
@@ -4344,7 +4400,10 @@ export default class LayoutSceneLayer {
           const clampedCenterX = (clampedX1 + clampedX2) / 2;
 
           const hole = new THREE.Path();
-          if (op.headShape === "arched" && y2 - y1 > clampedHoleHalfW) {
+          if (op.headShape === "round") {
+            const rad = Math.min(clampedHoleHalfW, (y2 - y1) / 2);
+            hole.absarc(clampedCenterX, (y1 + y2) / 2, rad, 0, Math.PI * 2, false);
+          } else if (op.headShape === "arched" && y2 - y1 > clampedHoleHalfW) {
             const rectH = y2 - y1 - clampedHoleHalfW;
             const archBaseY = y1 + rectH;
             hole.moveTo(clampedX1, y1);
@@ -4850,7 +4909,10 @@ export default class LayoutSceneLayer {
       const shape = new THREE.Shape();
       const halfW = sw / 2;
       
-      if (shapeType === "arched") {
+      if (shapeType === "round") {
+        const rad = Math.min(halfW, sh / 2);
+        shape.absarc(0, sh / 2, rad, 0, Math.PI * 2, false);
+      } else if (shapeType === "arched") {
         const rectH = Math.max(0.01, sh - halfW);
         shape.moveTo(-halfW, 0);
         shape.lineTo(-halfW, rectH);
@@ -4878,7 +4940,14 @@ export default class LayoutSceneLayer {
 
     const frameThick = 0.05; // 50mm
     const outer = buildOutlineShape(w, h, headShape);
-    const inner = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+    const inner = headShape === "round"
+      ? (() => {
+          const s = new THREE.Shape();
+          const rad = Math.max(0.01, Math.min(w / 2, h / 2) - frameThick);
+          s.absarc(0, h / 2, rad, 0, Math.PI * 2, false);
+          return s;
+        })()
+      : buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
     outer.holes.push(inner);
 
     const { frameMat, panelMat } = this.getOpeningMaterials(
@@ -4898,31 +4967,107 @@ export default class LayoutSceneLayer {
 
     // 2. Panel Mesh (door leaf or window glass pane)
     const panelThick = category === "door" ? 0.04 : 0.012; // 40mm leaf, 12mm glass
-    if (style === "double" && category === "door") {
-      const leafW = (w - frameThick * 2) / 2;
-      const leafShape = buildOutlineShape(leafW, Math.max(0.01, h - frameThick), headShape);
-      
-      const leftGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
-      leftGeo.translate(0, 0, -panelThick / 2);
-      const leftMesh = new THREE.Mesh(leftGeo, panelMat);
-      leftMesh.position.set(-leafW / 2, 0, 0);
-      leftMesh.name = "opening-panel-left";
-      
-      const rightGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
-      rightGeo.translate(0, 0, -panelThick / 2);
-      const rightMesh = new THREE.Mesh(rightGeo, panelMat);
-      rightMesh.position.set(leafW / 2, 0, 0);
-      rightMesh.name = "opening-panel-right";
+    if (category === "door") {
+      if (style === "double") {
+        const leafW = (w - frameThick * 2) / 2;
+        const leafShape = buildOutlineShape(leafW, Math.max(0.01, h - frameThick), headShape);
+        
+        const leftGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
+        leftGeo.translate(0, 0, -panelThick / 2);
+        const leftMesh = new THREE.Mesh(leftGeo, panelMat);
+        leftMesh.position.set(-leafW / 2, 0, 0);
+        leftMesh.name = "opening-panel-left";
+        
+        const rightGeo = new THREE.ExtrudeGeometry(leafShape, { depth: panelThick, bevelEnabled: false });
+        rightGeo.translate(0, 0, -panelThick / 2);
+        const rightMesh = new THREE.Mesh(rightGeo, panelMat);
+        rightMesh.position.set(leafW / 2, 0, 0);
+        rightMesh.name = "opening-panel-right";
 
-      boxGroup.add(leftMesh, rightMesh);
+        boxGroup.add(leftMesh, rightMesh);
+      } else if (style === "sliding") {
+        const innerW = w - frameThick * 2;
+        const leafW = innerW * 0.54;
+        const leafH = Math.max(0.01, h - frameThick);
+        for (let i = 0; i < 2; i++) {
+          const sign = i === 0 ? -1 : 1;
+          const leafGeo = new THREE.BoxGeometry(leafW, leafH, panelThick * 0.8);
+          const leafMesh = new THREE.Mesh(leafGeo, panelMat);
+          leafMesh.position.set(sign * (innerW * 0.23), leafH / 2, sign * (panelThick * 0.6));
+          boxGroup.add(leafMesh);
+        }
+      } else if (style === "garage") {
+        const innerW = w - frameThick * 2;
+        const innerH = Math.max(0.01, h - frameThick);
+        const panelCount = 4;
+        const panelH = innerH / panelCount;
+        for (let i = 0; i < panelCount; i++) {
+          const slat = new THREE.Mesh(new THREE.BoxGeometry(innerW, panelH - 0.01, panelThick), panelMat);
+          slat.position.set(0, (i + 0.5) * panelH, 0);
+          boxGroup.add(slat);
+        }
+      } else {
+        const panelShape = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+        const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
+        panelGeo.translate(0, 0, -panelThick / 2);
+        const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+        panelMesh.name = "opening-panel";
+        boxGroup.add(panelMesh);
+      }
     } else {
-      const panelShape = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
-      const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
-      panelGeo.translate(0, 0, -panelThick / 2);
-      const panelMesh = new THREE.Mesh(panelGeo, panelMat);
-      panelMesh.name = "opening-panel";
-      boxGroup.add(panelMesh);
+      // Windows
+      const innerW = w - frameThick * 2;
+      const innerH = Math.max(0.01, h - frameThick);
+      if (headShape === "round") {
+        const rad = Math.max(0.01, Math.min(w / 2, h / 2) - frameThick);
+        const paneShape = new THREE.Shape();
+        paneShape.absarc(0, h / 2, rad, 0, Math.PI * 2, false);
+        const paneGeo = new THREE.ExtrudeGeometry(paneShape, { depth: panelThick, bevelEnabled: false });
+        paneGeo.translate(0, 0, -panelThick / 2);
+        const paneMesh = new THREE.Mesh(paneGeo, panelMat);
+        boxGroup.add(paneMesh);
+        const hMull = new THREE.Mesh(new THREE.BoxGeometry(rad * 2, frameThick * 0.5, frameThick * 0.8), frameMat);
+        hMull.position.set(0, h / 2, 0);
+        const vMull = new THREE.Mesh(new THREE.BoxGeometry(frameThick * 0.5, rad * 2, frameThick * 0.8), frameMat);
+        vMull.position.set(0, h / 2, 0);
+        boxGroup.add(hMull, vMull);
+      } else if (win?.sashCount === 2) {
+        const mullionW = frameThick * 0.7;
+        const paneW = (innerW - mullionW) / 2;
+        for (const dir of [-1, 1]) {
+          const pGeo = new THREE.BoxGeometry(paneW, innerH, panelThick);
+          const pMesh = new THREE.Mesh(pGeo, panelMat);
+          pMesh.position.set(dir * (paneW / 2 + mullionW / 2), innerH / 2, 0);
+          boxGroup.add(pMesh);
+        }
+        const centerMull = new THREE.Mesh(new THREE.BoxGeometry(mullionW, innerH, d * 0.8), frameMat);
+        centerMull.position.set(0, innerH / 2, 0);
+        boxGroup.add(centerMull);
+      } else if (win?.sashCount === 4) {
+        const mullionW = frameThick * 0.5;
+        const paneW = (innerW - mullionW * 3) / 4;
+        for (let i = 0; i < 4; i++) {
+          const x = -innerW / 2 + paneW / 2 + i * (paneW + mullionW);
+          const pGeo = new THREE.BoxGeometry(paneW, innerH, panelThick);
+          const pMesh = new THREE.Mesh(pGeo, panelMat);
+          pMesh.position.set(x, innerH / 2, 0);
+          boxGroup.add(pMesh);
+          if (i < 3) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(mullionW, innerH, d * 0.8), frameMat);
+            m.position.set(x + paneW / 2 + mullionW / 2, innerH / 2, 0);
+            boxGroup.add(m);
+          }
+        }
+      } else {
+        const panelShape = buildOutlineShape(innerW, innerH, headShape);
+        const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
+        panelGeo.translate(0, 0, -panelThick / 2);
+        const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+        panelMesh.name = "opening-panel";
+        boxGroup.add(panelMesh);
+      }
     }
+
 
     g.add(boxGroup);
 
@@ -5208,51 +5353,120 @@ export default class LayoutSceneLayer {
     const hx = fromMm(hinge.xMm);
     const hz = fromMm(hinge.yMm);
     const leafLen = fromMm(door.widthMm);
-
-    // Leaf in open position (90° into room).
-    const leafEnd = new THREE.Vector3(
-      hx + perpX * leafLen,
-      y,
-      hz + perpZ * leafLen,
-    );
-    const leafGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(hx, y, hz),
-      leafEnd,
-    ]);
     const lineMat = new THREE.LineBasicMaterial({
       color: 0x44403c,
       depthTest: false,
     });
-    const leaf = new THREE.Line(leafGeo, lineMat);
-    leaf.renderOrder = 20;
-    g.add(leaf);
+    const arcMat = new THREE.LineBasicMaterial({
+      color: 0x78716c,
+      depthTest: false,
+    });
 
-    // Quarter-circle swing arc from closed (along wall) to open (perp).
-    const closedSign = door.hinge === "end" ? -1 : 1;
-    const closedX = dirX * closedSign;
-    const closedZ = dirZ * closedSign;
-    const arcPts: THREE.Vector3[] = [];
-    const steps = 16;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const c = Math.cos((Math.PI / 2) * t);
-      const s = Math.sin((Math.PI / 2) * t);
-      // Rotate closed → open
-      const dx = closedX * c + perpX * s;
-      const dz = closedZ * c + perpZ * s;
-      arcPts.push(
-        new THREE.Vector3(hx + dx * leafLen, y, hz + dz * leafLen),
+    if (door.style === "double") {
+      const halfLeaf = leafLen / 2;
+      // Left leaf at start
+      const h1 = pointOnWallMm(wall, door.positionMm - halfW);
+      const h1x = fromMm(h1.xMm), h1z = fromMm(h1.yMm);
+      const leaf1 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(h1x, y, h1z),
+          new THREE.Vector3(h1x + perpX * halfLeaf, y, h1z + perpZ * halfLeaf),
+        ]),
+        lineMat,
       );
+      leaf1.renderOrder = 20;
+      g.add(leaf1);
+
+      const arcPts1: THREE.Vector3[] = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        const c = Math.cos((Math.PI / 2) * t), s = Math.sin((Math.PI / 2) * t);
+        arcPts1.push(new THREE.Vector3(h1x + (dirX * c + perpX * s) * halfLeaf, y, h1z + (dirZ * c + perpZ * s) * halfLeaf));
+      }
+      const arc1 = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts1), arcMat);
+      arc1.renderOrder = 20;
+      g.add(arc1);
+
+      // Right leaf at end
+      const h2 = pointOnWallMm(wall, door.positionMm + halfW);
+      const h2x = fromMm(h2.xMm), h2z = fromMm(h2.yMm);
+      const leaf2 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(h2x, y, h2z),
+          new THREE.Vector3(h2x + perpX * halfLeaf, y, h2z + perpZ * halfLeaf),
+        ]),
+        lineMat,
+      );
+      leaf2.renderOrder = 20;
+      g.add(leaf2);
+
+      const arcPts2: THREE.Vector3[] = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        const c = Math.cos((Math.PI / 2) * t), s = Math.sin((Math.PI / 2) * t);
+        arcPts2.push(new THREE.Vector3(h2x + (-dirX * c + perpX * s) * halfLeaf, y, h2z + (-dirZ * c + perpZ * s) * halfLeaf));
+      }
+      const arc2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts2), arcMat);
+      arc2.renderOrder = 20;
+      g.add(arc2);
+    } else if (door.style === "sliding") {
+      const p1 = pointOnWallMm(wall, door.positionMm - halfW);
+      const p2 = pointOnWallMm(wall, door.positionMm + halfW);
+      const offset = fromMm(wall.thicknessMm * 0.15);
+      const mid = pointOnWallMm(wall, door.positionMm);
+      const l1 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(fromMm(p1.xMm) - perpX * offset, y, fromMm(p1.yMm) - perpZ * offset),
+          new THREE.Vector3(fromMm(mid.xMm) + dirX * 0.04 - perpX * offset, y, fromMm(mid.yMm) + dirZ * 0.04 - perpZ * offset),
+        ]),
+        lineMat,
+      );
+      const l2 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(fromMm(mid.xMm) - dirX * 0.04 + perpX * offset, y, fromMm(mid.yMm) - dirZ * 0.04 + perpZ * offset),
+          new THREE.Vector3(fromMm(p2.xMm) + perpX * offset, y, fromMm(p2.yMm) + perpZ * offset),
+        ]),
+        lineMat,
+      );
+      l1.renderOrder = 20; l2.renderOrder = 20;
+      g.add(l1, l2);
+    } else {
+      // Leaf in open position (90° into room).
+      const leafEnd = new THREE.Vector3(
+        hx + perpX * leafLen,
+        y,
+        hz + perpZ * leafLen,
+      );
+      const leafGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(hx, y, hz),
+        leafEnd,
+      ]);
+      const leaf = new THREE.Line(leafGeo, lineMat);
+      leaf.renderOrder = 20;
+      g.add(leaf);
+
+      // Quarter-circle swing arc from closed (along wall) to open (perp).
+      const closedSign = door.hinge === "end" ? -1 : 1;
+      const closedX = dirX * closedSign;
+      const closedZ = dirZ * closedSign;
+      const arcPts: THREE.Vector3[] = [];
+      const steps = 16;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const c = Math.cos((Math.PI / 2) * t);
+        const s = Math.sin((Math.PI / 2) * t);
+        // Rotate closed → open
+        const dx = closedX * c + perpX * s;
+        const dz = closedZ * c + perpZ * s;
+        arcPts.push(
+          new THREE.Vector3(hx + dx * leafLen, y, hz + dz * leafLen),
+        );
+      }
+      const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts), arcMat);
+      arc.renderOrder = 20;
+      g.add(arc);
     }
-    const arc = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(arcPts),
-      new THREE.LineBasicMaterial({
-        color: 0x78716c,
-        depthTest: false,
-      }),
-    );
-    arc.renderOrder = 20;
-    g.add(arc);
+
 
     // Invisible pick mesh covering the opening
     const pick = new THREE.Mesh(
@@ -5333,6 +5547,41 @@ export default class LayoutSceneLayer {
     );
     rightCap.renderOrder = 21;
     g.add(rightCap);
+
+    // Sash mullions and round window indicators in 2D
+    const midLine = (t: number) => {
+      const mx = ax + (bx - ax) * t;
+      const mz = az + (bz - az) * t;
+      const m = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(mx - perpX * halfT * 0.7, y, mz - perpZ * halfT * 0.7),
+          new THREE.Vector3(mx + perpX * halfT * 0.7, y, mz + perpZ * halfT * 0.7),
+        ]),
+        capMat,
+      );
+      m.renderOrder = 21;
+      g.add(m);
+    };
+    if (win.sashCount === 2) {
+      midLine(0.5);
+    } else if (win.sashCount === 4) {
+      midLine(0.25);
+      midLine(0.5);
+      midLine(0.75);
+    }
+    if (win.headShape === "round") {
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const circlePts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const rad = (i / 24) * Math.PI * 2;
+        const cr = halfT * 0.6;
+        circlePts.push(new THREE.Vector3(mx + Math.cos(rad) * cr, y, mz + Math.sin(rad) * cr));
+      }
+      const cLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(circlePts), mat);
+      cLine.renderOrder = 22;
+      g.add(cLine);
+    }
+
 
     const pick = new THREE.Mesh(
       new THREE.BoxGeometry(
@@ -5495,7 +5744,7 @@ export default class LayoutSceneLayer {
       const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400));
       const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
 
-      const geoKey = `${item.category}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
+      const geoKey = `${item.category}:${item.familyId}:${item.moduleWidthMm}:${item.color}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
 
       let grp = this.equipmentMeshes.get(item.id);
       const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
@@ -5514,7 +5763,9 @@ export default class LayoutSceneLayer {
         grp.userData.geometryKey = geoKey;
 
         // Build procedural 3D model per category
-        if (item.category === "toilet") {
+        if (item.category === "furniture" || isArchitecturalComponent(item.familyId)) {
+          grp.add(createFurniture(item));
+        } else if (item.category === "toilet") {
           // Porcelain Toilet (WC): bowl, tank/cistern, seat, flush plate, drain
           const porcelainMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
@@ -5927,6 +6178,8 @@ export default class LayoutSceneLayer {
           grp.add(gen);
         }
 
+        grp.traverse((object) => { if (object instanceof THREE.Mesh) object.userData.layoutEquipmentId = item.id; });
+
         // Add visual connector markers if selected
         if (isSelected) {
           const connectors = getEquipmentConnectors(item);
@@ -5955,7 +6208,7 @@ export default class LayoutSceneLayer {
 
       const rot = ((item.rotationDeg ?? 0) * Math.PI) / 180;
       grp.position.set(fromMm(item.xMm), centerY, fromMm(item.yMm));
-      grp.rotation.y = rot;
+      grp.rotation.y = -rot;
       grp.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
@@ -5972,7 +6225,7 @@ export default class LayoutSceneLayer {
   }
 
   setMepPreview(
-    tool: "duct" | "flex_duct" | "mep_placeholder" | "pipe" | "cabletray" | "wire" | "equipment" | "workplane" | null,
+    tool: "duct" | "flex_duct" | "mep_placeholder" | "pipe" | "cabletray" | "wire" | "equipment" | "component" | "workplane" | null,
     start: { xMm: number; yMm: number } | null,
     cursor: { xMm: number; yMm: number } | null,
     params?: any,
@@ -5982,23 +6235,20 @@ export default class LayoutSceneLayer {
 
     const baseElevMm = params?.baseElevMm ?? 0;
 
-    if (tool === "equipment") {
+    if (tool === "equipment" || tool === "component") {
       const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
       const cat = params?.category ?? "generic_component";
-      const w = fromMm(cat === "radiator" ? 1000 : cat === "fan_coil" ? 900 : cat === "ac_unit" ? 850 : cat === "chiller" ? 1600 : cat === "air_terminal" ? 600 : cat === "lighting_fixture" ? 600 : cat === "sprinkler" ? 80 : 400);
-      const h = fromMm(cat === "radiator" ? 600 : cat === "fan_coil" ? 250 : cat === "ac_unit" ? 290 : cat === "chiller" ? 1200 : cat === "air_terminal" ? 120 : cat === "lighting_fixture" ? 80 : cat === "sprinkler" ? 100 : 400);
-      const d = fromMm(cat === "radiator" ? 100 : cat === "fan_coil" ? 600 : cat === "ac_unit" ? 210 : cat === "chiller" ? 800 : cat === "air_terminal" ? 600 : cat === "lighting_fixture" ? 600 : cat === "sprinkler" ? 80 : 400);
-
-      const ghostGeo = new THREE.BoxGeometry(w, h, d);
-      const col = cat === "sprinkler" ? 0xef4444 : cat === "lighting_fixture" || cat === "light" ? 0xfacc15 : 0x38bdf8;
-      const ghostMat = new THREE.MeshStandardMaterial({
-        color: col,
-        transparent: true,
-        opacity: 0.65,
-      });
-      const ghost = new THREE.Mesh(ghostGeo, ghostMat);
-      ghost.position.set(fromMm(cursor.xMm), elev + h / 2, fromMm(cursor.yMm));
-      this.mepPreview.add(ghost);
+      const isArch = cat === "furniture" || isArchitecturalComponent(params?.familyId);
+      const model = isArch ? createFurniture(params) : new THREE.Group();
+      if (!isArch) {
+        const w = fromMm(params?.widthMm ?? 600), h = fromMm(params?.heightMm ?? 600), d = fromMm(params?.depthMm ?? 400);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 }));
+        mesh.position.y = h / 2; model.add(mesh);
+      }
+      model.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
+      model.rotation.y = -THREE.MathUtils.degToRad(params?.rotationDeg ?? 0);
+      model.traverse((o) => { o.userData.isMarkupPreview = true; o.raycast = () => undefined; if (o instanceof THREE.Mesh && o.material instanceof THREE.Material) { o.material.transparent = true; o.material.opacity = 0.55; } });
+      this.mepPreview.add(model);
       return;
     }
 

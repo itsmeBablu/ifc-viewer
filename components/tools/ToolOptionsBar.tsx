@@ -4,6 +4,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
+import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import {
   LuTrash2,
@@ -99,6 +100,10 @@ export default function ToolOptionsBar() {
   const setDraftEquipmentElevationMm = useLayoutDrawingStore((s) => s.setDraftEquipmentElevationMm);
   const draftEquipmentFlowM3h = useLayoutDrawingStore((s) => s.draftEquipmentFlowM3h);
   const setDraftEquipmentFlowM3h = useLayoutDrawingStore((s) => s.setDraftEquipmentFlowM3h);
+  const draftComponentId = useLayoutDrawingStore((s) => s.draftComponentId);
+  const chooseComponent = useLayoutDrawingStore((s) => s.chooseComponent);
+  const draftEquipmentRotationDeg = useLayoutDrawingStore((s) => s.draftEquipmentRotationDeg);
+  const setDraftEquipmentRotationDeg = useLayoutDrawingStore((s) => s.setDraftEquipmentRotationDeg);
   const draftWireGauge = useLayoutDrawingStore((s) => s.draftWireGauge);
   const setDraftWireGauge = useLayoutDrawingStore((s) => s.setDraftWireGauge);
   const draftWireSystem = useLayoutDrawingStore((s) => s.draftWireSystem);
@@ -995,8 +1000,45 @@ export default function ToolOptionsBar() {
           </div>
         )}
 
+        {/* ARCHITECTURAL FURNITURE OPTIONS */}
+        {(armedLayoutTool === "component" || (armedLayoutTool === "equipment" && draftEquipmentCategory === "furniture")) && (
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 font-bold text-amber-400">
+              <span>Furniture:</span>
+            </span>
+
+            <label className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Piece:</span>
+              <select
+                value={draftComponentId}
+                onChange={(e) => chooseComponent(e.target.value)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1.5 py-0.5 text-[11px] font-semibold text-amber-400 focus:outline-none"
+              >
+                {COMPONENT_CATALOG.filter((p) => p.category === "furniture" || !p.id.startsWith("mep-")).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.room}) · {p.widthMm}×{p.depthMm}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--text-muted)]">Rot:</span>
+              <button
+                type="button"
+                onClick={() => setDraftEquipmentRotationDeg((draftEquipmentRotationDeg + 90) % 360)}
+                className="rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-strong)] hover:border-yellow-400 hover:text-yellow-500"
+              >
+                {draftEquipmentRotationDeg}° (Space +90°)
+              </button>
+            </div>
+
+            <span className="text-[10px] font-medium italic text-amber-400">Click in 2D/3D to place · Space rotates 90°</span>
+          </div>
+        )}
+
         {/* MEP EQUIPMENT OPTIONS */}
-        {armedLayoutTool === "equipment" && (
+        {armedLayoutTool === "equipment" && draftEquipmentCategory !== "furniture" && (
           <div className="flex items-center gap-3">
             <span className="font-bold text-amber-400 flex items-center gap-1">
               <span>MEP Fixture:</span>

@@ -15,8 +15,9 @@
  *   - Collapsible: toggle button slides the full panel in/out
  */
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import gsap from "gsap";
+import MeasurementProperties from "./MeasurementProperties";
 import {
   LuChevronRight,
   LuChevronLeft,
@@ -55,6 +56,7 @@ import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
+import ComponentProperties from "./ComponentProperties";
 import {
   wallLengthMm,
   type LayoutLevel,
@@ -113,7 +115,6 @@ export default function ToolRightPanel({
 
   // -- Edit type, materials, and settings tabs in Properties -----------------
   const [propTab, setPropTab] = useState<"properties" | "materials" | "settings">("properties");
-  const [editTypeMode, setEditTypeMode] = useState(false);
   const [editTypeOpen, setEditTypeOpen] = useState(false);
   const [materialEditorOpen, setMaterialEditorOpen] = useState(false);
   const [types, setTypes] = useState<Record<string, ElementTypeDefinition>>(DEFAULT_ELEMENT_TYPES);
@@ -169,6 +170,7 @@ export default function ToolRightPanel({
   const groups = useLayoutDrawingStore((s) => s.groups);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
+  const measureMode = useToolMarkupStore((s) => s.measureMode);
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const levels = useLayoutDrawingStore((s) => s.levels);
 
@@ -336,6 +338,14 @@ export default function ToolRightPanel({
     : "wall-generic-200";
 
   const currentType = types[activeTypeKey] || DEFAULT_ELEMENT_TYPES[activeTypeKey] || DEFAULT_ELEMENT_TYPES["wall-300"] || Object.values(DEFAULT_ELEMENT_TYPES)[0];
+
+  const selectedType = useMemo(() => ({
+    ...currentType,
+    ...(selectedWall ? { thicknessMm: selectedWall.thicknessMm, heightMm: selectedWall.heightMm, layers: selectedWall.layers, material: selectedWall.material ?? currentType.material } : {}),
+    ...(selectedDoor ? { widthMm: selectedDoor.widthMm, heightMm: selectedDoor.heightMm, material: selectedDoor.material ?? currentType.material } : {}),
+    ...(selectedWindow ? { widthMm: selectedWindow.widthMm, heightMm: selectedWindow.heightMm, sillHeightMm: selectedWindow.sillHeightMm, material: selectedWindow.material ?? currentType.material } : {}),
+    ...(selectedSlab ? { thicknessMm: selectedSlab.thicknessMm, material: selectedSlab.material ?? currentType.material } : {}),
+  }), [currentType, selectedWall, selectedDoor, selectedWindow, selectedSlab]);
 
   const isMepActive = Boolean(selectedDuct || selectedPipe || selectedCableTray || selectedEquipment);
 
@@ -547,7 +557,6 @@ export default function ToolRightPanel({
               type="button"
               onClick={() => {
                 setPropTab("properties");
-                setEditTypeMode(false);
               }}
               className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${
                 propTab === "properties"
@@ -594,16 +603,7 @@ export default function ToolRightPanel({
 
         {/* TAB 1: DEFAULT (PROPERTIES & LAYOUT) */}
         {propTab === "properties" && (
-          editTypeMode && (selectedWall || selectedDoor || selectedWindow || selectedSlab) ? (
-            <div className="flex-1 min-h-0 h-full overflow-hidden">
-              <EditTypeEmbeddedPanel
-                typeDef={currentType}
-                onBack={() => setEditTypeMode(false)}
-                onSave={handleTypeSave}
-                onOpenMaterialPicker={() => setPropTab("materials")}
-              />
-            </div>
-          ) : (
+          (
             <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
               {/* Top Properties Region */}
               <div
@@ -613,30 +613,12 @@ export default function ToolRightPanel({
                 <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${activeTextClass} flex items-center gap-1.5 truncate`}>
                     <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
-                    {propertiesTitle}
+                    {measureMode ? "Measurement" : propertiesTitle}
                   </span>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {hasSelection &&
-                      (selectedWall ||
-                        selectedDoor ||
-                        selectedWindow ||
-                        selectedSlab) && (
-                        <button
-                          type="button"
-                          onClick={() => setEditTypeMode(true)}
-                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${activeHighlightClass} transition-all`}
-                          title="Edit Type Parameters (Esc to return)"
-                        >
-                          <LuSlidersHorizontal className="h-2.5 w-2.5" />
-                          <span>Edit Type</span>
-                        </button>
-                      )}
-                  </div>
                 </div>
 
                 <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
-                  {hasSelection ? (
+                  {measureMode ? <MeasurementProperties /> : hasSelection ? (
                     <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />
@@ -1109,6 +1091,18 @@ export default function ToolRightPanel({
                 </p>
               </div>
             )}
+                  {selectedElements.length <= 1 && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
+                    <section className="space-y-1 border-b border-[var(--panel-divider)] pb-1">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Type properties</p>
+                      <EditTypeEmbeddedPanel
+                        inline
+                        key={selectedWall?.id || selectedDoor?.id || selectedWindow?.id || selectedSlab?.id}
+                        typeDef={selectedType}
+                        onSave={handleTypeSave}
+                        onOpenMaterialPicker={() => setPropTab("materials")}
+                      />
+                    </section>
+                  )}
           </div>
         </div>
 
@@ -1494,22 +1488,34 @@ function WallConstraintFields({
   );
 }
 
-function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
+function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
   const store = useLayoutDrawingStore();
   const markup = useToolMarkupStore();
+
   const typeCategory: ElementTypeDefinition["category"] | null =
     tool === "wall" ? "Wall" : tool === "door" ? "Door" : tool === "window" ? "Window" :
     tool === "floor" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
-    tool === "ramp" ? "Ramp" : null;
+    tool === "ramp" ? "Ramp" : tool === "column" ? "Column" : tool === "beam" ? "Beam" : null;
   const availableTypes = Object.values(DEFAULT_ELEMENT_TYPES).filter((item) => item.category === typeCategory);
-  const [draftType, setDraftType] = useState<ElementTypeDefinition | null>(availableTypes[0] ?? null);
-  const [editingType, setEditingType] = useState(false);
+  const [draftType, setDraftType] = useState<ElementTypeDefinition | null>((tool === "wall" ? availableTypes.find((item) => item.id === store.draftWallTypeId) : null) ?? availableTypes[0] ?? null);
   const fieldClass = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
   const labelClass = "space-y-1 text-[10px] font-semibold text-[var(--text-muted)]";
   const baseLevelId = store.draftWallBaseLevelId ?? markup.markupFloorId ?? store.levels[0]?.id ?? "";
   const base = store.levels.find((level) => level.id === baseLevelId);
   const top = store.levels.find((level) => level.id === store.draftWallTopLevelId);
   const wallHeight = base && top ? top.elevationMm - base.elevationMm : store.draftWallHeightMm;
+
+  const liveDraftType = useMemo(() => draftType ? {
+    ...draftType,
+    ...(tool === "wall" ? { heightMm: wallHeight, thicknessMm: store.draftWallThicknessMm } : {}),
+    ...(tool === "door" ? { widthMm: store.draftDoorWidthMm, heightMm: store.draftDoorHeightMm } : {}),
+    ...(tool === "window" ? { widthMm: store.draftWindowWidthMm, heightMm: store.draftWindowHeightMm, sillHeightMm: store.draftWindowSillMm } : {}),
+    ...(tool === "floor" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
+    ...(tool === "stair" ? { widthMm: store.draftStairWidthMm } : {}),
+    ...(tool === "ramp" ? { widthMm: store.draftRampWidthMm, thicknessMm: store.draftRampThicknessMm } : {}),
+    ...(tool === "column" ? { widthMm: store.draftColumnWidthMm, depthMm: store.draftColumnDepthMm } : {}),
+    ...(tool === "beam" ? { widthMm: store.draftBeamWidthMm, depthMm: store.draftBeamDepthMm } : {}),
+  } : null, [draftType, tool, wallHeight, store.draftWallThicknessMm, store.draftDoorWidthMm, store.draftDoorHeightMm, store.draftWindowWidthMm, store.draftWindowHeightMm, store.draftWindowSillMm, store.draftSlabThicknessMm, store.draftStairWidthMm, store.draftRampWidthMm, store.draftRampThicknessMm, store.draftColumnWidthMm, store.draftColumnDepthMm, store.draftBeamWidthMm, store.draftBeamDepthMm]);
 
   const applyDraftType = (typeDef: ElementTypeDefinition) => {
     setDraftType(typeDef);
@@ -1530,19 +1536,12 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
     } else if (tool === "ramp") {
       if (typeDef.widthMm) store.setDraftRampWidthMm(typeDef.widthMm);
       if (typeDef.thicknessMm) store.setDraftRampThicknessMm(typeDef.thicknessMm);
+    } else if (tool === "column") {
+      if (typeDef.widthMm && typeDef.depthMm) store.setDraftColumnSize(typeDef.widthMm, typeDef.depthMm);
+    } else if (tool === "beam") {
+      if (typeDef.widthMm && typeDef.depthMm) store.setDraftBeamSize(typeDef.widthMm, typeDef.depthMm);
     }
   };
-
-  if (editingType && draftType) {
-    return (
-      <EditTypeEmbeddedPanel
-        typeDef={draftType}
-        onBack={() => setEditingType(false)}
-        onSave={applyDraftType}
-        onOpenMaterialPicker={() => undefined}
-      />
-    );
-  }
 
   const heading = tool === "lines" ? "New drawing line" : `New ${tool}`;
   return (
@@ -1556,7 +1555,6 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
         <div className="space-y-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 p-2">
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-500">{typeCategory} type</span>
-            <button type="button" onClick={() => setEditingType(true)} className="btn-yellow-border-hover rounded-md border border-[var(--panel-divider)] px-2 py-1 text-[9px] font-bold">Edit type</button>
           </div>
           <select
             className={fieldClass}
@@ -1568,7 +1566,7 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
           >
             {availableTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <p className="text-[9px] leading-relaxed text-[var(--text-muted)]">{draftType.functionType} · {draftType.material}</p>
+          <EditTypeEmbeddedPanel inline typeDef={liveDraftType ?? draftType} onSave={applyDraftType} />
         </div>
       )}
 
@@ -1631,6 +1629,21 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
         </div>
       )}
 
+      {tool === "column" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftColumnWidthMm} onChange={(event) => store.setDraftColumnSize(Math.max(50, Number(event.target.value)), store.draftColumnDepthMm)} /></label>
+          <label className={labelClass}>Depth (mm)<input className={fieldClass} type="number" min={50} value={store.draftColumnDepthMm} onChange={(event) => store.setDraftColumnSize(store.draftColumnWidthMm, Math.max(50, Number(event.target.value)))} /></label>
+        </div>
+      )}
+
+      {tool === "beam" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className={labelClass}>Width (mm)<input className={fieldClass} type="number" min={50} value={store.draftBeamWidthMm} onChange={(event) => store.setDraftBeamSize(Math.max(50, Number(event.target.value)), store.draftBeamDepthMm)} /></label>
+          <label className={labelClass}>Depth (mm)<input className={fieldClass} type="number" min={50} value={store.draftBeamDepthMm} onChange={(event) => store.setDraftBeamSize(store.draftBeamWidthMm, Math.max(50, Number(event.target.value)))} /></label>
+        </div>
+      )}
+
+
       {tool === "duct" && (
         <div className="grid grid-cols-2 gap-2">
           <label className={labelClass}>Shape
@@ -1685,6 +1698,18 @@ function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
 
     </div>
   );
+}
+
+function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
+  if (tool === "equipment" || tool === "component") {
+    return (
+      <div className="space-y-2 p-1">
+        <ComponentProperties />
+      </div>
+    );
+  }
+
+  return <GenericDraftToolProperties tool={tool} />;
 }
 
 function DraftSketchLineProperties() {

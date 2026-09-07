@@ -11,8 +11,8 @@ import {
   type MarkupPlacement,
   type MarkupShapeType,
 } from "@/lib/toolMarkup";
-import { toMm } from "@/lib/markupUnits";
-import type { MarkupMeasurement } from "@/store/useToolMarkupStore";
+import { measurementGeometry, measurementLabel } from "@/lib/measurementGeometry";
+import { useToolMarkupStore, type MarkupMeasurement } from "@/store/useToolMarkupStore";
 
 /**
  * Imperative Three.js layer for Werkzeug markup meshes + CSS2D notes.
@@ -29,6 +29,7 @@ export class MarkupSceneLayer {
   private selectedId: string | null = null;
   private cubePreview: THREE.Mesh | null = null;
   private snapIndicator: THREE.Mesh | null = null;
+  private measurePreview: THREE.Group | null = null;
   private measureDraftLine: THREE.Line | null = null;
   private measureDraftDot: THREE.Mesh | null = null;
   private measureDraftLabel: CSS2DObject | null = null;
@@ -71,6 +72,13 @@ export class MarkupSceneLayer {
 
   render(camera: THREE.Camera) {
     if (!this.scene || !this.labelRenderer) return;
+    if (this.snapIndicator?.visible && this.host) {
+      const depth = -this.snapIndicator.position.clone().applyMatrix4(camera.matrixWorldInverse).z;
+      const visibleHeight = camera instanceof THREE.PerspectiveCamera
+        ? 2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.zoom
+        : camera instanceof THREE.OrthographicCamera ? (camera.top - camera.bottom) / camera.zoom : 1;
+      this.snapIndicator.scale.setScalar(Math.max(0.001, visibleHeight * 4 / Math.max(1, this.host.clientHeight) / 0.06));
+    }
     this.labelRenderer.render(this.scene, camera);
   }
 
@@ -370,163 +378,60 @@ export class MarkupSceneLayer {
   ) {
     const keep = new Set(measurements.map((m) => m.id));
     for (const [id, g] of this.measureGroups) {
-      if (!keep.has(id)) {
-        this.disposeMeasureGroup(g);
-        this.measureGroups.delete(id);
-      }
+      if (!keep.has(id)) { this.disposeMeasureGroup(g); this.measureGroups.delete(id); }
     }
     for (const m of measurements) {
       if (this.measureGroups.has(m.id)) continue;
-      const g = this.buildMeasureGroup(m);
-      this.measureGroups.set(m.id, g);
-      this.group.add(g);
+      const group = this.buildMeasureGroup(m);
+      this.measureGroups.set(m.id, group);
+      this.group.add(group);
     }
-
+    if (this.measurePreview) { this.disposeMeasureGroup(this.measurePreview); this.measurePreview = null; }
     if (draft && cursor) {
-      console.log("syncMeasurements draft update - draft:", draft, "cursor:", cursor);
-      if (!this.measureDraftLine) {
-        const geo = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(),
-          new THREE.Vector3(),
-        ]);
-        this.measureDraftLine = new THREE.Line(
-          geo,
-          new THREE.LineBasicMaterial({
-            color: 0x38bdf8,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.85,
-          }),
-        );
-        this.measureDraftLine.frustumCulled = false;
-        this.measureDraftLine.renderOrder = 998;
-        this.measureDraftLine.userData.isMarkupPreview = true;
-        this.group.add(this.measureDraftLine);
-      }
-      const pos = this.measureDraftLine.geometry.attributes
-        .position as THREE.BufferAttribute;
-      pos.setXYZ(0, draft.x, draft.y, draft.z);
-      pos.setXYZ(1, cursor.x, cursor.y, cursor.z);
-      pos.needsUpdate = true;
-      this.measureDraftLine.geometry.computeBoundingSphere();
-      this.measureDraftLine.visible = true;
-
-      // Floating label for the line
-      const draftPt = new THREE.Vector3(draft.x, draft.y, draft.z);
-      const cursorPt = new THREE.Vector3(cursor.x, cursor.y, cursor.z);
-      const distMm = Math.round(toMm(draftPt.distanceTo(cursorPt)));
-
-      const dx = cursor.x - draft.x;
-      const dz = cursor.z - draft.z;
-      const dxMm = Math.round(toMm(Math.abs(dx)));
-      const dzMm = Math.round(toMm(Math.abs(dz)));
-      let angleDeg = Math.round((Math.atan2(-dz, dx) * 180) / Math.PI);
-      if (angleDeg < 0) angleDeg += 360;
-
-      const mid = draftPt.clone().add(cursorPt).multiplyScalar(0.5);
-
-      if (!this.measureDraftLabel) {
-        const el = document.createElement("div");
-        el.style.cssText = [
-          "pointer-events:none",
-          "padding:4px 10px",
-          "border-radius:10px",
-          "background:rgba(9,9,11,0.88)",
-          "border:1px solid rgba(250,204,21,0.5)",
-          "color:#facc15",
-          "font:700 11px/1.25 system-ui,sans-serif",
-          "box-shadow:0 8px 24px rgba(0,0,0,0.5), 0 0 16px rgba(250,204,21,0.25)",
-          "white-space:nowrap",
-          "transform:translate(-50%,-130%)",
-          "backdrop-filter:blur(8px)",
-          "display:flex",
-          "flex-direction:column",
-          "align-items:center",
-          "gap:2px",
-        ].join(";");
-        this.measureDraftLabel = new CSS2DObject(el);
-        this.group.add(this.measureDraftLabel);
-      }
-      const distM = (distMm / 1000).toFixed(2);
-      this.measureDraftLabel.element.innerHTML = `<span style="font-weight:900;color:#fff">${distMm} mm <span style="color:#facc15;font-weight:600">(${distM} m)</span> · ${angleDeg}°</span><span style="font-size:9px;color:#a1a1aa">ΔX: ${dxMm} mm | ΔZ: ${dzMm} mm</span>`;
-      this.measureDraftLabel.position.copy(mid);
-      this.measureDraftLabel.visible = true;
-    } else {
-      if (this.measureDraftLine) this.measureDraftLine.visible = false;
-      if (this.measureDraftLabel) this.measureDraftLabel.visible = false;
-    }
-
-    if (draft) {
-      if (!this.measureDraftDot) {
-        this.measureDraftDot = new THREE.Mesh(
-          new THREE.SphereGeometry(0.035, 10, 10),
-          new THREE.MeshBasicMaterial({
-            color: 0x38bdf8,
-            depthTest: false,
-          }),
-        );
-        this.measureDraftDot.renderOrder = 999;
-        this.measureDraftDot.userData.isMarkupPreview = true;
-        this.group.add(this.measureDraftDot);
-      }
-      this.measureDraftDot.visible = true;
-      this.measureDraftDot.position.set(draft.x, draft.y, draft.z);
-    } else if (this.measureDraftDot) {
-      this.measureDraftDot.visible = false;
+      const { measureSecond, measurementKind } = useToolMarkupStore.getState();
+      const end = measureSecond ?? cursor;
+      this.measurePreview = this.buildMeasureGroup({
+        id: "preview", kind: measureSecond ? measurementKind : "distance",
+        ax: draft.x, ay: draft.y, az: draft.z, bx: end.x, by: end.y, bz: end.z,
+        ...(measureSecond ? { third: cursor } : {}),
+      });
+      this.group.add(this.measurePreview);
     }
   }
 
   private buildMeasureGroup(m: MarkupMeasurement): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.isMarkupMeasure = true;
+    const group = new THREE.Group();
+    group.userData.isMarkupMeasure = true;
     const a = new THREE.Vector3(m.ax, m.ay, m.az);
     const b = new THREE.Vector3(m.bx, m.by, m.bz);
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    const distMm = Math.round(toMm(a.distanceTo(b)));
-
-    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const line = new THREE.Line(
-      geo,
-      new THREE.LineBasicMaterial({
-        color: 0x0ea5e9,
-        depthTest: false,
-        transparent: true,
-        opacity: 0.95,
-      }),
-    );
-    line.renderOrder = 997;
-    line.userData.isMarkupPreview = true;
-    g.add(line);
-
-    for (const p of [a, b]) {
-      const dot = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0x0284c7, depthTest: false }),
-      );
-      dot.position.copy(p);
-      dot.renderOrder = 998;
-      dot.userData.isMarkupPreview = true;
-      g.add(dot);
+    const points = [a, b, ...(m.third ? [new THREE.Vector3(m.third.x, m.third.y, m.third.z)] : [])];
+    const geometry = measurementGeometry(m.kind ?? "distance", points);
+    if (!geometry) return group;
+    const paths = [...geometry.paths];
+    if (!m.kind || m.kind === "distance") {
+      const direction = b.clone().sub(a).normalize();
+      const normal = new THREE.Vector3().crossVectors(direction, Math.abs(direction.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+      const offset = Math.min(0.3, a.distanceTo(b) * 0.12);
+      const start = a.clone().addScaledVector(normal, offset);
+      const end = b.clone().addScaledVector(normal, offset);
+      const tick = direction.clone().add(normal).normalize().multiplyScalar(offset * 0.16);
+      paths.splice(0, 1, [start, end], [a, start.clone().addScaledVector(normal, offset * 0.2)], [b, end.clone().addScaledVector(normal, offset * 0.2)], [start.clone().sub(tick), start.clone().add(tick)], [end.clone().sub(tick), end.clone().add(tick)]);
+      geometry.labelAt.copy(start).lerp(end, 0.5);
     }
-
+    for (const path of paths) {
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(path), new THREE.LineBasicMaterial({ color: 0x38bdf8, depthTest: false, depthWrite: false }));
+      line.renderOrder = 997;
+      line.userData.isMarkupPreview = true;
+      line.raycast = () => undefined;
+      group.add(line);
+    }
     const el = document.createElement("div");
-    el.style.cssText = [
-      "pointer-events:none",
-      "padding:2px 6px",
-      "border-radius:6px",
-      "background:rgba(14,165,233,0.92)",
-      "color:#fff",
-      "font:700 10px/1.2 system-ui,sans-serif",
-      "box-shadow:0 2px 8px rgba(0,0,0,.2)",
-      "white-space:nowrap",
-      "transform:translate(-50%,-120%)",
-    ].join(";");
-    el.textContent = `${distMm} mm`;
+    el.style.cssText = "pointer-events:none;padding:3px 6px;border-radius:3px;background:var(--surface-card, #18181b);border:1px solid #38bdf8;color:var(--text-strong, #fff);font:600 11px/1.3 system-ui,sans-serif;white-space:nowrap";
+    el.textContent = measurementLabel(geometry);
     const label = new CSS2DObject(el);
-    label.position.copy(mid);
-    g.add(label);
-    return g;
+    label.position.copy(geometry.labelAt);
+    group.add(label);
+    return group;
   }
 
   private disposeMeasureGroup(g: THREE.Group) {
@@ -543,6 +448,7 @@ export class MarkupSceneLayer {
   }
 
   private clearAll() {
+    if (this.measurePreview) { this.disposeMeasureGroup(this.measurePreview); this.measurePreview = null; }
     for (const mesh of this.meshes.values()) {
       this.group.remove(mesh);
       mesh.geometry.dispose();

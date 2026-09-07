@@ -68,7 +68,8 @@ export type LayoutDoor = {
   swing: 1 | -1;
   createdAt: number;
   // -- Section 6: Door style, head shape, color --------------------------
-  style?: "wood" | "metal" | "glass" | "double";
+  style?: "wood" | "metal" | "glass" | "double" | "sliding" | "garage";
+  typeId?: string;
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
   material?: string;
@@ -85,7 +86,9 @@ export type LayoutWindow = {
   sillHeightMm: number;
   createdAt: number;
   // -- Section 6: Head shape + color -------------------------------------
-  headShape?: "flat" | "arched" | "triangular";
+  headShape?: "flat" | "arched" | "triangular" | "round";
+  sashCount?: 1 | 2 | 4;
+  typeId?: string;
   color?: string;
   material?: string;
 };
@@ -185,7 +188,7 @@ export type LayoutColumn = {
   topLevelId?: string;
   xMm: number;
   yMm: number;
-  profile: "rect" | "circle";
+  profile: "rect" | "circle" | "i";
   widthMm: number;
   depthMm: number;
   heightMm?: number;
@@ -195,6 +198,7 @@ export type LayoutColumn = {
 };
 
 export type LayoutBeam = {
+  profile?: "rect" | "i";
   id: string;
   projectId: string;
   levelId: string;
@@ -432,9 +436,12 @@ export type MepEquipmentCategory =
   | "heat_pump"
   | "sink"
   | "toilet"
-  | "generic_component";
+  | "generic_component"
+  | "furniture";
 
 export type LayoutMepEquipment = {
+  familyId?: string;
+  moduleWidthMm?: number;
   id: string;
   projectId: string;
   levelId: string;
@@ -1000,6 +1007,7 @@ export type LayoutToolId =
   | "cabletray"
   | "wire"
   | "equipment"
+  | "component"
   | "workplane";
 
 export const DEFAULT_STAIR_WIDTH_MM = 1000;

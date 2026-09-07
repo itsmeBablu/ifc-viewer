@@ -2101,6 +2101,28 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
   .werkzeug-entry-panel button { min-height: 38px !important; padding-block: 7px !important; font-size: 11px !important; }
 }
 
+/* Landscape tablet: when the Properties / Layout drawer is visible, keep the
+   bottom ribbon entirely inside the remaining canvas and collapse tools to
+   centered icons. Portrait drawer behavior is intentionally unchanged. */
+@media (orientation: landscape) and (min-width: 901px) and (max-width: 1099px) {
+  .werkzeug-ipad-ribbons[data-panel-open="true"]:is([data-dock="top"], [data-dock="bottom"]) {
+    left: 8px;
+    width: calc(100vw - var(--werkzeug-ipad-panel-width, 300px) - 24px);
+    max-width: none;
+    transform: none;
+  }
+
+  .werkzeug-ipad-ribbons[data-panel-open="true"]:is([data-dock="top"], [data-dock="bottom"]) .werkzeug-tool-label {
+    display: none;
+  }
+
+  .werkzeug-ipad-ribbons[data-panel-open="true"]:is([data-dock="top"], [data-dock="bottom"]) .werkzeug-tool-button {
+    width: 34px;
+    min-width: 34px;
+    padding-inline: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .werkzeug-ipad-ribbons[data-dock="top"], .werkzeug-ipad-ribbons[data-dock="bottom"] { width: calc(100vw - 16px); }
   .werkzeug-ipad-tool-ribbon { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
@@ -3671,6 +3693,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   transform-origin: center;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overflow: visible !important;
 }
 
 .desktop-capsule-row-inner::-webkit-scrollbar {
@@ -3682,6 +3705,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   height: 25px;
   padding: 0 11px;
@@ -3724,6 +3748,30 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 2px 8px -2px rgba(0, 0, 0, 0.25);
 }
 
+.desktop-capsule-morph-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  overflow: visible;
+  pointer-events: none;
+  transform: translateZ(0);
+  will-change: filter;
+}
+
+.desktop-capsule-morph-clone {
+  z-index: 1;
+  pointer-events: none;
+  transform-origin: center;
+  will-change: transform, width, opacity;
+  transition: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.desktop-capsule-morph-clone::before {
+  opacity: 0.28;
+}
+
 .desktop-capsule-btn:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.62) 100%);
   border-color: rgba(250, 204, 21, 0.55);
@@ -3734,7 +3782,7 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 :is(.dark, [data-theme="dark"]) .desktop-capsule-btn:hover {
   background: linear-gradient(180deg, rgba(63, 63, 70, 0.8) 0%, rgba(39, 39, 42, 0.6) 100%);
   border-color: rgba(250, 204, 21, 0.45);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 4px 14px -3px rgba(0, 0, 0, 0.35), 0 0 12px rgba(250, 204, 21, 0.2);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255,255, 0.25), 0 4px 14px -3px rgba(0, 0, 0, 0.35), 0 0 12px rgba(250, 204, 21, 0.2);
   transform: translateY(-1.5px) scale(1.02);
 }
 
@@ -3743,15 +3791,17 @@ body.mep-mode-active .desktop-island-category-btn.is-active {
 }
 
 .desktop-capsule-btn.is-active {
-  background: linear-gradient(180deg, rgba(254, 240, 138, 0.96) 0%, rgba(245, 158, 11, 0.92) 100%);
-  color: #18181b;
-  border-color: rgba(245, 158, 11, 0.85);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.75), 0 0 16px rgba(245, 158, 11, 0.45);
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.95), rgba(253, 224, 71, 0.9), rgba(251, 191, 36, 0.85));
+  color: #09090b;
+  border-color: rgba(253, 230, 138, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 4px 14px rgba(251, 191, 36, 0.35);
+  font-weight: 700;
 }
 
 .desktop-capsule-btn.is-active:hover {
-  background: linear-gradient(180deg, rgba(254, 240, 138, 1) 0%, rgba(245, 158, 11, 0.98) 100%);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.85), 0 0 20px rgba(245, 158, 11, 0.55);
+  background: linear-gradient(135deg, rgba(254, 240, 138, 1), rgba(253, 224, 71, 0.96), rgba(251, 191, 36, 0.92));
+  border-color: rgba(253, 224, 71, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 12px rgba(250, 204, 21, 0.3);
   transform: translateY(-1px) scale(1.02);
 }
 
@@ -3800,6 +3850,10 @@ body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
 }
 
 .desktop-capsule-btn-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   letter-spacing: -0.01em;
 }
 
@@ -3825,6 +3879,44 @@ body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
     height: 24px;
     gap: 4px;
     padding-inline: 8px;
+  }
+}
+
+.type-properties-inline > div > div {
+  border-radius: 4px;
+  padding: 6px;
+  box-shadow: none;
+}
+
+/* Keep the desktop capsule row clear of the right-side properties panel on
+   narrower desktop screens. Werkzeug switches to its dedicated iPad chrome
+   below 1100px, so the touch layout remains untouched. */
+@media (min-width: 1100px) and (max-width: 1608px) {
+  .desktop-capsule-row-inner {
+    width: min(70vw, calc(100vw - 376px));
+    justify-content: center;
+    gap: clamp(2px, 0.25vw, 4px) !important;
+    padding-inline: clamp(2px, 0.3vw, 5px) !important;
+  }
+
+  .desktop-capsule-btn {
+    width: clamp(34px, 2.6vw, 40px);
+    height: 24px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  .desktop-capsule-label {
+    display: none;
+  }
+
+  .desktop-capsule-btn > svg:last-child {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 7px;
+    height: 7px;
+    margin: 0;
   }
 }
 

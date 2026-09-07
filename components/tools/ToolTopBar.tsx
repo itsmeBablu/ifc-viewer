@@ -337,6 +337,7 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
               onClick={() => {
                 const next = !measureMode;
                 setMeasureMode(next);
+                if (next) useAppStore.getState().setRightPanelOpen(true);
                 if (next) {
                   useLayoutDrawingStore.getState().setArmedLayoutTool(null);
                 }

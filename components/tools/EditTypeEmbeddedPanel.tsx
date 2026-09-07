@@ -11,7 +11,8 @@ import UnifiedButton from "@/components/common/UnifiedButton";
 
 interface EditTypeEmbeddedPanelProps {
   typeDef?: ElementTypeDefinition;
-  onBack: () => void;
+  onBack?: () => void;
+  inline?: boolean;
   onSave: (updated: ElementTypeDefinition) => void;
   onOpenMaterialPicker?: (layerIdx: number) => void;
 }
@@ -36,6 +37,7 @@ export default function EditTypeEmbeddedPanel({
   onBack,
   onSave,
   onOpenMaterialPicker,
+  inline = false,
 }: EditTypeEmbeddedPanelProps) {
   const fallbackTypeDef = DEFAULT_ELEMENT_TYPES["wall-300"] || Object.values(DEFAULT_ELEMENT_TYPES)[0];
   const safeTypeDef = typeDef || fallbackTypeDef;
@@ -65,7 +67,7 @@ export default function EditTypeEmbeddedPanel({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onBack();
+        onBack?.();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -84,9 +86,9 @@ export default function EditTypeEmbeddedPanel({
     "h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] font-mono text-[var(--text-strong)] focus:outline-none transition-colors";
 
   return (
-    <div className="flex flex-col h-full overflow-hidden text-xs select-none">
+    <div className={inline ? "type-properties-inline text-xs" : "flex flex-col h-full overflow-hidden text-xs select-none"}>
       {/* Embedded Header with Back Button */}
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-2 bg-[var(--surface-overlay)]/60">
+      {!inline && <div className="flex h-8 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/60 px-2 bg-[var(--surface-overlay)]/60">
         <button
           type="button"
           onClick={onBack}
@@ -100,10 +102,10 @@ export default function EditTypeEmbeddedPanel({
         <span className="font-bold text-[10px] uppercase tracking-wider text-[var(--text-muted)] truncate max-w-[130px]" title={formData.name}>
           Edit: {formData.name}...
         </span>
-      </div>
+      </div>}
 
       {/* Main Form Body - Single Unified Panel without sub-tabs */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-2.5 thin-scroll text-xs">
+      <div className={inline ? "space-y-1 text-xs" : "flex-1 overflow-y-auto p-2 space-y-2.5 thin-scroll text-xs"}>
         {/* SECTION 1: Type Identity */}
         <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1">
           <label className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
@@ -420,7 +422,7 @@ export default function EditTypeEmbeddedPanel({
       </div>
 
       {/* Action Footer */}
-      <div className="flex items-center justify-end p-2 border-t border-[var(--panel-divider)] bg-[var(--surface-overlay)]/30">
+      {!inline && <div className="flex items-center justify-end p-2 border-t border-[var(--panel-divider)] bg-[var(--surface-overlay)]/30">
         <UnifiedButton
           size="xs"
           variant="primary"
@@ -430,7 +432,7 @@ export default function EditTypeEmbeddedPanel({
         >
           Apply & Return
         </UnifiedButton>
-      </div>
+      </div>}
     </div>
   );
 }
