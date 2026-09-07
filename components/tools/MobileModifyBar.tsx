@@ -428,11 +428,11 @@ export default function MobileModifyBar() {
 
   return (
     <div
-      className="werkzeug-ipad-modify-ribbon pointer-events-auto w-full !bg-transparent !border-0 !shadow-none !backdrop-blur-none"
+      className="werkzeug-ipad-modify-ribbon pointer-events-auto w-full !bg-transparent !border-0 !shadow-none !backdrop-blur-none !overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       role="toolbar"
       aria-label="Selection Modify Toolbar"
     >
-      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-x-auto bg-transparent border-0 p-0 shadow-none backdrop-blur-none thin-scroll scrollbar-none touch-pan-x select-none">
+      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-x-auto overflow-y-hidden bg-transparent border-0 p-0 shadow-none backdrop-blur-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden touch-pan-x select-none">
         {/* Compact Selection Title */}
         <span className="shrink-0 text-[10px] font-bold tracking-tight text-amber-400 pl-1 pr-1">
           {selectionTitle}

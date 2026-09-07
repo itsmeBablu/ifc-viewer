@@ -2357,6 +2357,10 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     align-items: center;
     gap: 4px;
     overflow-x: auto;
+    overflow-y: hidden !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x !important;
     border: 0 !important;
     border-radius: 0 !important;
     background: transparent !important;
@@ -2369,10 +2373,17 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     z-index: 85;
     pointer-events: auto;
   }
-  .werkzeug-ipad-modify-ribbon::-webkit-scrollbar {
+  .werkzeug-ipad-modify-ribbon,
+  .werkzeug-ipad-modify-ribbon * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .werkzeug-ipad-modify-ribbon::-webkit-scrollbar,
+  .werkzeug-ipad-modify-ribbon *::-webkit-scrollbar {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
+    background: transparent !important;
   }
   .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-ipad-modify-ribbon {
     top: auto;
