@@ -695,7 +695,7 @@ export default function WerkzeugContextMenu({
                       <div className="mb-2 rounded-2xl border border-yellow-400/35 bg-yellow-50/80 p-2 shadow-[inset_0_1px_0_white] dark:bg-yellow-950/20">
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-700 dark:text-yellow-400">
-                            Active: {armedLayoutTool === "equipment" ? (mepModeActive ? "MEP Component" : "Architectural Component") : armedLayoutTool}
+                            Active: {armedLayoutTool === "equipment" || armedLayoutTool === "component" ? (mepModeActive ? "MEP Equipment" : "Architectural Furniture") : armedLayoutTool}
                           </span>
                           <span className="rounded-full bg-yellow-400/20 px-1.5 py-0.5 text-[8px] font-bold text-yellow-800 dark:text-yellow-300">
                             Select Type

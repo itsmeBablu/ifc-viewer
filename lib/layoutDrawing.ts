@@ -1007,6 +1007,7 @@ export type LayoutToolId =
   | "cabletray"
   | "wire"
   | "equipment"
+  | "component"
   | "workplane";
 
 export const DEFAULT_STAIR_WIDTH_MM = 1000;

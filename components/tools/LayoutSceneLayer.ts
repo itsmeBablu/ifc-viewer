@@ -3,6 +3,7 @@
  */
 
 import { createFurniture } from "@/lib/furnitureGeometry";
+import { isArchitecturalComponent } from "@/lib/componentCatalog";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
@@ -5762,7 +5763,7 @@ export default class LayoutSceneLayer {
         grp.userData.geometryKey = geoKey;
 
         // Build procedural 3D model per category
-        if (item.category === "furniture") {
+        if (item.category === "furniture" || isArchitecturalComponent(item.familyId)) {
           grp.add(createFurniture(item));
         } else if (item.category === "toilet") {
           // Porcelain Toilet (WC): bowl, tank/cistern, seat, flush plate, drain
@@ -6224,7 +6225,7 @@ export default class LayoutSceneLayer {
   }
 
   setMepPreview(
-    tool: "duct" | "flex_duct" | "mep_placeholder" | "pipe" | "cabletray" | "wire" | "equipment" | "workplane" | null,
+    tool: "duct" | "flex_duct" | "mep_placeholder" | "pipe" | "cabletray" | "wire" | "equipment" | "component" | "workplane" | null,
     start: { xMm: number; yMm: number } | null,
     cursor: { xMm: number; yMm: number } | null,
     params?: any,
@@ -6234,11 +6235,12 @@ export default class LayoutSceneLayer {
 
     const baseElevMm = params?.baseElevMm ?? 0;
 
-    if (tool === "equipment") {
+    if (tool === "equipment" || tool === "component") {
       const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
       const cat = params?.category ?? "generic_component";
-      const model = cat === "furniture" ? createFurniture(params) : new THREE.Group();
-      if (cat !== "furniture") {
+      const isArch = cat === "furniture" || isArchitecturalComponent(params?.familyId);
+      const model = isArch ? createFurniture(params) : new THREE.Group();
+      if (!isArch) {
         const w = fromMm(params?.widthMm ?? 600), h = fromMm(params?.heightMm ?? 600), d = fromMm(params?.depthMm ?? 400);
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 }));
         mesh.position.y = h / 2; model.add(mesh);

@@ -1,6 +1,6 @@
 "use client";
 
-import { COMPONENT_CATALOG, componentPreset } from "@/lib/componentCatalog";
+import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
 import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
 
 import { create } from "zustand";
@@ -1641,6 +1641,35 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setArmedLayoutTool: (tool) => {
+    if (tool === "component") {
+      const s = get();
+      const needsArchId = !isArchitecturalComponent(s.draftComponentId);
+      const nextId = needsArchId ? "sofa-3" : s.draftComponentId;
+      const preset = componentPreset(nextId);
+      set({
+        armedLayoutTool: "component",
+        sketchTargetKind: null,
+        wallDraw: null,
+        slabDraw: null,
+        tracePreview: null,
+        selectedWallId: null,
+        selectedDoorId: null,
+        selectedWindowId: null,
+        selectedSlabId: null,
+        selectedUnderlayId: null,
+        mepModeActive: false,
+        draftEquipmentCategory: "furniture",
+        draftComponentId: nextId,
+        ...(preset ? {
+          draftComponentWidthMm: preset.widthMm,
+          draftComponentDepthMm: preset.depthMm,
+          draftComponentHeightMm: preset.heightMm,
+          draftEquipmentElevationMm: preset.elevationMm,
+        } : {}),
+      });
+      return;
+    }
+
     const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
     const isMepTool =
       tool === "duct" ||

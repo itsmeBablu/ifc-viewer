@@ -1701,7 +1701,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
 }
 
 function DraftToolProperties({ tool }: { tool: LayoutToolId }) {
-  if (tool === "equipment") {
+  if (tool === "equipment" || tool === "component") {
     return (
       <div className="space-y-2 p-1">
         <ComponentProperties />

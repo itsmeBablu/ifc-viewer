@@ -17,7 +17,7 @@ export default function ToolTypeChoices({ tool, onChoose, selectedElement }: Too
   const store = useLayoutDrawingStore();
   const [search, setSearch] = useState("");
 
-  if (tool === "equipment" || selectedElement?.kind === "equipment") {
+  if (tool === "equipment" || tool === "component" || selectedElement?.kind === "equipment") {
     const item = selectedElement
       ? store.mepEquipment.find((eq) => eq.id === selectedElement.id)
       : undefined;

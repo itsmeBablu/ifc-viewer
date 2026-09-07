@@ -2,7 +2,15 @@ import * as THREE from "three";
 import type { LayoutLevel, LayoutMepEquipment, LayoutWall } from "./layoutDrawing";
 
 export function componentBaseLevel(levels: LayoutLevel[], isPlan: boolean, currentLevelId: string | null, explicitLevelId: string | null) {
-  return isPlan ? levels.find((l) => l.id === currentLevelId) ?? levels[0] ?? null : levels.find((l) => l.id === explicitLevelId) ?? null;
+  if (explicitLevelId) {
+    const explicit = levels.find((l) => l.id === explicitLevelId);
+    if (explicit) return explicit;
+  }
+  if (currentLevelId) {
+    const current = levels.find((l) => l.id === currentLevelId);
+    if (current) return current;
+  }
+  return levels[0] ?? null;
 }
 
 /** Align footprints, including rotation, without placing their centres inside walls. */

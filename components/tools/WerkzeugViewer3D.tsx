@@ -2818,16 +2818,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
-      if (e.code === "Space" && !typing && target?.tagName !== "SELECT" && target?.tagName !== "BUTTON" && !e.repeat) {
-        const layout = useLayoutDrawingStore.getState();
-        if (layout.armedLayoutTool === "equipment") {
-          e.preventDefault();
-          layout.setDraftEquipmentRotationDeg((layout.draftEquipmentRotationDeg + 90) % 360);
-          return;
-        }
-        const component = layout.mepEquipment.find((item) => item.id === layout.selectedEquipmentId);
-        if (component) { e.preventDefault(); void layout.updateEquipment(component.id, { rotationDeg: (component.rotationDeg + 90) % 360 }); return; }
-      }
       if (e.key === "Tab") {
         const layout = useLayoutDrawingStore.getState();
         if (
@@ -2973,14 +2963,14 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           void layout.updateEquipment(selectedEquip.id, { rotationDeg: nextRot });
           return;
         }
-        if (layout.armedLayoutTool === "equipment") {
+        if (layout.armedLayoutTool === "equipment" || layout.armedLayoutTool === "component") {
           e.preventDefault();
           const nextRot = (layout.draftEquipmentRotationDeg + 90) % 360;
           layout.setDraftEquipmentRotationDeg(nextRot);
           if (lastPointerClientPosRef.current && layoutLayerRef.current) {
             const placement = componentPoint(lastPointerClientPosRef.current.clientX, lastPointerClientPosRef.current.clientY, false);
             if (placement) {
-              layoutLayerRef.current.setMepPreview("equipment", null, placement.plan, {
+              layoutLayerRef.current.setMepPreview(layout.armedLayoutTool, null, placement.plan, {
                 baseElevMm: placement.level.elevationMm, elevationMm: layout.draftEquipmentElevationMm,
                 category: layout.draftEquipmentCategory, familyId: layout.draftComponentId,
                 widthMm: layout.draftComponentWidthMm, depthMm: layout.draftComponentDepthMm, heightMm: layout.draftComponentHeightMm,
@@ -4268,8 +4258,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const level = componentBaseLevel(layout.levels, isPlan, markup.markupFloorId, layout.componentPlacementLevelId);
       if (!level) return null;
       raycaster.current.setFromCamera(pointerNdc.current, camera);
-      const point = raycaster.current.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level.elevationMm)), new THREE.Vector3());
-      if (!point) return null;
+      let point = raycaster.current.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level.elevationMm)), new THREE.Vector3());
+      if (!point) {
+        const lh = layoutLayerRef.current?.pickLayout(raycaster.current);
+        if (lh?.point) point = lh.point.clone();
+        else return null;
+      }
       let plan = { xMm: toMm(point.x), yMm: toMm(point.z) }, label = "Free placement";
       if (!bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
         const rect = canvas.getBoundingClientRect();
@@ -4811,17 +4805,18 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const layoutStore = useLayoutDrawingStore.getState();
         const layoutLayer = layoutLayerRef.current;
         const cam = cameraRef.current;
-        if (layoutStore.armedLayoutTool === "equipment" && layoutLayer) {
+        const isComponentTool = layoutStore.armedLayoutTool === "equipment" || layoutStore.armedLayoutTool === "component";
+        if (isComponentTool && layoutLayer) {
           const placement = componentPoint(e.clientX, e.clientY, e.altKey);
           const ms = useToolMarkupStore.getState();
           if (placement) {
-            layoutLayer.setMepPreview("equipment", null, placement.plan, {
+            layoutLayer.setMepPreview(layoutStore.armedLayoutTool, null, placement.plan, {
               baseElevMm: placement.level.elevationMm, elevationMm: layoutStore.draftEquipmentElevationMm,
               category: layoutStore.draftEquipmentCategory, familyId: layoutStore.draftComponentId,
               widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
               moduleWidthMm: layoutStore.draftComponentModuleMm, rotationDeg: layoutStore.draftEquipmentRotationDeg,
             });
-            ms.setDragSnapHint({ text: `${componentPreset(layoutStore.draftComponentId)?.name ?? "Component"} ? ${placement.label} ? ${layoutStore.draftEquipmentRotationDeg}? ? Space: rotate`, clientX: e.clientX, clientY: e.clientY });
+            ms.setDragSnapHint({ text: `${componentPreset(layoutStore.draftComponentId)?.name ?? "Component"} · ${placement.label} · ${layoutStore.draftEquipmentRotationDeg}° · Space: rotate`, clientX: e.clientX, clientY: e.clientY });
           } else {
             layoutLayer.setMepPreview(null, null, null);
             ms.setDragSnapHint({ text: "Select a base level in Properties before placing in 3D", clientX: e.clientX, clientY: e.clientY });
@@ -6381,13 +6376,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               }
             }
 
-            if (layoutStore.armedLayoutTool === "equipment") {
+            if (layoutStore.armedLayoutTool === "equipment" || layoutStore.armedLayoutTool === "component") {
               const placement = componentPoint(e.clientX, e.clientY, e.altKey);
               if (placement) {
                 const preset = componentPreset(layoutStore.draftComponentId);
                 void layoutStore.placeEquipment({
                   levelId: placement.level.id, category: layoutStore.draftEquipmentCategory,
-                  familyId: layoutStore.draftComponentId, name: preset?.name ?? layoutStore.draftEquipmentCategory,
+                  familyId: layoutStore.draftComponentId, name: preset?.name ?? (layoutStore.draftEquipmentCategory === "furniture" ? "Furniture" : layoutStore.draftEquipmentCategory),
                   widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
                   moduleWidthMm: layoutStore.draftComponentModuleMm,
                   xMm: placement.plan.xMm, yMm: placement.plan.yMm,
