@@ -2309,9 +2309,23 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
 }
 
 @media (orientation: portrait) and (max-width: 600px) {
-  .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-panel-content .grid-cols-2 {
+  .werkzeug-ipad-context[data-orientation="portrait"] .werkzeug-ipad-panel-content .grid-cols-2:not(.material-actions-grid):not(.material-browser-grid) {
     grid-template-columns: minmax(0, 1fr) !important;
   }
+}
+
+.werkzeug-ipad-context .material-browser-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+}
+@media (min-width: 360px) {
+  .werkzeug-ipad-context .material-browser-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+.werkzeug-ipad-context .material-browser-grid button {
+  min-width: 0 !important;
 }
 
 @media (max-width: 1400px) {

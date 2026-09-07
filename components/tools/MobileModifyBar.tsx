@@ -33,13 +33,13 @@ export function activateModifyTool(tool: ModifyTool) {
   useModifyStore.getState().activate(tool);
 }
 
-interface ModifyCapsuleItem {
+interface ModifyIconItem {
   id: string;
   label: string;
   hint: string;
   icon: React.ReactNode;
   badge?: string;
-  glassStyle: string;
+  iconColor: string;
   isActive?: boolean;
   isDanger?: boolean;
   onClick: () => void;
@@ -160,16 +160,15 @@ export default function MobileModifyBar() {
 
   // Build the list of active tools in exact prompt order:
   // select Move rotate align mirror trim split (attach top bottom , detach , unjoin) element copy group, cut delete
-  const tools: ModifyCapsuleItem[] = [];
+  const tools: ModifyIconItem[] = [];
 
-  // 1. select (Honey Amber liquid glass)
+  // 1. select
   tools.push({
     id: "select",
     label: "Select",
     hint: "Selection mode / Clear selection (Esc)",
-    icon: <LuMousePointer2 className="h-4 w-4 stroke-[2.2]" />,
-    glassStyle:
-      "bg-gradient-to-b from-amber-400/40 via-amber-500/20 to-amber-600/30 border-amber-300/60 text-amber-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(245,158,11,0.35)]",
+    icon: <LuMousePointer2 className="h-4 w-4" />,
+    iconColor: "text-amber-400 hover:text-amber-300",
     isActive: state.tool === "select",
     onClick: () => {
       if (state.tool !== "select") {
@@ -180,123 +179,114 @@ export default function MobileModifyBar() {
     },
   });
 
-  // 2. Move (Sky Cyan liquid glass)
+  // 2. Move
   tools.push({
     id: "move",
     label: "Move",
     hint: "Translate element (drag gizmo)",
-    icon: <LuMove className="h-4 w-4 stroke-[2.2]" />,
-    glassStyle:
-      "bg-gradient-to-b from-cyan-400/40 via-sky-500/20 to-blue-600/30 border-cyan-300/60 text-cyan-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(6,182,212,0.35)]",
+    icon: <LuMove className="h-4 w-4" />,
+    iconColor: "text-sky-400 hover:text-sky-300",
     isActive: state.tool === "move",
     onClick: () => activateModifyTool("move"),
   });
 
-  // 3. rotate (Emerald Jade liquid glass) - not for hosted doors/windows
+  // 3. rotate - not for hosted doors/windows
   if (!isOnlyDoorOrWindow) {
     tools.push({
       id: "rotate",
       label: "Rotate",
       hint: "Rotate element (drag rotation ring)",
-      icon: <LuRotate3D className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-emerald-400/40 via-emerald-500/20 to-teal-600/30 border-emerald-300/60 text-emerald-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(16,185,129,0.35)]",
+      icon: <LuRotate3D className="h-4 w-4" />,
+      iconColor: "text-emerald-400 hover:text-emerald-300",
       isActive: state.tool === "rotate",
       onClick: () => activateModifyTool("rotate"),
     });
   }
 
-  // 4. align (Amethyst Purple liquid glass)
+  // 4. align
   if (!isOnlyDoorOrWindow && !kinds.has("stair") && !kinds.has("ramp")) {
     tools.push({
       id: "align",
       label: "Align",
       hint: "Align element to reference face or edge",
-      icon: <LuAlignCenterHorizontal className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-purple-400/40 via-purple-500/20 to-violet-600/30 border-purple-300/60 text-purple-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(168,85,247,0.35)]",
+      icon: <LuAlignCenterHorizontal className="h-4 w-4" />,
+      iconColor: "text-purple-400 hover:text-purple-300",
       isActive: state.tool === "align",
       onClick: () => activateModifyTool("align"),
     });
   }
 
-  // 5. mirror (Neon Fuchsia liquid glass)
+  // 5. mirror
   tools.push({
     id: "mirror",
     label: "Mirror",
     hint: "Mirror element / Flip orientation",
-    icon: <LuFlipHorizontal2 className="h-4 w-4 stroke-[2.2]" />,
-    glassStyle:
-      "bg-gradient-to-b from-fuchsia-400/40 via-pink-500/20 to-rose-600/30 border-fuchsia-300/60 text-fuchsia-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(217,70,239,0.35)]",
+    icon: <LuFlipHorizontal2 className="h-4 w-4" />,
+    iconColor: "text-fuchsia-400 hover:text-fuchsia-300",
     isActive: state.tool === "mirror",
     onClick: () => activateModifyTool("mirror"),
   });
 
-  // 6. trim (Ruby Rose liquid glass)
+  // 6. trim
   if (isLinear || hasRoofs || hasSlabs) {
     tools.push({
       id: "trim",
       label: "Trim",
       hint: "Trim or extend element (T)",
-      icon: <LuScissors className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-pink-400/40 via-rose-500/20 to-red-600/30 border-pink-300/60 text-pink-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(244,63,94,0.35)]",
+      icon: <LuScissors className="h-4 w-4" />,
+      iconColor: "text-pink-400 hover:text-pink-300",
       isActive: armed === "trim",
       onClick: () => useLayoutDrawingStore.getState().setArmedLayoutTool(armed === "trim" ? null : "trim"),
     });
   }
 
-  // 7. split (Sunset Tangerine liquid glass)
+  // 7. split
   if (isLinear) {
     tools.push({
       id: "split",
       label: "Split",
       hint: "Split element into two segments",
-      icon: <LuDivide className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-orange-400/40 via-amber-500/20 to-orange-600/30 border-orange-300/60 text-orange-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(249,115,22,0.35)]",
+      icon: <LuDivide className="h-4 w-4" />,
+      iconColor: "text-orange-400 hover:text-orange-300",
       isActive: state.tool === "split",
       onClick: () => activateModifyTool("split"),
     });
   }
 
-  // 8. attach top (Mint Aquamarine liquid glass) - for walls
+  // 8. attach top - for walls
   if (hasWalls) {
     tools.push({
       id: "attachTop",
       label: "Attach Top",
       hint: "Attach wall top to roof or slab",
-      icon: <LuArrowUpToLine className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-teal-400/40 via-teal-500/20 to-emerald-600/30 border-teal-300/60 text-teal-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(20,184,166,0.35)]",
+      icon: <LuArrowUpToLine className="h-4 w-4" />,
+      iconColor: "text-teal-400 hover:text-teal-300",
       isActive: state.tool === "attachTop",
       onClick: () => activateModifyTool("attachTop"),
     });
   }
 
-  // 9. attach bottom (Marine Cerulean liquid glass) - for walls
+  // 9. attach bottom - for walls
   if (hasWalls) {
     tools.push({
       id: "attachBase",
       label: "Attach Bottom",
       hint: "Attach wall base to roof or slab",
-      icon: <LuArrowDownToLine className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-teal-500/40 via-cyan-600/20 to-blue-700/30 border-teal-300/60 text-teal-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(13,148,136,0.35)]",
+      icon: <LuArrowDownToLine className="h-4 w-4" />,
+      iconColor: "text-cyan-400 hover:text-cyan-300",
       isActive: state.tool === "attachBase",
       onClick: () => activateModifyTool("attachBase"),
     });
   }
 
-  // 10. detach (Frosted Silver liquid glass) - for walls or roofs
+  // 10. detach - for walls or roofs
   if (hasWalls || hasRoofs) {
     tools.push({
       id: "detach",
       label: "Detach",
       hint: "Detach wall top/base or unjoin roof geometry",
-      icon: <LuUnlink className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-slate-400/40 via-zinc-500/20 to-slate-600/30 border-slate-300/60 text-slate-100 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(148,163,184,0.3)]",
+      icon: <LuUnlink className="h-4 w-4" />,
+      iconColor: "text-slate-300 hover:text-slate-200",
       onClick: () =>
         void report(async () => {
           const layout = useLayoutDrawingStore.getState();
@@ -321,7 +311,7 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 11. unjoin / join roof (Bronze Amber liquid glass) - for roofs
+  // 11. unjoin / join roof - for roofs
   if (hasRoofs) {
     const selectedRoof = slabs.find((s) => allSelected.some((sel) => sel.id === s.id && s.kind === "roof"));
     const isJoined = Boolean(selectedRoof?.roofJoin);
@@ -329,9 +319,8 @@ export default function MobileModifyBar() {
       id: "unjoin",
       label: isJoined ? "Unjoin" : "Join Roof",
       hint: isJoined ? "Unjoin roof geometry" : "Join roof edges to target roof face",
-      icon: <IconMarkupRoof className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-amber-500/40 via-orange-600/20 to-amber-700/30 border-amber-300/60 text-amber-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(217,119,6,0.35)]",
+      icon: <IconMarkupRoof className="h-4 w-4" />,
+      iconColor: "text-amber-500 hover:text-amber-400",
       isActive: state.tool === "joinRoof",
       onClick: () => {
         if (isJoined && selectedRoof) {
@@ -351,17 +340,16 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 12. element (Cobalt Blue liquid glass with badge)
+  // 12. element level
   if (hasWalls || hasRoofs || hasSlabs || hasColumns || hasBeams || kinds.has("placement")) {
     const levelBadge = state.level === "element" ? "E" : state.level === "face" ? "F" : state.level === "edge" ? "Ed" : "V";
     tools.push({
       id: "element",
       label: `Element Level: ${state.level}`,
       hint: `Cycle selection level (Element, Face, Edge, Vertex) · Current: ${state.level}`,
-      icon: <LuBox className="h-4 w-4 stroke-[2.2]" />,
+      icon: <LuBox className="h-4 w-4" />,
       badge: levelBadge,
-      glassStyle:
-        "bg-gradient-to-b from-blue-400/40 via-indigo-500/20 to-blue-700/30 border-blue-300/60 text-blue-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(59,130,246,0.35)]",
+      iconColor: "text-blue-400 hover:text-blue-300",
       onClick: () => {
         const levels: SelectionLevel[] = ["element", "face", "edge", "vertex"];
         const nextIdx = (levels.indexOf(state.level) + 1) % levels.length;
@@ -370,30 +358,28 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 13. copy (Spring Lime liquid glass)
+  // 13. copy
   tools.push({
     id: "copy",
     label: "Copy",
     hint: "Duplicate element with offset",
-    icon: <LuCopy className="h-4 w-4 stroke-[2.2]" />,
-    glassStyle:
-      "bg-gradient-to-b from-lime-400/40 via-emerald-500/20 to-green-600/30 border-lime-300/60 text-lime-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(132,204,22,0.35)]",
+    icon: <LuCopy className="h-4 w-4" />,
+    iconColor: "text-lime-400 hover:text-lime-300",
     onClick: () =>
       void report(() =>
         transformElements(currentModifySelection(), new Matrix4().makeTranslation(0.1, 0, 0.1), true)
       ),
   });
 
-  // 14. group (Neon Indigo liquid glass)
+  // 14. group
   if (canGroup) {
     const isGrouped = Boolean(group && !editingGroup);
     tools.push({
       id: "group",
       label: isGrouped ? "Ungroup" : "Group",
       hint: isGrouped ? "Ungroup selected elements" : "Group selected elements together",
-      icon: <LuBoxes className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-indigo-400/40 via-purple-500/20 to-indigo-700/30 border-indigo-300/60 text-indigo-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(99,102,241,0.35)]",
+      icon: <LuBoxes className="h-4 w-4" />,
+      iconColor: "text-indigo-400 hover:text-indigo-300",
       onClick: () => {
         if (isGrouped && group) {
           void report(() => useLayoutDrawingStore.getState().ungroup(group.id));
@@ -406,15 +392,14 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 15. cut (Scarlet Crimson liquid glass)
+  // 15. cut
   if (isLinear || hasColumns || hasBeams) {
     tools.push({
       id: "cut",
       label: "Cut",
       hint: "Cut element to clipboard and remove",
-      icon: <LuCrop className="h-4 w-4 stroke-[2.2]" />,
-      glassStyle:
-        "bg-gradient-to-b from-rose-500/40 via-pink-600/20 to-rose-700/30 border-rose-300/60 text-rose-200 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.7),0_4px_16px_rgba(225,29,72,0.35)]",
+      icon: <LuCrop className="h-4 w-4" />,
+      iconColor: "text-rose-400 hover:text-rose-300",
       onClick: async () => {
         const store = useLayoutDrawingStore.getState();
         await store.copySelected(0, 0);
@@ -423,14 +408,13 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 16. delete (Radiant Red Danger liquid glass)
+  // 16. delete
   tools.push({
     id: "delete",
     label: "Delete",
     hint: "Delete selected elements (Del)",
-    icon: <LuTrash2 className="h-4 w-4 stroke-[2.2]" />,
-    glassStyle:
-      "bg-gradient-to-b from-red-500/45 via-rose-600/25 to-red-700/35 border-red-400/70 text-red-100 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.8),0_4px_18px_rgba(239,68,68,0.5)] hover:bg-red-500/50",
+    icon: <LuTrash2 className="h-4 w-4" />,
+    iconColor: "text-red-500 hover:text-red-400",
     isDanger: true,
     onClick: () => {
       const markup = useToolMarkupStore.getState();
@@ -448,15 +432,15 @@ export default function MobileModifyBar() {
       role="toolbar"
       aria-label="Selection Modify Toolbar"
     >
-      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-2 overflow-x-auto rounded-2xl border border-white/20 bg-zinc-950/85 px-2.5 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.65)] backdrop-blur-2xl thin-scroll scrollbar-none touch-pan-x select-none">
-        {/* Micro Selection Chip */}
-        <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/15 px-3 py-1 text-[11px] font-bold text-amber-300 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]">
-          <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(250,204,21,0.9)]" />
-          <span className="truncate max-w-[90px]">{selectionTitle}</span>
-        </div>
+      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-x-auto rounded-lg border border-white/10 bg-black/55 px-2 py-1 shadow-lg backdrop-blur-md thin-scroll scrollbar-none touch-pan-x select-none">
+        {/* Compact Selection Title */}
+        <span className="shrink-0 text-[10px] font-bold tracking-tight text-amber-400/90 pl-0.5 pr-1">
+          {selectionTitle}
+        </span>
+        <span className="h-3.5 w-px bg-white/15 shrink-0" aria-hidden="true" />
 
-        {/* Liquid Glass Capsule Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Small Icons Without Any Background — matching desktop view without text */}
+        <div className="flex items-center gap-1">
           {tools.map((tool) => (
             <button
               key={tool.id}
@@ -465,33 +449,19 @@ export default function MobileModifyBar() {
               onClick={tool.onClick}
               title={`${tool.label} — ${tool.hint}`}
               aria-label={tool.label}
-              className={`group relative flex h-10 w-10 min-w-[40px] min-h-[40px] shrink-0 items-center justify-center rounded-full border backdrop-blur-xl transition-all duration-200 active:scale-95 disabled:opacity-40 select-none cursor-pointer overflow-hidden shadow-lg ${
-                tool.glassStyle
+              className={`relative flex h-7 w-7 min-w-[28px] min-h-[28px] shrink-0 items-center justify-center border-0 bg-transparent p-0 transition-all duration-150 active:scale-90 disabled:opacity-30 cursor-pointer ${
+                tool.iconColor
               } ${
                 tool.isActive
-                  ? "scale-110 ring-2 ring-white/95 shadow-[0_0_20px_rgba(255,255,255,0.55)] brightness-125 z-10"
-                  : "opacity-95 hover:opacity-100 hover:scale-105"
+                  ? "scale-115 text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.85)] brightness-125"
+                  : "opacity-85 hover:opacity-100 hover:scale-110"
               }`}
             >
-              {/* Specular curved reflection sheen */}
-              <span
-                className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-t-full bg-gradient-to-b from-white/45 via-white/15 to-transparent"
-                aria-hidden="true"
-              />
-              {/* Bottom ambient reflection */}
-              <span
-                className="pointer-events-none absolute inset-x-2 bottom-0.5 h-[20%] rounded-b-full bg-gradient-to-t from-white/25 to-transparent"
-                aria-hidden="true"
-              />
+              {tool.icon}
 
-              {/* Icon */}
-              <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-                {tool.icon}
-              </span>
-
-              {/* Selection Level Badge */}
+              {/* Selection Level Mini Badge */}
               {tool.badge && (
-                <span className="absolute bottom-0 right-0 z-20 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-blue-500 px-0.5 text-[8px] font-extrabold text-white shadow ring-1 ring-white/70">
+                <span className="absolute -bottom-0.5 -right-0.5 text-[7px] font-extrabold leading-none text-blue-400">
                   {tool.badge}
                 </span>
               )}
@@ -501,7 +471,7 @@ export default function MobileModifyBar() {
 
         {/* Status message hint (if any) */}
         {state.message && (
-          <span className="shrink-0 text-[11px] font-medium text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+          <span className="shrink-0 text-[10px] font-medium text-amber-300 pl-1">
             {state.message}
           </span>
         )}
