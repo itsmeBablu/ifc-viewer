@@ -271,7 +271,7 @@ function Slider({
   };
 
   return (
-    <label className="grid grid-cols-[80px_1fr_48px] items-center gap-1.5 text-[10px] py-0.5 border-b border-[var(--panel-divider)]/30 last:border-b-0 text-[var(--text-body)]">
+    <label className="grid grid-cols-[80px_1fr_48px] items-center gap-1.5 text-[10.5px] py-0.5 border-b border-[var(--panel-divider)]/30 last:border-b-0 text-zinc-200 font-medium">
       <span className="truncate">{label}</span>
       <input
         type="range"
@@ -394,7 +394,7 @@ function VYellowDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card,#ffffff)] text-[var(--text-strong)] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.30)] backdrop-blur-2xl thin-scroll">
+        <div className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card,#18181b)] text-[var(--text-strong)] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.40)] thin-scroll">
           {options.map((opt) => {
             const id = getOptId(opt);
             const label = getOptLabel(opt);
@@ -635,8 +635,8 @@ export default function MaterialEditorPanel({
     <div
       style={!embedded ? { width: panelWidth } : undefined}
       className={`${
-        embedded ? "relative h-full min-h-0 w-full" : "fixed top-0 bottom-0 right-0 z-40"
-      } flex select-none flex-col overflow-hidden border-l border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] shadow-2xl backdrop-blur-2xl transition-all`}
+        embedded ? "relative h-full min-h-0 w-full material-editor-embedded !backdrop-blur-none" : "fixed top-0 bottom-0 right-0 z-40 backdrop-blur-xl"
+      } flex select-none flex-col overflow-hidden border-l border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] shadow-2xl transition-all`}
     >
       {!embedded && (
         <div
@@ -722,7 +722,7 @@ export default function MaterialEditorPanel({
               <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Try a different search or category filter</span>
             </div>
           ) : (
-            <div className="grid max-h-72 grid-cols-2 min-[340px]:grid-cols-3 gap-2 overflow-y-auto p-1 thin-scroll">
+            <div className="material-browser-grid grid max-h-64 grid-cols-3 min-[340px]:grid-cols-4 gap-1.5 overflow-y-auto p-1 thin-scroll">
               {filtered.map((m) => {
                 const isSel = m.id === selected.id;
                 return (
@@ -732,38 +732,38 @@ export default function MaterialEditorPanel({
                     draggable
                     onDragStart={(e) => drag(e, m)}
                     onClick={() => select(m.id)}
-                    className={`group relative flex flex-col w-full overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                    className={`group relative flex flex-col w-full overflow-hidden rounded-lg border text-left transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] ${
                       isSel
                         ? isMep
-                          ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_16px_rgba(56,189,248,0.3)] bg-[var(--surface-card)]"
-                          : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.3)] bg-[var(--surface-card)]"
+                          ? "border-sky-400 ring-2 ring-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.3)] bg-[var(--surface-card)]"
+                          : "border-yellow-400 ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.3)] bg-[var(--surface-card)]"
                         : "border-[var(--panel-divider)] bg-[var(--surface-card)] hover:bg-[var(--surface-overlay)] hover:border-yellow-400/60 shadow-sm"
                     }`}
                     title={`${m.name} (${m.category})`}
                   >
-                    {/* Top: 3D Material Sphere Preview */}
-                    <div className="relative aspect-square w-full flex items-center justify-center p-2 bg-[var(--glass-inset-bg)] overflow-hidden">
+                    {/* Top: Compact 3D Material Sphere Preview */}
+                    <div className="relative aspect-square w-full flex items-center justify-center p-1 bg-[var(--glass-inset-bg)] overflow-hidden">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         draggable={false}
-                        src={renderMaterialPreview(m, "sphere", 96)}
+                        src={renderMaterialPreview(m, "sphere", 64)}
                         alt={m.name}
-                        className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-108 drop-shadow-md"
+                        className="h-full w-full max-h-12 object-contain transition-transform duration-300 group-hover:scale-108 drop-shadow-sm"
                       />
-                      <LuGrip className="absolute right-1.5 top-1.5 h-3 w-3 text-[var(--text-muted)] drop-shadow" />
+                      <LuGrip className="absolute right-1 top-1 h-2.5 w-2.5 text-[var(--text-muted)] drop-shadow" />
                     </div>
 
-                    {/* Bottom: Solid high-contrast label footer */}
-                    <div className="flex flex-col justify-center border-t border-[var(--panel-divider)]/50 bg-[var(--surface-overlay)] px-2 py-1.5 min-w-0">
-                      <span className="truncate text-[10px] font-bold text-[var(--text-strong)] leading-snug" title={m.name}>
+                    {/* Bottom: Compact label footer */}
+                    <div className="flex flex-col justify-center border-t border-[var(--panel-divider)]/50 bg-[var(--surface-overlay)] px-1 py-0.5 min-w-0">
+                      <span className="truncate text-[8.5px] font-bold text-[var(--text-strong)] leading-tight" title={m.name}>
                         {m.name}
                       </span>
-                      <div className="flex items-center justify-between gap-1 mt-0.5">
-                        <span className="truncate text-[8px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-strong)] transition-colors">
+                      <div className="flex items-center justify-between gap-0.5 mt-0.5">
+                        <span className="truncate text-[7px] font-medium text-[var(--text-muted)]">
                           {m.category}
                         </span>
                         <span
-                          className="h-2 w-2 rounded-full border border-black/20 shrink-0"
+                          className="h-1.5 w-1.5 rounded-full border border-black/20 shrink-0"
                           style={{ backgroundColor: m.color || "#888888" }}
                           title={`Color: ${m.color || "#888888"}`}
                         />
@@ -782,9 +782,9 @@ export default function MaterialEditorPanel({
 
         <Section title="Preview & Definition" icon={<LuPalette className="h-3.5 w-3.5" />} isMep={isMep}>
           <div className="grid grid-cols-[1fr_56px] gap-1.5">
-            <div className="flex h-20 items-center justify-center rounded border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]">
+            <div className="flex h-16 items-center justify-center rounded border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Material preview" className="h-16 w-16 object-contain drop-shadow" />
+              <img src={preview} alt="Material preview" className="h-14 w-14 object-contain drop-shadow" />
             </div>
 
             <div className="grid grid-rows-4 gap-0.5">
@@ -898,7 +898,7 @@ export default function MaterialEditorPanel({
           />
         </Section>
 
-        <div className="sticky bottom-0 grid grid-cols-2 gap-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-card)] p-1.5 shadow-lg">
+        <div className="material-actions-grid sticky bottom-0 grid grid-cols-2 gap-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-card)] p-1.5 shadow-lg">
           <UnifiedButton
             size="sm"
             variant="secondary"
