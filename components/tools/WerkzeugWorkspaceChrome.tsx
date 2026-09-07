@@ -6,7 +6,7 @@ import Image from "next/image";
 import gsap from "gsap";
 import {
   LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
-  LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2, LuZap,
+  LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuUndo2, LuZap,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -25,7 +25,7 @@ import MaterialEditorPanel from "./MaterialEditorPanel";
 import ObjectSnapStrip from "./ObjectSnapStrip";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
-import ModifyTools from "./ModifyTools";
+import MobileModifyBar from "./MobileModifyBar";
 import BoundarySketchOptions from "./BoundarySketchOptions";
 
 type PanelKey = "levels" | "materials" | LayoutToolId;
@@ -527,13 +527,13 @@ export default function WerkzeugWorkspaceChrome({
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
         </div>
-        <div className="werkzeug-ipad-modify-ribbon" aria-label="Modify">
-          {boundaryEdit ? <BoundarySketchOptions /> : <>
-          <ModifyTools />
-          <ModifyButton label="Trim" icon={<LuScissors />} active={armed === "trim"} onClick={() => useLayoutDrawingStore.getState().setArmedLayoutTool(armed === "trim" ? null : "trim")} />
-          <ModifyButton label="Delete" icon={<LuTrash2 />} danger onClick={() => void useLayoutDrawingStore.getState().deleteSelected()} />
-          </>}
-        </div>
+        {boundaryEdit ? (
+          <div className="werkzeug-ipad-modify-ribbon" aria-label="Modify">
+            <BoundarySketchOptions />
+          </div>
+        ) : (
+          <MobileModifyBar />
+        )}
         <div className="werkzeug-ipad-snap-ribbon"><button type="button" onClick={(event) => toggleAux("levels", event.currentTarget)} className={`werkzeug-ipad-level-trigger ${auxOpen === "levels" ? "is-active btn-v-yellow" : ""}`} title="Levels and active view"><LuLayers3 /><span><strong>{activeLevel?.name ?? "Levels"}</strong><small>{activeViewLabel}</small></span><LuChevronDown /></button></div>
         <div className="werkzeug-ipad-action-ribbon">
         <div className="flex shrink-0 items-center gap-1">
@@ -629,21 +629,6 @@ function springValue(
   });
 }
 
-function ModifyButton({
-  label,
-  icon,
-  active = false,
-  danger = false,
-  onClick,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  active?: boolean;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return <button type="button" className={`werkzeug-modify-button ${active ? "is-active btn-v-yellow" : ""} ${danger ? "is-danger" : ""}`} onClick={onClick} title={label}><span>{icon}</span><span>{label}</span></button>;
-}
 
 function LevelsPanel() {
   const viewItems: Array<{ label: string; value: MarkupViewPreset }> = [{ label: "3D", value: "free" }, { label: "Top", value: "top" }, { label: "N", value: "north" }, { label: "S", value: "south" }, { label: "O", value: "east" }, { label: "W", value: "west" }];
