@@ -24,6 +24,7 @@ export type MarkupViewPreset =
   | "section";
 
 export type MarkupPlacement = {
+  mirrored?: boolean;
   id: string;
   modelKey: string;
   type: MarkupShapeType;
@@ -201,6 +202,7 @@ export function createPlacementMesh(
   const mesh = new THREE.Mesh(geom, mat);
   mesh.position.set(placement.posX, placement.posY, placement.posZ);
   mesh.rotation.set(placement.rotX, placement.rotY, placement.rotZ);
+  mesh.scale.x = placement.mirrored ? -1 : 1;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData.isMarkupPlacement = true;
@@ -223,7 +225,7 @@ export function rebuildPlacementMesh(
   old.dispose();
   mesh.position.set(placement.posX, placement.posY, placement.posZ);
   mesh.rotation.set(placement.rotX, placement.rotY, placement.rotZ);
-  mesh.scale.set(1, 1, 1);
+  mesh.scale.set(placement.mirrored ? -1 : 1, 1, 1);
   const mat = mesh.material as THREE.MeshStandardMaterial;
   mat.color.set(placement.color);
   mat.needsUpdate = true;
@@ -245,6 +247,7 @@ export function normalizePlacement(
     rotX: raw.rotX ?? 0,
     rotY: raw.rotY ?? 0,
     rotZ: raw.rotZ ?? 0,
+    mirrored: raw.mirrored ?? false,
     sizeX: raw.sizeX ?? sizes.sizeX,
     sizeY: raw.sizeY ?? sizes.sizeY,
     sizeZ: raw.sizeZ ?? sizes.sizeZ,

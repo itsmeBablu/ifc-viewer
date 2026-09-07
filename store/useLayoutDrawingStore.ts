@@ -1,9 +1,15 @@
 "use client";
+import { connectMepSegment, type MepSnapPoint } from "@/lib/mepConnections";
+
+import { reflowKitchenRun } from "@/lib/componentPlacement";
+import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
 
 import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
 import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
 
 import { create } from "zustand";
+import { idbListSketchLines, idbPutSketchLine, idbDeleteSketchLine } from "@/lib/layoutDrawingDb";
+import { slabBoundaryLoops, validateBoundary, type BoundaryLoops } from "@/lib/boundaryEditing";
 import {
   DEFAULT_DOOR_HEIGHT_MM,
   DEFAULT_DOOR_WIDTH_MM,
@@ -342,6 +348,12 @@ type LayoutDrawingState = {
     phase: "selected" | "editing";
     originalBoundary: { xMm: number; yMm: number }[];
     originalAutoBoundaryFromWalls?: boolean;
+    originalHoles?: { xMm: number; yMm: number }[][];
+    originalEdgeSlopes?: LayoutSlab["edgeSlopes"];
+    originalRoofJoin?: LayoutSlab["roofJoin"];
+    originalSketchLines: LayoutSketchLine[];
+    tool: "modify" | "trim" | "insert" | "delete";
+    error: string | null;
   } | null;
   lockedElementKeys: string[];
   selectedUnderlayId: string | null;
@@ -480,7 +492,7 @@ type LayoutDrawingState = {
   addLevel: (opts?: { name?: string; elevationMm?: number; heightMm?: number }) => Promise<LayoutLevel | null>;
   updateLevel: (
     id: string,
-    patch: Partial<Pick<LayoutLevel, "name" | "elevationMm" | "heightMm">>,
+    patch: Partial<Pick<LayoutLevel, "name" | "elevationMm" | "heightMm" | "planView">>,
   ) => Promise<void>;
   deleteLevel: (id: string) => Promise<void>;
   setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
@@ -540,6 +552,8 @@ type LayoutDrawingState = {
       Pick<
         LayoutWall,
         | "levelId"
+        | "attachedTopRoofId"
+        | "attachedBaseRoofId"
         | "topLevelId"
         | "startXmm"
         | "startYmm"
@@ -596,7 +610,8 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutDoor,
-        "positionMm" | "widthMm" | "heightMm" | "hinge" | "swing" | "style" | "headShape" | "color" | "material"
+        "positionMm" | "widthMm" | "heightMm" | "hinge" | "swing" | "typeId"
+        | "style" | "headShape" | "color" | "material"
       >
     >,
   ) => Promise<void>;
@@ -622,6 +637,9 @@ type LayoutDrawingState = {
         | "widthMm"
         | "heightMm"
         | "sillHeightMm"
+        | "operation"
+        | "sashCount"
+        | "typeId"
         | "headShape"
         | "color"
         | "material"
@@ -666,6 +684,8 @@ type LayoutDrawingState = {
         | "elevationOffsetMm"
         | "boundary"
         | "holes"
+        | "roofJoin"
+        | "autoBoundaryFromWalls"
         | "edgeSlopes"
         | "color"
         | "material"
@@ -679,6 +699,8 @@ type LayoutDrawingState = {
   moveSlab: (id: string, deltaXmm: number, deltaYmm: number) => Promise<void>;
   beginFloorHole: (slabId: string) => void;
   beginSlabBoundaryEdit: (id: string) => void;
+  applySlabBoundaryLoops: (loops: BoundaryLoops) => boolean;
+  setBoundaryEditTool: (tool: "modify" | "trim" | "insert" | "delete") => void;
   updateSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   deleteSlabBoundaryVertex: (index: number) => void;
@@ -1329,6 +1351,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       wallTypes,
       underlays,
       presets,
+      savedSketchLines,
     ] = await Promise.all([
       idbListLevels(projectId),
       idbListWalls(projectId),
@@ -1350,6 +1373,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       idbListWallTypes(projectId),
       idbListUnderlays(projectId),
       idbGetPresets(projectId),
+      idbListSketchLines(projectId),
     ]);
     levels.sort((a, b) => a.elevationMm - b.elevationMm);
     // Deduplicate levels by elevation collision (within 50mm)
@@ -1387,6 +1411,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       isEmptyProject: isEmpty || projectId.startsWith("empty:"),
       lastMutatedAt: 0,
       levels: uniqueLevels,
+      sketchLines: savedSketchLines,
       walls,
       doors: doors.map((d) => normalizeDoor(d)),
       windows,
@@ -1563,6 +1588,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const level = get().levels.find((l) => l.id === id);
     if (!level) return;
     const next = { ...level, ...patch };
+    if (next.planView) {
+      const { bottomMm, cutMm, topMm } = next.planView;
+      if (![bottomMm, cutMm, topMm].every(Number.isFinite) || bottomMm > cutMm || cutMm > topMm) return;
+    }
     await idbPutLevel(next);
     set({
       levels: get()
@@ -1641,6 +1670,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setArmedLayoutTool: (tool) => {
+    const boundaryEdit = get().slabBoundaryEdit;
+    if (boundaryEdit) {
+      if (tool) set({ slabBoundaryEdit: { ...boundaryEdit, error: "Finish or cancel the boundary sketch before starting another drawing tool." } });
+      return;
+    }
     if (tool === "component") {
       const s = get();
       const needsArchId = !isArchitecturalComponent(s.draftComponentId);
@@ -2537,49 +2571,20 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     });
   },
 
-  insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => {
-    const edit = get().slabBoundaryEdit;
-    if (!edit || edit.phase !== "editing") return;
-    const slab = get().slabs.find((s) => s.id === edit.slabId);
+  insertSlabBoundaryVertex: (index, point) => {
+    const slab = get().slabs.find(s => s.id === get().slabBoundaryEdit?.slabId);
     if (!slab) return;
-    const current = slab.boundary?.length ? [...slab.boundary] : [...edit.originalBoundary];
-    current.splice(index + 1, 0, { ...point });
-    const xs = current.map((p) => p.xMm);
-    const ys = current.map((p) => p.yMm);
-    set({
-      slabs: get().slabs.map((s) => (s.id === slab.id ? {
-        ...s,
-        boundary: current,
-        minXmm: Math.min(...xs),
-        minYmm: Math.min(...ys),
-        maxXmm: Math.max(...xs),
-        maxYmm: Math.max(...ys),
-        autoBoundaryFromWalls: false,
-      } : s)),
-    });
+    const loops = slabBoundaryLoops(slab);
+    loops[0].splice(index + 1, 0, { ...point });
+    get().applySlabBoundaryLoops(loops);
   },
 
-  deleteSlabBoundaryVertex: (index: number) => {
-    const edit = get().slabBoundaryEdit;
-    if (!edit || edit.phase !== "editing") return;
-    const slab = get().slabs.find((s) => s.id === edit.slabId);
+  deleteSlabBoundaryVertex: (index) => {
+    const slab = get().slabs.find(s => s.id === get().slabBoundaryEdit?.slabId);
     if (!slab) return;
-    const current = slab.boundary?.length ? [...slab.boundary] : [...edit.originalBoundary];
-    if (current.length <= 3) return;
-    current.splice(index, 1);
-    const xs = current.map((p) => p.xMm);
-    const ys = current.map((p) => p.yMm);
-    set({
-      slabs: get().slabs.map((s) => (s.id === slab.id ? {
-        ...s,
-        boundary: current,
-        minXmm: Math.min(...xs),
-        minYmm: Math.min(...ys),
-        maxXmm: Math.max(...xs),
-        maxYmm: Math.max(...ys),
-        autoBoundaryFromWalls: false,
-      } : s)),
-    });
+    const loops = slabBoundaryLoops(slab);
+    loops[0].splice(index, 1);
+    get().applySlabBoundaryLoops(loops);
   },
 
   cancelSlabDraw: () => set({ slabDraw: null, armedLayoutTool: null }),
@@ -2590,6 +2595,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!cur) return;
     pushWerkzeugHistory();
     const next = { ...cur, ...patch };
+    if (!("roofJoin" in patch) && (patch.boundary || patch.holes || patch.edgeSlopes || patch.thicknessMm != null)) next.roofJoin = undefined;
     if (next.minXmm > next.maxXmm) {
       const t = next.minXmm;
       next.minXmm = next.maxXmm;
@@ -2697,61 +2703,74 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         { xMm: slab.maxXmm, yMm: slab.maxYmm },
         { xMm: slab.minXmm, yMm: slab.maxYmm },
       ];
-    // Convert boundary polygon to editable sketch lines
-    const lines: LayoutSketchLine[] = [];
-    for (let i = 0; i < boundary.length; i++) {
-      const p1 = boundary[i];
-      const p2 = boundary[(i + 1) % boundary.length];
-      lines.push({
-        id: newLayoutId("line"),
-        projectId: slab.projectId,
-        levelId: slab.levelId,
-        startXmm: p1.xMm,
-        startYmm: p1.yMm,
-        endXmm: p2.xMm,
-        endYmm: p2.yMm,
-        createdAt: Date.now(),
-        color: "#ec4899",
-      });
-    }
     set({
       editingSlabId: id,
-      sketchLines: lines,
+      sketchLines: get().sketchLines,
       sketchTargetKind: slab.kind,
-      armedLayoutTool: "lines",
-      selectedSlabId: null,
+      armedLayoutTool: null,
+      selectedSlabId: id,
       selectedElements: [],
       slabBoundaryEdit: {
         slabId: id,
         phase: "editing",
+        tool: "modify",
+        error: null,
+        originalHoles: slab.holes?.map(loop => loop.map(p => ({ ...p }))),
+        originalEdgeSlopes: slab.edgeSlopes?.map(edge => ({ ...edge })),
+        originalRoofJoin: slab.roofJoin,
+        originalSketchLines: get().sketchLines,
         originalBoundary: boundary.map((point) => ({ ...point })),
         originalAutoBoundaryFromWalls: slab.autoBoundaryFromWalls,
       },
     });
   },
 
+  setBoundaryEditTool: (tool) => {
+    const edit = get().slabBoundaryEdit;
+    if (edit) set({ slabBoundaryEdit: { ...edit, tool, error: null } });
+  },
+
+  applySlabBoundaryLoops: (loops) => {
+    const edit = get().slabBoundaryEdit;
+    if (!edit) return false;
+    const error = validateBoundary(loops);
+    if (error) { set({ slabBoundaryEdit: { ...edit, error } }); return false; }
+    const slab = get().slabs.find(item => item.id === edit.slabId);
+    if (!slab) return false;
+    const [boundary, ...holes] = loops.map(loop => loop.map(p => ({ ...p })));
+    const oldBoundary = slabBoundaryLoops(slab)[0];
+    // Preserve edge-indexed roof settings on supporting lines after split/trim.
+    const edgeSlopes = slab.edgeSlopes ? boundary.flatMap((a, edgeIdx) => {
+      const b = boundary[(edgeIdx + 1) % boundary.length];
+      const oldIdx = boundary.length === oldBoundary.length ? edgeIdx : oldBoundary.findIndex((c, i) => {
+        const d = oldBoundary[(i + 1) % oldBoundary.length];
+        const dx = d.xMm - c.xMm, dy = d.yMm - c.yMm;
+        return [a, b].every(p => Math.abs(dx * (p.yMm - c.yMm) - dy * (p.xMm - c.xMm)) < 0.001 * Math.hypot(dx, dy));
+      });
+      const setting = slab.edgeSlopes?.find(edge => edge.edgeIdx === oldIdx);
+      return setting ? [{ ...setting, edgeIdx }] : [];
+    }) : undefined;
+    set({
+      slabs: get().slabs.map(item => item.id === slab.id ? {
+        ...item, boundary, holes, edgeSlopes,
+        minXmm: Math.min(...boundary.map(p => p.xMm)), maxXmm: Math.max(...boundary.map(p => p.xMm)),
+        minYmm: Math.min(...boundary.map(p => p.yMm)), maxYmm: Math.max(...boundary.map(p => p.yMm)),
+        autoBoundaryFromWalls: false,
+        roofJoin: undefined,
+      } : item),
+      slabBoundaryEdit: { ...edit, error: null },
+    });
+    return true;
+  },
+
   updateSlabBoundaryVertex: (index, point) => {
     const edit = get().slabBoundaryEdit;
-    if (!edit || edit.phase !== "editing") return;
-    const slab = get().slabs.find((item) => item.id === edit.slabId);
+    const slab = get().slabs.find(item => item.id === edit?.slabId);
     if (!slab) return;
-    const boundary = (slab.boundary?.length ? slab.boundary : edit.originalBoundary).map(
-      (vertex, vertexIndex) => vertexIndex === index ? { ...point } : { ...vertex },
-    );
-    if (boundary.length < 3) return;
-    const xs = boundary.map((vertex) => vertex.xMm);
-    const ys = boundary.map((vertex) => vertex.yMm);
-    set({
-      slabs: get().slabs.map((item) => item.id === slab.id ? {
-        ...item,
-        boundary,
-        minXmm: Math.min(...xs),
-        minYmm: Math.min(...ys),
-        maxXmm: Math.max(...xs),
-        maxYmm: Math.max(...ys),
-        autoBoundaryFromWalls: false,
-      } : item),
-    });
+    const loops = slabBoundaryLoops(slab);
+    if (!loops[0][index]) return;
+    loops[0][index] = { ...point };
+    get().applySlabBoundaryLoops(loops);
   },
 
   commitSlabBoundaryEdit: async () => {
@@ -2759,10 +2778,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!edit) return;
     const draft = get().slabs.find((item) => item.id === edit.slabId);
     if (!draft) return;
+    const error = validateBoundary(slabBoundaryLoops(draft));
+    if (error) { set({ slabBoundaryEdit: { ...edit, error } }); return; }
     const originalXs = edit.originalBoundary.map((point) => point.xMm);
     const originalYs = edit.originalBoundary.map((point) => point.yMm);
     const original = {
       ...draft,
+      holes: edit.originalHoles,
+      edgeSlopes: edit.originalEdgeSlopes,
+      roofJoin: edit.originalRoofJoin,
       boundary: edit.originalBoundary.map((point) => ({ ...point })),
       minXmm: Math.min(...originalXs),
       minYmm: Math.min(...originalYs),
@@ -2776,7 +2800,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: get().slabs.map((item) => item.id === draft.id ? draft : item),
       slabBoundaryEdit: null,
       editingSlabId: null,
-      sketchLines: [],
+      sketchLines: edit?.originalSketchLines ?? get().sketchLines,
       armedLayoutTool: null,
       sketchTargetKind: null,
       selectedSlabId: draft.id,
@@ -2804,7 +2828,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       set({
         slabBoundaryEdit: null,
         editingSlabId: null,
-        sketchLines: [],
+        sketchLines: edit?.originalSketchLines ?? get().sketchLines,
         armedLayoutTool: null,
         sketchTargetKind: null,
       });
@@ -2817,6 +2841,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       slabs: get().slabs.map((item) => item.id === slab.id ? {
         ...item,
         boundary,
+        holes: edit.originalHoles,
+        edgeSlopes: edit.originalEdgeSlopes,
+      roofJoin: edit.originalRoofJoin,
         minXmm: Math.min(...xs),
         minYmm: Math.min(...ys),
         maxXmm: Math.max(...xs),
@@ -2825,7 +2852,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       } : item),
       slabBoundaryEdit: null,
       editingSlabId: null,
-      sketchLines: [],
+      sketchLines: edit?.originalSketchLines ?? get().sketchLines,
       armedLayoutTool: null,
       sketchTargetKind: null,
       selectedSlabId: slab.id,
@@ -3305,6 +3332,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       typeId: type?.id,
       headShape: type?.headShape,
       sashCount: type?.sashCount ?? 1,
+      operation: type?.windowOperation,
       material: type?.material,
       id: newLayoutId("win"),
       projectId,
@@ -3464,9 +3492,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!projectId || !levelId) return null;
     const image = await ingestReferenceDrawingFile(file);
     pushWerkzeugHistory();
-    // Replace existing underlay on this level (one per level for clarity).
-    const existing = get().underlays.filter((u) => u.levelId === levelId);
-    for (const u of existing) await idbDeleteUnderlay(u.id);
+    // References coexist; visibility is controlled by the level's plan view.
     const row = createUnderlayRecord({
       projectId,
       levelId,
@@ -3476,7 +3502,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     await idbPutUnderlay(row);
     set({
       underlays: [
-        ...get().underlays.filter((u) => u.levelId !== levelId),
+        ...get().underlays,
         row,
       ],
       selectedUnderlayId: row.id,
@@ -3757,6 +3783,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
 
     pushWerkzeugHistory();
+    void idbPutSketchLine(line);
     set({
       sketchLines: [...get().sketchLines, line],
       lastMutatedAt: Date.now(),
@@ -3915,14 +3942,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedElements: [{ kind: "line", id }],
     });
   },
-  deleteSketchLine: (id) =>
+  deleteSketchLine: (id) => {
+    void idbDeleteSketchLine(id);
     set((s) => ({
       sketchLines: s.sketchLines.filter((l) => l.id !== id),
       selectedSketchLineId:
         s.selectedSketchLineId === id ? null : s.selectedSketchLineId,
       selectedElements: s.selectedElements.filter((e) => !(e.kind === "line" && e.id === id)),
       lastMutatedAt: Date.now(),
-    })),
+    }));
+  },
   updateSketchLine: (id, patch) => set((s) => ({
     sketchLines: s.sketchLines.map((line) => line.id === id ? { ...line, ...patch } : line),
     lastMutatedAt: Date.now(),
@@ -3935,6 +3964,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
     const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    const editingGroup = get().groups.find(group => group.id === get().activeGroupId);
+    if (editingGroup && !editingGroup.elementRefs.some(member => member.kind === ref.kind && member.id === ref.id)) return;
     if (get().mepModeActive && get().mepArchitectureLocked && architectureKinds.has(ref.kind)) return;
     // If element belongs to a group and not currently editing inside that group:
     const group = get().groups.find((g) =>
@@ -3986,6 +4017,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   selectMultiple: (refs, mode = "replace") => {
+    const editingGroup = get().groups.find(group => group.id === get().activeGroupId);
+    if (editingGroup) refs = refs.filter(ref => editingGroup.elementRefs.some(member => member.kind === ref.kind && member.id === ref.id));
+    else {
+      const expanded = new Map(refs.map(ref => [`${ref.kind}:${ref.id}`, ref]));
+      for (const group of get().groups) if (group.elementRefs.some(member => expanded.has(`${member.kind}:${member.id}`))) {
+        for (const member of group.elementRefs) expanded.set(`${member.kind}:${member.id}`, member);
+      }
+      refs = [...expanded.values()];
+    }
     const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     const selectableRefs = get().mepModeActive && get().mepArchitectureLocked
       ? refs.filter((ref) => !architectureKinds.has(ref.kind))
@@ -4080,6 +4120,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const id of trayIds) await idbDeleteCableTray(id);
     for (const id of equipIds) await idbDeleteMepEquipment(id);
     for (const id of gridIds) await idbDeleteGridLine(id);
+    for (const id of lineIds) await idbDeleteSketchLine(id);
 
     set((s) => ({
       walls: s.walls.filter((w) => !wallIds.has(w.id)),
@@ -4113,183 +4154,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   moveSelected: async (deltaXmm, deltaYmm) => {
-    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
-    const sel = get().selectedElements;
-    if (sel.length === 0 || (deltaXmm === 0 && deltaYmm === 0)) return;
-    pushWerkzeugHistory();
-
-    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
-    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
-    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
-    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
-    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
-    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
-    const ductIds = new Set(sel.filter((e) => e.kind === "duct").map((e) => e.id));
-    const pipeIds = new Set(sel.filter((e) => e.kind === "pipe").map((e) => e.id));
-    const trayIds = new Set(sel.filter((e) => e.kind === "cabletray").map((e) => e.id));
-    const equipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
-    const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
-    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
-
-    const nextWalls = get().walls.map((w) => {
-      if (!wallIds.has(w.id)) return w;
-      return {
-        ...w,
-        startXmm: w.startXmm + deltaXmm,
-        startYmm: w.startYmm + deltaYmm,
-        endXmm: w.endXmm + deltaXmm,
-        endYmm: w.endYmm + deltaYmm,
-        arcCenterXmm: w.arcCenterXmm != null ? w.arcCenterXmm + deltaXmm : undefined,
-        arcCenterYmm: w.arcCenterYmm != null ? w.arcCenterYmm + deltaYmm : undefined,
-      };
-    });
-
-    const nextSlabs = get().slabs.map((sl) => {
-      if (!slabIds.has(sl.id)) return sl;
-      return {
-        ...sl,
-        minXmm: sl.minXmm + deltaXmm,
-        maxXmm: sl.maxXmm + deltaXmm,
-        minYmm: sl.minYmm + deltaYmm,
-        maxYmm: sl.maxYmm + deltaYmm,
-        boundary: sl.boundary?.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm })),
-        holes: sl.holes?.map((h) => h.map((p) => ({ xMm: p.xMm + deltaXmm, yMm: p.yMm + deltaYmm }))),
-      };
-    });
-
-    const nextCols = get().columns.map((c) => {
-      if (!colIds.has(c.id)) return c;
-      return { ...c, xMm: c.xMm + deltaXmm, yMm: c.yMm + deltaYmm };
-    });
-
-    const nextBeams = get().beams.map((b) => {
-      if (!beamIds.has(b.id)) return b;
-      return {
-        ...b,
-        startXmm: b.startXmm + deltaXmm,
-        startYmm: b.startYmm + deltaYmm,
-        endXmm: b.endXmm + deltaXmm,
-        endYmm: b.endYmm + deltaYmm,
-      };
-    });
-
-    const nextStairs = get().stairs.map((st) => {
-      if (!stairIds.has(st.id)) return st;
-      return {
-        ...st,
-        startXmm: st.startXmm + deltaXmm,
-        startYmm: st.startYmm + deltaYmm,
-        endXmm: st.endXmm + deltaXmm,
-        endYmm: st.endYmm + deltaYmm,
-        landingXmm: st.landingXmm != null ? st.landingXmm + deltaXmm : undefined,
-        landingYmm: st.landingYmm != null ? st.landingYmm + deltaYmm : undefined,
-      };
-    });
-
-    const nextRamps = get().ramps.map((r) => {
-      if (!rampIds.has(r.id)) return r;
-      return {
-        ...r,
-        startXmm: r.startXmm + deltaXmm,
-        startYmm: r.startYmm + deltaYmm,
-        endXmm: r.endXmm + deltaXmm,
-        endYmm: r.endYmm + deltaYmm,
-        landingXmm: r.landingXmm != null ? r.landingXmm + deltaXmm : undefined,
-        landingYmm: r.landingYmm != null ? r.landingYmm + deltaYmm : undefined,
-      };
-    });
-
-    const nextDucts = get().ducts.map((d) => {
-      if (!ductIds.has(d.id)) return d;
-      return {
-        ...d,
-        startXmm: d.startXmm + deltaXmm,
-        startYmm: d.startYmm + deltaYmm,
-        endXmm: d.endXmm + deltaXmm,
-        endYmm: d.endYmm + deltaYmm,
-      };
-    });
-
-    const nextPipes = get().pipes.map((p) => {
-      if (!pipeIds.has(p.id)) return p;
-      return {
-        ...p,
-        startXmm: p.startXmm + deltaXmm,
-        startYmm: p.startYmm + deltaYmm,
-        endXmm: p.endXmm + deltaXmm,
-        endYmm: p.endYmm + deltaYmm,
-      };
-    });
-
-    const nextTrays = get().cableTrays.map((t) => {
-      if (!trayIds.has(t.id)) return t;
-      return {
-        ...t,
-        startXmm: t.startXmm + deltaXmm,
-        startYmm: t.startYmm + deltaYmm,
-        endXmm: t.endXmm + deltaXmm,
-        endYmm: t.endYmm + deltaYmm,
-      };
-    });
-
-    const nextEquip = get().mepEquipment.map((eq) => {
-      if (!equipIds.has(eq.id)) return eq;
-      return {
-        ...eq,
-        xMm: eq.xMm + deltaXmm,
-        yMm: eq.yMm + deltaYmm,
-      };
-    });
-
-    const nextGrids = get().gridLines.map((g) => {
-      if (!gridIds.has(g.id)) return g;
-      return {
-        ...g,
-        startXmm: g.startXmm + deltaXmm,
-        startYmm: g.startYmm + deltaYmm,
-        endXmm: g.endXmm + deltaXmm,
-        endYmm: g.endYmm + deltaYmm,
-      };
-    });
-
-    const nextLines = get().sketchLines.map((l) => {
-      if (!lineIds.has(l.id)) return l;
-      return {
-        ...l,
-        startXmm: l.startXmm + deltaXmm,
-        startYmm: l.startYmm + deltaYmm,
-        endXmm: l.endXmm + deltaXmm,
-        endYmm: l.endYmm + deltaYmm,
-      };
-    });
-
-    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
-    for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
-    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
-    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
-    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
-    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
-    for (const d of nextDucts) if (ductIds.has(d.id)) await idbPutDuct(d);
-    for (const p of nextPipes) if (pipeIds.has(p.id)) await idbPutPipe(p);
-    for (const t of nextTrays) if (trayIds.has(t.id)) await idbPutCableTray(t);
-    for (const eq of nextEquip) if (equipIds.has(eq.id)) await idbPutMepEquipment(eq);
-    for (const g of nextGrids) if (gridIds.has(g.id)) await idbPutGridLine(g);
-
-    set({
-      walls: nextWalls,
-      slabs: nextSlabs,
-      columns: nextCols,
-      beams: nextBeams,
-      stairs: nextStairs,
-      ramps: nextRamps,
-      ducts: nextDucts,
-      pipes: nextPipes,
-      cableTrays: nextTrays,
-      mepEquipment: nextEquip,
-      gridLines: nextGrids,
-      sketchLines: nextLines,
-      lastMutatedAt: Date.now(),
-    });
+    const { transformElements, currentModifySelection } = await import("@/lib/modifyOperations");
+    const { Matrix4 } = await import("three");
+    await transformElements(currentModifySelection(), new Matrix4().makeTranslation(deltaXmm / 1000, 0, deltaYmm / 1000));
   },
 
   alignSelected: async (axis) => {
@@ -4370,6 +4237,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   copySelected: async (deltaXmm, deltaYmm, targetLevelId) => {
+    if (!targetLevelId) {
+      const { transformElements, currentModifySelection } = await import("@/lib/modifyOperations");
+      const { Matrix4 } = await import("three");
+      return transformElements(currentModifySelection(), new Matrix4().makeTranslation(deltaXmm / 1000, 0, deltaYmm / 1000), true);
+    }
     const sel = get().selectedElements;
     const projectId = get().projectId;
     if (sel.length === 0 || !projectId) return [];
@@ -4608,269 +4480,26 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   mirrorSelected: async (axisP1, axisP2) => {
-    const sel = get().selectedElements;
-    if (sel.length === 0) return;
-    pushWerkzeugHistory();
-
-    const dx = axisP2.xMm - axisP1.xMm;
-    const dy = axisP2.yMm - axisP1.yMm;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return;
-
-    const mirrorPoint = (x: number, y: number) => {
-      const u = ((x - axisP1.xMm) * dx + (y - axisP1.yMm) * dy) / lenSq;
-      const projX = axisP1.xMm + u * dx;
-      const projY = axisP1.yMm + u * dy;
-      return { x: 2 * projX - x, y: 2 * projY - y };
-    };
-
-    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
-    const slabIds = new Set(sel.filter((e) => e.kind === "slab").map((e) => e.id));
-    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
-    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
-    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
-    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
-    const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
-
-    const nextWalls = get().walls.map((w) => {
-      if (!wallIds.has(w.id)) return w;
-      const p1 = mirrorPoint(w.startXmm, w.startYmm);
-      const p2 = mirrorPoint(w.endXmm, w.endYmm);
-      return { ...w, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    const nextCols = get().columns.map((c) => {
-      if (!colIds.has(c.id)) return c;
-      const p = mirrorPoint(c.xMm, c.yMm);
-      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
-    });
-
-    const nextBeams = get().beams.map((b) => {
-      if (!beamIds.has(b.id)) return b;
-      const p1 = mirrorPoint(b.startXmm, b.startYmm);
-      const p2 = mirrorPoint(b.endXmm, b.endYmm);
-      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    const nextStairs = get().stairs.map((st) => {
-      if (!stairIds.has(st.id)) return st;
-      const p1 = mirrorPoint(st.startXmm, st.startYmm);
-      const p2 = mirrorPoint(st.endXmm, st.endYmm);
-      const lp = st.landingXmm != null && st.landingYmm != null ? mirrorPoint(st.landingXmm, st.landingYmm) : undefined;
-      return {
-        ...st,
-        startXmm: Math.round(p1.x),
-        startYmm: Math.round(p1.y),
-        endXmm: Math.round(p2.x),
-        endYmm: Math.round(p2.y),
-        landingXmm: lp ? Math.round(lp.x) : undefined,
-        landingYmm: lp ? Math.round(lp.y) : undefined,
-      };
-    });
-
-    const nextRamps = get().ramps.map((r) => {
-      if (!rampIds.has(r.id)) return r;
-      const p1 = mirrorPoint(r.startXmm, r.startYmm);
-      const p2 = mirrorPoint(r.endXmm, r.endYmm);
-      const lp = r.landingXmm != null && r.landingYmm != null ? mirrorPoint(r.landingXmm, r.landingYmm) : undefined;
-      return {
-        ...r,
-        startXmm: Math.round(p1.x),
-        startYmm: Math.round(p1.y),
-        endXmm: Math.round(p2.x),
-        endYmm: Math.round(p2.y),
-        landingXmm: lp ? Math.round(lp.x) : undefined,
-        landingYmm: lp ? Math.round(lp.y) : undefined,
-      };
-    });
-
-    const nextSlabs = get().slabs.map((sl) => {
-      if (!slabIds.has(sl.id)) return sl;
-      const p1 = mirrorPoint(sl.minXmm, sl.minYmm);
-      const p2 = mirrorPoint(sl.maxXmm, sl.maxYmm);
-      return {
-        ...sl,
-        minXmm: Math.min(Math.round(p1.x), Math.round(p2.x)),
-        maxXmm: Math.max(Math.round(p1.x), Math.round(p2.x)),
-        minYmm: Math.min(Math.round(p1.y), Math.round(p2.y)),
-        maxYmm: Math.max(Math.round(p1.y), Math.round(p2.y)),
-        boundary: sl.boundary?.map((p) => {
-          const mp = mirrorPoint(p.xMm, p.yMm);
-          return { xMm: Math.round(mp.x), yMm: Math.round(mp.y) };
-        }),
-      };
-    });
-
-    const nextLines = get().sketchLines.map((l) => {
-      if (!lineIds.has(l.id)) return l;
-      const p1 = mirrorPoint(l.startXmm, l.startYmm);
-      const p2 = mirrorPoint(l.endXmm, l.endYmm);
-      return { ...l, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
-    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
-    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
-    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
-    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
-    for (const sl of nextSlabs) if (slabIds.has(sl.id)) await idbPutSlab(sl);
-
-    set({
-      walls: nextWalls,
-      columns: nextCols,
-      beams: nextBeams,
-      stairs: nextStairs,
-      ramps: nextRamps,
-      slabs: nextSlabs,
-      sketchLines: nextLines,
-      lastMutatedAt: Date.now(),
-    });
+    const { transformElements, currentModifySelection, mirrorMatrix } = await import("@/lib/modifyOperations");
+    const { Vector3 } = await import("three");
+    await transformElements(currentModifySelection(), mirrorMatrix(new Vector3(axisP1.xMm / 1000, 0, axisP1.yMm / 1000), new Vector3(axisP2.xMm / 1000, 0, axisP2.yMm / 1000)));
   },
 
   rotateSelected: async (center, angleDeg) => {
-    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
-    const sel = get().selectedElements;
-    if (sel.length === 0 || angleDeg === 0) return;
-    pushWerkzeugHistory();
-
-    const rad = (angleDeg * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-
-    const rotatePoint = (x: number, y: number) => {
-      const rx = x - center.xMm;
-      const ry = y - center.yMm;
-      return {
-        x: center.xMm + rx * cos - ry * sin,
-        y: center.yMm + rx * sin + ry * cos,
-      };
-    };
-
-    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
-    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
-    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
-    const stairIds = new Set(sel.filter((e) => e.kind === "stair").map((e) => e.id));
-    const rampIds = new Set(sel.filter((e) => e.kind === "ramp").map((e) => e.id));
-
-    const nextWalls = get().walls.map((w) => {
-      if (!wallIds.has(w.id)) return w;
-      const p1 = rotatePoint(w.startXmm, w.startYmm);
-      const p2 = rotatePoint(w.endXmm, w.endYmm);
-      return { ...w, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    const nextCols = get().columns.map((c) => {
-      if (!colIds.has(c.id)) return c;
-      const p = rotatePoint(c.xMm, c.yMm);
-      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
-    });
-
-    const nextBeams = get().beams.map((b) => {
-      if (!beamIds.has(b.id)) return b;
-      const p1 = rotatePoint(b.startXmm, b.startYmm);
-      const p2 = rotatePoint(b.endXmm, b.endYmm);
-      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    const nextStairs = get().stairs.map((st) => {
-      if (!stairIds.has(st.id)) return st;
-      const p1 = rotatePoint(st.startXmm, st.startYmm);
-      const p2 = rotatePoint(st.endXmm, st.endYmm);
-      const lp = st.landingXmm != null && st.landingYmm != null ? rotatePoint(st.landingXmm, st.landingYmm) : undefined;
-      return {
-        ...st,
-        startXmm: Math.round(p1.x),
-        startYmm: Math.round(p1.y),
-        endXmm: Math.round(p2.x),
-        endYmm: Math.round(p2.y),
-        landingXmm: lp ? Math.round(lp.x) : undefined,
-        landingYmm: lp ? Math.round(lp.y) : undefined,
-      };
-    });
-
-    const nextRamps = get().ramps.map((r) => {
-      if (!rampIds.has(r.id)) return r;
-      const p1 = rotatePoint(r.startXmm, r.startYmm);
-      const p2 = rotatePoint(r.endXmm, r.endYmm);
-      const lp = r.landingXmm != null && r.landingYmm != null ? rotatePoint(r.landingXmm, r.landingYmm) : undefined;
-      return {
-        ...r,
-        startXmm: Math.round(p1.x),
-        startYmm: Math.round(p1.y),
-        endXmm: Math.round(p2.x),
-        endYmm: Math.round(p2.y),
-        landingXmm: lp ? Math.round(lp.x) : undefined,
-        landingYmm: lp ? Math.round(lp.y) : undefined,
-      };
-    });
-
-    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
-    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
-    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
-    for (const st of nextStairs) if (stairIds.has(st.id)) await idbPutStair(st);
-    for (const r of nextRamps) if (rampIds.has(r.id)) await idbPutRamp(r);
-
-    set({
-      walls: nextWalls,
-      columns: nextCols,
-      beams: nextBeams,
-      stairs: nextStairs,
-      ramps: nextRamps,
-      lastMutatedAt: Date.now(),
-    });
+    const { transformElements, currentModifySelection } = await import("@/lib/modifyOperations");
+    const { Matrix4 } = await import("three");
+    const matrix = new Matrix4().makeTranslation(center.xMm / 1000, 0, center.yMm / 1000)
+      .multiply(new Matrix4().makeRotationY(-angleDeg * Math.PI / 180))
+      .multiply(new Matrix4().makeTranslation(-center.xMm / 1000, 0, -center.yMm / 1000));
+    await transformElements(currentModifySelection(), matrix);
   },
-
   scaleSelected: async (origin, scaleFactor) => {
-    if (get().selectedElements.some((ref) => get().lockedElementKeys.includes(`${ref.kind}:${ref.id}`))) return;
-    const sel = get().selectedElements;
-    if (sel.length === 0 || scaleFactor <= 0 || scaleFactor === 1) return;
-    pushWerkzeugHistory();
-
-    const scalePoint = (x: number, y: number) => ({
-      x: origin.xMm + (x - origin.xMm) * scaleFactor,
-      y: origin.yMm + (y - origin.yMm) * scaleFactor,
-    });
-
-    const wallIds = new Set(sel.filter((e) => e.kind === "wall").map((e) => e.id));
-    const colIds = new Set(sel.filter((e) => e.kind === "column").map((e) => e.id));
-    const beamIds = new Set(sel.filter((e) => e.kind === "beam").map((e) => e.id));
-
-    const nextWalls = get().walls.map((w) => {
-      if (!wallIds.has(w.id)) return w;
-      const p1 = scalePoint(w.startXmm, w.startYmm);
-      const p2 = scalePoint(w.endXmm, w.endYmm);
-      return {
-        ...w,
-        startXmm: Math.round(p1.x),
-        startYmm: Math.round(p1.y),
-        endXmm: Math.round(p2.x),
-        endYmm: Math.round(p2.y),
-      };
-    });
-
-    const nextCols = get().columns.map((c) => {
-      if (!colIds.has(c.id)) return c;
-      const p = scalePoint(c.xMm, c.yMm);
-      return { ...c, xMm: Math.round(p.x), yMm: Math.round(p.y) };
-    });
-
-    const nextBeams = get().beams.map((b) => {
-      if (!beamIds.has(b.id)) return b;
-      const p1 = scalePoint(b.startXmm, b.startYmm);
-      const p2 = scalePoint(b.endXmm, b.endYmm);
-      return { ...b, startXmm: Math.round(p1.x), startYmm: Math.round(p1.y), endXmm: Math.round(p2.x), endYmm: Math.round(p2.y) };
-    });
-
-    for (const w of nextWalls) if (wallIds.has(w.id)) await idbPutWall(w);
-    for (const c of nextCols) if (colIds.has(c.id)) await idbPutColumn(c);
-    for (const b of nextBeams) if (beamIds.has(b.id)) await idbPutBeam(b);
-
-    set({
-      walls: nextWalls,
-      columns: nextCols,
-      beams: nextBeams,
-      lastMutatedAt: Date.now(),
-    });
+    const { transformElements, currentModifySelection } = await import("@/lib/modifyOperations");
+    const { Matrix4 } = await import("three");
+    const matrix = new Matrix4().makeTranslation(origin.xMm / 1000, 0, origin.yMm / 1000)
+      .multiply(new Matrix4().makeScale(scaleFactor, 1, scaleFactor))
+      .multiply(new Matrix4().makeTranslation(-origin.xMm / 1000, 0, -origin.yMm / 1000));
+    await transformElements(currentModifySelection(), matrix);
   },
 
   // -- Section 2: Grouping ------------------------------------------------
@@ -5480,7 +5109,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         heightMm: s.draftDuctHeightMm,
         diameterMm: s.draftDuctDiameterMm,
         system: s.draftDuctSystem,
-        elevationOffsetMm: s.draftDuctElevationMm,
+        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? s.draftDuctElevationMm,
       },
     });
   },
@@ -5519,7 +5148,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       for (const c of conns) {
         if (c.type === "duct") {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
-          if (dStart <= 350) {
+          if (dStart <= 350 && !(dd.start as MepSnapPoint).mepEndpoint) {
             startX = Math.round(c.worldXmm);
             startY = Math.round(c.worldYmm);
             startConnectorId = c.id;
@@ -5537,7 +5166,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       for (const c of conns) {
         if (c.type === "duct") {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
-          if (dEnd <= 350) {
+          if (dEnd <= 350 && !(dd.cursor as MepSnapPoint).mepEndpoint) {
             endX = Math.round(c.worldXmm);
             endY = Math.round(c.worldYmm);
             endConnectorId = c.id;
@@ -5571,6 +5200,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
+    Object.assign(duct, connectMepSegment("duct", duct, get(), get().ductDraw?.start ?? undefined, get().ductDraw?.cursor ?? undefined));
     await idbPutDuct(duct);
     set((prev) => ({
       ducts: [...prev.ducts, duct],
@@ -5594,6 +5224,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       projectId,
       createdAt: Date.now(),
     };
+    Object.assign(duct, connectMepSegment("duct", duct, get(), get().ductDraw?.start ?? undefined, get().ductDraw?.cursor ?? undefined));
     await idbPutDuct(duct);
     set((s) => ({
       ducts: [...s.ducts, duct],
@@ -5670,7 +5301,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         cursor: null,
         diameterMm: s.draftPipeDiameterMm,
         system: s.draftPipeSystem,
-        elevationOffsetMm: s.draftPipeElevationMm,
+        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? s.draftPipeElevationMm,
       },
     });
   },
@@ -5709,7 +5340,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       for (const c of conns) {
         if (c.type === "pipe") {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
-          if (dStart <= 350) {
+          if (dStart <= 350 && !(pd.start as MepSnapPoint).mepEndpoint) {
             startX = Math.round(c.worldXmm);
             startY = Math.round(c.worldYmm);
             startConnectorId = c.id;
@@ -5727,7 +5358,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       for (const c of conns) {
         if (c.type === "pipe") {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
-          if (dEnd <= 350) {
+          if (dEnd <= 350 && !(pd.cursor as MepSnapPoint).mepEndpoint) {
             endX = Math.round(c.worldXmm);
             endY = Math.round(c.worldYmm);
             endConnectorId = c.id;
@@ -5757,6 +5388,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
+    Object.assign(pipe, connectMepSegment("pipe", pipe, get(), get().pipeDraw?.start ?? undefined, get().pipeDraw?.cursor ?? undefined));
     await idbPutPipe(pipe);
     set((prev) => ({
       pipes: [...prev.pipes, pipe],
@@ -5780,6 +5412,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       projectId,
       createdAt: Date.now(),
     };
+    Object.assign(pipe, connectMepSegment("pipe", pipe, get(), get().pipeDraw?.start ?? undefined, get().pipeDraw?.cursor ?? undefined));
     await idbPutPipe(pipe);
     set((s) => ({
       pipes: [...s.pipes, pipe],
@@ -5857,7 +5490,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         widthMm: s.draftCableTrayWidthMm,
         heightMm: s.draftCableTrayHeightMm,
         trayType: s.draftCableTrayType,
-        elevationOffsetMm: s.draftCableTrayElevationMm,
+        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? s.draftCableTrayElevationMm,
       },
     });
   },
@@ -5896,6 +5529,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
+    Object.assign(tray, connectMepSegment("cabletray", tray, get(), get().cableTrayDraw?.start ?? undefined, get().cableTrayDraw?.cursor ?? undefined));
     await idbPutCableTray(tray);
     set((prev) => ({
       cableTrays: [...prev.cableTrays, tray],
@@ -5919,6 +5553,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       projectId,
       createdAt: Date.now(),
     };
+    Object.assign(tray, connectMepSegment("cabletray", tray, get(), get().cableTrayDraw?.start ?? undefined, get().cableTrayDraw?.cursor ?? undefined));
     await idbPutCableTray(tray);
     set((s) => ({
       cableTrays: [...s.cableTrays, tray],
@@ -5996,7 +5631,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     let posY = data.yMm;
 
     // Temporary item to compute connectors
-    const equip: LayoutMepEquipment = {
+    let equip: LayoutMepEquipment = {
       ...data,
       id: newLayoutId("equip"),
       projectId,
@@ -6074,10 +5709,20 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     equip.xMm = Math.round(posX);
     equip.yMm = Math.round(posY);
+    equip = normalizeParametricFurniture(equip);
+    const parametricGroups: LayoutGroup[] = [];
+    if (equip.furnitureParameters) {
+      const definition: NonNullable<LayoutGroup["definition"]> = [{ kind: "equipment", row: structuredClone(equip) }];
+      const template: LayoutGroup = { id: newLayoutId("group-type"), projectId, name: equip.name ?? "Parametric furniture", isTemplate: true, elementRefs: [], definition, createdAt: Date.now() };
+      const instance: LayoutGroup = { ...template, id: newLayoutId("group"), definitionId: template.id, isTemplate: false, elementRefs: [{ kind: "equipment", id: equip.id }] };
+      parametricGroups.push(template, instance);
+      await Promise.all(parametricGroups.map(idbPutGroup));
+    }
 
     await idbPutMepEquipment(equip);
     set((state) => ({
       mepEquipment: [...state.mepEquipment, equip],
+      groups: [...state.groups, ...parametricGroups],
       selectedElements: [{ kind: "equipment", id: equip.id }],
       selectedEquipmentId: equip.id,
       lastMutatedAt: Date.now(),
@@ -6089,10 +5734,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const prev = get().mepEquipment.find((e) => e.id === id);
     if (!prev) return;
     pushWerkzeugHistory();
-    const updated: LayoutMepEquipment = { ...prev, ...patch };
-    await idbPutMepEquipment(updated);
+    const updated: LayoutMepEquipment = normalizeParametricFurniture({ ...prev, ...patch, furnitureParameters: patch.familyId && patch.familyId !== prev.familyId ? undefined : patch.furnitureParameters ?? prev.furnitureParameters });
+    const changes = reflowKitchenRun(prev, updated, get().walls, get().mepEquipment);
+    await Promise.all(changes.map(idbPutMepEquipment));
+    const changed = new Map(changes.map(e => [e.id, e]));
+    const additionalGroups: LayoutGroup[] = [];
+    if (updated.furnitureParameters && !get().groups.some(g => g.elementRefs.some(ref => ref.kind === "equipment" && ref.id === id))) {
+      const template: LayoutGroup = { id: newLayoutId("group-type"), projectId: updated.projectId, name: updated.name ?? "Parametric furniture", isTemplate: true, elementRefs: [], definition: [{ kind: "equipment", row: structuredClone(updated) }], createdAt: Date.now() };
+      additionalGroups.push(template, { ...template, id: newLayoutId("group"), definitionId: template.id, isTemplate: false, elementRefs: [{ kind: "equipment", id }] });
+      await Promise.all(additionalGroups.map(idbPutGroup));
+    }
     set((s) => ({
-      mepEquipment: s.mepEquipment.map((e) => (e.id === id ? updated : e)),
+      mepEquipment: s.mepEquipment.map((e) => changed.get(e.id) ?? e),
+      groups: [...s.groups, ...additionalGroups],
       lastMutatedAt: Date.now(),
     }));
   },
@@ -6149,7 +5803,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         cursor: null,
         wireGauge: s.draftWireGauge,
         systemType: s.draftWireSystem,
-        elevationOffsetMm: 2800,
+        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? 2800,
       },
     });
   },
@@ -6188,6 +5842,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       createdAt: Date.now(),
     };
     pushWerkzeugHistory();
+    Object.assign(wire, connectMepSegment("wire", wire, get(), get().wireDraw?.start ?? undefined, get().wireDraw?.cursor ?? undefined));
     await idbPutWire(wire);
     set((prev) => ({
       wires: [...prev.wires, wire],
@@ -6211,6 +5866,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       projectId,
       createdAt: Date.now(),
     };
+    Object.assign(wire, connectMepSegment("wire", wire, get(), get().wireDraw?.start ?? undefined, get().wireDraw?.cursor ?? undefined));
     await idbPutWire(wire);
     set((s) => ({
       wires: [...s.wires, wire],

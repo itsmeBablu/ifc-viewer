@@ -5,8 +5,8 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import {
-  LuAlignCenterHorizontal, LuBox, LuChevronDown, LuChevronLeft, LuCopy, LuDoorOpen, LuEye, LuFlipHorizontal2, LuFolderOpen, LuLayers3,
-  LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuMove, LuPalette, LuPaperclip, LuRedo2, LuRotate3D, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2, LuZap,
+  LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuScissors, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuTrash2, LuUndo2, LuZap,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
 import GlassPanel from "@/components/common/GlassPanel";
@@ -24,6 +24,9 @@ import ToolFloorsSection from "./ToolFloorsSection";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import ObjectSnapStrip from "./ObjectSnapStrip";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
+import ViewPropertiesPanel from "./ViewPropertiesPanel";
+import ModifyTools from "./ModifyTools";
+import BoundarySketchOptions from "./BoundarySketchOptions";
 
 type PanelKey = "levels" | "materials" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
@@ -119,10 +122,11 @@ export default function WerkzeugWorkspaceChrome({
     initialLandscapePanelHeight,
   );
   const [portraitPanelWidth, setPortraitPanelWidth] = useState(320);
-  const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
+
   const [panelTab, setPanelTab] = useState<"properties" | "layout" | "type" | "materials">("properties");
   const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
+  const boundaryEdit = useLayoutDrawingStore((s) => s.slabBoundaryEdit);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
   const walls = useLayoutDrawingStore((s) => s.walls);
@@ -332,6 +336,8 @@ export default function WerkzeugWorkspaceChrome({
       const slab = state.slabs.find((item) => item.id === state.selectedSlabId);
       if (slab) reveal(slab.kind);
     }
+    else if (state.selectedWireId !== previous.selectedWireId && state.selectedWireId) reveal("wire");
+    else if (state.selectedEquipmentId !== previous.selectedEquipmentId && state.selectedEquipmentId) reveal("equipment");
     else if (state.selectedStairId !== previous.selectedStairId && state.selectedStairId) reveal("stair");
     else if (state.selectedRampId !== previous.selectedRampId && state.selectedRampId) reveal("ramp");
     else if (state.selectedElements !== previous.selectedElements) {
@@ -487,46 +493,6 @@ export default function WerkzeugWorkspaceChrome({
     RENDER_MODES.find((mode) => mode.id === renderMode) ?? RENDER_MODES[0];
   const activeLevel = levels.find((level) => level.id === markupFloorId) ?? levels[0] ?? null;
   const activeViewLabel = viewItems.find((view) => view.value === viewPreset)?.label ?? "3D";
-  const hasContextSelection = selectedElements.some((ref) =>
-    ref.kind === "wall" || ref.kind === "door" || ref.kind === "window" ||
-    ref.kind === "slab" || ref.kind === "stair" || ref.kind === "ramp" ||
-    ref.kind === "column" || ref.kind === "beam",
-  );
-  const modifyTitle = selectedWallId ? "Modify | Walls"
-    : selectedDoorId ? "Modify | Doors"
-      : selectedWindowId ? "Modify | Windows"
-        : selectedSlab ? `Modify | ${selectedSlab.kind === "roof" ? "Roofs" : "Floors"}`
-          : selectedStair ? "Modify | Stairs"
-            : selectedRamp ? "Modify | Ramps"
-              : selectedColumn ? "Modify | Columns"
-                : selectedBeam ? "Modify | Beams" : "Modify";
-  const activateTransform = (mode: "translate" | "rotate") => {
-    useLayoutDrawingStore.getState().setArmedLayoutTool(null);
-    useToolMarkupStore.getState().setTransformMode(mode);
-  };
-  const mirrorSelection = () => {
-    const store = useLayoutDrawingStore.getState();
-    const wall = store.walls.find((item) => item.id === store.selectedWallId);
-    if (wall) {
-      void store.mirrorSelected(
-        { xMm: wall.startXmm, yMm: wall.startYmm },
-        { xMm: wall.endXmm, yMm: wall.endYmm },
-      );
-      return;
-    }
-    const column = store.columns.find((item) => store.selectedElements.some((ref) => ref.kind === "column" && ref.id === item.id));
-    const slab = store.slabs.find((item) => item.id === store.selectedSlabId);
-    const centerX = column?.xMm ?? (slab ? (slab.minXmm + slab.maxXmm) / 2 : 0);
-    void store.mirrorSelected(
-      { xMm: centerX, yMm: -1_000_000 },
-      { xMm: centerX, yMm: 1_000_000 },
-    );
-  };
-  const copySelection = () => {
-    const markup = useToolMarkupStore.getState();
-    if (markup.selectedPlacementId) void markup.duplicatePlacement(markup.selectedPlacementId);
-    else void useLayoutDrawingStore.getState().copySelected(100, 100);
-  };
   return (
     <>
       <div
@@ -561,19 +527,13 @@ export default function WerkzeugWorkspaceChrome({
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
         </div>
-        {hasContextSelection && <div className="werkzeug-ipad-modify-ribbon" aria-label={modifyTitle}>
-          <span className="werkzeug-ipad-modify-title">{modifyTitle}</span>
-          <ModifyButton label="Move" icon={<LuMove />} onClick={() => activateTransform("translate")} />
-          <ModifyButton label="Rotate" icon={<LuRotate3D />} onClick={() => activateTransform("rotate")} />
-          <ModifyButton label={`Align ${alignAxis.toUpperCase()}`} icon={<LuAlignCenterHorizontal />} onClick={() => {
-            void useLayoutDrawingStore.getState().alignSelected(alignAxis);
-            setAlignAxis((axis) => axis === "x" ? "y" : "x");
-          }} />
-          <ModifyButton label="Mirror" icon={<LuFlipHorizontal2 />} onClick={mirrorSelection} />
-          <ModifyButton label="Copy" icon={<LuCopy />} onClick={copySelection} />
+        <div className="werkzeug-ipad-modify-ribbon" aria-label="Modify">
+          {boundaryEdit ? <BoundarySketchOptions /> : <>
+          <ModifyTools />
           <ModifyButton label="Trim" icon={<LuScissors />} active={armed === "trim"} onClick={() => useLayoutDrawingStore.getState().setArmedLayoutTool(armed === "trim" ? null : "trim")} />
           <ModifyButton label="Delete" icon={<LuTrash2 />} danger onClick={() => void useLayoutDrawingStore.getState().deleteSelected()} />
-        </div>}
+          </>}
+        </div>
         <div className="werkzeug-ipad-snap-ribbon"><button type="button" onClick={(event) => toggleAux("levels", event.currentTarget)} className={`werkzeug-ipad-level-trigger ${auxOpen === "levels" ? "is-active btn-v-yellow" : ""}`} title="Levels and active view"><LuLayers3 /><span><strong>{activeLevel?.name ?? "Levels"}</strong><small>{activeViewLabel}</small></span><LuChevronDown /></button></div>
         <div className="werkzeug-ipad-action-ribbon">
         <div className="flex shrink-0 items-center gap-1">
@@ -688,7 +648,7 @@ function ModifyButton({
 function LevelsPanel() {
   const viewItems: Array<{ label: string; value: MarkupViewPreset }> = [{ label: "3D", value: "free" }, { label: "Top", value: "top" }, { label: "N", value: "north" }, { label: "S", value: "south" }, { label: "O", value: "east" }, { label: "W", value: "west" }];
   const preset = useToolMarkupStore((s) => s.viewPreset);
-  return <div className="space-y-1.5"><div className="grid grid-cols-6 gap-1 rounded-lg border border-[var(--panel-divider)] bg-transparent p-1">{viewItems.map((view) => <button key={view.value} onClick={() => useToolMarkupStore.getState().setViewPreset(view.value)} className={`min-h-8 rounded-md text-[10px] font-semibold ${preset === view.value ? "btn-v-yellow" : "btn-yellow-border-hover"}`}>{view.label}</button>)}</div><ToolFloorsSection className="werkzeug-ipad-levels" /></div>;
+  return <div className="space-y-1.5"><div className="grid grid-cols-6 gap-1 rounded-lg border border-[var(--panel-divider)] bg-transparent p-1">{viewItems.map((view) => <button key={view.value} onClick={() => useToolMarkupStore.getState().setViewPreset(view.value)} className={`min-h-8 rounded-md text-[10px] font-semibold ${preset === view.value ? "btn-v-yellow" : "btn-yellow-border-hover"}`}>{view.label}</button>)}</div><ToolFloorsSection className="werkzeug-ipad-levels" /><ViewPropertiesPanel /></div>;
 }
 
 function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked: boolean; tab: "properties" | "type" | "materials" }) {
@@ -696,6 +656,9 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   const markup = useToolMarkupStore();
   const slab = store.slabs.find((item) => item.id === store.selectedSlabId && item.kind === panelKey);
   const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-transparent px-2 text-[11px] text-[var(--text-strong)] disabled:opacity-50";
+  if (!store.armedLayoutTool && !store.selectedElements.length && !store.selectedWallId && !store.selectedSlabId && !store.selectedDoorId && !store.selectedWindowId && !markup.selectedPlacementId) return <ViewPropertiesPanel />;
+  if (store.selectedWireId || store.selectedElements.some(e => e.kind === "wire")) return <LayoutPropertiesPanel />;
+  if (store.selectedEquipmentId || store.selectedElements.some(e => e.kind === "equipment")) return <LayoutPropertiesPanel />;
   if (tab === "type") return <TypeOptions panelKey={panelKey} locked={locked} />;
   if (panelKey === "column" || panelKey === "beam" || panelKey === "stair" || panelKey === "ramp") return <LayoutPropertiesPanel />;
   if ((panelKey === "floor" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {

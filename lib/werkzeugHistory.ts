@@ -4,6 +4,12 @@
  */
 
 import type {
+  LayoutSketchLine,
+  LayoutDuct,
+  LayoutPipe,
+  LayoutCableTray,
+  LayoutMepEquipment,
+  LayoutWire,
   LayoutBeam,
   LayoutColumn,
   LayoutDoor,
@@ -16,6 +22,7 @@ import type {
   LayoutWall,
   LayoutWindow,
 } from "@/lib/layoutDrawing";
+import * as layoutDb from "@/lib/layoutDrawingDb";
 import type { ReferenceUnderlay } from "@/lib/referenceUnderlay";
 import type { MarkupNote, MarkupPlacement } from "@/lib/toolMarkup";
 import {
@@ -70,6 +77,12 @@ export type WerkzeugSnapshot = {
   ramps?: LayoutRamp[];
   gridLines?: LayoutGridLine[];
   groups?: LayoutGroup[];
+  sketchLines?: LayoutSketchLine[];
+  ducts?: LayoutDuct[];
+  pipes?: LayoutPipe[];
+  cableTrays?: LayoutCableTray[];
+  mepEquipment?: LayoutMepEquipment[];
+  wires?: LayoutWire[];
   underlays: ReferenceUnderlay[];
 };
 
@@ -103,6 +116,12 @@ export function takeWerkzeugSnapshot(): WerkzeugSnapshot {
     ramps: cloneJson(l.ramps ?? []),
     gridLines: cloneJson(l.gridLines ?? []),
     groups: cloneJson(l.groups ?? []),
+    sketchLines: cloneJson(l.sketchLines ?? []),
+    ducts: cloneJson(l.ducts ?? []),
+    pipes: cloneJson(l.pipes ?? []),
+    cableTrays: cloneJson(l.cableTrays ?? []),
+    mepEquipment: cloneJson(l.mepEquipment ?? []),
+    wires: cloneJson(l.wires ?? []),
     underlays: cloneJson(l.underlays),
   };
 }
@@ -197,6 +216,18 @@ async function persistSnapshot(snap: WerkzeugSnapshot): Promise<void> {
       if (!keepL.has(lvl.id)) await idbDeleteLevel(lvl.id);
     }
 
+    for (const row of l.sketchLines) if (!(snap.sketchLines ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeleteSketchLine(row.id);
+    for (const row of snap.sketchLines ?? []) await layoutDb.idbPutSketchLine(row);
+    for (const row of l.ducts) if (!(snap.ducts ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeleteDuct(row.id);
+    for (const row of snap.ducts ?? []) await layoutDb.idbPutDuct(row);
+    for (const row of l.pipes) if (!(snap.pipes ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeletePipe(row.id);
+    for (const row of snap.pipes ?? []) await layoutDb.idbPutPipe(row);
+    for (const row of l.cableTrays) if (!(snap.cableTrays ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeleteCableTray(row.id);
+    for (const row of snap.cableTrays ?? []) await layoutDb.idbPutCableTray(row);
+    for (const row of l.mepEquipment) if (!(snap.mepEquipment ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeleteMepEquipment(row.id);
+    for (const row of snap.mepEquipment ?? []) await layoutDb.idbPutMepEquipment(row);
+    for (const row of l.wires) if (!(snap.wires ?? []).some(saved => saved.id === row.id)) await layoutDb.idbDeleteWire(row.id);
+    for (const row of snap.wires ?? []) await layoutDb.idbPutWire(row);
     for (const lvl of snap.levels) await idbPutLevel(lvl);
     for (const w of snap.walls) await idbPutWall(w);
     for (const d of snap.doors) await idbPutDoor(d);
@@ -239,6 +270,15 @@ async function applySnapshot(snap: WerkzeugSnapshot): Promise<void> {
       ramps: cloneJson(snap.ramps ?? []),
       gridLines: cloneJson(snap.gridLines ?? []),
       groups: cloneJson(snap.groups ?? []),
+      sketchLines: cloneJson(snap.sketchLines ?? []),
+      ducts: cloneJson(snap.ducts ?? []),
+      pipes: cloneJson(snap.pipes ?? []),
+      cableTrays: cloneJson(snap.cableTrays ?? []),
+      mepEquipment: cloneJson(snap.mepEquipment ?? []),
+      wires: cloneJson(snap.wires ?? []),
+      activeGroupId: null,
+      slabBoundaryEdit: null,
+      editingSlabId: null,
       underlays: cloneJson(snap.underlays ?? []),
       selectedElements: [],
       wallDraw: null,

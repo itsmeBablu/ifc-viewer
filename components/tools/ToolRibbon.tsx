@@ -1,4 +1,5 @@
 "use client";
+import { activateModifyTool } from "./ModifyTools";
 import gsap from "gsap";
 import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import Image from "next/image";
@@ -966,7 +967,7 @@ export default function ToolRibbon({
             <RibbonBtn
               key={m.id}
               active={transformMode === m.id}
-              onClick={() => setTransformMode(m.id)}
+              onClick={() => { setTransformMode(m.id); if (m.id !== "scale") activateModifyTool(m.id === "translate" ? "move" : "rotate"); }}
               title={m.label}
             >
               <Icon className="h-4 w-4" />

@@ -27,6 +27,8 @@ import {
 } from "@/lib/layoutDrawing";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import MepConnectionProperties from "./MepConnectionProperties";
+import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
 import { isArchitecturalComponent } from "@/lib/componentCatalog";
 
@@ -122,9 +124,10 @@ export default function LayoutPropertiesPanel({
   const duct = ducts.find((d) => d.id === selectedDuctId) ?? null;
   const pipe = pipes.find((p) => p.id === selectedPipeId) ?? null;
   const tray = cableTrays.find((t) => t.id === selectedCableTrayId) ?? null;
+  const wire = useLayoutDrawingStore(s => s.wires.find(w => w.id === (s.selectedWireId ?? s.selectedElements.find(e => e.kind === "wire")?.id)));
   const equip = mepEquipment.find((eq) => eq.id === selectedEquipmentId) ?? null;
 
-  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip) return null;
+  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip && !wire) return <ViewPropertiesPanel />;
 
   const len = wall ? Math.round(wallLengthMm(wall)) : 0;
   const ang = wall ? Math.round(wallAngleDeg(wall) * 10) / 10 : 0;
@@ -136,6 +139,10 @@ export default function LayoutPropertiesPanel({
 
   return (
     <div className={`flex flex-col gap-2.5 ${className}`}>
+      {duct && <MepConnectionProperties kind="duct" row={duct} />}
+      {pipe && <MepConnectionProperties kind="pipe" row={pipe} />}
+      {tray && <MepConnectionProperties kind="cabletray" row={tray} />}
+      {wire && <MepConnectionProperties kind="wire" row={wire} />}
       {wall && (
         <>
           <div className="flex items-center justify-between gap-2">
@@ -1348,7 +1355,7 @@ export default function LayoutPropertiesPanel({
                   />
                 )}
                 <MmInput
-                  label="Center Elev"
+                  label="Center offset"
                   value={duct.elevationMm ?? duct.elevationOffsetMm ?? 2600}
                   onCommit={(v) => void updateDuct(duct.id, { elevationMm: v })}
                 />

@@ -181,7 +181,7 @@ export default function WerkzeugContextMenu({
   const toggleRevealHiddenMode = useLayoutDrawingStore((s) => s.toggleRevealHiddenMode);
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
-  const isPlacing = Boolean(armedLayoutTool && armedLayoutTool !== "select");
+  const isPlacing = Boolean(armedLayoutTool);
 
   const requestToolReveal = useAppStore((s) => s.requestToolReveal);
   const toolSelectedExpressId = useAppStore((s) => s.toolSelectedExpressId);
@@ -704,13 +704,13 @@ export default function WerkzeugContextMenu({
                               Choose Type
                             </span>
                           </div>
-                          <ToolTypeChoices tool={armedLayoutTool} onChoose={close} />
+                          {armedLayoutTool && <ToolTypeChoices tool={armedLayoutTool} onChoose={close} />}
                           <div className="mt-2 border-t border-yellow-400/20 pt-1.5">
                             <button
                               type="button"
                               className={`${itemCls()} text-zinc-600 dark:text-zinc-300 hover:text-zinc-900`}
                               onClick={() => {
-                                useLayoutDrawingStore.getState().setArmedLayoutTool("select");
+                                useLayoutDrawingStore.getState().setArmedLayoutTool(null);
                                 close();
                               }}
                             >

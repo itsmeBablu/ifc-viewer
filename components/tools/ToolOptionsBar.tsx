@@ -6,6 +6,8 @@ import { useAppStore } from "@/store/useAppStore";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
 import ColorSwatchPicker from "./ColorSwatchPicker";
+import BoundarySketchOptions from "./BoundarySketchOptions";
+import ModifyTools from "./ModifyTools";
 import {
   LuTrash2,
   LuCopy,
@@ -115,6 +117,7 @@ export default function ToolOptionsBar() {
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const editingSlabId = useLayoutDrawingStore((s) => s.editingSlabId);
+  const slabBoundaryEdit = useLayoutDrawingStore((s) => s.slabBoundaryEdit);
   const sketchTargetKind = useLayoutDrawingStore((s) => s.sketchTargetKind);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
   const updateSlab = useLayoutDrawingStore((s) => s.updateSlab);
@@ -154,6 +157,7 @@ export default function ToolOptionsBar() {
     <div className="werkzeug-options-bar relative flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
       {/* Active Tool Options */}
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
+        {!armedLayoutTool && !slabBoundaryEdit && <ModifyTools />}
         {/* WALL TOOL OPTIONS */}
         {armedLayoutTool === "wall" && (
           <div className="flex items-center gap-3">
@@ -377,7 +381,7 @@ export default function ToolOptionsBar() {
         )}
 
         {/* FLOOR / ROOF / BOUNDARY EDIT TOOL OPTIONS */}
-        {(editingSlabId || (armedLayoutTool === "lines" && sketchTargetKind)) ? (
+        {slabBoundaryEdit ? <BoundarySketchOptions /> : (editingSlabId || (armedLayoutTool === "lines" && sketchTargetKind)) ? (
           <div className="flex items-center gap-3">
             <span className="font-bold text-pink-500 flex items-center gap-1">
               <LuPencil className="h-3.5 w-3.5" />

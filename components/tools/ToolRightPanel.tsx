@@ -56,6 +56,7 @@ import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
+import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
 import {
   wallLengthMm,
@@ -279,9 +280,10 @@ export default function ToolRightPanel({
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId);
 
-  const hasLineSelection = Boolean(selectedSketchLine || sketchLines.length > 0);
+  const hasWireSelection = selectedElements.some(e => e.kind === "wire");
+  const hasLineSelection = Boolean(selectedSketchLine);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasLineSelection || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasWireSelection || hasLineSelection || selectedPlacement
   );
 
   const propertiesTitle = selectedWall
@@ -318,7 +320,7 @@ export default function ToolRightPanel({
     ? "Markup Properties"
     : armedLayoutTool
     ? `${armedLayoutTool === "lines" ? "Line" : armedLayoutTool[0].toUpperCase() + armedLayoutTool.slice(1)} Creation Properties`
-    : "Properties";
+    : "View Properties";
 
   // Type definitions
   const activeTypeKey = selectedWall
@@ -363,12 +365,14 @@ export default function ToolRightPanel({
     } else if (selectedDoor && tDef.category === "Door") {
       const ids = selectedElements.filter((item) => item.kind === "door").map((item) => item.id);
       for (const id of ids.length ? ids : [selectedDoor.id]) void updateDoor(id, {
+        typeId: tDef.id, style: tDef.doorStyle ?? "wood", headShape: tDef.headShape === "round" ? "arched" : tDef.headShape,
         widthMm: tDef.widthMm || selectedDoor.widthMm,
         heightMm: tDef.heightMm || selectedDoor.heightMm,
       });
     } else if (selectedWindow && tDef.category === "Window") {
       const ids = selectedElements.filter((item) => item.kind === "window").map((item) => item.id);
       for (const id of ids.length ? ids : [selectedWindow.id]) void updateWindow(id, {
+        typeId: tDef.id, operation: tDef.windowOperation, sashCount: tDef.sashCount ?? 1, headShape: tDef.headShape,
         widthMm: tDef.widthMm || selectedWindow.widthMm,
         heightMm: tDef.heightMm || selectedWindow.heightMm,
       });
@@ -393,12 +397,14 @@ export default function ToolRightPanel({
       });
     } else if (selectedDoor && updated.category === "Door") {
       void updateDoor(selectedDoor.id, {
+        typeId: updated.id, style: updated.doorStyle ?? "wood", headShape: updated.headShape === "round" ? "arched" : updated.headShape,
         widthMm: updated.widthMm || selectedDoor.widthMm,
         heightMm: updated.heightMm || selectedDoor.heightMm,
         material: updated.material,
       });
     } else if (selectedWindow && updated.category === "Window") {
       void updateWindow(selectedWindow.id, {
+        typeId: updated.id, operation: updated.windowOperation, sashCount: updated.sashCount ?? 1, headShape: updated.headShape,
         widthMm: updated.widthMm || selectedWindow.widthMm,
         heightMm: updated.heightMm || selectedWindow.heightMm,
         sillHeightMm: updated.sillHeightMm ?? selectedWindow.sillHeightMm,
@@ -622,7 +628,7 @@ export default function ToolRightPanel({
                     <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />
-                ) : selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment ? (
+                ) : selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasWireSelection ? (
                   <LayoutPropertiesPanel />
                 ) : selectedSketchLine ? (
                   <div className="space-y-2">
@@ -1080,16 +1086,7 @@ export default function ToolRightPanel({
             ) : armedLayoutTool ? (
               <DraftToolProperties key={armedLayoutTool} tool={armedLayoutTool} />
             ) : (
-              /* Persistent Empty State when nothing is selected */
-              <div className="flex flex-col items-center justify-center p-6 text-center h-full min-h-[160px] text-[var(--text-muted)] space-y-2 select-none">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--glass-inset-bg)] border border-[var(--panel-divider)]">
-                  <LuSlidersHorizontal className="h-5 w-5 text-yellow-400 opacity-60" />
-                </div>
-                <p className="text-xs font-semibold text-[var(--text-body)]">No Element Selected</p>
-                <p className="text-[10px] text-[var(--text-muted)] max-w-[200px] leading-relaxed">
-                  Click any wall, door, window, or slab in the viewport to inspect and modify properties.
-                </p>
-              </div>
+              <ViewPropertiesPanel />
             )}
                   {selectedElements.length <= 1 && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
                     <section className="space-y-1 border-b border-[var(--panel-divider)] pb-1">

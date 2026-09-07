@@ -1,4 +1,6 @@
 "use client";
+import { activateModifyTool } from "./ModifyTools";
+import { useModifyStore } from "@/store/useModifyStore";
 
 /**
  * DesktopIsland — unified central fixed workspace header & contextual capsule row for desktop /werkzeug.
@@ -181,12 +183,23 @@ const MEP_ALL_ITEMS: CapsuleItem[] = [
 const MODIFY_ITEMS: CapsuleItem[] = [
   { id: "move", label: "Move", hint: "Translate selected elements", icon: <LuMove className="h-3 w-3 text-sky-400 shrink-0" /> },
   { id: "rotate", label: "Rotate", hint: "Rotate selected elements around center", icon: <LuRotate3D className="h-3 w-3 text-emerald-400 shrink-0" /> },
-  { id: "align", label: "Align", hint: "Align elements along X or Y axis", icon: <LuAlignCenterHorizontal className="h-3 w-3 text-purple-400 shrink-0" /> },
+  { id: "align", label: "Align", hint: "Pick reference geometry, then the target feature", icon: <LuAlignCenterHorizontal className="h-3 w-3 text-purple-400 shrink-0" /> },
   { id: "mirror", label: "Mirror", hint: "Mirror selection about an axis", icon: <LuFlipHorizontal2 className="h-3 w-3 text-indigo-400 shrink-0" /> },
   { id: "copy", label: "Copy", hint: "Duplicate selected elements", icon: <LuCopy className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "trim", label: "Trim", hint: "Trim or extend elements (T)", icon: <LuScissors className="h-3 w-3 text-pink-400 shrink-0" /> },
+  { id: "split", label: "Split", hint: "Split a wall or line at a picked point", icon: <LuScissors className="h-3 w-3 text-sky-400 shrink-0" /> },
+  { id: "group", label: "Group", hint: "Save selected members as a named group", icon: <LuLayers3 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "delete", label: "Delete", hint: "Delete selected elements (Del)", icon: <LuTrash2 className="h-3 w-3 text-red-500 shrink-0" />, isDanger: true },
   { id: "deselect", label: "Deselect", hint: "Clear active selection (Esc)", icon: <LuX className="h-3 w-3 text-zinc-400 shrink-0" /> },
+];
+
+const BOUNDARY_ITEMS: CapsuleItem[] = [
+  { id: "boundary-modify", label: "Modify", hint: "Drag vertices or select an edge to extend its endpoints", icon: <LuMove className="h-3 w-3 text-pink-400 shrink-0" /> },
+  { id: "boundary-trim", label: "Trim / Extend", hint: "Click two edge portions to keep", icon: <LuScissors className="h-3 w-3 text-pink-400 shrink-0" /> },
+  { id: "boundary-insert", label: "Insert vertex", hint: "Click an edge to add a vertex", icon: <LuPencil className="h-3 w-3 text-sky-400 shrink-0" /> },
+  { id: "boundary-delete", label: "Remove vertex", hint: "Click a vertex to remove it", icon: <LuMinus className="h-3 w-3 text-rose-400 shrink-0" /> },
+  { id: "boundary-finish", label: "Finish", hint: "Save the valid boundary sketch", icon: <LuCheck className="h-3 w-3 text-emerald-400 shrink-0" /> },
+  { id: "boundary-cancel", label: "Cancel", hint: "Restore the original boundary and holes", icon: <LuX className="h-3 w-3 text-rose-400 shrink-0" /> },
 ];
 
 function appendCellularMorph(
@@ -340,7 +353,9 @@ export default function DesktopIsland() {
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
-  const [alignAxis, setAlignAxis] = useState<"x" | "y">("x");
+  const modifyTool = useModifyStore(s => s.tool);
+  const boundaryEdit = useLayoutDrawingStore(s => s.slabBoundaryEdit);
+  const isBoundaryEditing = Boolean(boundaryEdit);
 
   const archCategory = useLayoutDrawingStore((s) => s.desktopArchCategory);
   const setArchCategory = useLayoutDrawingStore((s) => s.setDesktopArchCategory);
@@ -349,7 +364,7 @@ export default function DesktopIsland() {
 
   const measureMode = useToolMarkupStore((s) => s.measureMode);
   const armedMarkupTool = useToolMarkupStore((s) => s.armedTool);
-  const transformMode = useToolMarkupStore((s) => s.transformMode);
+
 
   /* ── Tab thumb refs & animations ──────────────────────── */
   const tabThumbRef = useRef<HTMLDivElement>(null);
@@ -566,12 +581,9 @@ export default function DesktopIsland() {
 
   /* ── active capsules list ────────────────────────────── */
   const activeCapsules: CapsuleItem[] = useMemo(() => {
+    if (isBoundaryEditing) return BOUNDARY_ITEMS;
     if (hasContextSelection) {
-      return MODIFY_ITEMS.map((item) =>
-        item.id === "align"
-          ? { ...item, label: `Align ${alignAxis.toUpperCase()}` }
-          : item,
-      );
+      return MODIFY_ITEMS;
     }
 
     if (!mepModeActive) {
@@ -599,7 +611,7 @@ export default function DesktopIsland() {
           return MEP_ALL_ITEMS;
       }
     }
-  }, [hasContextSelection, alignAxis, mepModeActive, archCategory, mepCategory]);
+  }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing]);
 
   const [renderedCapsules, setRenderedCapsules] = useState(activeCapsules);
   const renderedCapsulesRef = useRef(renderedCapsules);
@@ -715,11 +727,24 @@ export default function DesktopIsland() {
 
   /* ── actions ─────────────────────────────────────────── */
   const clearSelection = () => {
+    if (useLayoutDrawingStore.getState().slabBoundaryEdit) useLayoutDrawingStore.getState().cancelSlabBoundaryEdit();
+    useModifyStore.getState().activate("select");
+    useModifyStore.setState({ selection: null, placingGroupId: null });
     useLayoutDrawingStore.getState().clearSelection();
     useToolMarkupStore.getState().clearSelection();
   };
 
   const handleCapsuleClick = (id: string) => {
+    const layout = useLayoutDrawingStore.getState();
+    if (layout.slabBoundaryEdit) {
+      if (id === "boundary-finish") void layout.commitSlabBoundaryEdit();
+      else if (id === "boundary-cancel" || id === "deselect" || id === "select") layout.cancelSlabBoundaryEdit();
+      else if (id === "boundary-modify") layout.setBoundaryEditTool("modify");
+      else if (id === "boundary-trim") layout.setBoundaryEditTool("trim");
+      else if (id === "boundary-insert") layout.setBoundaryEditTool("insert");
+      else if (id === "boundary-delete") layout.setBoundaryEditTool("delete");
+      return;
+    }
     if (id === "dimension") {
       clearSelection();
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
@@ -783,49 +808,13 @@ export default function DesktopIsland() {
       }
       return;
     }
-    if (id === "move") {
-      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
-      useToolMarkupStore.getState().setTransformMode("translate");
+    if (id === "move" || id === "rotate" || id === "align" || id === "mirror" || id === "split") {
+      activateModifyTool(id);
       return;
     }
-    if (id === "rotate") {
-      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
-      useToolMarkupStore.getState().setTransformMode("rotate");
-      return;
-    }
-    if (id === "align") {
-      void useLayoutDrawingStore.getState().alignSelected(alignAxis);
-      setAlignAxis((axis) => (axis === "x" ? "y" : "x"));
-      return;
-    }
-    if (id === "mirror") {
-      const store = useLayoutDrawingStore.getState();
-      const wall = store.walls.find((w) => w.id === store.selectedWallId);
-      if (wall) {
-        void store.mirrorSelected(
-          { xMm: wall.startXmm, yMm: wall.startYmm },
-          { xMm: wall.endXmm, yMm: wall.endYmm },
-        );
-      } else {
-        const column = store.columns.find((c) =>
-          store.selectedElements.some((ref) => ref.kind === "column" && ref.id === c.id)
-        );
-        const slab = store.slabs.find((s) => s.id === store.selectedSlabId);
-        const centerX = column?.xMm ?? (slab ? (slab.minXmm + slab.maxXmm) / 2 : 0);
-        void store.mirrorSelected(
-          { xMm: centerX, yMm: -1_000_000 },
-          { xMm: centerX, yMm: 1_000_000 },
-        );
-      }
-      return;
-    }
+    if (id === "group") { useModifyStore.setState({ requestGroupName: true }); return; }
     if (id === "copy") {
-      const markup = useToolMarkupStore.getState();
-      if (markup.selectedPlacementId) {
-        void markup.duplicatePlacement(markup.selectedPlacementId);
-      } else {
-        void useLayoutDrawingStore.getState().copySelected(100, 100);
-      }
+      void useLayoutDrawingStore.getState().copySelected(100, 100).catch(error => useModifyStore.setState({ message: String(error) }));
       return;
     }
     if (id === "trim") {
@@ -860,14 +849,10 @@ export default function DesktopIsland() {
   };
 
   const isCapsuleActive = (id: string) => {
+    if (id.startsWith("boundary-")) return id === `boundary-${boundaryEdit?.tool}`;
     if (id === "dimension") return measureMode;
-    if (id === "deselect" || id === "delete" || id === "mirror" || id === "copy" || id === "align") return false;
-    if (id === "move") {
-      return transformMode === "translate";
-    }
-    if (id === "rotate") {
-      return transformMode === "rotate";
-    }
+    if (["move", "rotate", "align", "mirror", "split"].includes(id)) return modifyTool === id;
+    if (id === "deselect" || id === "delete" || id === "copy" || id === "group") return false;
     if (id === "trim") {
       return armed === "trim";
     }
