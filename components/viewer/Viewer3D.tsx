@@ -67,7 +67,6 @@ import type { RenderMode, Room } from "@/lib/types";
 import { useAppStore, useEffectiveColorPalette } from "@/store/useAppStore";
 import { useModelScene } from "./ModelSceneContext";
 import { createEnhancedAxes } from "@/lib/axesHelper";
-import ViewportAxesGizmo from "@/components/tools/ViewportAxesGizmo";
 
 export type Viewer3DHandle = {
   getCameraPose: () => {
@@ -1009,12 +1008,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material];
     for (const m of gridMats) {
       m.transparent = true;
-      m.opacity = 0.55;
+      m.opacity = 0.2;
     }
     grid.visible = useAppStore.getState().show3DGrid;
     helpers.add(grid);
 
-    const axes = createEnhancedAxes(6);
+    const axes = createEnhancedAxes(2.5);
     axes.name = "3d-axes";
     axes.visible = true; // XYZ axes always on
     helpers.add(axes);
@@ -2939,9 +2938,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
   ]);
 
   return (
-    <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
-      <ViewportAxesGizmo cameraRef={cameraRef} />
-    </div>
+    <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root />
   );
 });
 

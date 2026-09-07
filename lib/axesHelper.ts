@@ -5,55 +5,78 @@ import * as THREE from "three";
  * - +X axis: Red with arrowhead
  * - +Y axis: Green with arrowhead (Up axis in Three.js coordinate space)
  * - +Z axis: Blue with arrowhead
- * - -X, -Y, -Z: Subtle dashed extension lines
- * - Origin: White center sphere
+ * - Soft transparency and reduced length to keep the scene clean and uncluttered.
  */
-export function createEnhancedAxes(length = 6): THREE.Group {
+export function createEnhancedAxes(length = 2.5): THREE.Group {
   const group = new THREE.Group();
   group.name = "3d-axes";
 
-  const headLength = Math.max(0.6, length * 0.18);
-  const headWidth = Math.max(0.25, length * 0.07);
-  const shaftRadius = Math.max(0.04, length * 0.012);
+  const headLength = Math.max(0.35, length * 0.2);
+  const headWidth = Math.max(0.12, length * 0.08);
+
+  const makeArrow = (dir: THREE.Vector3, colorHex: number) => {
+    const arrow = new THREE.ArrowHelper(
+      dir,
+      new THREE.Vector3(0, 0, 0),
+      length,
+      colorHex,
+      headLength,
+      headWidth,
+    );
+    const lineMat = arrow.line.material as THREE.LineBasicMaterial;
+    lineMat.transparent = true;
+    lineMat.opacity = 0.55;
+    lineMat.depthTest = true;
+
+    const coneMat = arrow.cone.material as THREE.MeshBasicMaterial;
+    coneMat.transparent = true;
+    coneMat.opacity = 0.65;
+    coneMat.depthTest = true;
+
+    return arrow;
+  };
 
   // +X Axis (Red)
-  const xDir = new THREE.Vector3(1, 0, 0);
-  const xArrow = new THREE.ArrowHelper(xDir, new THREE.Vector3(0, 0, 0), length, 0xef4444, headLength, headWidth);
-  group.add(xArrow);
+  group.add(makeArrow(new THREE.Vector3(1, 0, 0), 0xef4444));
 
   // +Y Axis (Green - Up)
-  const yDir = new THREE.Vector3(0, 1, 0);
-  const yArrow = new THREE.ArrowHelper(yDir, new THREE.Vector3(0, 0, 0), length, 0x22c55e, headLength, headWidth);
-  group.add(yArrow);
+  group.add(makeArrow(new THREE.Vector3(0, 1, 0), 0x22c55e));
 
   // +Z Axis (Blue)
-  const zDir = new THREE.Vector3(0, 0, 1);
-  const zArrow = new THREE.ArrowHelper(zDir, new THREE.Vector3(0, 0, 0), length, 0x3b82f6, headLength, headWidth);
-  group.add(zArrow);
+  group.add(makeArrow(new THREE.Vector3(0, 0, 1), 0x3b82f6));
 
-  // Subtle dashed negative axes for complete 3D orientation
+  // Subtle transparent negative axes for reference
   const negMat = new THREE.LineDashedMaterial({
     color: 0x94a3b8,
-    dashSize: 0.3,
-    gapSize: 0.2,
+    dashSize: 0.18,
+    gapSize: 0.14,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.2,
+    depthTest: true,
   });
 
-  for (const dir of [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, -1)]) {
+  for (const dir of [
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, -1, 0),
+    new THREE.Vector3(0, 0, -1),
+  ]) {
     const geo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0),
-      dir.clone().multiplyScalar(length * 0.45),
+      dir.clone().multiplyScalar(length * 0.35),
     ]);
     const line = new THREE.Line(geo, negMat);
     line.computeLineDistances();
     group.add(line);
   }
 
-  // Origin sphere marker
+  // Origin point
   const originMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(shaftRadius * 2.5, 16, 16),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.2 })
+    new THREE.SphereGeometry(0.04, 12, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.45,
+    }),
   );
   group.add(originMesh);
 

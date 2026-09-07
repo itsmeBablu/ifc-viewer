@@ -67,7 +67,6 @@ import { fromMm, snapToNearbyAabb, toMm } from "@/lib/markupUnits";
 import { MarkupSceneLayer } from "@/components/tools/MarkupSceneLayer";
 import { FirstPersonWalkthroughController } from "@/lib/firstPersonWalkthrough";
 import QuadViewOverlays from "@/components/tools/QuadViewOverlays";
-import ViewportAxesGizmo from "@/components/tools/ViewportAxesGizmo";
 import { createEnhancedAxes } from "@/lib/axesHelper";
 import {
   applySlotToCameras,
@@ -1302,12 +1301,12 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material];
     for (const m of gridMats) {
       m.transparent = true;
-      m.opacity = 0.55;
+      m.opacity = 0.2;
     }
     grid.visible = useAppStore.getState().show3DGrid;
     helpers.add(grid);
 
-    const axes = createEnhancedAxes(6);
+    const axes = createEnhancedAxes(2.5);
     axes.name = "3d-axes";
     axes.visible = true; // XYZ axes always on
     helpers.add(axes);
@@ -7316,7 +7315,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
-      <ViewportAxesGizmo cameraRef={cameraRef} />
       {marqueeBox && (
         <div
           className="pointer-events-none fixed z-[999]"
