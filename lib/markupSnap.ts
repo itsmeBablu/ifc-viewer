@@ -7,6 +7,7 @@ export type MarkupSurfaceHit = {
   distance: number;
   /** Nearest vertex used for note snap (if any). */
   snappedVertex: THREE.Vector3 | null;
+  instanceId?: number;
 };
 
 const _inverse = new THREE.Matrix4();
@@ -26,6 +27,7 @@ export function pickMarkupSurface(
     if (!root) continue;
     root.traverse((o) => {
       if (!(o instanceof THREE.Mesh) || !o.visible) return;
+      for (let parent = o.parent; parent; parent = parent.parent) if (!parent.visible) return;
       if (o.userData.isClipStencil || o.userData.isClipCap) return;
       if (o.userData.isSelectionOutline) return;
       if (o.userData.isMarkupPreview) return;
@@ -56,6 +58,7 @@ export function pickMarkupSurface(
     object: hit.object,
     distance: hit.distance,
     snappedVertex: null,
+    instanceId: hit.instanceId,
   };
 }
 

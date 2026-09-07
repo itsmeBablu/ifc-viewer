@@ -7,6 +7,7 @@
  */
 
 import * as THREE from "three";
+import { screenSegmentPoint } from "./measurementSnap";
 import type {
   LayoutWall,
   LayoutSlab,
@@ -129,7 +130,7 @@ function segmentIntersection(
   if (Math.abs(den) < 1e-9) return null;
   const t = ((cx - ax) * sY - (cy - ay) * sX) / den;
   const u = ((cx - ax) * rY - (cy - ay) * rX) / den;
-  if (t >= -0.01 && t <= 1.01 && u >= -0.01 && u <= 1.01) {
+  if (t >= -1e-9 && t <= 1 + 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) {
     return { x: ax + t * rX, y: ay + t * rY };
   }
   return null;
@@ -191,6 +192,10 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
     referenceAngle?: number,
     isAutoClose?: boolean,
   ) => {
+    const projected = new THREE.Vector3(xMm / 1000, levelElevationMm / 1000, yMm / 1000);
+    if (projected.clone().applyMatrix4(camera.matrixWorldInverse).z >= 0) return;
+    projected.project(camera);
+    if (projected.z < -1 || projected.z > 1) return;
     const screen = worldMmToScreen(xMm, yMm, levelElevationMm, camera, canvas);
     const pixelDist = Math.hypot(clientPos.x - screen.clientX, clientPos.y - screen.clientY);
 
@@ -199,8 +204,8 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
 
     if (pixelDist <= maxPx) {
       candidates.push({
-        xMm: Math.round(xMm),
-        yMm: Math.round(yMm),
+        xMm,
+        yMm,
         type,
         priority,
         pixelDist,
@@ -259,6 +264,24 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
     }
     if (w.curved && w.arcCenterXmm != null && w.arcCenterYmm != null && modes.center) {
       addCandidate(w.arcCenterXmm, w.arcCenterYmm, "center", 4, "Arc Center");
+    }
+    if (w.curved && w.arcRadiusMm != null && w.arcCenterXmm != null && w.arcCenterYmm != null && w.arcStartAngleDeg != null && w.arcEndAngleDeg != null) {
+      const start = w.arcStartAngleDeg * Math.PI / 180;
+      const sweep = (w.arcEndAngleDeg - w.arcStartAngleDeg) * Math.PI / 180;
+      const at = (t: number, radius = w.arcRadiusMm!) => ({ x: w.arcCenterXmm! + Math.cos(start + sweep * t) * radius, y: w.arcCenterYmm! + Math.sin(start + sweep * t) * radius });
+      if (modes.midpoint) { const p = at(0.5); addCandidate(p.x, p.y, "midpoint", 2, "Arc Midpoint"); }
+      if (modes.nearest) {
+        for (const radius of [w.arcRadiusMm, w.arcRadiusMm - w.thicknessMm / 2, w.arcRadiusMm + w.thicknessMm / 2]) {
+          // Minimize projected distance on the analytic arc, not a chord.
+          const distance = (t: number) => { const p = at(t, radius); const s = worldMmToScreen(p.x, p.y, levelElevationMm, camera, canvas); return Math.hypot(s.clientX - clientPos.x, s.clientY - clientPos.y); };
+          let best = 0;
+          for (let i = 1; i <= 64; i++) if (distance(i / 64) < distance(best)) best = i / 64;
+          let lo = Math.max(0, best - 1 / 64), hi = Math.min(1, best + 1 / 64);
+          for (let i = 0; i < 24; i++) { const l = lo + (hi - lo) / 3, r = hi - (hi - lo) / 3; if (distance(l) < distance(r)) hi = r; else lo = l; }
+          const p = at((lo + hi) / 2, radius); addCandidate(p.x, p.y, "nearest", 5, "On Arc");
+        }
+      }
+      continue;
     }
     activeSegments.push({
       ax: w.startXmm,
@@ -325,6 +348,7 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
 
   // Sketch Lines
   for (const sk of sketchLines) {
+    if (levelId && sk.levelId !== levelId) continue;
     if (modes.endpoint) {
       addCandidate(sk.startXmm, sk.startYmm, "endpoint", 0, "Line End");
       addCandidate(sk.endXmm, sk.endYmm, "endpoint", 0, "Line End");
@@ -359,6 +383,11 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
   for (let i = 0; i < activeSegments.length; i++) {
     const seg = activeSegments[i];
 
+    if (modes.endpoint) {
+      addCandidate(seg.ax, seg.ay, "endpoint", 0, "Endpoint");
+      addCandidate(seg.bx, seg.by, "endpoint", 0, "Endpoint");
+    }
+
     // Midpoint
     if (modes.midpoint) {
       const mx = (seg.ax + seg.bx) / 2;
@@ -377,34 +406,28 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
 
     // Nearest point on line (lowest priority)
     if (modes.nearest) {
-      // Find approximate plan point under cursor
-      const midScreen = worldMmToScreen((seg.ax + seg.bx) / 2, (seg.ay + seg.by) / 2, levelElevationMm, camera, canvas);
-      const segLenPx = Math.hypot(
-        worldMmToScreen(seg.bx, seg.by, levelElevationMm, camera, canvas).clientX -
-        worldMmToScreen(seg.ax, seg.ay, levelElevationMm, camera, canvas).clientX,
-        worldMmToScreen(seg.bx, seg.by, levelElevationMm, camera, canvas).clientY -
-        worldMmToScreen(seg.ax, seg.ay, levelElevationMm, camera, canvas).clientY
+      const nearest = screenSegmentPoint(
+        new THREE.Vector3(seg.ax / 1000, levelElevationMm / 1000, seg.ay / 1000),
+        new THREE.Vector3(seg.bx / 1000, levelElevationMm / 1000, seg.by / 1000),
+        camera, canvas.getBoundingClientRect(), clientPos.x, clientPos.y,
       );
-      if (Math.hypot(clientPos.x - midScreen.clientX, clientPos.y - midScreen.clientY) < segLenPx / 2 + 50) {
-        // Sample 8 points along segment to find closest point on line
-        for (let s = 1; s <= 7; s++) {
-          const t = s / 8;
-          const sx = seg.ax + t * (seg.bx - seg.ax);
-          const sy = seg.ay + t * (seg.by - seg.ay);
-          addCandidate(sx, sy, "nearest", 5, "On Line");
-        }
-      }
+      if (nearest) addCandidate(nearest.x * 1000, nearest.z * 1000, "nearest", 5, "On Line");
     }
   }
 
   // 4. Intersections between active segments
   if (modes.intersection && activeSegments.length > 1) {
-    const limit = Math.min(activeSegments.length, 60);
+    const nearby = activeSegments.filter((seg) => {
+      const a = worldMmToScreen(seg.ax, seg.ay, levelElevationMm, camera, canvas);
+      const b = worldMmToScreen(seg.bx, seg.by, levelElevationMm, camera, canvas);
+      return distPointToSegment(clientPos.x, clientPos.y, a.clientX, a.clientY, b.clientX, b.clientY).dist <= tolerancePx;
+    });
+    const limit = nearby.length;
     for (let i = 0; i < limit; i++) {
       for (let j = i + 1; j < limit; j++) {
         const inter = segmentIntersection(
-          activeSegments[i].ax, activeSegments[i].ay, activeSegments[i].bx, activeSegments[i].by,
-          activeSegments[j].ax, activeSegments[j].ay, activeSegments[j].bx, activeSegments[j].by,
+          nearby[i].ax, nearby[i].ay, nearby[i].bx, nearby[i].by,
+          nearby[j].ax, nearby[j].ay, nearby[j].bx, nearby[j].by,
         );
         if (inter) {
           addCandidate(inter.x, inter.y, "intersection", 1, "Intersection");
@@ -425,8 +448,8 @@ export function findGlobalSnap(opts: GlobalSnapOptions): GlobalSnapResult {
 
   // Sort candidates by priority (lower number = higher priority), then by pixel distance
   candidates.sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return a.pixelDist - b.pixelDist;
+    if (a.isAutoClose !== b.isAutoClose) return a.isAutoClose ? -1 : 1;
+    return (a.pixelDist + a.priority * 2) - (b.pixelDist + b.priority * 2);
   });
 
   const best = candidates[0];

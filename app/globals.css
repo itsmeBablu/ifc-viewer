@@ -3828,6 +3828,44 @@ body.mep-mode-active .desktop-capsule-btn.is-active :is(svg, span) {
   }
 }
 
+.type-properties-inline > div > div {
+  border-radius: 4px;
+  padding: 6px;
+  box-shadow: none;
+}
+
+/* Keep the desktop capsule row clear of the right-side properties panel on
+   narrower desktop screens. Werkzeug switches to its dedicated iPad chrome
+   below 1100px, so the touch layout remains untouched. */
+@media (min-width: 1100px) and (max-width: 1608px) {
+  .desktop-capsule-row-inner {
+    width: min(70vw, calc(100vw - 376px));
+    justify-content: center;
+    gap: clamp(2px, 0.25vw, 4px) !important;
+    padding-inline: clamp(2px, 0.3vw, 5px) !important;
+  }
+
+  .desktop-capsule-btn {
+    width: clamp(34px, 2.6vw, 40px);
+    height: 24px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  .desktop-capsule-label {
+    display: none;
+  }
+
+  .desktop-capsule-btn > svg:last-child {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    width: 7px;
+    height: 7px;
+    margin: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .desktop-clean-tab-btn {
     padding-inline: 8px;

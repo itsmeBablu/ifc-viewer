@@ -17,6 +17,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import gsap from "gsap";
+import MeasurementProperties from "./MeasurementProperties";
 import {
   LuChevronRight,
   LuChevronLeft,
@@ -168,6 +169,7 @@ export default function ToolRightPanel({
   const groups = useLayoutDrawingStore((s) => s.groups);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
+  const measureMode = useToolMarkupStore((s) => s.measureMode);
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const levels = useLayoutDrawingStore((s) => s.levels);
 
@@ -610,12 +612,12 @@ export default function ToolRightPanel({
                 <div className="flex h-7 shrink-0 items-center justify-between border-b border-[var(--panel-divider)]/40 px-2.5 bg-[var(--surface-overlay)]/40">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${activeTextClass} flex items-center gap-1.5 truncate`}>
                     <LuSlidersHorizontal className="h-3 w-3 shrink-0" />
-                    {propertiesTitle}
+                    {measureMode ? "Measurement" : propertiesTitle}
                   </span>
                 </div>
 
                 <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
-                  {hasSelection ? (
+                  {measureMode ? <MeasurementProperties /> : hasSelection ? (
                     <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />

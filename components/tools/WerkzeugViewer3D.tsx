@@ -1,5 +1,8 @@
 "use client";
 
+import { findGlobalSnap } from "@/lib/globalSnapping";
+import { snapMeshMeasurement } from "@/lib/measurementSnap";
+
 /**
  * Viewer3D — the core Three.js scene component: loads the IFC shell and room
  * overlays (cloned from `useModelScene`) into a perspective scene with
@@ -2477,7 +2480,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   useEffect(() => {
     const layer = markupLayerRef.current;
     if (!layer) return;
-    const unsub = useToolMarkupStore.subscribe((s) => {
+    const unsub = useToolMarkupStore.subscribe((s, prev) => {
       // Don't rebuild from store mid-drag — that resets the mesh to the old pose.
       if (transformDraggingRef.current) return;
       if (suppressTransformReleaseClickRef.current) {
@@ -2487,6 +2490,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (transformControlsRef.current?.axis) return;
       layer.syncPlacements(s.placements, s.selectedPlacementId);
       layer.syncNotes(s.notes, s.selectedNoteId);
+      if (!s.measureMode && prev.measureMode) layer.setSnapIndicator(null);
+      if (s.measurements !== prev.measurements || s.measureDraft !== prev.measureDraft || s.measureSecond !== prev.measureSecond) layer.syncMeasurements(s.measurements, s.measureDraft, null);
       for (const p of s.placements) {
         const mesh = layer.getMesh(p.id);
         if (!mesh) continue;
@@ -2839,10 +2844,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (ms.measureMode) {
           if (ms.measureDraft) {
             ms.clearMeasureDraft();
-            return;
-          }
-          if (ms.measurements.length) {
-            ms.clearMeasurements();
             return;
           }
           ms.setMeasureMode(false);
@@ -4209,6 +4210,52 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       useToolMarkupStore.getState().setDragSnapHint(null);
     };
 
+    const measurementPoint = (clientX: number, clientY: number, bypass = false) => {
+      const camera = preparePointerRayRef.current(clientX, clientY);
+      if (!camera) return null;
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+      const markup = useToolMarkupStore.getState();
+      const layout = useLayoutDrawingStore.getState();
+      const level = layout.levels.find((l) => l.id === markup.markupFloorId) ?? layout.levels.find((l) => l.id === layout.draftWallBaseLevelId) ?? layout.levels[0];
+      const roots = [shellCloneRef.current, markupLayerRef.current?.group, layoutLayerRef.current?.group].filter((root): root is THREE.Group => Boolean(root));
+      const surface = pickMarkupSurface(raycaster.current, roots);
+      const direction = camera.getWorldDirection(new THREE.Vector3());
+      const isPlan = Math.abs(direction.y) > 0.999;
+      let point = surface?.point.clone() ?? null;
+      const elevation = (level?.elevationMm ?? 0) / 1000;
+      if (isPlan || !point) {
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -elevation);
+        point = raycaster.current.ray.intersectPlane(plane, new THREE.Vector3()) ?? point;
+      }
+      if (!point) return null;
+      const bounds = canvas.getBoundingClientRect();
+      const quad = markup.quadView;
+      const snapCanvas = quad ? { getBoundingClientRect: () => ({
+        left: bounds.left + (clientX >= bounds.left + bounds.width / 2 ? bounds.width / 2 : 0),
+        top: bounds.top + (clientY >= bounds.top + bounds.height / 2 ? bounds.height / 2 : 0),
+        width: bounds.width / 2, height: bounds.height / 2,
+      }) } as HTMLCanvasElement : canvas;
+      const from = markup.measureSecond ?? markup.measureDraft;
+      if (!bypass && isPlan) {
+        const snap = findGlobalSnap({ clientPos: { x: clientX, y: clientY }, camera, canvas: snapCanvas,
+          levelElevationMm: level?.elevationMm ?? 0, levelId: level?.id,
+          walls: layout.walls, slabs: layout.slabs, sketchLines: layout.sketchLines, gridLines: layout.gridLines, underlays: layout.underlays,
+          activeModes: layout.planSnapModes, checkAutoClose: false, tolerancePx: 12,
+          fromMm: from ? { xMm: from.x * 1000, yMm: from.z * 1000 } : null,
+        });
+        if (snap.snapped) return { point: new THREE.Vector3(snap.worldMm.xMm / 1000, elevation, snap.worldMm.yMm / 1000), label: snap.label ?? "Snap" };
+      }
+      if (!bypass && surface) {
+        const snap = snapMeshMeasurement(surface.object, camera, snapCanvas, clientX, clientY, layout.planSnapModes, from ? new THREE.Vector3(from.x, from.y, from.z) : null, surface.instanceId);
+        if (snap) {
+          if (isPlan) snap.point.y = elevation;
+          return { point: snap.point, label: snap.label };
+        }
+      }
+      if (!bypass && markup.gridSnap && (isPlan || !surface)) return { point: applyGridSnap(point, markup.gridSize, ["x", "z"]), label: "Grid" };
+      return { point, label: surface && !isPlan ? "Surface" : "Free point" };
+    };
+
     const planMmFromPointer = (
       clientX: number,
       clientY: number,
@@ -5437,62 +5484,17 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const ms = useToolMarkupStore.getState();
         const layer = markupLayerRef.current;
         if (ms.measureMode && cam && layer) {
-          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
-          if (!camRay) return;
-          raycaster.current.setFromCamera(pointerNdc.current, camRay);
-          const roots: THREE.Object3D[] = [];
-          if (shellCloneRef.current) roots.push(shellCloneRef.current);
-          roots.push(layer.group);
-          const layoutLayer = layoutLayerRef.current;
-          if (layoutLayer) roots.push(layoutLayer.group);
-          let surface = pickMarkupSurface(raycaster.current, roots);
-          if (surface && ms.snapToFaces) {
-            surface = enhanceHitWithVertexSnap(
-              surface,
-              raycaster.current,
-              0.35,
-            );
-          }
-          let pt = surface?.snappedVertex ?? surface?.point ?? null;
-          if (!pt && layoutLayer) {
-            const lh = layoutLayer.pickLayout(raycaster.current);
-            if (lh?.kind === "ground" || lh?.kind === "underlay") {
-              pt = lh.point.clone();
-            }
-          }
-          if (pt) {
-            const layoutState = useLayoutDrawingStore.getState();
-            const activeLevelId = layoutState.draftWallBaseLevelId ?? layoutState.levels[0]?.id;
-            if (activeLevelId) {
-              const measureFrom = ms.measureDraft ? { xMm: toMm(ms.measureDraft.x), yMm: toMm(ms.measureDraft.z) } : null;
-              const snap = snapPlanPointToWalls(
-                { xMm: toMm(pt.x), yMm: toMm(pt.z) },
-                layoutState.walls,
-                activeLevelId,
-                350,
-                layoutState.planSnapModes,
-                measureFrom,
-                layoutState.underlays,
-              );
-              if (snap.type) {
-                pt.x = fromMm(snap.point.xMm);
-                pt.z = fromMm(snap.point.yMm);
-              }
-            }
-            if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "y", "z"]);
-            layer.setSnapIndicator(pt);
-            layer.syncMeasurements(
-              ms.measurements,
-              ms.measureDraft,
-              ms.measureDraft
-                ? { x: pt.x, y: pt.y, z: pt.z }
-                : null,
-            );
+          const hit = measurementPoint(e.clientX, e.clientY, e.altKey);
+          if (hit) {
+            layer.setSnapIndicator(hit.point);
+            layer.syncMeasurements(ms.measurements, ms.measureDraft, hit.point);
+            const stage = !ms.measureDraft ? "Pick first point" : ms.measurementKind === "distance" ? "Pick end point" : !ms.measureSecond ? (ms.measurementKind === "angle" ? "Pick angle vertex" : "Pick point on arc") : "Pick end point";
+            ms.setDragSnapHint({ text: `${hit.label} ? ${stage} ? Alt: free point`, clientX: e.clientX, clientY: e.clientY });
             canvas.style.cursor = "crosshair";
           } else {
             layer.setSnapIndicator(null);
             layer.syncMeasurements(ms.measurements, ms.measureDraft, null);
-            canvas.style.cursor = "default";
+            ms.setDragSnapHint(null);
           }
           setHoveredRoom(null);
           return;
@@ -5689,52 +5691,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         const layer = markupLayerRef.current;
         const camera = cameraRef.current;
         if (camera && layer && markupStore.measureMode) {
-          const camRay =
-            preparePointerRayRef.current(e.clientX, e.clientY) ?? camera;
-          raycaster.current.setFromCamera(pointerNdc.current, camRay);
-          const roots: THREE.Object3D[] = [];
-          if (shellCloneRef.current) roots.push(shellCloneRef.current);
-          roots.push(layer.group);
-          const layoutLayer = layoutLayerRef.current;
-          if (layoutLayer) roots.push(layoutLayer.group);
-          let surface = pickMarkupSurface(raycaster.current, roots);
-          if (surface && markupStore.snapToFaces) {
-            surface = enhanceHitWithVertexSnap(
-              surface,
-              raycaster.current,
-              0.35,
-            );
-          }
-          let pt = surface?.snappedVertex ?? surface?.point ?? null;
-          if (!pt && layoutLayer) {
-            const lh = layoutLayer.pickLayout(raycaster.current);
-            if (lh?.kind === "ground" || lh?.kind === "underlay") {
-              pt = lh.point.clone();
-            }
-          }
-          if (pt) {
-            const layoutState = useLayoutDrawingStore.getState();
-            const activeLevelId = layoutState.draftWallBaseLevelId ?? layoutState.levels[0]?.id;
-            if (activeLevelId) {
-              const measureFrom = markupStore.measureDraft ? { xMm: toMm(markupStore.measureDraft.x), yMm: toMm(markupStore.measureDraft.z) } : null;
-              const snap = snapPlanPointToWalls(
-                { xMm: toMm(pt.x), yMm: toMm(pt.z) },
-                layoutState.walls,
-                activeLevelId,
-                350,
-                layoutState.planSnapModes,
-                measureFrom,
-                layoutState.underlays,
-              );
-              if (snap.type) {
-                pt.x = fromMm(snap.point.xMm);
-                pt.z = fromMm(snap.point.yMm);
-              }
-            }
-            if (markupStore.gridSnap) {
-              pt = applyGridSnap(pt, markupStore.gridSize, ["x", "y", "z"]);
-            }
-            markupStore.addMeasurePoint({ x: pt.x, y: pt.y, z: pt.z });
+          const hit = measurementPoint(e.clientX, e.clientY, e.altKey);
+          if (hit) {
+            markupStore.addMeasurePoint(hit.point);
             const after = useToolMarkupStore.getState();
             layer.syncMeasurements(after.measurements, after.measureDraft, null);
           }

@@ -43,6 +43,10 @@ import {
   LuZap,
 } from "react-icons/lu";
 import {
+  IconMarkupStair,
+  IconMarkupRamp,
+  IconMarkupColumn,
+  IconMarkupBeam,
   IconMarkupFloor,
   IconMarkupRoof,
   IconMarkupWall,
@@ -116,16 +120,16 @@ const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
-  { id: "column", label: "Column", hint: "Place structural column (C)", icon: <LuBox className="h-3 w-3 text-slate-300 shrink-0" /> },
-  { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <LuMinus className="h-3.5 w-3.5 text-indigo-400 stroke-[3] shrink-0" /> },
-  { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <LuLayers3 className="h-3 w-3 text-teal-400 shrink-0" /> },
-  { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <LuLayers3 className="h-3 w-3 text-lime-400 shrink-0" /> },
+  { id: "column", label: "Column", hint: "Place structural column (C)", icon: <IconMarkupColumn className="h-3 w-3 text-slate-300 shrink-0" /> },
+  { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <IconMarkupBeam className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
+  { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <IconMarkupStair className="h-3 w-3 text-teal-400 shrink-0" /> },
+  { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <IconMarkupRamp className="h-3 w-3 text-lime-400 shrink-0" /> },
 ];
 
 const ARCH_STRUCTURE_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
-  { id: "column", label: "Column", hint: "Place structural column (C)", icon: <LuBox className="h-3 w-3 text-slate-300 shrink-0" /> },
-  { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <LuMinus className="h-3.5 w-3.5 text-indigo-400 stroke-[3] shrink-0" /> },
+  { id: "column", label: "Column", hint: "Place structural column (C)", icon: <IconMarkupColumn className="h-3 w-3 text-slate-300 shrink-0" /> },
+  { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <IconMarkupBeam className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
   { id: "floor", label: "Slab", hint: "Choose a structural slab type", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "grid", label: "Grid", hint: "Draw column grid lines (G)", icon: <LuGrid2X2 className="h-3 w-3 text-orange-400 shrink-0" /> },
 ];
@@ -193,6 +197,7 @@ export default function DesktopIsland() {
   const mepCategory = useLayoutDrawingStore((s) => s.desktopMepCategory);
   const setMepCategory = useLayoutDrawingStore((s) => s.setDesktopMepCategory);
 
+  const measureMode = useToolMarkupStore((s) => s.measureMode);
   const armedMarkupTool = useToolMarkupStore((s) => s.armedTool);
   const transformMode = useToolMarkupStore((s) => s.transformMode);
 
@@ -470,7 +475,15 @@ export default function DesktopIsland() {
   };
 
   const handleCapsuleClick = (id: string) => {
+    if (id === "dimension") {
+      clearSelection();
+      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+      useToolMarkupStore.getState().setMeasureMode(!measureMode);
+      useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
     if (id === "select") {
+      useToolMarkupStore.getState().setMeasureMode(false);
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
       useToolMarkupStore.getState().setArmedTool(null);
       clearSelection();
@@ -602,6 +615,7 @@ export default function DesktopIsland() {
   };
 
   const isCapsuleActive = (id: string) => {
+    if (id === "dimension") return measureMode;
     if (id === "deselect" || id === "delete" || id === "mirror" || id === "copy" || id === "align") return false;
     if (id === "move") {
       return transformMode === "translate";
@@ -618,7 +632,7 @@ export default function DesktopIsland() {
     if (id === "note") {
       return armedMarkupTool === "note";
     }
-    if (id === "select") return armed === null && armedMarkupTool === null;
+    if (id === "select") return !measureMode && armed === null && armedMarkupTool === null;
     return armed === id;
   };
 

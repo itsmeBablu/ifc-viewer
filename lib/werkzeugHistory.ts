@@ -225,6 +225,7 @@ async function applySnapshot(snap: WerkzeugSnapshot): Promise<void> {
       pendingNote: null,
       cubeDraw: null,
       measureDraft: null,
+      measureSecond: null,
     });
     useLayoutDrawingStore.setState({
       levels: cloneJson(snap.levels),
