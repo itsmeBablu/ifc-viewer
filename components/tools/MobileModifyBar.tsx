@@ -428,18 +428,18 @@ export default function MobileModifyBar() {
 
   return (
     <div
-      className="werkzeug-ipad-modify-ribbon pointer-events-auto w-full"
+      className="werkzeug-ipad-modify-ribbon pointer-events-auto w-full !bg-transparent !border-0 !shadow-none !backdrop-blur-none"
       role="toolbar"
       aria-label="Selection Modify Toolbar"
     >
-      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-x-auto rounded-lg border border-white/10 bg-black/55 px-2 py-1 shadow-lg backdrop-blur-md thin-scroll scrollbar-none touch-pan-x select-none">
+      <div className="relative flex w-full max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-x-auto bg-transparent border-0 p-0 shadow-none backdrop-blur-none thin-scroll scrollbar-none touch-pan-x select-none">
         {/* Compact Selection Title */}
-        <span className="shrink-0 text-[10px] font-bold tracking-tight text-amber-400/90 pl-0.5 pr-1">
+        <span className="shrink-0 text-[10px] font-bold tracking-tight text-amber-400 pl-1 pr-1">
           {selectionTitle}
         </span>
-        <span className="h-3.5 w-px bg-white/15 shrink-0" aria-hidden="true" />
+        <span className="h-3.5 w-px bg-white/20 shrink-0" aria-hidden="true" />
 
-        {/* Small Icons Without Any Background — matching desktop view without text */}
+        {/* Small Icons Floating Directly on 3D View Without Any Background — Round Liquid Glass Button on Click */}
         <div className="flex items-center gap-1">
           {tools.map((tool) => (
             <button
@@ -449,19 +449,19 @@ export default function MobileModifyBar() {
               onClick={tool.onClick}
               title={`${tool.label} — ${tool.hint}`}
               aria-label={tool.label}
-              className={`relative flex h-7 w-7 min-w-[28px] min-h-[28px] shrink-0 items-center justify-center border-0 bg-transparent p-0 transition-all duration-150 active:scale-90 disabled:opacity-30 cursor-pointer ${
-                tool.iconColor
-              } ${
-                tool.isActive
-                  ? "scale-115 text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.85)] brightness-125"
-                  : "opacity-85 hover:opacity-100 hover:scale-110"
-              }`}
+              className={`btn-liquid-glass-round relative shrink-0 disabled:opacity-30 ${
+                tool.isDanger ? "is-danger" : ""
+              } ${tool.isActive ? "is-active" : tool.iconColor}`}
             >
               {tool.icon}
 
               {/* Selection Level Mini Badge */}
               {tool.badge && (
-                <span className="absolute -bottom-0.5 -right-0.5 text-[7px] font-extrabold leading-none text-blue-400">
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 text-[7px] font-extrabold leading-none ${
+                    tool.isActive ? "text-zinc-900" : "text-blue-400"
+                  }`}
+                >
                   {tool.badge}
                 </span>
               )}

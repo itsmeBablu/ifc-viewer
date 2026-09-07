@@ -271,7 +271,7 @@ function Slider({
   };
 
   return (
-    <label className="grid grid-cols-[80px_1fr_48px] items-center gap-1.5 text-[10px] py-0.5 border-b border-[var(--panel-divider)]/30 last:border-b-0 text-[var(--text-body)]">
+    <label className="grid grid-cols-[80px_1fr_48px] items-center gap-1.5 text-[10.5px] py-0.5 border-b border-[var(--panel-divider)]/30 last:border-b-0 text-zinc-200 font-medium">
       <span className="truncate">{label}</span>
       <input
         type="range"
@@ -394,7 +394,7 @@ function VYellowDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card,#ffffff)] text-[var(--text-strong)] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.30)] backdrop-blur-2xl thin-scroll">
+        <div className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card,#18181b)] text-[var(--text-strong)] p-1 shadow-[0_12px_36px_rgba(0,0,0,0.40)] thin-scroll">
           {options.map((opt) => {
             const id = getOptId(opt);
             const label = getOptLabel(opt);
@@ -635,8 +635,8 @@ export default function MaterialEditorPanel({
     <div
       style={!embedded ? { width: panelWidth } : undefined}
       className={`${
-        embedded ? "relative h-full min-h-0 w-full material-editor-embedded" : "fixed top-0 bottom-0 right-0 z-40"
-      } flex select-none flex-col overflow-hidden border-l border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] shadow-2xl backdrop-blur-2xl transition-all`}
+        embedded ? "relative h-full min-h-0 w-full material-editor-embedded !backdrop-blur-none" : "fixed top-0 bottom-0 right-0 z-40 backdrop-blur-xl"
+      } flex select-none flex-col overflow-hidden border-l border-[var(--panel-divider)] bg-[var(--surface-card)] text-[var(--text-strong)] shadow-2xl transition-all`}
     >
       {!embedded && (
         <div
