@@ -14,6 +14,15 @@ export const DEFAULT_WINDOW_HEIGHT_MM = 1400;
 export const DEFAULT_WINDOW_SILL_MM = 900;
 
 export type LayoutLevel = {
+  /** Settings belong to this level's plan view, not to the model elements. */
+  planView?: {
+    visualStyle?: "realistic" | "light" | "wireframe";
+    topMm: number;
+    cutMm: number;
+    bottomMm: number;
+    hiddenCategories: string[];
+    hiddenUnderlayIds: string[];
+  };
   id: string;
   projectId: string;
   name: string;
@@ -25,6 +34,11 @@ export type LayoutLevel = {
 };
 
 export type LayoutWall = {
+  attachedTopRoofId?: string;
+  attachedBaseRoofId?: string;
+  /** Derived during scene sync; never persisted as the attachment constraint. */
+  roofProfile?: { t: number; topMm: number; baseMm: number }[];
+  baseOffsetMm?: number;
   id: string;
   projectId: string;
   levelId: string;
@@ -76,6 +90,7 @@ export type LayoutDoor = {
 };
 
 export type LayoutWindow = {
+  operation?: "single-hung" | "double-hung" | "casement" | "fixed" | "sliding";
   id: string;
   projectId: string;
   wallId: string;
@@ -95,6 +110,7 @@ export type LayoutWindow = {
 
 /** Horizontal slab — floor plate or roof plate. */
 export type LayoutSlab = {
+  roofJoin?: { positions: number[]; targetId: string; originalBoundary: { xMm: number; yMm: number }[] };
   id: string;
   projectId: string;
   levelId: string;
@@ -141,6 +157,7 @@ export function normalizeDoor(
 }
 
 export type LayoutSketchLine = {
+  elevationOffsetMm?: number;
   id: string;
   projectId: string;
   levelId: string;
@@ -182,6 +199,8 @@ export type WallType = {
 };
 
 export type LayoutColumn = {
+  baseOffsetMm?: number;
+  rotationDeg?: number;
   id: string;
   projectId: string;
   levelId: string;
@@ -307,7 +326,11 @@ export interface MepConnector {
   heightMm?: number; // height for rect/oval duct
 }
 
+export type MepEndpointLink = { kind: "duct" | "pipe" | "cabletray" | "wire"; id: string; endpoint: "start" | "end" };
+
 export type LayoutDuct = {
+  startConnection?: MepEndpointLink;
+  endConnection?: MepEndpointLink;
   id: string;
   projectId: string;
   levelId: string;
@@ -346,6 +369,8 @@ export type PipeSystemType =
   | "gas";
 
 export type LayoutPipe = {
+  startConnection?: MepEndpointLink;
+  endConnection?: MepEndpointLink;
   id: string;
   projectId: string;
   levelId: string;
@@ -372,6 +397,8 @@ export type LayoutPipe = {
 export type CableTrayType = "ladder" | "perforated" | "wire_mesh" | "conduit";
 
 export type LayoutCableTray = {
+  startConnection?: MepEndpointLink;
+  endConnection?: MepEndpointLink;
   id: string;
   projectId: string;
   levelId: string;
@@ -390,6 +417,8 @@ export type LayoutCableTray = {
 };
 
 export type LayoutWire = {
+  startConnection?: MepEndpointLink;
+  endConnection?: MepEndpointLink;
   id: string;
   projectId: string;
   levelId: string;
@@ -440,6 +469,9 @@ export type MepEquipmentCategory =
   | "furniture";
 
 export type LayoutMepEquipment = {
+  furnitureParameters?: import("./parametricFurniture").FurnitureParameters;
+  kitchenWallId?: string;
+  mirrored?: boolean;
   familyId?: string;
   moduleWidthMm?: number;
   id: string;
@@ -803,8 +835,9 @@ export function getEquipmentConnectors(
   return baseConnectors.map((c) => {
     // 2D rotation of (relXmm, relYmm) around item center
     // Note: in 2D plan, X is horizontal, Y is vertical
-    const rotX = c.relXmm * cos - c.relYmm * sin;
-    const rotY = c.relXmm * sin + c.relYmm * cos;
+    const localY = item.mirrored ? -c.relYmm : c.relYmm;
+    const rotX = c.relXmm * cos - localY * sin;
+    const rotY = c.relXmm * sin + localY * cos;
 
     return {
       ...c,
@@ -956,6 +989,8 @@ export function snapMepPoint(
 }
 
 export type SelectedElementRef = {
+  /** Optional picked geometric feature; whole-element selection remains compatible. */
+  geometry?: import("./modifySelection").GeometryReference;
   kind:
     | "wall"
     | "door"
@@ -979,10 +1014,14 @@ export type SelectedElementRef = {
 };
 
 export type LayoutGroup = {
+  isTemplate?: boolean;
+  definitionId?: string;
   id: string;
   projectId: string;
   name: string;
   elementRefs: SelectedElementRef[];
+  /** Saved member data, independent of the source instance, for repeated placement. */
+  definition?: import("./modifyOperations").GroupDefinition;
   createdAt: number;
 };
 

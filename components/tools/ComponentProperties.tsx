@@ -1,5 +1,6 @@
 "use client";
 
+import { furnitureParametersFor, evaluateFurniture } from "@/lib/parametricFurniture";
 import { useState } from "react";
 import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
 import type { LayoutMepEquipment } from "@/lib/layoutDrawing";
@@ -11,9 +12,9 @@ export function ComponentLibrary({ item, onChoose }: { item?: LayoutMepEquipment
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
-  const isFurniture = store.armedLayoutTool === "component" ||
-    store.draftEquipmentCategory === "furniture" ||
-    (item ? (item.category === "furniture" || isArchitecturalComponent(item.familyId)) : !store.mepModeActive);
+  const isFurniture = item
+    ? (item.category === "furniture" || isArchitecturalComponent(item.familyId))
+    : (!store.mepModeActive && store.armedLayoutTool !== "equipment");
 
   const catalog = COMPONENT_CATALOG.filter((p) =>
     isFurniture ? isArchitecturalComponent(p.id) : !isArchitecturalComponent(p.id)
@@ -117,16 +118,19 @@ export function ComponentLibrary({ item, onChoose }: { item?: LayoutMepEquipment
 
 export default function ComponentProperties({ item }: { item?: LayoutMepEquipment }) {
   const store = useLayoutDrawingStore();
+  const [parameterError, setParameterError] = useState<string | null>(null);
   const markup = useToolMarkupStore();
 
-  const isFurniture = store.armedLayoutTool === "component" ||
-    store.draftEquipmentCategory === "furniture" ||
-    (item ? (item.category === "furniture" || isArchitecturalComponent(item.familyId)) : !store.mepModeActive);
+  const isFurniture = item
+    ? (item.category === "furniture" || isArchitecturalComponent(item.familyId))
+    : (!store.mepModeActive && store.armedLayoutTool !== "equipment");
 
-  // Auto-heal draftComponentId if it's currently an MEP component in furniture mode
+  // Auto-heal draftComponentId if it's currently an MEP component in furniture mode, or furniture in MEP mode
   const activeFamilyId = item?.familyId ?? store.draftComponentId;
   if (!item && isFurniture && !isArchitecturalComponent(activeFamilyId)) {
     store.chooseComponent("sofa-3");
+  } else if (!item && !isFurniture && isArchitecturalComponent(activeFamilyId)) {
+    store.chooseComponent("mep-boiler");
   }
 
   const preset = componentPreset(item?.familyId ?? store.draftComponentId);
@@ -137,8 +141,10 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
   const field = "h-7 w-full min-w-0 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-1.5 text-[11px] font-semibold text-[var(--text-strong)] focus:border-yellow-400 focus:outline-none";
   const labelCls = "space-y-0.5 text-[10px] font-semibold text-[var(--text-muted)]";
 
+  const parameters = item ? furnitureParametersFor(item) : undefined;
   const update = (patch: Partial<LayoutMepEquipment>) => {
-    if (item) void store.updateEquipment(item.id, patch);
+    setParameterError(null);
+    if (item) void store.updateEquipment(item.id, patch).catch(e => setParameterError(e instanceof Error ? e.message : "Could not update component."));
   };
 
   const handleLevelChange = (newLevelId: string) => {
@@ -164,6 +170,20 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
       </div>
 
       <ComponentLibrary item={item} />
+      {parameterError && <p role="alert" className="text-xs text-red-500">{parameterError}</p>}
+      {parameters && <div className="space-y-2 border-t border-[var(--panel-divider)] pt-2">
+        <strong className="text-xs">Assembly parameters</strong>
+        {parameters.kind === "dining" ? <>
+          <label className={labelCls}>Table shape<select className={field} value={parameters.shape} onChange={e => update({ furnitureParameters: { ...parameters, shape: e.target.value as "circular" | "rectangular" } })}><option value="rectangular">Rectangular</option><option value="circular">Circular</option></select></label>
+          <label className={labelCls}>Chairs<input className={field} type="number" min={2} max={20} step={1} value={parameters.chairs} onChange={e => { if (e.target.value) update({ furnitureParameters: { ...parameters, chairs: Number(e.target.value) } }); }}/><input aria-label="Chair count slider" className="w-full" type="range" min={2} max={20} value={parameters.chairs} onChange={e => update({ furnitureParameters: { ...parameters, chairs: Number(e.target.value) } })}/></label>
+          <p className="text-[10px]">650 mm per place setting. Table dimensions and chair positions are derived from the count.</p>
+        </> : <>
+          <label className={labelCls}>Cabinet count<input className={field} type="number" min={1} max={24} value={parameters.modules} onChange={e => { if (e.target.value) update({ furnitureParameters: { ...parameters, modules: Number(e.target.value) } }); }}/></label>
+          <label className={labelCls}>Module width<select className={field} value={parameters.moduleMm} onChange={e => update({ furnitureParameters: { ...parameters, moduleMm: Number(e.target.value) } })}>{[300,400,450,500,600,800,900].map(mm => <option key={mm} value={mm}>{mm} mm</option>)}</select></label>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={parameters.upperCabinets} onChange={e => update({ furnitureParameters: { ...parameters, upperCabinets: e.target.checked } })}/>Upper cabinets</label>
+        </>}
+        <p className="text-[10px]">Derived size: {evaluateFurniture(parameters).widthMm} &times; {evaluateFurniture(parameters).depthMm} mm</p>
+      </div>}
 
       {/* Geometry and placement properties */}
       <div className="space-y-2 border-t border-[var(--panel-divider)] pt-2.5">
@@ -190,7 +210,8 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
               type="number"
               className={field}
               min={100}
-              value={item?.widthMm ?? store.draftComponentWidthMm}
+              readOnly={Boolean(parameters)}
+              value={parameters ? evaluateFurniture(parameters).widthMm : item?.widthMm ?? store.draftComponentWidthMm}
               onChange={(e) => {
                 const val = Math.max(100, Number(e.target.value));
                 if (item) update({ widthMm: val });
@@ -204,7 +225,8 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
               type="number"
               className={field}
               min={100}
-              value={item?.depthMm ?? store.draftComponentDepthMm}
+              readOnly={Boolean(parameters)}
+              value={parameters ? evaluateFurniture(parameters).depthMm : item?.depthMm ?? store.draftComponentDepthMm}
               onChange={(e) => {
                 const val = Math.max(100, Number(e.target.value));
                 if (item) update({ depthMm: val });
@@ -218,7 +240,8 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
               type="number"
               className={field}
               min={100}
-              value={item?.heightMm ?? store.draftComponentHeightMm}
+              readOnly={Boolean(parameters)}
+              value={parameters ? evaluateFurniture(parameters).heightMm : item?.heightMm ?? store.draftComponentHeightMm}
               onChange={(e) => {
                 const val = Math.max(100, Number(e.target.value));
                 if (item) update({ heightMm: val });
@@ -269,7 +292,7 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
             </button>
           </div>
 
-          {preset?.id.startsWith("kitchen-") && (
+          {!parameters && preset?.id.startsWith("kitchen-") && (
             <label className={`${labelCls} col-span-2`}>
               <span>Kitchen Module Width (mm)</span>
               <select

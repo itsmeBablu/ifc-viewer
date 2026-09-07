@@ -37,7 +37,7 @@ export default function ToolTypeChoices({ tool, onChoose, selectedElement }: Too
       const { kind, id } = selectedElement;
       if (kind === "wall") {
         void store.updateWall(id, {
-          typeId: type.id,
+          wallTypeId: type.id,
           thicknessMm: type.thicknessMm,
           heightMm: type.heightMm,
           material: type.material,
@@ -59,6 +59,7 @@ export default function ToolTypeChoices({ tool, onChoose, selectedElement }: Too
           sillHeightMm: type.sillHeightMm,
           headShape: type.headShape,
           sashCount: type.sashCount,
+          operation: type.windowOperation,
           material: type.material,
         });
       } else if (kind === "column") {
@@ -101,7 +102,7 @@ export default function ToolTypeChoices({ tool, onChoose, selectedElement }: Too
     if (selectedElement) {
       if (selectedElement.kind === "wall") {
         const w = store.walls.find((x) => x.id === selectedElement.id);
-        return w?.typeId === type.id;
+        return (w?.wallTypeId ?? (w as unknown as { typeId?: string })?.typeId) === type.id;
       }
       if (selectedElement.kind === "door") {
         const d = store.doors.find((x) => x.id === selectedElement.id);

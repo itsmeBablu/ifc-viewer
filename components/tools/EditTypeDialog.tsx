@@ -28,6 +28,7 @@ export type ElementTypeDefinition = {
     | "Heater"
     | "Cooling"
     | "Equipment";
+  windowOperation?: LayoutWindow["operation"];
   doorStyle?: LayoutDoor["style"];
   headShape?: LayoutWindow["headShape"];
   sashCount?: LayoutWindow["sashCount"];
@@ -212,6 +213,7 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
   },
   "door-double-1800": {
     id: "door-double-1800",
+    doorStyle: "double",
     name: "Double-Door: 1800 x 2100mm",
     category: "Door",
     widthMm: 1800,
@@ -224,6 +226,7 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
   // Window Types
   "win-fixed-1000": {
     id: "win-fixed-1000",
+    windowOperation: "fixed",
     name: "Fixed: 1000 x 1400mm",
     category: "Window",
     widthMm: 1000,
@@ -235,6 +238,7 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
   },
   "win-double-1200": {
     id: "win-double-1200",
+    windowOperation: "double-hung",
     name: "Double-Hung: 1200 x 1400mm",
     category: "Window",
     widthMm: 1200,
@@ -246,6 +250,7 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
   },
   "win-pano-2000": {
     id: "win-pano-2000",
+    windowOperation: "fixed",
     name: "Panoramic: 2000 x 1600mm",
     category: "Window",
     widthMm: 2000,

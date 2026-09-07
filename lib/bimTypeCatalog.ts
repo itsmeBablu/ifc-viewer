@@ -1,6 +1,9 @@
 import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
 
 const types: ElementTypeDefinition[] = [
+  { id: "window-single-hung", name: "Single-hung window", category: "Window", widthMm: 1000, heightMm: 1400, sillHeightMm: 900, windowOperation: "single-hung", material: "Wood", functionType: "Exterior" },
+  { id: "window-casement", name: "Casement window", category: "Window", widthMm: 900, heightMm: 1400, sillHeightMm: 900, windowOperation: "casement", material: "Wood", functionType: "Exterior" },
+  { id: "window-sliding", name: "Sliding window", category: "Window", widthMm: 1600, heightMm: 1200, sillHeightMm: 900, windowOperation: "sliding", material: "Aluminium", functionType: "Exterior" },
   { id: "door-double", name: "Double hinged door · 1800 × 2100", category: "Door", widthMm: 1800, heightMm: 2100, doorStyle: "double", material: "Wood", functionType: "Interior" },
   { id: "door-glass", name: "Glass door · 900 × 2100", category: "Door", widthMm: 900, heightMm: 2100, doorStyle: "glass", material: "Glass", functionType: "Interior" },
   { id: "door-sliding", name: "Sliding door · 1800 × 2100", category: "Door", widthMm: 1800, heightMm: 2100, doorStyle: "sliding", material: "Glass", functionType: "Interior" },

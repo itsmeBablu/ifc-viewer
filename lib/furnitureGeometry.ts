@@ -1,9 +1,22 @@
+import { furnitureParametersFor, evaluateFurniture } from "./parametricFurniture";
 import * as THREE from "three";
 import type { LayoutMepEquipment } from "./layoutDrawing";
 
 /** Parametric furniture in metres, centered in plan with its base at local Y=0. */
-export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "widthMm" | "depthMm" | "heightMm" | "color" | "moduleWidthMm">) {
+export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "widthMm" | "depthMm" | "heightMm" | "color" | "moduleWidthMm" | "furnitureParameters">, generatedPart = false) {
   const group = new THREE.Group();
+  const parameters = generatedPart ? undefined : furnitureParametersFor(item);
+  if (parameters) {
+    for (const part of evaluateFurniture(parameters).parts) {
+      const child = createFurniture({ ...part, color: item.color }, true);
+      child.name = part.key;
+      child.userData.parametricPart = part.key;
+      child.position.set(part.xMm / 1000, part.elevationMm / 1000, part.yMm / 1000);
+      child.rotation.y = part.rotationDeg * Math.PI / 180;
+      group.add(child);
+    }
+    return group;
+  }
   const id = item.familyId ?? "kitchen-base";
   const w = Math.max(0.1, (item.widthMm ?? 600) / 1000), d = Math.max(0.1, (item.depthMm ?? 600) / 1000), h = Math.max(0.1, (item.heightMm ?? 900) / 1000);
   const wood = new THREE.MeshStandardMaterial({ color: item.color ?? "#bb9167", roughness: 0.75 });
@@ -20,7 +33,8 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     mesh.position.set(x, y, z); group.add(mesh); return mesh;
   };
   const legs = (top: number) => { for (const x of [-1, 1]) for (const z of [-1, 1]) box(x * w * 0.4, top / 2, z * d * 0.4, w * 0.065, top, d * 0.065, dark); };
-  if (id.startsWith("sofa") || id === "armchair") {
+  if (id === "parametric-countertop") { box(0, h / 2, 0, w, h, d, white); }
+  else if (id.startsWith("sofa") || id === "armchair") {
     legs(h * 0.18); box(0, h * 0.32, 0, w, h * 0.28, d, fabric);
     box(0, h * 0.7, -d * 0.4, w, h * 0.6, d * 0.2, fabric);
     for (const x of [-1, 1]) box(x * w * 0.45, h * 0.56, 0, w * 0.1, h * 0.4, d, fabric);
@@ -35,7 +49,8 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     legs(seatY); box(0, seatY, 0, w, h * 0.08, d, fabric);
     if (id !== "bar-stool") box(0, h * 0.76, -d * 0.45, w, h * 0.48, d * 0.1, fabric);
   } else if (["coffee-table", "desk", "dining-table", "round-table"].includes(id)) {
-    legs(h * 0.92);
+    if (id === "round-table") cylinder(0, h * 0.46, 0, Math.min(w, d) * 0.12, h * 0.92);
+    else legs(h * 0.92);
     if (id === "round-table") { const top = cylinder(0, h * 0.96, 0, w / 2, h * 0.08, wood); top.scale.z = d / w; }
     else box(0, h * 0.96, 0, w, h * 0.08, d);
   } else if (id === "bath-tub") {

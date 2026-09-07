@@ -1,8 +1,13 @@
 "use client";
+import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
+import { applyFeatureWireframe } from "@/lib/featureWireframe";
+import { buildMepJointGeometry } from "./MepJointGeometry";
+import { applyPlanViewDisplay } from "./PlanViewDisplay";
 
-import { componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
+import { alignKitchenPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
 import { componentPreset } from "@/lib/componentCatalog";
-import { findGlobalSnap } from "@/lib/globalSnapping";
+import { mepEndpoints, type MepKind } from "@/lib/mepConnections";
+import { snapElevatedEndpoints, findGlobalSnap } from "@/lib/globalSnapping";
 import { snapMeshMeasurement } from "@/lib/measurementSnap";
 
 /**
@@ -32,6 +37,9 @@ import { snapMeshMeasurement } from "@/lib/measurementSnap";
  * orientation map, not an exhaustive spec.
  */
 
+import { installBoundarySketchEditor } from "./BoundarySketchEditor";
+import { installModifyController } from "./ModifyController";
+import { useModifyStore } from "@/store/useModifyStore";
 import {
   forwardRef,
   useEffect,
@@ -92,7 +100,6 @@ import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
   getEquipmentConnectors,
-  snapMepPoint,
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
   snapPlanPointToWalls,
@@ -543,7 +550,6 @@ function applyRenderMode(
     color: number;
   },
 ) {
-  const wire = mode === "wireframe";
   const light = mode === "light";
   const textureOnly = mode === "texture";
   const shellEmpty = !shell || shell.children.length === 0;
@@ -569,7 +575,7 @@ function applyRenderMode(
       const baseHex =
         (mat.userData.baseColorHex as string | undefined) ??
         `#${mat.color.getHexString()}`;
-      mat.wireframe = wire;
+      mat.wireframe = false;
       mat.envMapIntensity = 0;
       mat.metalness = 0;
       mat.depthTest = true;
@@ -712,7 +718,7 @@ function applyRenderMode(
         mat.emissiveIntensity = 0;
         mat.side = THREE.FrontSide;
         applySurfaceOpacity(mat, elementOpacity, false);
-        mat.wireframe = wire;
+        mat.wireframe = false;
         mat.needsUpdate = true;
         return;
       }
@@ -741,7 +747,7 @@ function applyRenderMode(
       if (colorAmt < 1) {
         mat.color.lerp(new THREE.Color(0xb8bec8), 1 - colorAmt);
       }
-      mat.wireframe = wire;
+      mat.wireframe = false;
       mat.needsUpdate = true;
     });
   }
@@ -794,6 +800,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         plan: { xMm: number; yMm: number };
         level: { id: string; name: string; elevationMm: number };
         label: string;
+        rotationDeg?: number;
+        kitchenWallId?: string;
       } | null)
     | null
   >(null);
@@ -858,7 +866,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
   const activeTemperatureRange =
     dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
-  const renderMode = useAppStore((s) => s.renderMode);
+  const workspaceRenderMode = useAppStore((s) => s.renderMode);
+  const planStyleLevel = useLayoutDrawingStore(s => s.levels);
+  const planStyleMarkup = useToolMarkupStore();
+  const planStylePreset = planStyleMarkup.quadView ? planStyleMarkup.quadPresets[planStyleMarkup.quadActiveIndex] : planStyleMarkup.viewPreset;
+  const renderMode = (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
   const lighting = useAppStore((s) => s.lighting);
   const sceneBackground = useAppStore((s) => s.sceneBackground);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
@@ -1129,12 +1141,20 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const prevH = el.height;
       const cssW = el.clientWidth || prevW;
       const cssH = el.clientHeight || prevH;
+      const markupState = useToolMarkupStore.getState();
+      const level = markupState.viewPreset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === markupState.markupFloorId) : undefined;
+      const wireMode = (level?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
+      const renderCapture = () => {
+        const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], level);
+        const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
+        try { renderer.render(scene, camera); } finally { restoreWire(); restoreRange(); }
+      };
       try {
         if (scale > 1) {
           renderer.setPixelRatio(1);
           renderer.setSize(cssW * scale, cssH * scale, false);
         }
-        renderer.render(scene, camera);
+        renderCapture();
         return el.toDataURL("image/png");
       } catch {
         return null;
@@ -1142,7 +1162,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         if (scale > 1) {
           renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
           renderer.setSize(cssW, cssH, false);
-          renderer.render(scene, camera);
+          renderCapture();
         }
       }
     },
@@ -1275,6 +1295,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         pushWerkzeugHistory();
         suspendWerkzeugHistory(true);
       } else {
+        const oc = controls as unknown as {
+          state?: number;
+          _pointers?: number[];
+          _pointerPositions?: Record<number, unknown>;
+        };
+        if (oc.state !== undefined) oc.state = 0;
+        if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
+        if (oc._pointerPositions) {
+          for (const k of Object.keys(oc._pointerPositions)) delete oc._pointerPositions[Number(k)];
+        }
         // Persist while history is still suspended so the drag is one undo step.
         requestAnimationFrame(() => {
           persistGizmoRef.current();
@@ -1405,7 +1435,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           }
           renderer.setViewport(rect.x, rect.y, rect.w, rect.h);
           renderer.setScissor(rect.x, rect.y, rect.w, rect.h);
-          renderer.render(scene, cam);
+const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
+          const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
+          const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
+          const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
+          try { renderer.render(scene, cam); } finally { restoreWire(); restoreRange(); }
         }
         // Restore display mode for the active pane (picking / labels).
         layoutLayerRef.current?.setPlanMode(
@@ -1474,7 +1508,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         }
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, sz.x, sz.y);
-        renderer.render(scene, activeCam);
+const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
+          const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
+        const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
+        const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
+        try { renderer.render(scene, activeCam); } finally { restoreWire(); restoreRange(); }
         markup?.render(activeCam);
         viewCube.updateViewport(sz.x, sz.y);
         if (activeCam instanceof THREE.PerspectiveCamera) {
@@ -2524,6 +2562,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   useEffect(() => {
     const layer = layoutLayerRef.current;
     if (!layer || !toolMode) return;
+    let jointDisplay: ReturnType<typeof buildMepJointGeometry> | null = null;
+    let jointSources: unknown[] = [];
     const sync = () => {
       const s = useLayoutDrawingStore.getState();
       const markupFloor = useToolMarkupStore.getState().markupFloorId;
@@ -2621,19 +2661,25 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         planMode: isPlanView,
       });
-      layer.syncDucts(s.ducts || [], s.levels, {
+      const jointInputs = [s.ducts, s.pipes, s.cableTrays, s.wires, s.levels, markupFloor, showAllLevels, s.hiddenElementIds, s.hiddenCategories, s.isolatedElementIds, s.revealHiddenMode];
+      if (!jointDisplay || jointInputs.some((input, i) => input !== jointSources[i])) {
+        jointDisplay?.dispose();
+        jointDisplay = buildMepJointGeometry(s, row => (showAllLevels || row.levelId === markupFloor) && (s.revealHiddenMode || (!s.hiddenElementIds.has(row.id) && !s.hiddenCategories.has("mep") && (!s.isolatedElementIds || s.isolatedElementIds.has(row.id)))));
+        layer.group.add(jointDisplay.group); jointSources = jointInputs;
+      }
+      layer.syncDucts(jointDisplay.network.ducts, s.levels, {
         activeLevelId: markupFloor,
         selectedDuctIds: selDuctIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
-      layer.syncPipes(s.pipes || [], s.levels, {
+      layer.syncPipes(jointDisplay.network.pipes, s.levels, {
         activeLevelId: markupFloor,
         selectedPipeIds: selPipeIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
-      layer.syncCableTrays(s.cableTrays || [], s.levels, {
+      layer.syncCableTrays(jointDisplay.network.cableTrays, s.levels, {
         activeLevelId: markupFloor,
         selectedCableTrayIds: selTrayIds,
         showAllLevels,
@@ -2645,7 +2691,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
       });
-      layer.syncWires(s.wires || [], s.levels, {
+      layer.syncWires(jointDisplay.network.wires, s.levels, {
         activeLevelId: markupFloor,
         selectedWireIds: selWireIds,
         showAllLevels,
@@ -2653,7 +2699,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       });
       layer.syncWorkPlane(s.activeWorkPlane, activeLevel?.elevationMm ?? 0);
       layer.setMepModeDimming(s.mepModeActive);
-      layer.syncUnderlays(isPlanView ? s.underlays : [], s.levels, {
+      layer.syncUnderlays(isPlanView ? s.underlays.filter(u => !activeLevel?.planView?.hiddenUnderlayIds.includes(u.id)) : [], s.levels, {
         activeLevelId: markupFloor,
         showAllLevels,
         selectedUnderlayId: s.selectedUnderlayId,
@@ -2793,6 +2839,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     });
     sync();
     return () => {
+      jointDisplay?.dispose();
       unsubLayout();
       unsubMarkup();
     };
@@ -2983,7 +3030,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 baseElevMm: placement.level.elevationMm, elevationMm: layout.draftEquipmentElevationMm,
                 category: layout.draftEquipmentCategory, familyId: layout.draftComponentId,
                 widthMm: layout.draftComponentWidthMm, depthMm: layout.draftComponentDepthMm, heightMm: layout.draftComponentHeightMm,
-                moduleWidthMm: layout.draftComponentModuleMm, rotationDeg: nextRot,
+                moduleWidthMm: layout.draftComponentModuleMm, rotationDeg: placement.rotationDeg ?? nextRot,
               });
               useToolMarkupStore.getState().setDragSnapHint({
                 text: `${componentPreset(layout.draftComponentId)?.name ?? "Component"} · ${placement.label} · ${nextRot}° · Space: rotate`,
@@ -3032,7 +3079,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const sync = () => {
       const s = useToolMarkupStore.getState();
       const helper = tc.getHelper();
-      if (!toolMode || !s.selectedPlacementId) {
+      if (!toolMode || !s.selectedPlacementId || useModifyStore.getState().tool !== "select") {
         tc.detach();
         helper.visible = false;
         tc.enabled = false;
@@ -3053,8 +3100,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     sync();
     const unsub = useToolMarkupStore.subscribe(sync);
+    const unsubModify = useModifyStore.subscribe(sync);
     return () => {
       unsub();
+      unsubModify();
       tc.detach();
       tc.getHelper().visible = false;
       tc.enabled = false;
@@ -4232,8 +4281,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (!drag) return;
       wallEditDragRef.current = null;
       const controls = controlsRef.current;
-      if (controls && !useAppStore.getState().viewerContextMenuOpen) {
-        controls.enabled = true;
+      if (controls) {
+        const oc = controls as unknown as { state?: number; _pointers?: number[] };
+        if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
+        if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
+        if (!useAppStore.getState().viewerContextMenuOpen) {
+          controls.enabled = true;
+        }
       }
       if (drag.mode === "move" && drag.wallId) {
         const layout = useLayoutDrawingStore.getState();
@@ -4270,23 +4324,42 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       let point = raycaster.current.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level.elevationMm)), new THREE.Vector3());
       if (!point) {
         const lh = layoutLayerRef.current?.pickLayout(raycaster.current);
-        if (lh?.point) point = lh.point.clone();
+        if (lh && "point" in lh && lh.point instanceof THREE.Vector3) point = lh.point.clone();
         else return null;
       }
-      let plan = { xMm: toMm(point.x), yMm: toMm(point.z) }, label = "Free placement";
-      if (!bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
+      if (!point) return null;
+      const validPoint = point;
+      let plan = { xMm: toMm(validPoint.x), yMm: toMm(validPoint.z) }, label = "Free placement";
+      const draftFurniture = normalizeParametricFurniture({ familyId: layout.draftComponentId, widthMm: layout.draftComponentWidthMm, depthMm: layout.draftComponentDepthMm, moduleWidthMm: layout.draftComponentModuleMm });
+      const kitchen = !bypass ? alignKitchenPlacement({ ...plan, familyId: layout.draftComponentId, levelId: level.id, widthMm: draftFurniture.widthMm, depthMm: draftFurniture.depthMm, elevationMm: layout.draftEquipmentElevationMm }, layout.walls, layout.mepEquipment) : null;
+      if (kitchen) { plan = { xMm: kitchen.xMm, yMm: kitchen.yMm }; label = "Kitchen back face / adjacent unit"; }
+      if (!kitchen && !bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
         const rect = canvas.getBoundingClientRect();
         const snap = snapComponentFootprint(plan, layout.draftComponentWidthMm, layout.draftComponentDepthMm, layout.draftEquipmentRotationDeg,
-          layout.walls, layout.mepEquipment, level.id, (candidate) => projectedMoveDistance(point, new THREE.Vector3(fromMm(candidate.xMm), point.y, fromMm(candidate.yMm)), camera, rect.width / (markup.quadView ? 2 : 1), rect.height / (markup.quadView ? 2 : 1)));
+          layout.walls, layout.mepEquipment, level.id, (candidate) => projectedMoveDistance(validPoint, new THREE.Vector3(fromMm(candidate.xMm), validPoint.y, fromMm(candidate.yMm)), camera, rect.width / (markup.quadView ? 2 : 1), rect.height / (markup.quadView ? 2 : 1)));
         plan = snap.point; label = snap.label;
       }
       if (!bypass && label === "Free placement" && markup.gridSnap) {
-        const snapped = applyGridSnap(new THREE.Vector3(fromMm(plan.xMm), point.y, fromMm(plan.yMm)), markup.gridSize, ["x", "z"]);
+        const snapped = applyGridSnap(new THREE.Vector3(fromMm(plan.xMm), validPoint.y, fromMm(plan.yMm)), markup.gridSize, ["x", "z"]);
         plan = { xMm: toMm(snapped.x), yMm: toMm(snapped.z) }; label = "Grid";
       }
-      return { plan, level, label };
+      return { plan, level, label, rotationDeg: kitchen?.rotationDeg ?? layout.draftEquipmentRotationDeg, kitchenWallId: kitchen?.kitchenWallId };
     };
     componentPointRef.current = componentPoint;
+
+    const snapMepEndpointAt = (kind: MepKind, event: PointerEvent) => {
+      if (event.altKey) return null;
+      const state = useLayoutDrawingStore.getState(), markup = useToolMarkupStore.getState();
+      const levelId = markup.markupFloorId ?? state.levels[0]?.id;
+      const camera = preparePointerRayRef.current(event.clientX, event.clientY);
+      if (!levelId || !camera) return null;
+      const draw = kind === "duct" ? state.ductDraw : kind === "pipe" ? state.pipeDraw : kind === "wire" ? state.wireDraw : state.cableTrayDraw;
+      const full = canvas.getBoundingClientRect();
+      const rect = markup.quadView ? { left: full.left + (event.clientX >= full.left + full.width / 2 ? full.width / 2 : 0), top: full.top + (event.clientY >= full.top + full.height / 2 ? full.height / 2 : 0), width: full.width / 2, height: full.height / 2 } : full;
+      const snap = snapElevatedEndpoints(mepEndpoints(kind, state, levelId, draw?.elevationOffsetMm), { camera, canvas: { getBoundingClientRect: () => rect } as HTMLCanvasElement, clientPos: { x: event.clientX, y: event.clientY }, activeModes: state.planSnapModes });
+      if (snap) markup.setDragSnapHint({ text: "MEP endpoint: " + snap.elevationMm + " mm above level", clientX: event.clientX, clientY: event.clientY });
+      return snap;
+    };
 
     const measurementPoint = (clientX: number, clientY: number, bypass = false) => {
       const camera = preparePointerRayRef.current(clientX, clientY);
@@ -4632,6 +4705,13 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     };
 
     const onMove = (e: PointerEvent) => {
+      if (e.buttons === 0) {
+        const c = controlsRef.current as unknown as { state?: number; _pointers?: number[] } | null;
+        if (c && c.state !== undefined && c.state !== 0) {
+          c.state = 0;
+          if (Array.isArray(c._pointers)) c._pointers.length = 0;
+        }
+      }
       if ((e.buttons & 1) === 1 && (!suppressNextClick || marqueeActive)) {
         if (marqueeActive) {
           const dx = e.clientX - marqueeStartX;
@@ -4820,11 +4900,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           const placement = componentPoint(e.clientX, e.clientY, e.altKey);
           const ms = useToolMarkupStore.getState();
           if (placement) {
-            layoutLayer.setMepPreview(layoutStore.armedLayoutTool, null, placement.plan, {
+            layoutLayer.setMepPreview(layoutStore.armedLayoutTool as "equipment" | "component", null, placement.plan, {
               baseElevMm: placement.level.elevationMm, elevationMm: layoutStore.draftEquipmentElevationMm,
               category: layoutStore.draftEquipmentCategory, familyId: layoutStore.draftComponentId,
               widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
-              moduleWidthMm: layoutStore.draftComponentModuleMm, rotationDeg: layoutStore.draftEquipmentRotationDeg,
+              moduleWidthMm: layoutStore.draftComponentModuleMm, rotationDeg: placement.rotationDeg ?? layoutStore.draftEquipmentRotationDeg,
             });
             ms.setDragSnapHint({ text: `${componentPreset(layoutStore.draftComponentId)?.name ?? "Component"} · ${placement.label} · ${layoutStore.draftEquipmentRotationDeg}° · Space: rotate`, clientX: e.clientX, clientY: e.clientY });
           } else {
@@ -5065,13 +5145,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           }
           if (pt) {
             if (ms.gridSnap) pt = applyGridSnap(pt, ms.gridSize, ["x", "z"]);
-            const cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
+            let cursor = { xMm: toMm(pt.x), yMm: toMm(pt.z) };
             const kind = layoutStore.armedLayoutTool;
+            const endpointKind = kind === "flex_duct" || kind === "mep_placeholder" ? "duct" : kind;
+            const endpointSnap = endpointKind === "duct" || endpointKind === "pipe" || endpointKind === "cabletray" || endpointKind === "wire" ? snapMepEndpointAt(endpointKind, e) : null;
+            if (endpointSnap) cursor = endpointSnap;
 
             if (kind === "duct" || kind === "flex_duct" || kind === "mep_placeholder") {
-              let snapHintText: string | null = null;
+              let snapHintText: string | null = endpointSnap ? "MEP endpoint: " + endpointSnap.elevationMm + " mm above level" : null;
               let effectiveCursor = cursor;
-              for (const eq of layoutStore.mepEquipment) {
+              for (const eq of endpointSnap ? [] : layoutStore.mepEquipment) {
                 const conns = getEquipmentConnectors(eq);
                 for (const c of conns) {
                   if (c.type === "duct") {
@@ -5090,7 +5173,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (start) layoutStore.updateDuctDrawCursor(effectiveCursor);
               layoutLayer.setMepPreview(kind, start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
-                elevationMm: layoutStore.draftDuctElevationMm,
+                elevationMm: layoutStore.ductDraw?.elevationOffsetMm ?? endpointSnap?.elevationMm ?? layoutStore.draftDuctElevationMm,
                 shape: layoutStore.draftDuctShape,
                 widthMm: layoutStore.draftDuctWidthMm,
                 heightMm: layoutStore.draftDuctHeightMm,
@@ -5102,9 +5185,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 clientY: e.clientY,
               });
             } else if (kind === "pipe") {
-              let snapHintText: string | null = null;
+              let snapHintText: string | null = endpointSnap ? "MEP endpoint: " + endpointSnap.elevationMm + " mm above level" : null;
               let effectiveCursor = cursor;
-              for (const eq of layoutStore.mepEquipment) {
+              for (const eq of endpointSnap ? [] : layoutStore.mepEquipment) {
                 const conns = getEquipmentConnectors(eq);
                 for (const c of conns) {
                   if (c.type === "pipe") {
@@ -5123,7 +5206,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (start) layoutStore.updatePipeDrawCursor(effectiveCursor);
               layoutLayer.setMepPreview("pipe", start, effectiveCursor, {
                 baseElevMm: level?.elevationMm ?? 0,
-                elevationMm: layoutStore.draftPipeElevationMm,
+                elevationMm: layoutStore.pipeDraw?.elevationOffsetMm ?? endpointSnap?.elevationMm ?? layoutStore.draftPipeElevationMm,
                 diameterMm: layoutStore.draftPipeDiameterMm,
               });
               ms.setDragSnapHint({
@@ -5136,7 +5219,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (start) layoutStore.updateCableTrayDrawCursor(cursor);
               layoutLayer.setMepPreview("cabletray", start, cursor, {
                 baseElevMm: level?.elevationMm ?? 0,
-                elevationMm: layoutStore.draftCableTrayElevationMm,
+                elevationMm: layoutStore.cableTrayDraw?.elevationOffsetMm ?? endpointSnap?.elevationMm ?? layoutStore.draftCableTrayElevationMm,
                 widthMm: layoutStore.draftCableTrayWidthMm,
                 heightMm: layoutStore.draftCableTrayHeightMm,
               });
@@ -5150,7 +5233,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (start) layoutStore.updateWireDrawCursor(cursor);
               layoutLayer.setMepPreview("wire", start, cursor, {
                 baseElevMm: level?.elevationMm ?? 0,
-                elevationMm: 2800,
+                elevationMm: layoutStore.wireDraw?.elevationOffsetMm ?? endpointSnap?.elevationMm ?? 2800,
               });
               ms.setDragSnapHint({
                 text: start ? `${Math.round(Math.hypot(cursor.xMm - start.xMm, cursor.yMm - start.yMm))} mm · click to finish wire` : "Click start point for wire",
@@ -6254,8 +6337,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
-                const mepSnap = snapMepPoint(plan, "duct", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
-                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
+                const effectivePlan = snapMepEndpointAt("duct", e) ?? plan;
 
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.ductDraw) {
@@ -6290,8 +6372,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
-                const mepSnap = snapMepPoint(plan, "pipe", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
-                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
+                const effectivePlan = snapMepEndpointAt("pipe", e) ?? plan;
 
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.pipeDraw) {
@@ -6319,8 +6400,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
               }
               if (plan) {
-                const mepSnap = snapMepPoint(plan, "cabletray", layoutStore.mepEquipment, layoutStore.ducts, layoutStore.pipes, layoutStore.cableTrays, 350);
-                const effectivePlan = mepSnap.snapped ? { xMm: mepSnap.point.xMm, yMm: mepSnap.point.yMm } : plan;
+                const effectivePlan = snapMepEndpointAt("cabletray", e) ?? plan;
 
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.cableTrayDraw) {
@@ -6350,9 +6430,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
               if (plan) {
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.wireDraw) {
-                  layoutStore.startWireDraw(levelId, plan);
+                  layoutStore.startWireDraw(levelId, snapMepEndpointAt("wire", e) ?? plan);
                 } else {
-                  layoutStore.updateWireDrawCursor(plan);
+                  layoutStore.updateWireDrawCursor(snapMepEndpointAt("wire", e) ?? plan);
                   void layoutStore.finishWireDraw();
                 }
                 return;
@@ -6396,7 +6476,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
                   widthMm: layoutStore.draftComponentWidthMm, depthMm: layoutStore.draftComponentDepthMm, heightMm: layoutStore.draftComponentHeightMm,
                   moduleWidthMm: layoutStore.draftComponentModuleMm,
                   xMm: placement.plan.xMm, yMm: placement.plan.yMm,
-                  rotationDeg: layoutStore.draftEquipmentRotationDeg,
+                  rotationDeg: placement.rotationDeg ?? layoutStore.draftEquipmentRotationDeg,
+                  kitchenWallId: placement.kitchenWallId,
                   elevationMm: layoutStore.draftEquipmentElevationMm,
                   flowM3h: layoutStore.draftEquipmentFlowM3h, airflowM3h: layoutStore.draftEquipmentFlowM3h,
                   powerWatts: layoutStore.draftEquipmentHeatingWatts, coolingWatts: layoutStore.draftEquipmentCoolingWatts,
@@ -7016,7 +7097,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
             useLayoutDrawingStore.getState().slabDraw ||
             useLayoutDrawingStore.getState().sketchDraw ||
             useToolMarkupStore.getState().armedTool ||
-            useToolMarkupStore.getState().measureMode)
+            useToolMarkupStore.getState().measureMode ||
+            Boolean(transformControlsRef.current?.axis))
         ) {
           // When drawing or measuring, disable orbit rotation so left-click places points reliably
           const controls = controlsRef.current;
@@ -7279,8 +7361,30 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (hit) applyPickSelection(hit);
     };
 
+    const disposeModifyController = sceneRef.current ? installModifyController({
+      canvas, scene: sceneRef.current,
+      camera: (x, y) => preparePointerRayRef.current(x, y),
+      roots: () => [layoutLayerRef.current?.group, markupLayerRef.current?.group].filter((root): root is THREE.Group => Boolean(root)),
+      controls: () => controlsRef.current,
+    }) : () => {};
+    const disposeBoundaryEditor = installBoundarySketchEditor({
+      canvas,
+      camera: (x, y) => preparePointerRayRef.current(x, y),
+      controls: () => controlsRef.current,
+    });
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerleave", onLeave);
+    const onWindowPointerUp = (e: PointerEvent) => {
+      if (e.buttons === 0) {
+        const controls = controlsRef.current;
+        if (controls) {
+          const oc = controls as unknown as { state?: number; _pointers?: number[] };
+          if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
+          if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
+        }
+      }
+    };
+    window.addEventListener("pointerup", onWindowPointerUp);
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("click", onClick);
@@ -7288,8 +7392,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     canvas.addEventListener("werkzeug-context-pick", onContextPick);
     return () => {
       componentPointRef.current = null;
+      disposeBoundaryEditor();
+      disposeModifyController();
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("pointerup", onWindowPointerUp);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("click", onClick);

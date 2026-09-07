@@ -1,3 +1,5 @@
+import { createOperableWindow } from "@/lib/windowGeometry";
+import { roofWallProfile } from "@/lib/roofConnections";
 /**
  * Imperative Three.js layer for layout walls / doors / windows (live 3D).
  */
@@ -67,6 +69,7 @@ const RAMP_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
   readonly group = new THREE.Group();
+  private planCutElevationMm = 1200;
   private currentRenderMode: RenderMode = "fullColor";
   private wallMeshes = new Map<string, THREE.Group>();
   private doorMeshes = new Map<string, THREE.Group>();
@@ -584,6 +587,8 @@ export default class LayoutSceneLayer {
     },
   ) {
     const planMode = Boolean(opts.planMode);
+    const planLevel = levels.find(l => l.id === opts.activeLevelId);
+    this.planCutElevationMm = (planLevel?.elevationMm ?? 0) + (planLevel?.planView?.cutMm ?? 1200);
     this.isPlanModeActive = planMode;
     const levelById = new Map(levels.map((l) => [l.id, l]));
     const wallKeep = new Set(walls.map((w) => w.id));
@@ -593,11 +598,27 @@ export default class LayoutSceneLayer {
         this.wallMeshes.delete(id);
       }
     }
+    const attachmentRoofs = new Map<string, THREE.Mesh>();
+    for (const wall of walls) for (const id of [wall.attachedTopRoofId, wall.attachedBaseRoofId]) {
+      if (!id || attachmentRoofs.has(id)) continue;
+      const roof = slabs.find(s => s.id === id && s.kind === "roof");
+      if (roof) {
+        let mesh = this.slabMeshes.get(id);
+        if (!mesh) { mesh = this.createSlabMesh(roof, levelById.get(roof.levelId)?.elevationMm ?? 0); this.slabMeshes.set(id, mesh); this.group.add(mesh); }
+        else this.updateSlabMesh(mesh, roof, levelById.get(roof.levelId)?.elevationMm ?? 0);
+        attachmentRoofs.set(id, mesh);
+      }
+    }
     const joins = joinedWallCenterlines(walls);
     const miterJoins = solveWallJunctions(walls, joins);
-    for (const wall of walls) {
+    for (const originalWall of walls) {
+      let wall = originalWall;
       const level = levelById.get(wall.levelId);
-      const elev = level?.elevationMm ?? 0;
+      const elev = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
+      if (wall.attachedTopRoofId || wall.attachedBaseRoofId) {
+        try { wall = { ...wall, roofProfile: roofWallProfile(wall, elev, attachmentRoofs.get(wall.attachedTopRoofId ?? ""), attachmentRoofs.get(wall.attachedBaseRoofId ?? "")) }; }
+        catch { /* Keep the unconstrained wall visible if a later roof edit invalidates attachment. */ }
+      }
       const vis = this.checkElementVisibility(wall.id, "walls", opts);
       const visible =
         vis.showMesh &&
@@ -652,7 +673,7 @@ export default class LayoutSceneLayer {
       const wall = walls.find((w) => w.id === door.wallId);
       if (!wall) continue;
       const level = levelById.get(wall.levelId);
-      const elev = level?.elevationMm ?? 0;
+      const elev = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
       const vis = this.checkElementVisibility(door.id, "doors", opts);
       const visible =
         vis.showMesh &&
@@ -684,7 +705,7 @@ export default class LayoutSceneLayer {
       const wall = walls.find((w) => w.id === win.wallId);
       if (!wall) continue;
       const level = levelById.get(wall.levelId);
-      const elev = level?.elevationMm ?? 0;
+      const elev = (level?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
       const vis = this.checkElementVisibility(win.id, "windows", opts);
       const visible =
         vis.showMesh &&
@@ -843,7 +864,8 @@ export default class LayoutSceneLayer {
         mesh.userData.geometryKey = geometryKey;
       }
 
-      mesh.position.set(fromMm(col.xMm), fromMm(elev) + height / 2, fromMm(col.yMm));
+      mesh.position.set(fromMm(col.xMm), fromMm(elev + (col.baseOffsetMm ?? 0)) + height / 2, fromMm(col.yMm));
+      mesh.rotation.y = -(col.rotationDeg ?? 0) * Math.PI / 180;
       const vis = this.checkElementVisibility(col.id, "structural", opts);
       mesh.visible =
         vis.showMesh &&
@@ -1083,7 +1105,7 @@ export default class LayoutSceneLayer {
 
     for (const duct of ducts) {
       const level = levelById.get(duct.levelId);
-      const elev = fromMm((level?.elevationMm ?? 0) + (duct.elevationOffsetMm ?? duct.elevationMm ?? 2800));
+      const elev = fromMm((level?.elevationMm ?? 0) + (duct.elevationMm ?? duct.elevationOffsetMm ?? 2600));
       const dx = fromMm(duct.endXmm - duct.startXmm);
       const dz = fromMm(duct.endYmm - duct.startYmm);
       const len = Math.hypot(dx, dz);
@@ -1095,6 +1117,12 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedDuctIds.has(duct.id);
 
       let mesh = this.ductMeshes.get(duct.id);
+      const geometryKey = JSON.stringify([len, duct]);
+      if (mesh && mesh.userData.mepGeometryKey !== geometryKey) {
+        this.group.remove(mesh);
+        mesh.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) { o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) material.dispose(); } });
+        this.ductMeshes.delete(duct.id); mesh = undefined;
+      }
       if (!mesh) {
         const w = fromMm(duct.widthMm ?? 300);
         const h = fromMm(duct.heightMm ?? 200);
@@ -1124,6 +1152,7 @@ export default class LayoutSceneLayer {
         }
         mesh.userData.layoutDuctId = duct.id;
         mesh.userData.kind = "duct";
+        mesh.userData.mepGeometryKey = geometryKey;
         this.ductMeshes.set(duct.id, mesh);
         this.group.add(mesh);
       }
@@ -1170,7 +1199,7 @@ export default class LayoutSceneLayer {
 
     for (const pipe of pipes) {
       const level = levelById.get(pipe.levelId);
-      const elev = fromMm((level?.elevationMm ?? 0) + (pipe.elevationOffsetMm ?? pipe.elevationMm ?? 2600));
+      const elev = fromMm((level?.elevationMm ?? 0) + (pipe.elevationMm ?? pipe.elevationOffsetMm ?? 2700));
       const dx = fromMm(pipe.endXmm - pipe.startXmm);
       const dz = fromMm(pipe.endYmm - pipe.startYmm);
       const len = Math.hypot(dx, dz);
@@ -1182,6 +1211,12 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedPipeIds.has(pipe.id);
 
       let mesh = this.pipeMeshes.get(pipe.id);
+      const geometryKey = JSON.stringify([len, pipe]);
+      if (mesh && mesh.userData.mepGeometryKey !== geometryKey) {
+        this.group.remove(mesh);
+        mesh.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) { o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) material.dispose(); } });
+        this.pipeMeshes.delete(pipe.id); mesh = undefined;
+      }
       if (!mesh) {
         const dia = fromMm(pipe.diameterMm ?? 32);
         const geo = new THREE.CylinderGeometry(dia / 2, dia / 2, len, 12);
@@ -1203,6 +1238,7 @@ export default class LayoutSceneLayer {
         mesh.rotation.z = Math.PI / 2;
         mesh.userData.layoutPipeId = pipe.id;
         mesh.userData.kind = "pipe";
+        mesh.userData.mepGeometryKey = geometryKey;
         this.pipeMeshes.set(pipe.id, mesh);
         this.group.add(mesh);
       }
@@ -1249,7 +1285,7 @@ export default class LayoutSceneLayer {
 
     for (const ct of cableTrays) {
       const level = levelById.get(ct.levelId);
-      const elev = fromMm((level?.elevationMm ?? 0) + (ct.elevationOffsetMm ?? ct.elevationMm ?? 2900));
+      const elev = fromMm((level?.elevationMm ?? 0) + (ct.elevationMm ?? ct.elevationOffsetMm ?? 2800));
       const dx = fromMm(ct.endXmm - ct.startXmm);
       const dz = fromMm(ct.endYmm - ct.startYmm);
       const len = Math.hypot(dx, dz);
@@ -1261,18 +1297,26 @@ export default class LayoutSceneLayer {
       const isSelected = opts.selectedCableTrayIds.has(ct.id);
 
       let mesh = this.cableTrayMeshes.get(ct.id);
+      const geometryKey = JSON.stringify([len, ct]);
+      if (mesh && mesh.userData.mepGeometryKey !== geometryKey) {
+        this.group.remove(mesh);
+        mesh.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) { o.geometry.dispose(); for (const material of Array.isArray(o.material) ? o.material : [o.material]) material.dispose(); } });
+        this.cableTrayMeshes.delete(ct.id); mesh = undefined;
+      }
       if (!mesh) {
         const w = fromMm(ct.widthMm ?? 200);
         const h = fromMm(ct.heightMm ?? 60);
-        const geo = new THREE.BoxGeometry(len, h, w);
+        const geo = ct.trayType === "conduit" ? new THREE.CylinderGeometry(w / 2, w / 2, len, 16) : new THREE.BoxGeometry(len, h, w);
         const mat = new THREE.MeshPhysicalMaterial({
           color: 0xf59e0b,
           roughness: 0.4,
           metalness: 0.3,
         });
         mesh = new THREE.Mesh(geo, mat);
+        if (ct.trayType === "conduit") mesh.rotation.z = Math.PI / 2;
         mesh.userData.layoutCableTrayId = ct.id;
         mesh.userData.kind = "cabletray";
+        mesh.userData.mepGeometryKey = geometryKey;
         this.cableTrayMeshes.set(ct.id, mesh);
         this.group.add(mesh);
       }
@@ -3332,7 +3376,7 @@ export default class LayoutSceneLayer {
       const isSelected = l.id === selectedLineId;
       const parsed = l.color ? Number.parseInt(l.color.replace("#", ""), 16) : draftingGray;
       const col = isSelected ? selectedYellow : targetKind ? boundaryYellow : parsed;
-      const elevMm = levelMap.get(l.levelId) ?? fallbackElevMm;
+      const elevMm = (levelMap.get(l.levelId) ?? fallbackElevMm) + (l.elevationOffsetMm ?? 0);
       const y = fromMm(elevMm) + 0.08;
       const p1 = new THREE.Vector3(fromMm(l.startXmm), y, fromMm(l.startYmm));
       const p2 = new THREE.Vector3(fromMm(l.endXmm), y, fromMm(l.endYmm));
@@ -3531,6 +3575,15 @@ export default class LayoutSceneLayer {
   }
 
   private buildSlabGeometry(slab: LayoutSlab): THREE.BufferGeometry {
+    if (slab.roofJoin?.positions.length) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(slab.roofJoin.positions, 3));
+      const uv: number[] = [];
+      for (let i = 0; i < slab.roofJoin.positions.length; i += 3) uv.push(slab.roofJoin.positions[i], slab.roofJoin.positions[i + 1]);
+      geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+      geometry.computeVertexNormals(); geometry.computeBoundingSphere();
+      return geometry;
+    }
     const boundary = slab.boundary && slab.boundary.length >= 3 ? slab.boundary : [
       { xMm: slab.minXmm, yMm: slab.minYmm },
       { xMm: slab.maxXmm, yMm: slab.minYmm },
@@ -3682,10 +3735,11 @@ export default class LayoutSceneLayer {
       c: [number, number, number],
     ) => positions.push(...a, ...b, ...c);
 
-    const triangles = THREE.ShapeUtils.triangulateShape(points, []);
-    for (const triangle of triangles) {
-      const [a, b, c] = triangle.map((index) => points[index]);
-      pushTriangle([c.x, c.y, 0], [b.x, b.y, 0], [a.x, a.y, 0]);
+    // A roof is a thickness shell: its underside follows the same pitches.
+    const undersideApex: [number, number, number] = [center.x, center.y, rise];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i], b = points[(i + 1) % points.length];
+      pushTriangle([b.x, b.y, 0], [a.x, a.y, 0], undersideApex);
     }
 
     const apex: [number, number, number] = [center.x, center.y, eaveZ + rise];
@@ -3714,7 +3768,8 @@ export default class LayoutSceneLayer {
   }
 
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
-    const geo = this.buildSlabGeometry(slab);
+    // updateSlabMesh builds the initial geometry once and owns invalidation.
+    const geo = new THREE.BufferGeometry();
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.9,
       metalness: 0.02,
@@ -3737,8 +3792,24 @@ export default class LayoutSceneLayer {
     slab: LayoutSlab,
     elevMm: number,
   ) {
-    mesh.geometry.dispose();
-    mesh.geometry = this.buildSlabGeometry(slab);
+    // Store updates also carry selection and validation messages. Those must not
+    // retriangulate floors/roofs while the boundary overlay previews a drag.
+    const geometryKey = JSON.stringify([
+      slab.kind,
+      Math.max(50, slab.thicknessMm),
+      slab.boundary?.length && slab.boundary.length >= 3
+        ? slab.boundary
+        : [slab.minXmm, slab.minYmm, slab.maxXmm, slab.maxYmm],
+      slab.holes ?? [],
+      slab.kind === "roof" ? slab.edgeSlopes ?? [] : [],
+      slab.roofJoin?.positions,
+    ]);
+    if (mesh.userData.slabGeometryKey !== geometryKey) {
+      const geometry = this.buildSlabGeometry(slab);
+      mesh.geometry.dispose();
+      mesh.geometry = geometry;
+      mesh.userData.slabGeometryKey = geometryKey;
+    }
 
     const thickness = fromMm(Math.max(50, slab.thicknessMm));
     
@@ -3950,7 +4021,7 @@ export default class LayoutSceneLayer {
       mat.clearcoatRoughness = 0.1;
       mat.ior = 1.5;
     }
-    mat.wireframe = this.currentRenderMode === "wireframe";
+    mat.wireframe = false;
 
     const customMat = useMaterialStore.getState().getMaterial(matType);
 
@@ -4137,7 +4208,7 @@ export default class LayoutSceneLayer {
       mat.clearcoatRoughness = 0.1;
       mat.ior = 1.5;
     }
-    mat.wireframe = renderMode === "wireframe";
+    mat.wireframe = false;
 
     if (isSelected) {
       mat.color.setHex(WALL_SEL);
@@ -4351,10 +4422,17 @@ export default class LayoutSceneLayer {
 
       // Build outer wall 2D profile (local X: along wall length, local Y: height)
       const shape = new THREE.Shape();
-      shape.moveTo(-halfLen, -halfHeight);
-      shape.lineTo(halfLen, -halfHeight);
-      shape.lineTo(halfLen, halfHeight);
-      shape.lineTo(-halfLen, halfHeight);
+      if (wall.roofProfile?.length) {
+        const profile = wall.roofProfile;
+        shape.moveTo(-halfLen, fromMm(profile[0].baseMm) - halfHeight);
+        for (const p of profile.slice(1)) shape.lineTo(p.t * lenM - halfLen, fromMm(p.baseMm) - halfHeight);
+        for (const p of [...profile].reverse()) shape.lineTo(p.t * lenM - halfLen, fromMm(p.topMm) - halfHeight);
+      } else {
+        shape.moveTo(-halfLen, -halfHeight);
+        shape.lineTo(halfLen, -halfHeight);
+        shape.lineTo(halfLen, halfHeight);
+        shape.lineTo(-halfLen, halfHeight);
+      }
       shape.closePath();
 
       // Hosted openings (doors + windows)
@@ -4817,6 +4895,18 @@ export default class LayoutSceneLayer {
       currentOffsetM += layerThickM;
     }
 
+    // One outer envelope prevents construction-layer interfaces appearing as wall edges.
+    const envelope = new THREE.Mesh(
+      this.buildWallLayerGeometry(wall, cl, doors, windows, miter, 0, totalThickM, totalThickM),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    envelope.name = "wall-wireframe-envelope";
+    envelope.userData.isWireframeEnvelope = true;
+    envelope.userData.layoutWallId = wall.id;
+    envelope.visible = false;
+    envelope.raycast = () => {};
+    grp.add(envelope);
+
     if (
       wall.curved &&
       wall.arcRadiusMm != null &&
@@ -4844,10 +4934,14 @@ export default class LayoutSceneLayer {
     grp.userData.layoutWallId = wall.id;
 
     // Attach 2D plan cut poché group
-    const planGroup = this.buildWallPlanCut(wall, cl, doors, windows, miter, layers);
+    const cutAboveBase = this.planCutElevationMm - elevMm;
+    const planGroup = this.buildWallPlanCut(wall, cl,
+      doors.filter(d => cutAboveBase >= 0 && cutAboveBase <= d.heightMm),
+      windows.filter(w => cutAboveBase >= w.sillHeightMm && cutAboveBase <= w.sillHeightMm + w.heightMm), miter, layers);
+    planGroup.userData.outsidePlanCut = cutAboveBase < 0 || cutAboveBase > wall.heightMm;
     const height = fromMm(wall.heightMm || 3000);
     planGroup.position.set(0, -height / 2 + 0.03, 0);
-    planGroup.visible = this.isPlanModeActive;
+    planGroup.visible = this.isPlanModeActive && !planGroup.userData.outsidePlanCut;
     grp.add(planGroup);
 
     // Apply wireframe / shaded edges
@@ -4859,7 +4953,7 @@ export default class LayoutSceneLayer {
     this.isPlanModeActive = planMode;
     for (const grp of this.wallMeshes.values()) {
       const planCut = grp.children.find((c) => c.name === "wall-plan-cut");
-      if (planCut) planCut.visible = planMode;
+      if (planCut) planCut.visible = planMode && !planCut.userData.outsidePlanCut;
       grp.traverse((c) => {
         if (c instanceof THREE.Mesh && c.userData.isWallLayer && c.material instanceof THREE.Material) {
           c.material.visible = !planMode;
@@ -4996,6 +5090,10 @@ export default class LayoutSceneLayer {
           leafMesh.position.set(sign * (innerW * 0.23), leafH / 2, sign * (panelThick * 0.6));
           boxGroup.add(leafMesh);
         }
+        for (const y of [0.025, leafH + 0.025]) {
+          const track = new THREE.Mesh(new THREE.BoxGeometry(innerW + 0.08, 0.035, 0.12), frameMat);
+          track.position.set(0, y, 0); boxGroup.add(track);
+        }
       } else if (style === "garage") {
         const innerW = w - frameThick * 2;
         const innerH = Math.max(0.01, h - frameThick);
@@ -5031,6 +5129,8 @@ export default class LayoutSceneLayer {
         const vMull = new THREE.Mesh(new THREE.BoxGeometry(frameThick * 0.5, rad * 2, frameThick * 0.8), frameMat);
         vMull.position.set(0, h / 2, 0);
         boxGroup.add(hMull, vMull);
+      } else if (win?.operation || win?.typeId === "win-double-1200" || win?.typeId === "win-fixed-1000" || win?.typeId === "win-pano-2000") {
+        boxGroup.add(createOperableWindow(win.operation ?? (win.typeId === "win-double-1200" ? "double-hung" : "fixed"), innerW, innerH, frameMat, panelMat));
       } else if (win?.sashCount === 2) {
         const mullionW = frameThick * 0.7;
         const paneW = (innerW - mullionW) / 2;
@@ -5091,8 +5191,8 @@ export default class LayoutSceneLayer {
     let panelMat: THREE.Material = new THREE.MeshPhysicalMaterial({ roughness: 0.8, metalness: 0.05 });
 
     if (this.currentRenderMode === "wireframe") {
-      frameMat.wireframe = true;
-      (panelMat as THREE.MeshPhysicalMaterial).wireframe = true;
+      frameMat.wireframe = false;
+      (panelMat as THREE.MeshPhysicalMaterial).wireframe = false;
     }
 
     if (this.currentRenderMode === "light") {
@@ -5744,7 +5844,7 @@ export default class LayoutSceneLayer {
       const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400));
       const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
 
-      const geoKey = `${item.category}:${item.familyId}:${item.moduleWidthMm}:${item.color}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
+      const geoKey = `${JSON.stringify(item.furnitureParameters)}:${item.category}:${item.familyId}:${item.moduleWidthMm}:${item.color}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
 
       let grp = this.equipmentMeshes.get(item.id);
       const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
@@ -6209,6 +6309,7 @@ export default class LayoutSceneLayer {
       const rot = ((item.rotationDeg ?? 0) * Math.PI) / 180;
       grp.position.set(fromMm(item.xMm), centerY, fromMm(item.yMm));
       grp.rotation.y = -rot;
+      grp.scale.z = item.mirrored ? -1 : 1;
       grp.visible =
         opts.showAllLevels ||
         opts.activeLevelId == null ||
@@ -6291,7 +6392,7 @@ export default class LayoutSceneLayer {
         color: isPlaceholder ? 0x38bdf8 : 0x06b6d4,
         transparent: true,
         opacity: 0.65,
-        wireframe: isPlaceholder,
+        wireframe: false,
       });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(midX, elev, midZ);

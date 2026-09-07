@@ -109,6 +109,8 @@ export default function ToolFloorsSection({
   }, [popupLevelId]);
 
   const select = (floorId: string | null, goTop = false) => {
+    useLayoutDrawingStore.getState().clearSelection();
+    useToolMarkupStore.getState().selectPlacement(null);
     setMarkupFloorId(floorId);
     setSelectedFloor(floorId);
     if (goTop && floorId) setViewPreset("top");
@@ -145,7 +147,7 @@ export default function ToolFloorsSection({
     }
   };
 
-  const popupUnderlay = popupLevelId ? underlayFor(popupLevelId) : null;
+  const popupUnderlay = popupLevelId ? underlays.find(u => u.levelId === popupLevelId && u.id === selectedUnderlayId) ?? underlayFor(popupLevelId) : null;
 
   const rawFloorRows: {
     id: string;
@@ -467,6 +469,7 @@ export default function ToolFloorsSection({
                   </button>
                 </div>
 
+                {popupLevelId && <select aria-label="Attached reference" value={popupUnderlay?.id ?? ""} onChange={e => selectUnderlay(e.target.value)} className="w-full rounded border border-[var(--panel-divider)] bg-transparent p-1 text-xs">{underlays.filter(u => u.levelId === popupLevelId).map(u => <option key={u.id} value={u.id}>{u.sourceName}</option>)}</select>}
                 {popupUnderlay ? (
                   <>
                     <p className="text-[9.5px] leading-snug text-[var(--text-body)]">
@@ -528,7 +531,7 @@ export default function ToolFloorsSection({
                         }}
                         icon={<LuRefreshCw className="h-3 w-3" />}
                       >
-                        {t(uiLanguage, "underlayReplace")}
+                        Add reference
                       </UnifiedButton>
 
                       <UnifiedButton
