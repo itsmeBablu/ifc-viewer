@@ -1494,7 +1494,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
 
   const typeCategory: ElementTypeDefinition["category"] | null =
     tool === "wall" ? "Wall" : tool === "door" ? "Door" : tool === "window" ? "Window" :
-    tool === "floor" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
+    tool === "floor" ? "Floor" : tool === "ceiling" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
     tool === "ramp" ? "Ramp" : tool === "column" ? "Column" : tool === "beam" ? "Beam" : null;
   const availableTypes = Object.values(DEFAULT_ELEMENT_TYPES).filter((item) => item.category === typeCategory);
   const [draftType, setDraftType] = useState<ElementTypeDefinition | null>((tool === "wall" ? availableTypes.find((item) => item.id === store.draftWallTypeId) : null) ?? availableTypes[0] ?? null);
@@ -1510,7 +1510,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
     ...(tool === "wall" ? { heightMm: wallHeight, thicknessMm: store.draftWallThicknessMm } : {}),
     ...(tool === "door" ? { widthMm: store.draftDoorWidthMm, heightMm: store.draftDoorHeightMm } : {}),
     ...(tool === "window" ? { widthMm: store.draftWindowWidthMm, heightMm: store.draftWindowHeightMm, sillHeightMm: store.draftWindowSillMm } : {}),
-    ...(tool === "floor" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
+    ...(tool === "floor" || tool === "ceiling" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
     ...(tool === "stair" ? { widthMm: store.draftStairWidthMm } : {}),
     ...(tool === "ramp" ? { widthMm: store.draftRampWidthMm, thicknessMm: store.draftRampThicknessMm } : {}),
     ...(tool === "column" ? { widthMm: store.draftColumnWidthMm, depthMm: store.draftColumnDepthMm } : {}),
@@ -1527,7 +1527,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
       store.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
     } else if (tool === "window" && typeDef.widthMm && typeDef.heightMm) {
       store.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? store.draftWindowSillMm);
-    } else if ((tool === "floor" || tool === "roof") && typeDef.thicknessMm) {
+    } else if ((tool === "floor" || tool === "ceiling" || tool === "roof") && typeDef.thicknessMm) {
       store.setDraftSlabThicknessMm(typeDef.thicknessMm);
     } else if (tool === "stair") {
       if (typeDef.widthMm) store.setDraftStairWidthMm(typeDef.widthMm);
@@ -1604,7 +1604,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
         </div>
       )}
 
-      {(tool === "floor" || tool === "roof") && (
+      {(tool === "floor" || tool === "ceiling" || tool === "roof") && (
         <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={20} value={store.draftSlabThicknessMm} onChange={(event) => store.setDraftSlabThicknessMm(Number(event.target.value))} /></label>
       )}
 

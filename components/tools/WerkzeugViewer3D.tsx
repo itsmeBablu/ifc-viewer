@@ -2778,7 +2778,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
           s.levels.find((l) => l.id === s.slabDraw!.levelId) ?? activeLevel;
         const elev = lvl?.elevationMm ?? 0;
         const offset =
-          s.slabDraw.kind === "roof"
+          s.slabDraw.kind === "roof" || s.slabDraw.kind === "ceiling"
             ? (lvl?.heightMm ?? 3000)
             : 0;
         layer.setSlabPreview(

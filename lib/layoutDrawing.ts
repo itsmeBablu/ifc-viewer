@@ -116,7 +116,7 @@ export type LayoutSlab = {
   id: string;
   projectId: string;
   levelId: string;
-  kind: "floor" | "roof";
+  kind: "floor" | "ceiling" | "roof";
   // -- Legacy rectangle fields (kept for backwards compatibility) ---------
   /** Plan rectangle AABB (mm). Computed from boundary if polygon mode. */
   minXmm: number;
@@ -1033,6 +1033,7 @@ export type LayoutToolId =
   | "door"
   | "window"
   | "floor"
+  | "ceiling"
   | "roof"
   | "column"
   | "beam"

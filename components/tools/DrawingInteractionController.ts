@@ -218,7 +218,6 @@ export function installDrawingInteractionController(options: Options) {
   function navigationDown(e: PointerEvent) { if (enabled() && useDrawingInteractionStore.getState().navigating) e.stopImmediatePropagation(); }
   const unsub = useLayoutDrawingStore.subscribe((s, prev) => {
     if (s.armedLayoutTool !== prev.armedLayoutTool || s.projectId !== prev.projectId || s.sketchTargetKind !== prev.sketchTargetKind) { reset(); cancel(); }
-    if (!useDrawingInteractionStore.getState().busy && (s.sketchLines !== prev.sketchLines || s.walls !== prev.walls)) reset();
     if (s.draftDrawMode !== prev.draftDrawMode) useDrawingInteractionStore.setState({ shape: s.draftDrawMode });
   });
   const unsubMarkup = useToolMarkupStore.subscribe((s, prev) => { if (s.markupFloorId !== prev.markupFloorId || s.viewPreset !== prev.viewPreset) { reset(); cancel(); } });

@@ -189,7 +189,7 @@ export type SketchDrawState = {
 } | null;
 
 export type SlabDrawState = {
-  kind: "floor" | "roof";
+  kind: "floor" | "ceiling" | "roof";
   levelId: string;
   /** First corner; null until first click. */
   start: { xMm: number; yMm: number } | null;
@@ -311,7 +311,7 @@ type LayoutDrawingState = {
   activeGroupId: string | null;
   layoutRooms: LayoutRoom[];
   sketchLines: LayoutSketchLine[];
-  sketchTargetKind: "floor" | "roof" | null;
+  sketchTargetKind: "floor" | "ceiling" | "roof" | null;
   draftSketchLineStyle: Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">;
   sketchDraw: SketchDrawState;
   gapHighlightPoints: { xMm: number; yMm: number }[];
@@ -665,7 +665,7 @@ type LayoutDrawingState = {
   confirmTraceCandidate: () => Promise<
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
-  beginSlabDraw: (kind: "floor" | "roof", levelId: string) => void;
+  beginSlabDraw: (kind: "floor" | "ceiling" | "roof", levelId: string) => void;
   beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
   addSlabCorner: (
@@ -746,7 +746,7 @@ type LayoutDrawingState = {
   deleteSketchLine: (id: string) => void;
   updateSketchLine: (id: string, patch: Partial<Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">>) => void;
   clearSketchLines: () => void;
-  convertSketchToSlab: (kind: "floor" | "roof") => Promise<{
+  convertSketchToSlab: (kind: "floor" | "ceiling" | "roof") => Promise<{
     success: boolean;
     error?: string;
     gapPoints?: { xMm: number; yMm: number }[];
@@ -1712,7 +1712,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
 
-    const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
+    const boundaryKind = tool === "floor" || tool === "ceiling" || tool === "roof" ? tool : null;
     const isMepTool =
       tool === "duct" ||
       tool === "flex_duct" ||
@@ -2704,7 +2704,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const shiftPt = (p: { xMm: number; yMm: number }) => ({ xMm: p.xMm + 500, yMm: p.yMm + 500 });
     const clone: LayoutSlab = {
       ...slab,
-      id: newLayoutId(slab.kind === "roof" ? "roof" : "floor"),
+      id: newLayoutId(slab.kind === "roof" ? "roof" : slab.kind === "ceiling" ? "ceiling" : "floor"),
       minXmm: slab.minXmm + 500,
       maxXmm: slab.maxXmm + 500,
       minYmm: slab.minYmm + 500,
@@ -3914,10 +3914,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
       const thicknessMm = get().draftSlabThicknessMm;
       const elevationOffsetMm =
-        kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+        kind === "roof" || kind === "ceiling" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
 
       const slab: LayoutSlab = {
-        id: newLayoutId(kind === "roof" ? "roof" : "floor"),
+        id: newLayoutId(kind === "roof" ? "roof" : kind === "ceiling" ? "ceiling" : "floor"),
         projectId,
         levelId,
         kind,

@@ -398,7 +398,7 @@ export default function ToolOptionsBar() {
 
             <span className="text-[10px] text-emerald-400 font-medium italic">Click start, then click endpoint · Angle & Length snap active</span>
           </div>
-        ) : (armedLayoutTool === "floor" || armedLayoutTool === "roof") && (
+        ) : (armedLayoutTool === "floor" || armedLayoutTool === "ceiling" || armedLayoutTool === "roof") && (
           <div className="flex items-center gap-3">
             <span className="font-bold text-amber-500 capitalize">{armedLayoutTool} Slab:</span>
             <div className="flex items-center gap-1.5">

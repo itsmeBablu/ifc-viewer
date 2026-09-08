@@ -41,6 +41,7 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "window", label: "Window", icon: <IconMarkupWindow /> },
   { id: "roof", label: "Roof", icon: <IconMarkupRoof /> },
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
+  { id: "ceiling", label: "Ceiling", icon: <IconMarkupFloor /> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
 ];
@@ -468,7 +469,7 @@ export default function WerkzeugWorkspaceChrome({
     window.dispatchEvent(new CustomEvent("werkzeug-level-highlight", { detail: id === "levels" }));
     setPanelHidden(false);
     setPanelTab("properties");
-    const alreadyDrawingBoundary = (id === "floor" || id === "roof") && store.sketchTargetKind === id && store.armedLayoutTool === "lines";
+    const alreadyDrawingBoundary = (id === "floor" || id === "ceiling" || id === "roof") && store.sketchTargetKind === id && store.armedLayoutTool === "lines";
     if (!alreadyDrawingBoundary) store.setArmedLayoutTool(id === "levels" || id === "materials" ? null : id);
     useToolMarkupStore.getState().setArmedTool(null);
   };
@@ -599,7 +600,7 @@ export default function WerkzeugWorkspaceChrome({
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
             </div>
-            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
+            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
             {!collapsed && <>
               {!portrait && <button type="button" onPointerDown={beginLandscapeResize} className="werkzeug-ipad-height-resize absolute inset-x-0 bottom-0 z-20 h-5 touch-none cursor-ns-resize" aria-label="Drag down to increase options height"><span /></button>}
             </>}
@@ -653,12 +654,12 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   }
   if (tab === "type") return <TypeOptions panelKey={panelKey} locked={locked} />;
   if (panelKey === "column" || panelKey === "beam" || panelKey === "stair" || panelKey === "ramp") return <LayoutPropertiesPanel />;
-  if ((panelKey === "floor" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
+  if ((panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
     const loops = detectLoopsFromSegments(store.sketchLines);
     const openingCount = [...loops.nestedHoles.values()].reduce((sum, holes) => sum + holes.length, 0);
     return <div className="space-y-3"><div className="rounded-xl bg-blue-500/10 p-3 text-[11px] text-blue-600"><strong className="block uppercase tracking-wide">{panelKey} boundary sketch</strong><span>Draw one closed blue outer loop. Closed loops inside it become openings.</span></div><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Closed loops</span><strong>{loops.closedLoops.length}</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Openings</span><strong>{openingCount}</strong></div></div><label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input className={field} type="number" min={50} value={store.draftSlabThicknessMm} onChange={(e) => store.setDraftSlabThicknessMm(Number(e.target.value))}/></label><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!loops.isFullyClosed} className="btn-v-yellow col-span-2 min-h-11 rounded-xl px-3 text-xs disabled:opacity-40" onClick={() => void store.convertSketchToSlab(panelKey)}>Finish {panelKey}</button><button type="button" className="btn-yellow-border-hover min-h-10 rounded-lg border border-[var(--panel-divider)] px-2 text-[11px]" onClick={store.finishSketchLineDraw}>Finish chain</button><button type="button" className="btn-yellow-border-hover min-h-10 rounded-lg border border-[var(--panel-divider)] px-2 text-[11px]" onClick={store.clearSketchLines}>Clear</button></div></div>;
   }
-  if ((panelKey === "floor" || panelKey === "roof") && slab) {
+  if ((panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof") && slab) {
     const boundary = slab.boundary?.length ? slab.boundary : [{ xMm: slab.minXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.maxYmm }, { xMm: slab.minXmm, yMm: slab.maxYmm }];
     return <div className="space-y-3"><label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input disabled={locked} type="number" value={slab.thicknessMm} onChange={(e) => void store.updateSlab(slab.id, { thicknessMm: Number(e.target.value) })} className={field}/></label><div className="grid grid-cols-2 gap-2"><button disabled={locked} type="button" onClick={() => store.beginSlabBoundaryEdit(slab.id)} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Edit vertices</button><button disabled={locked} type="button" onClick={() => store.beginSlabRedraw(slab.id)} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Redraw boundary</button>{store.slabBoundaryEdit?.slabId === slab.id && <><button type="button" onClick={() => void store.commitSlabBoundaryEdit()} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Commit</button><button type="button" onClick={store.cancelSlabBoundaryEdit} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Cancel</button></>}</div>{store.slabBoundaryEdit?.slabId === slab.id && <div className="space-y-2"><p className="text-[10px] text-[var(--text-muted)]">Boundary vertices · Escape restores the original polygon</p>{boundary.map((point, index) => <div key={index} className="grid grid-cols-[2rem_1fr_1fr] items-center gap-2"><span className="text-[10px] text-[var(--text-muted)]">{index + 1}</span><input aria-label={`Vertex ${index + 1} X`} type="number" value={point.xMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, xMm: Number(e.target.value) })}/><input aria-label={`Vertex ${index + 1} Y`} type="number" value={point.yMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, yMm: Number(e.target.value) })}/></div>)}</div>}</div>;
   }
