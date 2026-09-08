@@ -1299,6 +1299,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.rotateSpeed = 0.85;
+    controls.enableZoom = true;
     controls.zoomSpeed = 1.1;
     controls.panSpeed = 0.85;
     controls.maxPolarAngle = Math.PI; // allow full orbit — avoids horizon clipping flicker
@@ -1335,7 +1336,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           _pointers?: number[];
           _pointerPositions?: Record<number, unknown>;
         };
-        if (oc.state !== undefined) oc.state = 0;
+        if (oc.state !== undefined) oc.state = -1;
         if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
         if (oc._pointerPositions) {
           for (const k of Object.keys(oc._pointerPositions)) delete oc._pointerPositions[Number(k)];
@@ -4352,7 +4353,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       const controls = controlsRef.current;
       if (controls) {
         const oc = controls as unknown as { state?: number; _pointers?: number[] };
-        if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
+        if (oc.state !== undefined && oc.state !== -1) oc.state = -1;
         if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
         controls.enableRotate = true;
         if (!useAppStore.getState().viewerContextMenuOpen) {
@@ -4777,8 +4778,8 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
     const onMove = (e: PointerEvent) => {
       if (e.buttons === 0) {
         const c = controlsRef.current as unknown as { state?: number; _pointers?: number[] } | null;
-        if (c && c.state !== undefined && c.state !== 0) {
-          c.state = 0;
+        if (c && c.state !== undefined && c.state !== -1) {
+          c.state = -1;
           if (Array.isArray(c._pointers)) c._pointers.length = 0;
         }
       }
@@ -7445,7 +7446,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         const controls = controlsRef.current;
         if (controls) {
           const oc = controls as unknown as { state?: number; _pointers?: number[] };
-          if (oc.state !== undefined && oc.state !== 0 && !wallEditDragRef.current && !sectionEditDragRef.current) oc.state = 0;
+          if (oc.state !== undefined && oc.state !== -1 && !wallEditDragRef.current && !sectionEditDragRef.current) oc.state = -1;
           if (Array.isArray(oc._pointers) && (e.pointerType === "touch" || e.buttons === 0)) oc._pointers.length = 0;
           controls.enableRotate = true;
         }

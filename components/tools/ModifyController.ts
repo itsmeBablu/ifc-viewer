@@ -131,7 +131,7 @@ export function installModifyController(options: {
         _pointers?: number[];
         _pointerPositions?: Record<number, unknown>;
       };
-      if (oc.state !== undefined) oc.state = 0;
+      if (oc.state !== undefined) oc.state = -1;
       if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
       if (oc._pointerPositions) {
         for (const k of Object.keys(oc._pointerPositions)) delete oc._pointerPositions[Number(k)];
@@ -306,7 +306,7 @@ export function installModifyController(options: {
     if (controls) {
       controls.enabled = true;
       const oc = controls as unknown as { state?: number; _pointers?: number[] };
-      if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
+      if (oc.state !== undefined && oc.state !== -1) oc.state = -1;
       if (Array.isArray(oc._pointers) && oc._pointers.length > 0) oc._pointers.length = 0;
     }
   }
@@ -327,7 +327,7 @@ export function installModifyController(options: {
           controls.enabled = controlsEnabled;
         }
         const oc = controls as unknown as { state?: number; _pointers?: number[] };
-        if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
+        if (oc.state !== undefined && oc.state !== -1) oc.state = -1;
         if (Array.isArray(oc._pointers) && oc._pointers.length > 0) oc._pointers.length = 0;
       }
     }
