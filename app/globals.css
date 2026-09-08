@@ -4345,14 +4345,14 @@ body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeu
 }
 body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeug-tool-button, .werkzeug-icon-action),
 body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeug-tool-button, .werkzeug-icon-action) :is(span, strong, small) {
-  color: #d4d4d8 !important;
-  -webkit-text-fill-color: #d4d4d8 !important;
+  color: var(--text-body) !important;
+  -webkit-text-fill-color: var(--text-body) !important;
   opacity: 1 !important;
   visibility: visible !important;
 }
 body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeug-tool-button, .werkzeug-icon-action) svg {
-  color: #d4d4d8 !important;
-  stroke: #d4d4d8 !important;
+  color: var(--text-body) !important;
+  stroke: currentColor !important;
   opacity: 1 !important;
   visibility: visible !important;
 }
