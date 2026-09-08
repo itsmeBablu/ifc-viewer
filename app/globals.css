@@ -4235,7 +4235,10 @@ body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-theme-knob {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.12);
   backdrop-filter: blur(14px) saturate(150%);
   transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+  color: rgba(255,255,255,.88) !important;
 }
+body.werkzeug-active .werkzeug-ipad-tool-ribbon .werkzeug-tool-button :is(svg, span),
+body.werkzeug-active .werkzeug-ipad-action-ribbon :is(.werkzeug-icon-action, .werkzeug-theme-knob) :is(svg, span) { color: inherit !important; }
 body.werkzeug-active .werkzeug-ipad-tool-ribbon .werkzeug-tool-button:hover,
 body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-icon-action:hover,
 body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-theme-knob:hover {
@@ -4260,17 +4263,20 @@ body.werkzeug-active .desktop-capsule-btn {
   background: rgba(255,255,255,.16) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.12) !important;
   backdrop-filter: blur(14px) saturate(150%);
+  color: rgba(255,255,255,.88) !important;
 }
+body.werkzeug-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button :is(svg, span),
+body.werkzeug-active .desktop-capsule-btn :is(svg, span) { color: inherit !important; }
 body.werkzeug-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
 body.werkzeug-active .desktop-capsule-btn:hover {
   transform: translateY(-1px);
   border-color: transparent !important;
   background: rgba(255,255,255,.24) !important;
-  color: inherit !important;
+  color: rgba(255,255,255,.98) !important;
 }
 body.werkzeug-active.mep-mode-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
 body.werkzeug-active.mep-mode-active .desktop-capsule-btn:hover {
   border-color: transparent !important;
   background: rgba(255,255,255,.24) !important;
-  color: inherit !important;
+  color: rgba(255,255,255,.98) !important;
 }
