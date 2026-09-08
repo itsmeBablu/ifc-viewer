@@ -23,6 +23,7 @@ import { createPortal } from "react-dom";
 import { flushSync } from "react-dom";
 import gsap from "gsap";
 import { Flip } from "gsap/Flip";
+import { MorphSVGPlugin } from "gsap/MorphSVGPlugin";
 import {
   LuAlignCenterHorizontal,
   LuBox,
@@ -73,7 +74,7 @@ import type { MarkupShapeType } from "@/lib/toolMarkup";
 import { groupCapsulesForMorph } from "@/lib/capsuleMorph";
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 
-gsap.registerPlugin(Flip);
+gsap.registerPlugin(Flip, MorphSVGPlugin);
 
 /* ───── types & tab definitions ──────────────────────────────────── */
 
@@ -210,35 +211,90 @@ function appendCellularMorph(
   incoming: HTMLElement[],
   fusionLayer: HTMLElement,
 ) {
-  const groupDelay = 0.045;
-  timeline.to(fusionLayer, {
-    filter: "blur(.65px) contrast(1.12) saturate(1.04)",
-    duration: 0.18,
-    ease: "power2.inOut",
-  }, 0.1);
-  timeline.to(fusionLayer, {
-    filter: "blur(0px) contrast(1) saturate(1)",
-    duration: 0.16,
-    ease: "power2.out",
-  }, 0.27);
+  // Keep the organic phases compact: the entire row settles in 230–280 ms.
+  timeline.timeScale(1.9);
+  const groupDelay = 0.01;
+  const approach = 0.12;
+  const fusion = 0.15;
+  const resolve = 0.13;
+  const pinchAt = approach + fusion;
+  const settleAt = pinchAt + resolve;
+  // This timeline inherits overwrite:true. Phases intentionally share targets,
+  // so their local tweens must coexist instead of killing the next phase.
+  const phase = { overwrite: false };
+  const ns = "http://www.w3.org/2000/svg";
+  const sourceRects = new Map(outgoing.map((node) => [node, node.getBoundingClientRect()]));
+  const targetRects = new Map(incoming.map((node) => [node, node.getBoundingClientRect()]));
+
+  const pill = (cx: number, cy: number, width: number, height: number) => {
+    const r = Math.min(height, width) / 2, k = r * 0.55228475;
+    const l = cx - width / 2, t = cy - height / 2, b = cy + height / 2, right = cx + width / 2;
+    return `M${l + r},${t} H${right - r} C${right - r + k},${t} ${right},${t + r - k} ${right},${t + r}
+      V${b - r} C${right},${b - r + k} ${right - r + k},${b} ${right - r},${b}
+      H${l + r} C${l + r - k},${b} ${l},${b - r + k} ${l},${b - r}
+      V${t + r} C${l},${t + r - k} ${l + r - k},${t} ${l + r},${t} Z`;
+  };
+  // Smooth lobes joined by narrow necks: every split point pinches together.
+  const lobes = (cx: number, cy: number, width: number, height: number, count: number) => {
+    const l = cx - width / 2, step = width / count, neck = height * 0.07;
+    let d = `M${l},${cy}`;
+    for (let i = 0; i < count; i++) {
+      const x = l + i * step, endY = i === count - 1 ? cy : cy - neck;
+      d += ` C${x},${cy - height * 0.65} ${x + step},${cy - height * 0.65} ${x + step},${endY}`;
+    }
+    for (let i = count - 1; i >= 0; i--) {
+      const x = l + i * step, endY = i === 0 ? cy : cy + neck;
+      d += ` C${x + step},${cy + height * 0.65} ${x},${cy + height * 0.65} ${x},${endY}`;
+    }
+    return `${d} Z`;
+  };
+  const body = (reference: HTMLElement, shape: string) => {
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("aria-hidden", "true");
+    Object.assign(svg.style, { position: "fixed", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
+    const computed = getComputedStyle(reference);
+    const colors = computed.backgroundImage.match(/rgba?\([^)]+\)/g);
+    const gradientId = `capsule-blob-${gsap.utils.random(0, 1e9, 1)}`;
+    const defs = document.createElementNS(ns, "defs");
+    const gradient = document.createElementNS(ns, "linearGradient");
+    gradient.id = gradientId;
+    gradient.setAttribute("x2", "0"); gradient.setAttribute("y2", "1");
+    [colors?.[0] ?? computed.backgroundColor, colors?.at(-1) ?? computed.backgroundColor].forEach((color, i) => {
+      const stop = document.createElementNS(ns, "stop");
+      stop.setAttribute("offset", String(i)); stop.setAttribute("stop-color", color); gradient.appendChild(stop);
+    });
+    defs.appendChild(gradient); svg.appendChild(defs);
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", shape); path.setAttribute("fill", `url(#${gradientId})`);
+    path.setAttribute("stroke", computed.borderTopColor); path.setAttribute("stroke-width", "1");
+    path.style.opacity = "0";
+    svg.appendChild(path); fusionLayer.appendChild(svg);
+    return path;
+  };
+  const morph = (path: SVGPathElement, from: string, to: string, at: number, duration: number, ease: string) => {
+    timeline.fromTo(path, { morphSVG: from }, {
+      ...phase, morphSVG: { shape: to, shapeIndex: 0 }, duration, ease, immediateRender: false,
+    }, at);
+  };
+  const reveal = (target: HTMLElement, path: SVGPathElement, at: number) => {
+    // Real buttons (including their labels) arrive only after the body settles.
+    timeline.to(target, { ...phase, autoAlpha: 1, duration: 0.07, ease: "sine.out" }, at + 0.36);
+    timeline.to(path, { ...phase, opacity: 0, duration: 0.04, ease: "sine.out" }, at + settleAt);
+  };
+  const same = (source: HTMLElement, target: HTMLElement, offset: number) => {
+    const first = sourceRects.get(source)!, last = targetRects.get(target)!;
+    const dx = last.left - first.left, dy = last.top - first.top;
+    gsap.set(target, { autoAlpha: 0, x: -dx, y: -dy, scaleX: first.width / last.width, transformOrigin: "left center" });
+    timeline.to(source, { ...phase, x: dx, y: dy, width: last.width, scaleY: 1.04, borderRadius: "50%", duration: 0.28, ease: "back.inOut(1.15)" }, offset);
+    timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.1);
+    timeline.to(target, { ...phase, x: 0, y: 0, scaleX: 1, duration: 0.28, ease: "back.inOut(1.15)" }, offset);
+    timeline.to(target, { ...phase, autoAlpha: 1, duration: 0.12, ease: "sine.inOut" }, offset + 0.14);
+    timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.1 }, offset + 0.16);
+    timeline.to(target, { ...phase, scaleY: 1, duration: 0.08, ease: "elastic.out(1, .7)" }, offset + 0.28);
+  };
 
   if (outgoing.length === incoming.length) {
-    outgoing.forEach((source, index) => {
-      const target = incoming[index];
-      const first = source.getBoundingClientRect();
-      const last = target.getBoundingClientRect();
-      const offset = index * 0.018;
-      gsap.set(target, { autoAlpha: 0, scaleX: 0.94, filter: "blur(1px)" });
-      timeline.to(source, {
-        x: last.left - first.left, width: last.width, scaleY: 1.03,
-        borderRadius: 999, duration: 0.2, ease: "back.inOut(1.2)",
-      }, offset);
-      timeline.to(source.children, { autoAlpha: 0, duration: 0.08, ease: "power2.in" }, offset + 0.1);
-      timeline.to(source, { autoAlpha: 0, scaleY: 1, duration: 0.12 }, offset + 0.18);
-      timeline.to(target, {
-        autoAlpha: 1, scaleX: 1, filter: "blur(0px)", duration: 0.16, ease: "back.out(1.3)",
-      }, offset + 0.17);
-    });
+    outgoing.forEach((source, index) => same(source, incoming[index], index * groupDelay));
     return;
   }
 
@@ -246,62 +302,43 @@ function appendCellularMorph(
     const groups = groupCapsulesForMorph(outgoing, incoming.length);
     incoming.forEach((target, groupIndex) => {
       const group = groups[groupIndex] ?? [];
-      const targetRect = target.getBoundingClientRect();
-      const targetCenter = targetRect.left + targetRect.width / 2;
+      if (!group.length) return;
       const offset = groupIndex * groupDelay;
-      const sourceCenter = group.reduce((sum, source) => {
-        const rect = source.getBoundingClientRect();
-        return sum + rect.left + rect.width / 2;
-      }, 0) / Math.max(group.length, 1);
-      const fusionCore = target.cloneNode(false) as HTMLElement;
-      fusionCore.removeAttribute("data-capsule-id");
-      fusionCore.removeAttribute("data-flip-id");
-      fusionCore.classList.add("desktop-capsule-morph-clone", "desktop-capsule-fusion-core");
-      Object.assign(fusionCore.style, {
-        position: "fixed",
-        left: `${targetCenter - 11}px`,
-        top: `${targetRect.top}px`,
-        width: "22px",
-        height: `${targetRect.height}px`,
-        opacity: "0",
-        margin: "0px",
-      });
-      fusionLayer.appendChild(fusionCore);
-      gsap.set(target, {
-        autoAlpha: 0, x: sourceCenter - targetCenter, scaleX: 0.36, scaleY: 1.06,
-        borderRadius: 999, filter: "blur(2px) drop-shadow(0 0 7px rgba(250,204,21,.28))",
-      });
-      group.forEach((source) => {
-        const rect = source.getBoundingClientRect();
-        const delta = targetCenter - (rect.left + rect.width / 2);
-        const fusedWidth = Math.max(22, targetRect.width * 0.72);
-        timeline.to(source, {
-          x: delta * 0.58, scaleX: 0.9, scaleY: 0.97, borderRadius: 999,
-          duration: 0.14, ease: "power2.inOut",
+      if (group.length === 1) { same(group[0], target, offset); return; }
+      const targetRect = targetRects.get(target)!;
+      const targetCenter = targetRect.left + targetRect.width / 2;
+      const sourceCenter = group.reduce((sum, source) => { const r = sourceRects.get(source)!; return sum + r.left + r.width / 2; }, 0) / group.length;
+      const center = sourceCenter + (targetCenter - sourceCenter) * 0.45;
+      const cy = targetRect.top + targetRect.height / 2;
+      const diameter = targetRect.height * 1.2;
+      const joinedWidth = diameter * (1 + (group.length - 1) * 0.65);
+      const joined = lobes(center, cy, joinedWidth, diameter, group.length);
+      const absorbed = pill(center, cy, diameter * 1.15, diameter);
+      const final = pill(targetCenter, cy, targetRect.width, targetRect.height);
+      const blob = body(target, joined);
+      gsap.set(target, { autoAlpha: 0 });
+      group.forEach((source, i) => {
+        const rect = sourceRects.get(source)!;
+        const firstCenter = rect.left + rect.width / 2;
+        const beadWidth = Math.max(diameter, rect.width * 0.62);
+        timeline.to(source, { ...phase,
+          x: center + (firstCenter - sourceCenter) * 0.4 - rect.left - beadWidth / 2,
+          y: cy - rect.top - rect.height / 2, width: beadWidth,
+          scaleX: 0.92, scaleY: 0.94, borderRadius: "50%",
+          duration: approach, ease: "power2.inOut",
         }, offset);
-        timeline.to(source, {
-          x: targetCenter - (rect.left + fusedWidth / 2), width: fusedWidth,
-          scaleX: 0.82, scaleY: 1.06, borderRadius: 999,
-          duration: 0.17, ease: "back.inOut(1.18)",
-        }, offset + 0.12);
-        timeline.to(source.children, { autoAlpha: 0, duration: 0.1, ease: "power2.in" }, offset + 0.2);
-        timeline.to(source, { autoAlpha: 0, scale: 0.5, duration: 0.12, ease: "power2.in" }, offset + 0.29);
+        timeline.to(source, { ...phase,
+          x: center + (i - (group.length - 1) / 2) * diameter * 0.65 - rect.left - diameter / 2,
+          width: diameter, scaleX: 0.8, scaleY: 1.14, borderRadius: "50%",
+          duration: fusion, ease: "back.inOut(1.5)",
+        }, offset + approach);
+        timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.07);
+        timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.15);
       });
-      timeline.to(fusionCore, {
-        autoAlpha: 0.92, width: Math.max(30, targetRect.width * 0.52),
-        x: -(Math.max(30, targetRect.width * 0.52) - 22) / 2,
-        scaleY: 1.08, duration: 0.17, ease: "back.out(1.22)",
-      }, offset + 0.15);
-      timeline.to(fusionCore, {
-        width: targetRect.width, x: -(targetRect.width - 22) / 2,
-        scaleY: 1, duration: 0.15, ease: "elastic.out(1, .8)",
-      }, offset + 0.29);
-      timeline.to(target, {
-        autoAlpha: 1, x: 0, scaleX: 1, scaleY: 1, borderRadius: 999,
-        filter: "blur(0px) drop-shadow(0 0 0 rgba(250,204,21,0))",
-        duration: 0.17, ease: "elastic.out(1, .78)",
-      }, offset + 0.35);
-      timeline.to(fusionCore, { autoAlpha: 0, duration: 0.12, ease: "power2.out" }, offset + 0.37);
+      timeline.to(blob, { ...phase, opacity: 1, duration: 0.06 }, offset + approach);
+      morph(blob, joined, absorbed, offset + approach, fusion, "back.inOut(1.4)");
+      morph(blob, absorbed, final, offset + pinchAt, resolve, "elastic.out(1, .65)");
+      reveal(target, blob, offset);
     });
     return;
   }
@@ -309,37 +346,39 @@ function appendCellularMorph(
   const targetGroups = groupCapsulesForMorph(incoming, outgoing.length);
   outgoing.forEach((source, groupIndex) => {
     const targets = targetGroups[groupIndex] ?? [];
-    const sourceRect = source.getBoundingClientRect();
-    const targetRects = targets.map((target) => target.getBoundingClientRect());
-    const left = Math.min(...targetRects.map((rect) => rect.left));
-    const right = Math.max(...targetRects.map((rect) => rect.right));
-    const splitCenter = (left + right) / 2;
-    const swollenWidth = Math.min(Math.max(sourceRect.width * 1.28, 38), 112);
+    if (!targets.length) return;
     const offset = groupIndex * groupDelay;
-    timeline.to(source, {
-      scaleX: 1.08, scaleY: 1.05, borderRadius: 999,
-      duration: 0.14, ease: "back.out(1.18)",
-    }, offset);
-    timeline.to(source, {
-      x: splitCenter - (sourceRect.left + swollenWidth / 2), width: swollenWidth,
-      scaleX: 1, scaleY: 0.94, borderRadius: 999,
-      duration: 0.17, ease: "back.inOut(1.16)",
-    }, offset + 0.12);
-    timeline.to(source.children, { autoAlpha: 0, duration: 0.1 }, offset + 0.23);
-    targets.forEach((target) => {
-      const targetRect = target.getBoundingClientRect();
-      gsap.set(target, {
-        autoAlpha: 0, x: splitCenter - (targetRect.left + targetRect.width / 2),
-        scaleX: 0.3, scaleY: 1.06, borderRadius: 999, filter: "blur(2px)",
-      });
-      timeline.to(target, {
-        autoAlpha: 1, x: 0, scaleX: 1, scaleY: 1, borderRadius: 999, filter: "blur(0px)",
-        duration: 0.2, ease: "elastic.out(1, .78)",
-      }, offset + 0.31);
+    if (targets.length === 1) { same(source, targets[0], offset); return; }
+    const first = sourceRects.get(source)!;
+    const rects = targets.map((target) => targetRects.get(target)!);
+    const sourceCenter = first.left + first.width / 2;
+    const finalCenter = (rects[0].left + rects.at(-1)!.right) / 2;
+    const center = sourceCenter + (finalCenter - sourceCenter) * 0.45;
+    const cy = first.top + first.height / 2;
+    const width = Math.max(first.width * 1.25, targets.length * first.height * 0.85);
+    const swelled = pill(sourceCenter, cy, first.width * 1.08, first.height * 1.12);
+    const pinched = lobes(center, cy, width, first.height * 1.12, targets.length);
+    const blob = body(source, swelled);
+    timeline.to(source, { ...phase, scaleX: 1.08, scaleY: 1.12, borderRadius: "50%", duration: approach, ease: "back.out(1.3)" }, offset);
+    timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.07 }, offset + 0.07);
+    timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.05 }, offset + approach);
+    timeline.to(blob, { ...phase, opacity: 1, duration: 0.05 }, offset + approach);
+    morph(blob, swelled, pinched, offset + approach, fusion, "back.inOut(1.5)");
+    timeline.set(blob, { ...phase, opacity: 0 }, offset + pinchAt);
+    targets.forEach((target, i) => {
+      const rect = rects[i];
+      const pieceCenter = center - width / 2 + (i + 0.5) * width / targets.length;
+      const seed = lobes(pieceCenter, cy, width / targets.length, first.height * 1.12, 1);
+      const final = pill(rect.left + rect.width / 2, rect.top + rect.height / 2, rect.width, rect.height);
+      const piece = body(target, seed);
+      gsap.set(target, { autoAlpha: 0 });
+      timeline.set(piece, { ...phase, opacity: 1 }, offset + pinchAt);
+      morph(piece, seed, final, offset + pinchAt, resolve, "elastic.out(1, .65)");
+      reveal(target, piece, offset);
     });
-    timeline.to(source, { autoAlpha: 0, scaleY: 0.72, duration: 0.14, ease: "power2.out" }, offset + 0.31);
   });
 }
+
 
 /* ───── component ───────────────────────────────────────────────── */
 
@@ -708,7 +747,7 @@ export default function DesktopIsland() {
 
     const outgoingSelect = clones.find((clone) => clone.dataset.capsuleId === "select");
     if (selectState && incomingSelect) {
-      selectFlipRef.current = Flip.from(selectState, { targets: incomingSelect, duration: 0.38, ease: "back.inOut(1.2)", absolute: true });
+      selectFlipRef.current = Flip.from(selectState, { targets: incomingSelect, duration: 0.22, ease: "back.inOut(1.2)", absolute: true });
       outgoingSelect?.remove();
     } else if (outgoingSelect) {
       timeline.to(outgoingSelect, { autoAlpha: 0, scale: 0.35, duration: 0.2, ease: "power3.in" }, 0);
