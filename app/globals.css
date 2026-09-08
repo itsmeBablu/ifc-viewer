@@ -4231,7 +4231,7 @@ body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-theme-knob {
   min-height: 32px;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 999px;
-  background: rgba(24,24,27,.34);
+  background: rgba(255,255,255,.16);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.12);
   backdrop-filter: blur(14px) saturate(150%);
   transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
@@ -4252,3 +4252,25 @@ body.werkzeug-active.mep-mode-active .werkzeug-ipad-action-ribbon .werkzeug-them
   box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 4px 14px rgba(56,189,248,.2);
 }
 .werkzeug-ipad-tool-ribbon .werkzeug-tool-label { font-weight: 650; letter-spacing: .01em; }
+/* Bottom contextual capsules use the same quiet gray glass as navigation;
+   active MEP capsules inherit the workspace's blue accent. */
+body.werkzeug-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button,
+body.werkzeug-active .desktop-capsule-btn {
+  border: 1px solid rgba(255,255,255,.22) !important;
+  background: rgba(255,255,255,.16) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 8px rgba(0,0,0,.12) !important;
+  backdrop-filter: blur(14px) saturate(150%);
+}
+body.werkzeug-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
+body.werkzeug-active .desktop-capsule-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(250,204,21,.72) !important;
+  background: rgba(250,204,21,.14) !important;
+  color: #fde68a !important;
+}
+body.werkzeug-active.mep-mode-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
+body.werkzeug-active.mep-mode-active .desktop-capsule-btn:hover {
+  border-color: rgba(125,211,252,.82) !important;
+  background: rgba(56,189,248,.16) !important;
+  color: #bae6fd !important;
+}
