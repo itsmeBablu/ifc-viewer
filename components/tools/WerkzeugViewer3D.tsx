@@ -1382,6 +1382,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     cameraRef.current = camera;
     rendererRef.current = renderer;
     controlsRef.current = controls;
+    // Temporary browser reproduction hook; removed before committing.
+    Object.assign(window, { __usability: {
+      layout: useLayoutDrawingStore, markup: useToolMarkupStore, app: useAppStore,
+      controls, THREE, camera: () => cameraRef.current, layer: () => layoutLayerRef.current,
+    } });
     overlaysRef.current = overlays;
     compareRootRef.current = compareRoot;
     helpersRef.current = helpers;

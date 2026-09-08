@@ -2162,6 +2162,7 @@ export default class LayoutSceneLayer {
           }
 
           const volGeo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false });
+          volGeo.rotateX(Math.PI / 2);
           const volMat = new THREE.MeshPhysicalMaterial({
             color: kind === "roof" ? ROOF_COLOR : FLOOR_COLOR,
             transparent: true,
@@ -2169,7 +2170,6 @@ export default class LayoutSceneLayer {
             depthWrite: false,
           });
           const volMesh = new THREE.Mesh(volGeo, volMat);
-          volMesh.rotation.x = -Math.PI / 2;
           volMesh.position.y = topY;
           volMesh.userData.isLayoutPreview = true;
           g.add(volMesh);
@@ -3595,7 +3595,7 @@ export default class LayoutSceneLayer {
     ];
 
     if (slab.kind === "roof" && !slab.holes?.length) {
-      const roof = this.buildPitchedRoofGeometry(slab, boundary);
+      const roof = this.buildComplexRoofGeometry(slab, boundary);
       if (roof) return roof;
     }
 
@@ -3624,50 +3624,8 @@ export default class LayoutSceneLayer {
       depth: thickness,
       bevelEnabled: false,
     });
-
-    // Section 8: Roof per-edge slope controls
-    if (slab.kind === "roof") {
-      const pos = geo.attributes.position;
-      const distPointToSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len2 = dx * dx + dy * dy;
-        if (len2 < 1e-9) return Math.hypot(px - ax, py - ay);
-        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
-        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-      };
-
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vy = pos.getY(i);
-        const vz = pos.getZ(i);
-
-        // Only warp vertices on the top face of extrusion (vz ~ thickness)
-        if (vz > thickness * 0.9) {
-          let minDist = Infinity;
-          let pitchDeg = 30; // default pitch
-          let isSloped = false;
-
-          for (let j = 0; j < boundary.length; j++) {
-            const p1 = boundary[j];
-            const p2 = boundary[(j + 1) % boundary.length];
-            const dVal = distPointToSegment(vx, vy, fromMm(p1.xMm), fromMm(p1.yMm), fromMm(p2.xMm), fromMm(p2.yMm));
-            if (dVal < minDist) {
-              minDist = dVal;
-              const slopeInfo = slab.edgeSlopes?.find((s) => s.edgeIdx === j);
-              isSloped = slopeInfo ? slopeInfo.isSloped : true; // default sloped
-              pitchDeg = slopeInfo ? slopeInfo.pitchDeg : 30;
-            }
-          }
-
-          if (isSloped) {
-            const pitchRad = (pitchDeg * Math.PI) / 180;
-            pos.setZ(i, vz + minDist * Math.tan(pitchRad));
-          }
-        }
-      }
-      geo.computeVertexNormals();
-    }
+    // Align local extrusion so local X -> World X, local Y -> World Z, local Z (depth) -> -World Y
+    geo.rotateX(Math.PI / 2);
 
     // World-metric UVs for slabs so hatch patterns tile without stretching
     const pos = geo.attributes.position;
@@ -3675,99 +3633,241 @@ export default class LayoutSceneLayer {
     if (pos && uvs) {
       for (let i = 0; i < pos.count; i++) {
         const vx = pos.getX(i);
-        const vy = pos.getY(i);
-        uvs.setXY(i, vx, vy);
+        const vz = pos.getZ(i);
+        uvs.setXY(i, vx, vz);
       }
       uvs.needsUpdate = true;
     }
+    geo.userData.isComplexRoof = false;
 
     return geo;
   }
 
-  /** Build an explicit watertight hip roof with a real ridge/apex vertex. */
-  private buildPitchedRoofGeometry(
+  /**
+   * Build an explicit Revit-style complex angled roof supporting:
+   * - Hip roofs (all edges sloped with ridge line)
+   * - Gable roofs (2 edges sloped, vertical gable end walls)
+   * - Shed / Mono-pitch roofs (1 edge sloped)
+   * - Flat roofs (0 edges sloped)
+   * - Custom angled multi-slope roofs with distinct edge pitches
+   * - Eave overhang extensions
+   */
+  private buildComplexRoofGeometry(
     slab: LayoutSlab,
-    boundary: { xMm: number; yMm: number }[],
+    rawBoundary: { xMm: number; yMm: number }[],
   ): THREE.BufferGeometry | null {
-    if (boundary.length < 3) return null;
-    let turnSign = 0;
-    for (let i = 0; i < boundary.length; i++) {
-      const a = boundary[i];
-      const b = boundary[(i + 1) % boundary.length];
-      const c = boundary[(i + 2) % boundary.length];
-      const cross =
-        (b.xMm - a.xMm) * (c.yMm - b.yMm) -
-        (b.yMm - a.yMm) * (c.xMm - b.xMm);
-      if (Math.abs(cross) < 1e-3) continue;
-      const sign = Math.sign(cross);
-      if (turnSign && sign !== turnSign) return null;
-      turnSign = sign;
+    if (rawBoundary.length < 3) return null;
+
+    const overhangMm = slab.overhangMm ?? 0;
+    const boundary = overhangMm > 0
+      ? this.expandBoundaryPolygon(rawBoundary, overhangMm)
+      : rawBoundary;
+
+    const n = boundary.length;
+    // Edge definitions: each edge i runs from boundary[i] to boundary[(i + 1) % n]
+    const edgeSlopes = slab.edgeSlopes && slab.edgeSlopes.length > 0
+      ? slab.edgeSlopes
+      : boundary.map((_, i) => ({ edgeIdx: i, pitchDeg: 30, isSloped: true }));
+
+    const slopedEdges = edgeSlopes.filter((e) => e.isSloped && e.pitchDeg > 0);
+    const thickness = fromMm(Math.max(50, slab.thicknessMm));
+
+    // Convert boundary points to Vector2 in meters
+    const pts = boundary.map(
+      (p) => new THREE.Vector2(fromMm(p.xMm), fromMm(p.yMm)),
+    );
+
+    // Flat roof fallback if no edges define slope
+    if (slopedEdges.length === 0) {
+      const shape = new THREE.Shape();
+      shape.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y);
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+      geo.rotateX(Math.PI / 2);
+      geo.userData.isComplexRoof = false;
+      return geo;
     }
 
-    let points = boundary.map(
-      (point) => new THREE.Vector2(fromMm(point.xMm), fromMm(point.yMm)),
-    );
-    if (turnSign < 0) points = points.reverse();
-    const center = points.reduce(
-      (sum, point) => sum.add(point),
-      new THREE.Vector2(),
-    ).multiplyScalar(1 / points.length);
-    const distanceToEdge = (p: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) => {
-      const ab = b.clone().sub(a);
-      const lenSq = ab.lengthSq();
-      const t = lenSq > 0
-        ? THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / lenSq, 0, 1)
-        : 0;
-      return p.distanceTo(a.clone().addScaledVector(ab, t));
+    // Helper: shortest distance from point (px, pz) to edge segment (ax, az) -> (bx, bz)
+    const distToSegment = (px: number, pz: number, ax: number, az: number, bx: number, bz: number): number => {
+      const dx = bx - ax;
+      const dz = bz - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-9) return Math.hypot(px - ax, pz - az);
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2));
+      return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
     };
-    const minRun = Math.min(
-      ...points.map((point, index) =>
-        distanceToEdge(center, point, points[(index + 1) % points.length]),
-      ),
-    );
-    const pitchedEdges = slab.edgeSlopes?.filter((edge) => edge.isSloped) ?? [];
-    const pitchDeg = pitchedEdges.length
-      ? pitchedEdges.reduce((sum, edge) => sum + edge.pitchDeg, 0) / pitchedEdges.length
-      : 30;
-    const rise = Math.max(0.05, minRun * Math.tan(THREE.MathUtils.degToRad(pitchDeg)));
-    const eaveZ = fromMm(Math.max(50, slab.thicknessMm));
+
+    // Height function H(x, z) above eave level determined by the envelope of sloped edge planes
+    const elevationAt = (x: number, z: number): number => {
+      let minH = Infinity;
+      for (const se of slopedEdges) {
+        const i = se.edgeIdx % n;
+        const a = pts[i];
+        const b = pts[(i + 1) % n];
+        const d = distToSegment(x, z, a.x, a.y, b.x, b.y);
+        const pitchRad = (se.pitchDeg * Math.PI) / 180;
+        const h = d * Math.tan(pitchRad);
+        if (h < minH) minH = h;
+      }
+      return Number.isFinite(minH) ? minH : 0;
+    };
+
+    // Triangulate footprint using Three.js ShapeUtils
+    const windingPoints = [...pts];
+    if (THREE.ShapeUtils.isClockWise(windingPoints)) {
+      windingPoints.reverse();
+    }
+    const initialTriIndices = THREE.ShapeUtils.triangulateShape(windingPoints, []);
+    if (!initialTriIndices || initialTriIndices.length === 0) return null;
+
+    type Tri2D = [THREE.Vector2, THREE.Vector2, THREE.Vector2];
+    let triangles: Tri2D[] = initialTriIndices.map((tri) => [
+      windingPoints[tri[0]],
+      windingPoints[tri[1]],
+      windingPoints[tri[2]],
+    ]);
+
+    // Subdivide large triangles to cleanly resolve hip rafters, ridges, and valleys
+    for (let pass = 0; pass < 2; pass++) {
+      const nextTriangles: Tri2D[] = [];
+      for (const [v0, v1, v2] of triangles) {
+        const d01 = v0.distanceTo(v1);
+        const d12 = v1.distanceTo(v2);
+        const d20 = v2.distanceTo(v0);
+        if (Math.max(d01, d12, d20) > 0.6) {
+          const m01 = new THREE.Vector2().addVectors(v0, v1).multiplyScalar(0.5);
+          const m12 = new THREE.Vector2().addVectors(v1, v2).multiplyScalar(0.5);
+          const m20 = new THREE.Vector2().addVectors(v2, v0).multiplyScalar(0.5);
+          nextTriangles.push([v0, m01, m20], [m01, v1, m12], [m20, m12, v2], [m01, m12, m20]);
+        } else {
+          nextTriangles.push([v0, v1, v2]);
+        }
+      }
+      triangles = nextTriangles;
+    }
+
     const positions: number[] = [];
-    const pushTriangle = (
-      a: [number, number, number],
-      b: [number, number, number],
-      c: [number, number, number],
-    ) => positions.push(...a, ...b, ...c);
+    const uvs: number[] = [];
+    const pushTri = (
+      p1: [number, number, number],
+      p2: [number, number, number],
+      p3: [number, number, number],
+    ) => {
+      positions.push(...p1, ...p2, ...p3);
+      uvs.push(p1[0], p1[2], p2[0], p2[2], p3[0], p3[2]);
+    };
 
-    // A roof is a thickness shell: its underside follows the same pitches.
-    const undersideApex: [number, number, number] = [center.x, center.y, rise];
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i], b = points[(i + 1) % points.length];
-      pushTriangle([b.x, b.y, 0], [a.x, a.y, 0], undersideApex);
+    // 1. Top roof sloped surface
+    for (const [v0, v1, v2] of triangles) {
+      const h0 = elevationAt(v0.x, v0.y);
+      const h1 = elevationAt(v1.x, v1.y);
+      const h2 = elevationAt(v2.x, v2.y);
+      pushTri(
+        [v0.x, thickness + h0, v0.y],
+        [v1.x, thickness + h1, v1.y],
+        [v2.x, thickness + h2, v2.y],
+      );
     }
 
-    const apex: [number, number, number] = [center.x, center.y, eaveZ + rise];
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i];
-      const b = points[(i + 1) % points.length];
-      pushTriangle([a.x, a.y, eaveZ], [b.x, b.y, eaveZ], apex);
-      pushTriangle([a.x, a.y, 0], [b.x, b.y, 0], [b.x, b.y, eaveZ]);
-      pushTriangle([a.x, a.y, 0], [b.x, b.y, eaveZ], [a.x, a.y, eaveZ]);
+    // 2. Bottom underside surface (wound in reverse)
+    for (const [v0, v1, v2] of triangles) {
+      const h0 = elevationAt(v0.x, v0.y);
+      const h1 = elevationAt(v1.x, v1.y);
+      const h2 = elevationAt(v2.x, v2.y);
+      pushTri(
+        [v0.x, h0, v0.y],
+        [v2.x, h2, v2.y],
+        [v1.x, h1, v1.y],
+      );
     }
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    const uv: number[] = [];
-    for (let i = 0; i < positions.length; i += 3) {
-      uv.push(positions[i], positions[i + 1]);
+    // 3. Perimeter walls (fascia & vertical gable end walls)
+    for (let i = 0; i < n; i++) {
+      const pA = pts[i];
+      const pB = pts[(i + 1) % n];
+      const edgeLen = pA.distanceTo(pB);
+      const steps = Math.max(1, Math.ceil(edgeLen / 0.5));
+      for (let s = 0; s < steps; s++) {
+        const t0 = s / steps;
+        const t1 = (s + 1) / steps;
+        const x0 = pA.x + (pB.x - pA.x) * t0;
+        const z0 = pA.y + (pB.y - pA.y) * t0;
+        const x1 = pA.x + (pB.x - pA.x) * t1;
+        const z1 = pA.y + (pB.y - pA.y) * t1;
+        const h0 = elevationAt(x0, z0);
+        const h1 = elevationAt(x1, z1);
+
+        const bot0: [number, number, number] = [x0, 0, z0];
+        const bot1: [number, number, number] = [x1, 0, z1];
+        const top0: [number, number, number] = [x0, thickness + h0, z0];
+        const top1: [number, number, number] = [x1, thickness + h1, z1];
+
+        // Vertical quad connecting eave base to top roof edge
+        pushTri(bot0, bot1, top1);
+        pushTri(bot0, top1, top0);
+      }
     }
-    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-    geometry.computeVertexNormals();
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    return geometry;
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    geo.userData.isComplexRoof = true;
+    return geo;
+  }
+
+  /** Expand a 2D boundary polygon outward by offsetMm. */
+  private expandBoundaryPolygon(
+    boundary: { xMm: number; yMm: number }[],
+    offsetMm: number,
+  ): { xMm: number; yMm: number }[] {
+    if (boundary.length < 3 || offsetMm <= 0) return boundary;
+    const n = boundary.length;
+    const cx = boundary.reduce((sum, p) => sum + p.xMm, 0) / n;
+    const cy = boundary.reduce((sum, p) => sum + p.yMm, 0) / n;
+    const result: { xMm: number; yMm: number }[] = [];
+
+    for (let i = 0; i < n; i++) {
+      const prev = boundary[(i - 1 + n) % n];
+      const curr = boundary[i];
+      const next = boundary[(i + 1) % n];
+
+      const v1x = curr.xMm - prev.xMm;
+      const v1y = curr.yMm - prev.yMm;
+      const len1 = Math.hypot(v1x, v1y) || 1;
+      const n1x = -v1y / len1;
+      const n1y = v1x / len1;
+
+      const v2x = next.xMm - curr.xMm;
+      const v2y = next.yMm - curr.yMm;
+      const len2 = Math.hypot(v2x, v2y) || 1;
+      const n2x = -v2y / len2;
+      const n2y = v2x / len2;
+
+      let nx = (n1x + n2x) * 0.5;
+      let ny = (n1y + n2y) * 0.5;
+      const nLen = Math.hypot(nx, ny) || 1;
+      nx /= nLen;
+      ny /= nLen;
+
+      // Ensure normal points outward away from center
+      const toPtX = curr.xMm - cx;
+      const toPtY = curr.yMm - cy;
+      if (nx * toPtX + ny * toPtY < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+
+      result.push({
+        xMm: Math.round(curr.xMm + nx * offsetMm),
+        yMm: Math.round(curr.yMm + ny * offsetMm),
+      });
+    }
+    return result;
   }
 
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {
@@ -3805,6 +3905,8 @@ export default class LayoutSceneLayer {
         : [slab.minXmm, slab.minYmm, slab.maxXmm, slab.maxYmm],
       slab.holes ?? [],
       slab.kind === "roof" ? slab.edgeSlopes ?? [] : [],
+      slab.roofPreset,
+      slab.overhangMm,
       slab.roofJoin?.positions,
     ]);
     if (mesh.userData.slabGeometryKey !== geometryKey) {
@@ -3815,16 +3917,15 @@ export default class LayoutSceneLayer {
     }
 
     const thickness = fromMm(Math.max(50, slab.thicknessMm));
-    
-    // Position mesh and rotate extrusion: Extrusion local Z maps to global Y pointing up
-    mesh.position.set(0, 0, 0);
-    mesh.rotation.set(-Math.PI / 2, 0, 0);
-
     const baseY = fromMm(elevMm + slab.elevationOffsetMm);
+
+    mesh.position.set(0, 0, 0);
+    mesh.rotation.set(0, 0, 0);
+
     if (slab.kind === "roof") {
-      mesh.position.y = baseY;
+      mesh.position.y = mesh.geometry.userData?.isComplexRoof ? baseY : baseY + thickness;
     } else {
-      mesh.position.y = baseY - thickness;
+      mesh.position.y = baseY;
     }
     mesh.userData.layoutSlabId = slab.id;
   }

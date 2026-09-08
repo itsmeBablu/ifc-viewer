@@ -391,6 +391,7 @@ export default function DesktopIsland() {
   const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
+  const slabs = useLayoutDrawingStore((s) => s.slabs);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
@@ -468,6 +469,7 @@ export default function DesktopIsland() {
     selectedSlabId,
     selectedStairId,
     selectedRampId,
+    slabs,
   ]);
 
   /* ── 1. GSAP squeeze-and-release underline, shared with Floors / Attributes ── */
@@ -603,7 +605,10 @@ export default function DesktopIsland() {
     if (selectedWallId) return "Modify · Wall";
     if (selectedDoorId) return "Modify · Door";
     if (selectedWindowId) return "Modify · Window";
-    if (selectedSlabId) return "Modify · Slab";
+    if (selectedSlabId) {
+      const slab = slabs.find((s) => s.id === selectedSlabId);
+      return slab?.kind === "roof" ? "Modify · Roof" : "Modify · Floor";
+    }
     if (selectedStairId) return "Modify · Stair";
     if (selectedRampId) return "Modify · Ramp";
     if (selectedElements && selectedElements.length > 0) {
@@ -624,6 +629,27 @@ export default function DesktopIsland() {
   const activeCapsules: CapsuleItem[] = useMemo(() => {
     if (isBoundaryEditing) return BOUNDARY_ITEMS;
     if (hasContextSelection) {
+      if (selectedSlabId) {
+        const slab = slabs.find((s) => s.id === selectedSlabId);
+        const isRoof = slab?.kind === "roof";
+        const slabItems: CapsuleItem[] = [
+          {
+            id: "edit-boundary",
+            label: isRoof ? "Edit Roof" : "Edit Floor",
+            hint: "Edit boundary sketch lines (re-draw perimeter)",
+            icon: <LuPencil className="h-3 w-3 text-amber-400 shrink-0" />,
+          },
+        ];
+        if (isRoof) {
+          slabItems.push(
+            { id: "roof-hip", label: "Hip", hint: "Hip roof (all edges sloped 30°)", icon: <span className="text-[11px] font-bold text-yellow-400">◺</span> },
+            { id: "roof-gable", label: "Gable", hint: "Gable roof (2 opposite slopes, 2 vertical ends)", icon: <span className="text-[11px] font-bold text-amber-400">∧</span> },
+            { id: "roof-shed", label: "Shed", hint: "Shed / mono-pitch roof (single slope)", icon: <span className="text-[11px] font-bold text-orange-400">/</span> },
+            { id: "roof-flat", label: "Flat", hint: "Flat roof slab (0° pitch)", icon: <span className="text-[11px] font-bold text-blue-400">—</span> },
+          );
+        }
+        return [...slabItems, ...MODIFY_ITEMS];
+      }
       return MODIFY_ITEMS;
     }
 
@@ -656,7 +682,7 @@ export default function DesktopIsland() {
           return MEP_ALL_ITEMS;
       }
     }
-  }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing]);
+  }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing, selectedSlabId, slabs]);
 
   const [renderedCapsules, setRenderedCapsules] = useState(activeCapsules);
   const renderedCapsulesRef = useRef(renderedCapsules);
@@ -782,7 +808,13 @@ export default function DesktopIsland() {
   const handleCapsuleClick = (id: string) => {
     const layout = useLayoutDrawingStore.getState();
     if (layout.slabBoundaryEdit) {
-      if (id === "boundary-finish") void layout.commitSlabBoundaryEdit();
+      if (id === "boundary-finish") {
+        if (layout.editingSlabId) {
+          void layout.convertSketchToSlab(layout.sketchTargetKind || "floor");
+        } else {
+          void layout.commitSlabBoundaryEdit();
+        }
+      }
       else if (id === "boundary-cancel" || id === "deselect" || id === "select") layout.cancelSlabBoundaryEdit();
       else if (id === "boundary-modify") layout.setBoundaryEditTool("modify");
       else if (id === "boundary-trim") layout.setBoundaryEditTool("trim");
@@ -836,6 +868,29 @@ export default function DesktopIsland() {
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
       useToolMarkupStore.getState().setArmedTool(null);
       useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
+
+    if (id === "edit-boundary") {
+      if (selectedSlabId) {
+        useLayoutDrawingStore.getState().beginSlabBoundaryEdit(selectedSlabId);
+      }
+      return;
+    }
+    if (id === "roof-hip") {
+      if (selectedSlabId) void useLayoutDrawingStore.getState().applyRoofPreset(selectedSlabId, "hip");
+      return;
+    }
+    if (id === "roof-gable") {
+      if (selectedSlabId) void useLayoutDrawingStore.getState().applyRoofPreset(selectedSlabId, "gable");
+      return;
+    }
+    if (id === "roof-shed") {
+      if (selectedSlabId) void useLayoutDrawingStore.getState().applyRoofPreset(selectedSlabId, "shed");
+      return;
+    }
+    if (id === "roof-flat") {
+      if (selectedSlabId) void useLayoutDrawingStore.getState().applyRoofPreset(selectedSlabId, "flat");
       return;
     }
 

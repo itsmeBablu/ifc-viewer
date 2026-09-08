@@ -138,6 +138,12 @@ export type LayoutSlab = {
   holes?: { xMm: number; yMm: number }[][];
   // -- Section 8: Roof per-edge slope control ----------------------------
   edgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[];
+  /** Eave overhang past boundary lines in mm (e.g. 300mm / 450mm). */
+  overhangMm?: number;
+  /** Roof preset type for quick Revit-style configuration. */
+  roofPreset?: "hip" | "gable" | "shed" | "flat" | "custom";
+  /** Fascia cut style: plumb (vertical) or square (perpendicular). */
+  fasciaCut?: "plumb" | "square";
   /** Boundary was inferred from an enclosed wall region and follows wall edits. */
   autoBoundaryFromWalls?: boolean;
   // -- Section 9: Material & color ---------------------------------------

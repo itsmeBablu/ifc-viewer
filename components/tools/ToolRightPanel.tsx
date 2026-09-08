@@ -41,6 +41,7 @@ import {
   LuSettings,
   LuTable,
   LuFileSpreadsheet,
+  LuPencil,
 } from "react-icons/lu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -59,7 +60,7 @@ import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
-import DuctCatalogDrawer from "./DuctCatalogDrawer";
+import MepToolsPanel from "./MepToolsPanel";
 import {
   wallLengthMm,
   type LayoutLevel,
@@ -1004,6 +1005,16 @@ export default function ToolRightPanel({
                                 {selectedSlab.elevationOffsetMm} mm
                               </span>
                             </PropRow>
+                            <div className="mt-2 pt-2 border-t border-[var(--panel-divider)]">
+                              <button
+                                type="button"
+                                onClick={() => store.beginSlabBoundaryEdit(selectedSlab.id)}
+                                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-semibold transition-colors"
+                              >
+                                <LuPencil className="h-3.5 w-3.5" />
+                                <span>Edit {selectedSlab.kind === "roof" ? "Roof" : "Floor"} Boundary</span>
+                              </button>
+                            </div>
                           </>
                         )}
                         {selectedPlacement && (
@@ -1347,30 +1358,6 @@ export default function ToolRightPanel({
 }
 
 // -- Small helper components ---------------------------------------------------
-
-function MepToolsPanel() {
-  const store = useLayoutDrawingStore();
-  const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
-  const activeLevel = store.levels.find((level) => level.id === activeLevelId) ?? store.levels[0];
-  const [connection, setConnection] = useState("auto");
-  const subCategory = store.desktopMepCategory;
-  const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)]";
-  const section = "rounded-lg border border-sky-400/25 bg-sky-400/5 p-2.5";
-  const arm = (tool: LayoutToolId) => { store.setArmedLayoutTool(tool); store.setMepModeActive(true); };
-  const categories = [["hvac", "Duct"], ["piping", "Piping"], ["wiring", "Wiring"], ["electrical", "Electrical"], ["components", "Components"]] as const;
-  const routeTools = subCategory === "hvac" ? [["duct", "Duct run"], ["flex_duct", "Flex duct"], ["equipment", "Diffuser / grille"]] : subCategory === "piping" ? [["pipe", "Pipe run"], ["equipment", "Sink / toilet"]] : subCategory === "wiring" ? [["wire", "Wire run"], ["cabletray", "Conduit / tray"]] : subCategory === "electrical" ? [["equipment", "Outlet / light"], ["wire", "Circuit wire"]] : [["equipment", "Mechanical equipment"], ["duct", "Duct"], ["pipe", "Pipe"], ["cabletray", "Cable tray"], ["wire", "Wire"]];
-  const mepSelected = store.selectedDuctId || store.selectedPipeId || store.selectedCableTrayId || store.selectedWireId || store.selectedEquipmentId;
-  return <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-16 compact-properties space-y-2 text-[11px]">
-    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-2.5"><div className="flex items-center justify-between"><p className="font-bold uppercase tracking-wide text-sky-400">MEP systems</p>{store.armedLayoutTool && <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[9px] font-semibold text-sky-300">Level: {activeLevel?.name ?? "—"}</span>}</div><p className="mt-1 text-[10px] text-[var(--text-muted)]">Route connected mechanical, electrical and plumbing services with endpoint snapping.</p></div>
-    <div className="grid grid-cols-4 gap-1 rounded-lg border border-[var(--panel-divider)] p-1">{categories.map(([id, label]) => <button key={id} type="button" className={`min-h-8 rounded-md px-1 text-[9px] font-semibold ${subCategory === id ? "btn-v-blue text-slate-950" : "text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]"}`} onClick={() => store.setDesktopMepCategory(id)}>{label}</button>)}</div>
-    <div className={section}><label className="property-field"><span>Discipline / family</span><select className={field} value={store.draftEquipmentCategory} onChange={(e) => store.setDraftEquipmentCategory(e.target.value as typeof store.draftEquipmentCategory)}><option value="air_terminal">Mechanical / HVAC terminal</option><option value="diffuser_supply">Supply diffuser</option><option value="diffuser_extract">Extract diffuser</option><option value="panel">Electrical panel</option><option value="socket">Socket / outlet</option><option value="lighting_fixture">Lighting fixture</option><option value="sprinkler">Sprinkler</option></select></label></div>
-    <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">{subCategory === "all" ? "Components" : categories.find(([id]) => id === subCategory)?.[1]} tools</p><div className="grid grid-cols-2 gap-1.5">{routeTools.map(([tool, label]) => <button key={`${tool}-${label}`} type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-left text-[10px]" onClick={() => arm(tool as LayoutToolId)}>{label}</button>)}</div></div>
-    <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">Fittings &amp; connections</p><label className="property-field"><span>Connection type</span><select className={field} value={connection} onChange={(e) => setConnection(e.target.value)}><option value="auto">Auto route / trim</option><option value="elbow">Elbow 90°</option><option value="tee">T connection</option><option value="wye">Wye connection</option><option value="u">U connection</option><option value="reducer">Reducer / transition</option><option value="union">Union / coupling</option></select></label><div className="mt-2 grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-blue min-h-9 rounded-md px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-auto-connect", { detail: { connection } }))}>Auto connect</button><button type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-trim-connect", { detail: { connection } }))}>Trim / join</button></div></div>
-    <div className="grid grid-cols-2 gap-1.5"><label className="property-field"><span>Elevation (mm)</span><input className={field} type="number" value={store.draftDuctElevationMm} onChange={(e) => store.setDraftDuctElevationMm(Number(e.target.value))} /></label><label className="property-field"><span>System</span><select className={field} value={store.draftDuctSystem} onChange={(e) => store.setDraftDuctSystem(e.target.value as typeof store.draftDuctSystem)}><option value="supply">Supply</option><option value="return">Return</option><option value="extract">Extract</option><option value="exhaust">Exhaust</option><option value="outdoor">Outdoor air</option></select></label></div>
-    <DuctCatalogDrawer domain={subCategory === "hvac" ? "duct" : subCategory === "piping" ? "piping" : subCategory === "wiring" ? "wiring" : subCategory === "electrical" ? "electrical" : "components"} />
-    {mepSelected && <div className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center gap-1 border-t border-sky-400/25 bg-[var(--panel-bg)]/95 p-2 backdrop-blur"><span className="mr-auto text-[9px] font-semibold text-sky-400">Selected MEP</span><button type="button" aria-label="Connect selected MEP" title="Connect" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-connect-mode"))}>↔</button><button type="button" aria-label="Align selected MEP" title="Align" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => store.setArmedLayoutTool("trim")}>⌗</button><button type="button" aria-label="Delete selected MEP" title="Delete" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px] text-red-400" onClick={() => void store.deleteSelected()}>⌫</button><button type="button" aria-label="More MEP actions" title="More" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-more-actions"))}>⋯</button></div>}
-  </div>;
-}
 
 function BulkSelectionProperties() {
   const selected = useLayoutDrawingStore((s) => s.selectedElements);
@@ -1774,10 +1761,118 @@ function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
 }
 
 function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const store = useLayoutDrawingStore();
   const count = slab.boundary?.length ?? 4;
   const slopes = Array.from({ length: count }, (_, edgeIdx) => slab.edgeSlopes?.find((edge) => edge.edgeIdx === edgeIdx) ?? { edgeIdx, isSloped: true, pitchDeg: 30 });
   const update = (edgeIdx: number, patch: Partial<(typeof slopes)[number]>) => void store.updateSlab(slab.id, { edgeSlopes: slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge) });
-  return <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
+
+  const setGlobalPitch = (pitch: number) => {
+    const updated = slopes.map((edge) => ({ ...edge, pitchDeg: pitch }));
+    store.updateSlab(slab.id, { edgeSlopes: updated });
+  };
+
+  return (
+    <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Revit Roof Generator & Slopes">
+      <div className="space-y-3 pt-1">
+        {/* Revit Roof Presets */}
+        <div>
+          <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">Roof Preset</span>
+          <div className="grid grid-cols-4 gap-1">
+            {(["hip", "gable", "shed", "flat"] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => store.applyRoofPreset(slab.id, preset)}
+                className={`py-1 px-1.5 rounded text-[10px] font-medium capitalize border transition-colors ${
+                  slab.roofPreset === preset
+                    ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold"
+                    : "border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-white/20"
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Global Pitch Controls */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-[var(--text-muted)]">Global Pitch</span>
+            <span className="text-[10px] font-mono text-amber-400 font-semibold">{slopes[0]?.pitchDeg ?? 30}°</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {[15, 25, 30, 45].map((angle) => (
+              <button
+                key={angle}
+                type="button"
+                onClick={() => setGlobalPitch(angle)}
+                className="flex-1 py-0.5 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-amber-500/40"
+              >
+                {angle}°
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Overhang Input */}
+        <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1.5">
+          <span className="text-[10px] font-semibold">Overhang:</span>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={slab.overhangMm ?? 0}
+              onChange={(e) => store.updateSlab(slab.id, { overhangMm: Math.max(0, Number(e.target.value)) })}
+              className="w-16 rounded border border-[var(--panel-divider)] bg-[var(--surface-base)] px-1.5 py-0.5 text-right font-mono text-[10px]"
+            />
+            <span className="text-[10px] text-[var(--text-muted)]">mm</span>
+          </div>
+        </div>
+
+        {/* Edit Boundary Action Button */}
+        <button
+          type="button"
+          onClick={() => store.beginSlabBoundaryEdit(slab.id)}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-semibold transition-colors"
+        >
+          <LuPencil className="h-3.5 w-3.5" />
+          <span>Edit Roof Boundary</span>
+        </button>
+
+        {/* Per Edge Slopes */}
+        <div className="border-t border-[var(--panel-divider)] pt-2 space-y-1.5">
+          <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider block">Boundary Edge Slopes ({count} edges)</span>
+          {slopes.map((edge) => (
+            <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5 bg-[var(--surface-overlay)]">
+              <span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span>
+              <label className="flex items-center gap-1 text-[9px] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={edge.isSloped}
+                  onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}
+                />
+                <span>Slope</span>
+              </label>
+              <div className="flex items-center gap-0.5">
+                <input
+                  aria-label={`Edge ${edge.edgeIdx + 1} pitch`}
+                  disabled={!edge.isSloped}
+                  className="h-6 w-11 rounded border border-[var(--panel-divider)] bg-[var(--surface-base)] px-1 text-right font-mono text-[10px] disabled:opacity-40"
+                  type="number"
+                  min={0}
+                  max={85}
+                  value={edge.pitchDeg}
+                  onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}
+                />
+                <span className="text-[9px] text-[var(--text-muted)]">°</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </PropSection>
+  );
 }

@@ -134,7 +134,8 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     }
   }
   function down(e: PointerEvent) {
-    if (!useLayoutDrawingStore.getState().slabBoundaryEdit) return;
+    const s = useLayoutDrawingStore.getState();
+    if (!s.slabBoundaryEdit || s.armedLayoutTool === "lines") return;
     if (e.button !== 0) return;
     if (drag && drag.pointer !== e.pointerId) { block(e); return; }
     pointer = { x: e.clientX, y: e.clientY };
@@ -172,7 +173,8 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     error(null);
   }
   function move(e: PointerEvent) {
-    if (!useLayoutDrawingStore.getState().slabBoundaryEdit) return;
+    const s = useLayoutDrawingStore.getState();
+    if (!s.slabBoundaryEdit || s.armedLayoutTool === "lines") return;
     if (drag && drag.pointer !== e.pointerId) { block(e); return; }
     pointer = { x: e.clientX, y: e.clientY };
     const ctx = context();
@@ -218,7 +220,8 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     error(invalid);
   }
   function up(e: PointerEvent) {
-    if (!useLayoutDrawingStore.getState().slabBoundaryEdit) return;
+    const s = useLayoutDrawingStore.getState();
+    if (!s.slabBoundaryEdit || s.armedLayoutTool === "lines") return;
     block(e);
     if (!drag || drag.pointer !== e.pointerId) return;
     if (drag.moved) useLayoutDrawingStore.getState().applySlabBoundaryLoops(drag.preview);
@@ -227,9 +230,10 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
   function cancel(e: Event) {
     if (drag && (!(e instanceof PointerEvent) || e.pointerId === drag.pointer)) { block(e); release(); }
   }
-  function swallow(e: Event) { if (useLayoutDrawingStore.getState().slabBoundaryEdit) block(e); }
+  function swallow(e: Event) { const s = useLayoutDrawingStore.getState(); if (s.slabBoundaryEdit && s.armedLayoutTool !== "lines") block(e); }
   function key(e: KeyboardEvent) {
-    if (!useLayoutDrawingStore.getState().slabBoundaryEdit || (e.target as HTMLElement)?.closest("input,textarea,[contenteditable=true]")) return;
+    const s = useLayoutDrawingStore.getState();
+    if (!s.slabBoundaryEdit || s.armedLayoutTool === "lines" || (e.target as HTMLElement)?.closest("input,textarea,[contenteditable=true]")) return;
     if (e.key === "Escape") {
       block(e);
       if (drag) release();

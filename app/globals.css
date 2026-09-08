@@ -4327,7 +4327,8 @@ body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeu
   color: rgba(228,228,231,.92) !important;
 }
 body.werkzeug-active :is(.desktop-capsule-btn.is-active, .werkzeug-modify-button.is-active, .werkzeug-tool-button.is-active) :is(svg, span, strong, small) {
-  color: #ffffff !important;
+  color: #18181b !important;
+  -webkit-text-fill-color: #18181b !important;
 }
 body.werkzeug-active :is(.desktop-capsule-btn, .werkzeug-modify-button, .werkzeug-tool-button, .werkzeug-icon-action) {
   font-family: inherit !important;

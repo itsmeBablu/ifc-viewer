@@ -133,6 +133,7 @@ export default function ToolOptionsBar() {
   const deleteSlab = useLayoutDrawingStore((s) => s.deleteSlab);
   const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
   const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
+  const applyRoofPreset = useLayoutDrawingStore((s) => s.applyRoofPreset);
   const duplicateWall = useLayoutDrawingStore((s) => s.duplicateWall);
   const duplicateStair = useLayoutDrawingStore((s) => s.duplicateStair);
   const duplicateRamp = useLayoutDrawingStore((s) => s.duplicateRamp);
@@ -1155,6 +1156,7 @@ export default function ToolOptionsBar() {
           {selectedSlabId && (() => {
             const slab = slabs.find((s) => s.id === selectedSlabId);
             if (!slab) return null;
+            const isRoof = slab.kind === "roof";
             return (
               <div className="flex items-center gap-2">
                 <span className="font-bold text-amber-500 capitalize">{slab.kind}:</span>
@@ -1178,13 +1180,71 @@ export default function ToolOptionsBar() {
                   />
                   <span>mm</span>
                 </label>
+
+                {isRoof && (
+                  <>
+                    <div className="h-4 w-px bg-[var(--panel-divider)]" />
+                    <span className="text-[10px] font-semibold text-[var(--text-muted)]">Style:</span>
+                    <div className="flex items-center rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-0.5 text-[10px]">
+                      {(["hip", "gable", "shed", "flat"] as const).map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => applyRoofPreset(slab.id, preset)}
+                          className={`rounded px-1.5 py-0.5 capitalize transition-colors ${
+                            slab.roofPreset === preset
+                              ? "bg-amber-500 text-black font-semibold shadow-sm"
+                              : "text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-white/5"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+
+                    <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                      Pitch:
+                      <input
+                        type="number"
+                        min={0}
+                        max={80}
+                        value={slab.edgeSlopes?.find((e) => e.isSloped)?.pitchDeg ?? 30}
+                        onChange={(e) => {
+                          const pitch = Math.max(0, Math.min(80, Number(e.target.value)));
+                          const count = slab.boundary?.length ?? 4;
+                          const slopes = Array.from({ length: count }, (_, i) => {
+                            const existing = slab.edgeSlopes?.find((edge) => edge.edgeIdx === i);
+                            return { edgeIdx: i, isSloped: existing?.isSloped ?? true, pitchDeg: pitch };
+                          });
+                          void updateSlab(slab.id, { edgeSlopes: slopes });
+                        }}
+                        className="w-10 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right font-mono text-[10px]"
+                      />
+                      <span>°</span>
+                    </label>
+
+                    <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                      Overhang:
+                      <input
+                        type="number"
+                        min={0}
+                        step={50}
+                        value={slab.overhangMm ?? 0}
+                        onChange={(e) => void updateSlab(slab.id, { overhangMm: Math.max(0, Number(e.target.value)) })}
+                        className="w-12 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right font-mono text-[10px]"
+                      />
+                      <span>mm</span>
+                    </label>
+                  </>
+                )}
+
                 <button
                   type="button"
                   onClick={() => beginSlabBoundaryEdit(slab.id)}
                   className="flex items-center gap-1 rounded-md px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-[10px] font-semibold text-amber-500 hover:bg-amber-500/20"
                 >
                   <LuPencil className="h-3 w-3" />
-                  <span>Edit Boundary</span>
+                  <span>{isRoof ? "Edit Roof" : "Edit Floor"}</span>
                 </button>
                 <button
                   type="button"

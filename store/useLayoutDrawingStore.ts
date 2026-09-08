@@ -1,5 +1,5 @@
 "use client";
-import { connectMepSegment, type MepSnapPoint } from "@/lib/mepConnections";
+import { connectMepSegment, mepOffset, mepEndpoints, type MepSnapPoint } from "@/lib/mepConnections";
 
 import { reflowKitchenRun } from "@/lib/componentPlacement";
 import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
@@ -430,6 +430,8 @@ type LayoutDrawingState = {
   draftDuctSystem: DuctSystemType;
   draftDuctElevationMm: number;
   draftDuctFlowM3h: number;
+  mepChainDrawing: boolean;
+  setMepChainDrawing: (enabled: boolean) => void;
   draftPipeDiameterMm: number;
   draftPipeSystem: PipeSystemType;
   draftPipeElevationMm: number;
@@ -708,6 +710,7 @@ type LayoutDrawingState = {
   deleteSlabBoundaryVertex: (index: number) => void;
   commitSlabBoundaryEdit: () => Promise<void>;
   cancelSlabBoundaryEdit: () => void;
+  applyRoofPreset: (slabId: string, preset: "hip" | "gable" | "shed" | "flat", defaultPitch?: number) => Promise<void>;
   toggleElementLock: (ref: SelectedElementRef) => void;
 
   addUnderlayFromFile: (
@@ -1194,6 +1197,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftDuctSystem: "supply",
   draftDuctElevationMm: DEFAULT_DUCT_ELEVATION_MM,
   draftDuctFlowM3h: 150,
+  mepChainDrawing: true,
+  setMepChainDrawing: (enabled) => set({ mepChainDrawing: enabled }),
   draftPipeDiameterMm: DEFAULT_PIPE_DIAMETER_MM,
   draftPipeSystem: "hydronic_supply",
   draftPipeElevationMm: DEFAULT_PIPE_ELEVATION_MM,
@@ -1673,7 +1678,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setArmedLayoutTool: (tool) => {
     const boundaryEdit = get().slabBoundaryEdit;
-    if (boundaryEdit) {
+    if (boundaryEdit && !(tool === "lines" && get().editingSlabId)) {
       if (tool) set({ slabBoundaryEdit: { ...boundaryEdit, error: "Finish or cancel the boundary sketch before starting another drawing tool." } });
       return;
     }
@@ -2737,11 +2742,45 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         { xMm: slab.maxXmm, yMm: slab.maxYmm },
         { xMm: slab.minXmm, yMm: slab.maxYmm },
       ];
+    const boundaryLines: LayoutSketchLine[] = [];
+    const createdAt = Date.now();
+    for (let i = 0; i < boundary.length; i++) {
+      const p1 = boundary[i];
+      const p2 = boundary[(i + 1) % boundary.length];
+      boundaryLines.push({
+        id: newLayoutId("line"),
+        projectId: slab.projectId,
+        levelId: slab.levelId,
+        startXmm: p1.xMm,
+        startYmm: p1.yMm,
+        endXmm: p2.xMm,
+        endYmm: p2.yMm,
+        createdAt,
+      });
+    }
+    if (slab.holes) {
+      for (const hole of slab.holes) {
+        for (let j = 0; j < hole.length; j++) {
+          const h1 = hole[j];
+          const h2 = hole[(j + 1) % hole.length];
+          boundaryLines.push({
+            id: newLayoutId("line"),
+            projectId: slab.projectId,
+            levelId: slab.levelId,
+            startXmm: h1.xMm,
+            startYmm: h1.yMm,
+            endXmm: h2.xMm,
+            endYmm: h2.yMm,
+            createdAt,
+          });
+        }
+      }
+    }
     set({
       editingSlabId: id,
-      sketchLines: get().sketchLines,
+      sketchLines: boundaryLines,
       sketchTargetKind: slab.kind,
-      armedLayoutTool: null,
+      armedLayoutTool: "lines",
       selectedSlabId: id,
       selectedElements: [],
       slabBoundaryEdit: {
@@ -2890,6 +2929,65 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       armedLayoutTool: null,
       sketchTargetKind: null,
       selectedSlabId: slab.id,
+    });
+  },
+
+  applyRoofPreset: async (slabId, preset, defaultPitch = 30) => {
+    const slab = get().slabs.find((s) => s.id === slabId && s.kind === "roof");
+    if (!slab) return;
+    const boundary = slab.boundary && slab.boundary.length >= 3 ? slab.boundary : [
+      { xMm: slab.minXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.minYmm },
+      { xMm: slab.maxXmm, yMm: slab.maxYmm },
+      { xMm: slab.minXmm, yMm: slab.maxYmm },
+    ];
+    const n = boundary.length;
+    let nextSlopes: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[] = [];
+
+    if (preset === "hip") {
+      nextSlopes = boundary.map((_, i) => ({ edgeIdx: i, pitchDeg: defaultPitch, isSloped: true }));
+    } else if (preset === "gable") {
+      const edgeLengths = boundary.map((p, i) => {
+        const next = boundary[(i + 1) % n];
+        return { i, len: Math.hypot(next.xMm - p.xMm, next.yMm - p.yMm) };
+      });
+      if (n === 4) {
+        const is0Longer = edgeLengths[0].len >= edgeLengths[1].len;
+        const slopedIdxs = is0Longer ? [0, 2] : [1, 3];
+        nextSlopes = boundary.map((_, i) => ({
+          edgeIdx: i,
+          pitchDeg: slopedIdxs.includes(i) ? defaultPitch : 0,
+          isSloped: slopedIdxs.includes(i),
+        }));
+      } else {
+        edgeLengths.sort((a, b) => b.len - a.len);
+        const slopedIdxs = [edgeLengths[0].i, edgeLengths[1]?.i ?? (edgeLengths[0].i + 2) % n];
+        nextSlopes = boundary.map((_, i) => ({
+          edgeIdx: i,
+          pitchDeg: slopedIdxs.includes(i) ? defaultPitch : 0,
+          isSloped: slopedIdxs.includes(i),
+        }));
+      }
+    } else if (preset === "shed") {
+      nextSlopes = boundary.map((_, i) => ({
+        edgeIdx: i,
+        pitchDeg: i === 0 ? defaultPitch : 0,
+        isSloped: i === 0,
+      }));
+    } else if (preset === "flat") {
+      nextSlopes = boundary.map((_, i) => ({ edgeIdx: i, pitchDeg: 0, isSloped: false }));
+    }
+
+    const nextSlab: LayoutSlab = {
+      ...slab,
+      roofPreset: preset,
+      edgeSlopes: nextSlopes,
+    };
+    pushWerkzeugHistory();
+    await idbPutSlab(nextSlab);
+    set({
+      slabs: get().slabs.map((s) => (s.id === slabId ? nextSlab : s)),
+      lastMutatedAt: Date.now(),
     });
   },
 
@@ -3883,6 +3981,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           boundary: outer.points,
           holes: holes.map((h) => h.points),
           autoBoundaryFromWalls: false,
+          edgeSlopes: existing.kind === "roof"
+            ? outer.points.map((_, edgeIdx) => existing.edgeSlopes?.find((e) => e.edgeIdx === edgeIdx) ?? { edgeIdx, pitchDeg: 30, isSloped: true })
+            : undefined,
         };
         await idbPutSlab(next);
         set((s) => ({
@@ -5161,6 +5262,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       set({ ductDraw: null });
       return null;
     }
+    if (Math.hypot(dd.cursor.xMm - dd.start.xMm, dd.cursor.yMm - dd.start.yMm) < 1) return null;
     const projectId = s.projectId;
     if (!projectId) {
       set({ ductDraw: null });
@@ -5178,9 +5280,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     // Check equipment connector snap for start
     for (const eq of s.mepEquipment) {
+      if (eq.levelId !== dd.levelId) continue;
       const conns = getEquipmentConnectors(eq);
       for (const c of conns) {
-        if (c.type === "duct") {
+        if (c.type === "duct" && Math.abs(c.worldZmm - dd.elevationOffsetMm) <= 25 && !s.ducts.some(row =>
+          (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
+          (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
           if (dStart <= 350 && !(dd.start as MepSnapPoint).mepEndpoint) {
             startX = Math.round(c.worldXmm);
@@ -5196,9 +5301,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     // Check equipment connector snap for end
     for (const eq of s.mepEquipment) {
+      if (eq.levelId !== dd.levelId) continue;
       const conns = getEquipmentConnectors(eq);
       for (const c of conns) {
-        if (c.type === "duct") {
+        if (!(connectedStartEquipmentId === eq.id && startConnectorId === c.id) && c.type === "duct" && Math.abs(c.worldZmm - dd.elevationOffsetMm) <= 25 && !s.ducts.some(row =>
+          (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
+          (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
           if (dEnd <= 350 && !(dd.cursor as MepSnapPoint).mepEndpoint) {
             endX = Math.round(c.worldXmm);
@@ -5211,6 +5319,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       }
       if (connectedEndEquipmentId) break;
     }
+
+    if (Math.hypot(endX - startX, endY - startY) < 1) return null;
 
     const duct: LayoutDuct = {
       id: newLayoutId("duct"),
@@ -5238,7 +5348,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     await idbPutDuct(duct);
     set((prev) => ({
       ducts: [...prev.ducts, duct],
-      ductDraw: null,
+      ductDraw: prev.mepChainDrawing && prev.ductDraw?.start === dd.start && !duct.endConnection && !duct.connectedEndEquipmentId
+        ? { ...dd, start: { xMm: duct.endXmm, yMm: duct.endYmm }, cursor: null } : null,
       selectedDuctId: duct.id,
       selectedElements: [{ kind: "duct", id: duct.id }],
       lastMutatedAt: Date.now(),
@@ -5353,6 +5464,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       set({ pipeDraw: null });
       return null;
     }
+    if (Math.hypot(pd.cursor.xMm - pd.start.xMm, pd.cursor.yMm - pd.start.yMm) < 1) return null;
     const projectId = s.projectId;
     if (!projectId) {
       set({ pipeDraw: null });
@@ -5370,9 +5482,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     // Check equipment connector snap for start
     for (const eq of s.mepEquipment) {
+      if (eq.levelId !== pd.levelId) continue;
       const conns = getEquipmentConnectors(eq);
       for (const c of conns) {
-        if (c.type === "pipe") {
+        if (c.type === "pipe" && Math.abs(c.worldZmm - pd.elevationOffsetMm) <= 25 && !s.pipes.some(row =>
+          (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
+          (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
           if (dStart <= 350 && !(pd.start as MepSnapPoint).mepEndpoint) {
             startX = Math.round(c.worldXmm);
@@ -5388,9 +5503,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     // Check equipment connector snap for end
     for (const eq of s.mepEquipment) {
+      if (eq.levelId !== pd.levelId) continue;
       const conns = getEquipmentConnectors(eq);
       for (const c of conns) {
-        if (c.type === "pipe") {
+        if (!(connectedStartEquipmentId === eq.id && startConnectorId === c.id) && c.type === "pipe" && Math.abs(c.worldZmm - pd.elevationOffsetMm) <= 25 && !s.pipes.some(row =>
+          (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
+          (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
           if (dEnd <= 350 && !(pd.cursor as MepSnapPoint).mepEndpoint) {
             endX = Math.round(c.worldXmm);
@@ -5403,6 +5521,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       }
       if (connectedEndEquipmentId) break;
     }
+
+    if (Math.hypot(endX - startX, endY - startY) < 1) return null;
 
     const pipe: LayoutPipe = {
       id: newLayoutId("pipe"),
@@ -5426,7 +5546,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     await idbPutPipe(pipe);
     set((prev) => ({
       pipes: [...prev.pipes, pipe],
-      pipeDraw: null,
+      pipeDraw: prev.mepChainDrawing && prev.pipeDraw?.start === pd.start && !pipe.endConnection && !pipe.connectedEndEquipmentId
+        ? { ...pd, start: { xMm: pipe.endXmm, yMm: pipe.endYmm }, cursor: null } : null,
       selectedPipeId: pipe.id,
       selectedElements: [{ kind: "pipe", id: pipe.id }],
       lastMutatedAt: Date.now(),
@@ -5542,6 +5663,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       set({ cableTrayDraw: null });
       return null;
     }
+    if (Math.hypot(cd.cursor.xMm - cd.start.xMm, cd.cursor.yMm - cd.start.yMm) < 1) return null;
     const projectId = s.projectId;
     if (!projectId) {
       set({ cableTrayDraw: null });
@@ -5567,7 +5689,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     await idbPutCableTray(tray);
     set((prev) => ({
       cableTrays: [...prev.cableTrays, tray],
-      cableTrayDraw: null,
+      cableTrayDraw: prev.mepChainDrawing && prev.cableTrayDraw?.start === cd.start && !tray.endConnection
+        ? { ...cd, start: { xMm: tray.endXmm, yMm: tray.endYmm }, cursor: null } : null,
       selectedCableTrayId: tray.id,
       selectedElements: [{ kind: "cabletray", id: tray.id }],
       lastMutatedAt: Date.now(),
@@ -5681,8 +5804,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const c of conns) {
       if (c.type === "pipe") {
         for (const pipe of s.pipes) {
+          if (pipe.levelId !== equip.levelId || Math.abs(mepOffset(pipe) - c.worldZmm) > 25) continue;
+          const open = mepEndpoints("pipe", s, equip.levelId).filter(point => point.mepEndpoint?.id === pipe.id);
           const dStart = Math.hypot(c.worldXmm - pipe.startXmm, c.worldYmm - pipe.startYmm);
-          if (dStart <= 350) {
+          if (dStart <= 350 && open.some(point => point.mepEndpoint?.endpoint === "start")) {
             const dx = pipe.startXmm - c.worldXmm;
             const dy = pipe.startYmm - c.worldYmm;
             posX += dx;
@@ -5695,7 +5820,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
             break;
           }
           const dEnd = Math.hypot(c.worldXmm - pipe.endXmm, c.worldYmm - pipe.endYmm);
-          if (dEnd <= 350) {
+          if (dEnd <= 350 && open.some(point => point.mepEndpoint?.endpoint === "end")) {
             const dx = pipe.endXmm - c.worldXmm;
             const dy = pipe.endYmm - c.worldYmm;
             posX += dx;
@@ -5710,8 +5835,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         }
       } else if (c.type === "duct") {
         for (const duct of s.ducts) {
+          if (duct.levelId !== equip.levelId || Math.abs(mepOffset(duct) - c.worldZmm) > 25) continue;
+          const open = mepEndpoints("duct", s, equip.levelId).filter(point => point.mepEndpoint?.id === duct.id);
           const dStart = Math.hypot(c.worldXmm - duct.startXmm, c.worldYmm - duct.startYmm);
-          if (dStart <= 350) {
+          if (dStart <= 350 && open.some(point => point.mepEndpoint?.endpoint === "start")) {
             const dx = duct.startXmm - c.worldXmm;
             const dy = duct.startYmm - c.worldYmm;
             posX += dx;
@@ -5724,7 +5851,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
             break;
           }
           const dEnd = Math.hypot(c.worldXmm - duct.endXmm, c.worldYmm - duct.endYmm);
-          if (dEnd <= 350) {
+          if (dEnd <= 350 && open.some(point => point.mepEndpoint?.endpoint === "end")) {
             const dx = duct.endXmm - c.worldXmm;
             const dy = duct.endYmm - c.worldYmm;
             posX += dx;
@@ -5855,6 +5982,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       set({ wireDraw: null });
       return null;
     }
+    if (Math.hypot(wd.cursor.xMm - wd.start.xMm, wd.cursor.yMm - wd.start.yMm) < 1) return null;
     const projectId = s.projectId;
     if (!projectId) {
       set({ wireDraw: null });
@@ -5880,7 +6008,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     await idbPutWire(wire);
     set((prev) => ({
       wires: [...prev.wires, wire],
-      wireDraw: null,
+      wireDraw: prev.mepChainDrawing && prev.wireDraw?.start === wd.start && !wire.endConnection
+        ? { ...wd, start: { xMm: wire.endXmm, yMm: wire.endYmm }, cursor: null } : null,
       selectedWireId: wire.id,
       selectedElements: [{ kind: "wire" as any, id: wire.id }],
       lastMutatedAt: Date.now(),

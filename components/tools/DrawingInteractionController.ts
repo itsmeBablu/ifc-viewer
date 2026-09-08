@@ -33,7 +33,7 @@ export function installDrawingInteractionController(options: Options) {
   const activePointers = new Set<number>();
   const enabled = () => {
     const s = useLayoutDrawingStore.getState();
-    return !s.slabBoundaryEdit && (s.armedLayoutTool === "wall" || s.armedLayoutTool === "lines");
+    return (!s.slabBoundaryEdit || Boolean(s.editingSlabId)) && (s.armedLayoutTool === "wall" || s.armedLayoutTool === "lines");
   };
   const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
   const clear = () => { svg.replaceChildren(); hud.style.display = "none"; };

@@ -13,6 +13,8 @@ export function mepEndpoints(kind: MepKind, state: MepNetwork, levelId: string, 
   for (const row of rows) {
     if (row.levelId !== levelId || (offset != null && Math.abs(mepOffset(row) - offset) > 1)) continue;
     for (const endpoint of ["start", "end"] as const) {
+      if ((endpoint === "start" && "connectedStartEquipmentId" in row && row.connectedStartEquipmentId) ||
+          (endpoint === "end" && "connectedEndEquipmentId" in row && row.connectedEndEquipmentId)) continue;
       if (row[endpoint === "start" ? "startConnection" : "endConnection"] || rows.some(r => [r.startConnection, r.endConnection].some(link => link?.id === row.id && link.endpoint === endpoint))) continue;
       const elevationMm = mepOffset(row);
       endpoints.push({ ...endpointPoint(row, endpoint), elevationMm, worldElevationMm: (state.levels.find(l => l.id === row.levelId)?.elevationMm ?? 0) + elevationMm, mepEndpoint: { kind, id: row.id, endpoint } });
