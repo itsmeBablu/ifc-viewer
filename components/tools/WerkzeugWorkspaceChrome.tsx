@@ -27,6 +27,8 @@ import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import MobileModifyBar from "./MobileModifyBar";
 import BoundarySketchOptions from "./BoundarySketchOptions";
+import ToolOptionsBar from "./ToolOptionsBar";
+import DrawingShapeOptions from "./DrawingShapeOptions";
 
 type PanelKey = "levels" | "materials" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
@@ -39,12 +41,15 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "window", label: "Window", icon: <IconMarkupWindow /> },
   { id: "roof", label: "Roof", icon: <IconMarkupRoof /> },
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
+  { id: "ceiling", label: "Ceiling", icon: <IconMarkupFloor /> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
 ];
 
 const MEP_TOOL_ITEMS: Array<{ id: LayoutToolId; label: string; icon: React.ReactNode }> = [
   { id: "duct", label: "Duct", icon: <span className="font-bold text-sky-400">▭</span> },
+  { id: "flex_duct", label: "Flex duct", icon: <span>∿</span> },
+  { id: "mep_placeholder", label: "Placeholder", icon: <LuBox /> },
   { id: "pipe", label: "Pipe", icon: <span className="font-bold text-blue-400">○</span> },
   { id: "cabletray", label: "Tray", icon: <span className="font-bold text-slate-400">≋</span> },
   { id: "wire", label: "Wire", icon: <LuZap /> },
@@ -459,13 +464,13 @@ export default function WerkzeugWorkspaceChrome({
   };
   const activate = (id: PanelKey) => {
     const store = useLayoutDrawingStore.getState();
-    const opening = panelKey !== id || panelHidden;
-    if (opening && id === "wall") setPanelFrame(compactWallFrame);
-    setPanelKey(opening ? id : null);
-    window.dispatchEvent(new CustomEvent("werkzeug-level-highlight", { detail: opening && id === "levels" }));
+    if (id === "wall") setPanelFrame(compactWallFrame);
+    setPanelKey(id);
+    window.dispatchEvent(new CustomEvent("werkzeug-level-highlight", { detail: id === "levels" }));
     setPanelHidden(false);
     setPanelTab("properties");
-    store.setArmedLayoutTool(id === "levels" || id === "materials" ? null : id);
+    const alreadyDrawingBoundary = (id === "floor" || id === "ceiling" || id === "roof") && store.sketchTargetKind === id && store.armedLayoutTool === "lines";
+    if (!alreadyDrawingBoundary) store.setArmedLayoutTool(id === "levels" || id === "materials" ? null : id);
     useToolMarkupStore.getState().setArmedTool(null);
   };
   const save = async () => {
@@ -524,7 +529,7 @@ export default function WerkzeugWorkspaceChrome({
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("elements", event.currentTarget)} className={`werkzeug-tool-button ${armed === "column" || armed === "beam" ? "is-active btn-v-yellow" : ""}`}><LuBox /><span className="werkzeug-tool-label">Elements</span><LuChevronDown /></button></div>
           {(mepModeActive ? MEP_TOOL_ITEMS : TOOL_ITEMS.filter((item) => item.id !== "levels")).map((item) => {
             const active = (!panelHidden && panelKey === item.id) || armed === item.id;
-            return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} onDoubleClick={() => { setPanelKey(item.id); setPanelHidden(false); }} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
+            return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
         </div>
         {boundaryEdit ? (
@@ -582,7 +587,7 @@ export default function WerkzeugWorkspaceChrome({
         </div>
       </div>
 
-      <GsapPopMenu show={Boolean(auxOpen)} className="fixed z-[120]" style={auxPosition}><div data-popup-surface className="werkzeug-ipad-popup">{lastAux === "levels" ? levels.map((level) => <button key={level.id} className={activeLevel?.id === level.id ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setMarkupFloorId(level.id); useAppStore.getState().setSelectedFloor(level.id); setPanelKey("levels"); setPanelHidden(false); setAuxOpen(null); }}><LuLayers3/><span>{level.name}</span></button>) : lastAux === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : lastAux === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div></GsapPopMenu>
+      <GsapPopMenu show={Boolean(auxOpen)} className="fixed z-[120]" style={auxPosition}><div data-popup-surface className="werkzeug-ipad-popup">{lastAux === "levels" ? levels.map((level) => <button key={level.id} className={activeLevel?.id === level.id ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setMarkupFloorId(level.id); useAppStore.getState().setSelectedFloor(level.id); setPanelKey("levels"); setPanelHidden(false); setAuxOpen(null); }}><LuLayers3/><span>{level.name}</span></button>) : lastAux === "views" ? viewItems.map((view) => <button key={view.value} className={viewPreset === view.value ? "is-active" : ""} onClick={() => { useToolMarkupStore.getState().setViewPreset(view.value); setAuxOpen(null); }}>{view.label}</button>) : lastAux === "scale" ? (["1:20", "1:50", "1:100", "1:200", "1:500"] as const).map((scale) => <button key={scale} className={drawingScale === scale ? "is-active" : ""} onClick={() => { setDrawingScale(scale); setAuxOpen(null); }}>{scale}</button>) : (["column", "beam", "stair", "ramp", "component", "grid", "section", "trim"] as const).map((kind) => <button key={kind} className={armed === kind ? "is-active" : ""} onClick={() => { activate(kind); setAuxOpen(null); }}><strong>{kind === "column" ? "▮" : "▬"}</strong><span className="capitalize">{kind}</span></button>)}</div></GsapPopMenu>
 
       {!panelKey && <button type="button" onClick={() => { setPanelKey("levels"); setPanelHidden(false); }} className={`werkzeug-ipad-panel-peek ${portrait ? "is-portrait" : "is-landscape"}`} aria-label="Show properties and layout options">{portrait ? <><LuSlidersHorizontal /><span>Properties</span><i aria-hidden="true" /><span>Layout</span></> : <LuChevronLeft />}</button>}
       {panelKey && <div ref={panelRef} data-orientation={portrait ? "portrait" : "landscape"} data-hidden={panelHidden ? "true" : "false"} className="werkzeug-ipad-context pointer-events-auto fixed z-[68]" style={portrait ? { right: 8, bottom: 8, width: portraitPanelWidth, maxWidth: "calc(100vw - 16px)", height: collapsed ? 48 : portraitPanelHeight } : { right: 8, bottom: 8, width: landscapePanelWidth, maxWidth: "calc(100vw - 16px)", height: collapsed ? 48 : landscapePanelHeight }}>
@@ -595,7 +600,7 @@ export default function WerkzeugWorkspaceChrome({
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
             </div>
-            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
+            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
             {!collapsed && <>
               {!portrait && <button type="button" onPointerDown={beginLandscapeResize} className="werkzeug-ipad-height-resize absolute inset-x-0 bottom-0 z-20 h-5 touch-none cursor-ns-resize" aria-label="Drag down to increase options height"><span /></button>}
             </>}
@@ -644,14 +649,17 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   if (!store.armedLayoutTool && !store.selectedElements.length && !store.selectedWallId && !store.selectedSlabId && !store.selectedDoorId && !store.selectedWindowId && !markup.selectedPlacementId) return <ViewPropertiesPanel />;
   if (store.selectedWireId || store.selectedElements.some(e => e.kind === "wire")) return <LayoutPropertiesPanel />;
   if (store.selectedEquipmentId || store.selectedElements.some(e => e.kind === "equipment")) return <LayoutPropertiesPanel />;
+  if (store.armedLayoutTool && !store.sketchTargetKind && panelKey !== "lines" && panelKey !== "column" && panelKey !== "beam" && panelKey !== "grid" && panelKey !== "section" && panelKey !== "trim") {
+    return <div className="werkzeug-touch-options space-y-3"><DrawingShapeOptions /><ToolOptionsBar /></div>;
+  }
   if (tab === "type") return <TypeOptions panelKey={panelKey} locked={locked} />;
   if (panelKey === "column" || panelKey === "beam" || panelKey === "stair" || panelKey === "ramp") return <LayoutPropertiesPanel />;
-  if ((panelKey === "floor" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
+  if ((panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof") && store.sketchTargetKind === panelKey && !slab) {
     const loops = detectLoopsFromSegments(store.sketchLines);
     const openingCount = [...loops.nestedHoles.values()].reduce((sum, holes) => sum + holes.length, 0);
     return <div className="space-y-3"><div className="rounded-xl bg-blue-500/10 p-3 text-[11px] text-blue-600"><strong className="block uppercase tracking-wide">{panelKey} boundary sketch</strong><span>Draw one closed blue outer loop. Closed loops inside it become openings.</span></div><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Closed loops</span><strong>{loops.closedLoops.length}</strong></div><div className="rounded-lg border border-[var(--panel-divider)] p-2"><span className="block text-[9px] text-[var(--text-muted)]">Openings</span><strong>{openingCount}</strong></div></div><label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input className={field} type="number" min={50} value={store.draftSlabThicknessMm} onChange={(e) => store.setDraftSlabThicknessMm(Number(e.target.value))}/></label><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!loops.isFullyClosed} className="btn-v-yellow col-span-2 min-h-11 rounded-xl px-3 text-xs disabled:opacity-40" onClick={() => void store.convertSketchToSlab(panelKey)}>Finish {panelKey}</button><button type="button" className="btn-yellow-border-hover min-h-10 rounded-lg border border-[var(--panel-divider)] px-2 text-[11px]" onClick={store.finishSketchLineDraw}>Finish chain</button><button type="button" className="btn-yellow-border-hover min-h-10 rounded-lg border border-[var(--panel-divider)] px-2 text-[11px]" onClick={store.clearSketchLines}>Clear</button></div></div>;
   }
-  if ((panelKey === "floor" || panelKey === "roof") && slab) {
+  if ((panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof") && slab) {
     const boundary = slab.boundary?.length ? slab.boundary : [{ xMm: slab.minXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.maxYmm }, { xMm: slab.minXmm, yMm: slab.maxYmm }];
     return <div className="space-y-3"><label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input disabled={locked} type="number" value={slab.thicknessMm} onChange={(e) => void store.updateSlab(slab.id, { thicknessMm: Number(e.target.value) })} className={field}/></label><div className="grid grid-cols-2 gap-2"><button disabled={locked} type="button" onClick={() => store.beginSlabBoundaryEdit(slab.id)} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Edit vertices</button><button disabled={locked} type="button" onClick={() => store.beginSlabRedraw(slab.id)} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Redraw boundary</button>{store.slabBoundaryEdit?.slabId === slab.id && <><button type="button" onClick={() => void store.commitSlabBoundaryEdit()} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Commit</button><button type="button" onClick={store.cancelSlabBoundaryEdit} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Cancel</button></>}</div>{store.slabBoundaryEdit?.slabId === slab.id && <div className="space-y-2"><p className="text-[10px] text-[var(--text-muted)]">Boundary vertices · Escape restores the original polygon</p>{boundary.map((point, index) => <div key={index} className="grid grid-cols-[2rem_1fr_1fr] items-center gap-2"><span className="text-[10px] text-[var(--text-muted)]">{index + 1}</span><input aria-label={`Vertex ${index + 1} X`} type="number" value={point.xMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, xMm: Number(e.target.value) })}/><input aria-label={`Vertex ${index + 1} Y`} type="number" value={point.yMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, yMm: Number(e.target.value) })}/></div>)}</div>}</div>;
   }
@@ -689,7 +697,7 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   }
   if (panelKey === "door" && store.selectedDoorId) { const door = store.doors.find((item) => item.id === store.selectedDoorId); if (door) return <div className="space-y-3">{(["widthMm", "heightMm"] as const).map((key) => <label key={key} className="block text-[10px] font-semibold text-[var(--text-muted)]">{key === "widthMm" ? "Width" : "Height"} (mm)<input disabled={locked} type="number" className={field} value={door[key]} onChange={(e) => void store.updateDoor(door.id, { [key]: Number(e.target.value) })}/></label>)}</div>; }
   if (panelKey === "window" && store.selectedWindowId) { const windowItem = store.windows.find((item) => item.id === store.selectedWindowId); if (windowItem) return <div className="space-y-3">{(["widthMm", "heightMm", "sillHeightMm"] as const).map((key) => <label key={key} className="block text-[10px] font-semibold text-[var(--text-muted)]">{key === "widthMm" ? "Width" : key === "heightMm" ? "Height" : "Sill height"} (mm)<input disabled={locked} type="number" className={field} value={windowItem[key]} onChange={(e) => void store.updateWindow(windowItem.id, { [key]: Number(e.target.value) })}/></label>)}</div>; }
-  return <div className="rounded-xl border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)] p-3 text-xs text-[var(--text-muted)]">{locked ? "Element locked. Properties remain visible, editing is disabled." : `Select a ${panelKey} in the 3D view to edit its properties.`}</div>;
+  return <LayoutPropertiesPanel />;
 }
 
 function TypeOptions({ panelKey, locked }: { panelKey: LayoutToolId; locked: boolean }) {

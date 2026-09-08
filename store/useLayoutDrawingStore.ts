@@ -8,7 +8,8 @@ import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/
 import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
 
 import { create } from "zustand";
-import { idbListSketchLines, idbPutSketchLine, idbDeleteSketchLine } from "@/lib/layoutDrawingDb";
+import type { DrawingSegment } from "@/lib/drawingShapes";
+import { idbListSketchLines, idbPutSketchLine, idbDeleteSketchLine, idbPutDrawingShape } from "@/lib/layoutDrawingDb";
 import { slabBoundaryLoops, validateBoundary, type BoundaryLoops } from "@/lib/boundaryEditing";
 import {
   DEFAULT_DOOR_HEIGHT_MM,
@@ -188,7 +189,7 @@ export type SketchDrawState = {
 } | null;
 
 export type SlabDrawState = {
-  kind: "floor" | "roof";
+  kind: "floor" | "ceiling" | "roof";
   levelId: string;
   /** First corner; null until first click. */
   start: { xMm: number; yMm: number } | null;
@@ -310,7 +311,7 @@ type LayoutDrawingState = {
   activeGroupId: string | null;
   layoutRooms: LayoutRoom[];
   sketchLines: LayoutSketchLine[];
-  sketchTargetKind: "floor" | "roof" | null;
+  sketchTargetKind: "floor" | "ceiling" | "roof" | null;
   draftSketchLineStyle: Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">;
   sketchDraw: SketchDrawState;
   gapHighlightPoints: { xMm: number; yMm: number }[];
@@ -322,6 +323,7 @@ type LayoutDrawingState = {
   activeSectionId: string | null;
   draftSectionStart: { xMm: number; yMm: number } | null;
   draftDrawMode: "line" | "arc";
+  commitDrawingSegments: (kind: "wall" | "lines", levelId: string, segments: DrawingSegment[]) => Promise<void>;
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
   stairDraw: StairDrawState;
@@ -663,7 +665,7 @@ type LayoutDrawingState = {
   confirmTraceCandidate: () => Promise<
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
-  beginSlabDraw: (kind: "floor" | "roof", levelId: string) => void;
+  beginSlabDraw: (kind: "floor" | "ceiling" | "roof", levelId: string) => void;
   beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
   addSlabCorner: (
@@ -744,7 +746,7 @@ type LayoutDrawingState = {
   deleteSketchLine: (id: string) => void;
   updateSketchLine: (id: string, patch: Partial<Pick<LayoutSketchLine, "color" | "thicknessPx" | "pattern" | "dashSizeMm" | "gapSizeMm">>) => void;
   clearSketchLines: () => void;
-  convertSketchToSlab: (kind: "floor" | "roof") => Promise<{
+  convertSketchToSlab: (kind: "floor" | "ceiling" | "roof") => Promise<{
     success: boolean;
     error?: string;
     gapPoints?: { xMm: number; yMm: number }[];
@@ -1675,6 +1677,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       if (tool) set({ slabBoundaryEdit: { ...boundaryEdit, error: "Finish or cancel the boundary sketch before starting another drawing tool." } });
       return;
     }
+    // Reopening options for the current tool must preserve its draft.
+    if (tool === get().armedLayoutTool && tool !== null) return;
+    set({
+      sketchDraw: null, stairDraw: null, rampDraw: null,
+      ductDraw: null, pipeDraw: null, cableTrayDraw: null, wireDraw: null,
+    });
     if (tool === "component") {
       const s = get();
       const needsArchId = !isArchitecturalComponent(s.draftComponentId);
@@ -1704,7 +1712,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       return;
     }
 
-    const boundaryKind = tool === "floor" || tool === "roof" ? tool : null;
+    const boundaryKind = tool === "floor" || tool === "ceiling" || tool === "roof" ? tool : null;
     const isMepTool =
       tool === "duct" ||
       tool === "flex_duct" ||
@@ -2051,6 +2059,32 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
   setDraftDrawMode: (mode) => set({ draftDrawMode: mode }),
 
+  commitDrawingSegments: async (kind, levelId, segments) => {
+    const state = get();
+    if (!state.projectId || !segments.length) return;
+    if (segments.some(segment => Object.values(segment).some(value => typeof value === "number" && !Number.isFinite(value)))) throw new Error("Drawing contains an invalid coordinate.");
+    const createdAt = Date.now();
+    pushWerkzeugHistory();
+    if (kind === "lines") {
+      const lines: LayoutSketchLine[] = segments.map(segment => ({ ...segment, ...state.draftSketchLineStyle, id: newLayoutId("line"), projectId: state.projectId!, levelId, createdAt }));
+      await idbPutDrawingShape(kind, lines);
+      if (get().projectId !== state.projectId) return;
+      set({ sketchLines: [...get().sketchLines, ...lines], gapHighlightPoints: [], lastMutatedAt: createdAt });
+    } else {
+      const base = state.levels.find(level => level.id === levelId);
+      const top = state.levels.find(level => level.id === state.draftWallTopLevelId);
+      const walls: LayoutWall[] = segments.map(segment => ({ ...segment, id: newLayoutId("wall"), projectId: state.projectId!, levelId,
+        topLevelId: top?.id, heightMm: top && base && top.elevationMm > base.elevationMm ? top.elevationMm - base.elevationMm : state.draftWallHeightMm,
+        thicknessMm: state.draftWallThicknessMm, color: "#d6d3d1", createdAt }));
+      await idbPutDrawingShape(kind, walls);
+      if (get().projectId !== state.projectId) return;
+      const nextWalls = [...get().walls, ...walls];
+      const slabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
+      set({ walls: nextWalls, slabs, lastMutatedAt: createdAt });
+      await Promise.all(slabs.filter(slab => slab.autoBoundaryFromWalls).map(idbPutSlab));
+    }
+  },
+
   addWallPoint: async (point) => {
     const draw = get().wallDraw;
     const projectId = get().projectId;
@@ -2213,7 +2247,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return wall;
   },
 
-  finishWallDraw: () => set({ wallDraw: null }),
+  finishWallDraw: () => { set({ wallDraw: null }); if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("werkzeug-drawing-reset")); },
   cancelWallDraw: () => set({ wallDraw: null, armedLayoutTool: null }),
 
   beginSlabDraw: (kind, levelId, targetSlabId?: string | null) =>
@@ -2670,7 +2704,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const shiftPt = (p: { xMm: number; yMm: number }) => ({ xMm: p.xMm + 500, yMm: p.yMm + 500 });
     const clone: LayoutSlab = {
       ...slab,
-      id: newLayoutId(slab.kind === "roof" ? "roof" : "floor"),
+      id: newLayoutId(slab.kind === "roof" ? "roof" : slab.kind === "ceiling" ? "ceiling" : "floor"),
       minXmm: slab.minXmm + 500,
       maxXmm: slab.maxXmm + 500,
       minYmm: slab.minYmm + 500,
@@ -3800,7 +3834,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     return line;
   },
 
-  finishSketchLineDraw: () => set({ sketchDraw: null }),
+  finishSketchLineDraw: () => { set({ sketchDraw: null }); if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("werkzeug-drawing-reset")); },
   cancelSketchLineDraw: () => set({ sketchDraw: null, armedLayoutTool: null, sketchTargetKind: null }),
   clearSketchLines: () => set({ sketchLines: [], sketchDraw: null, gapHighlightPoints: [] }),
 
@@ -3880,10 +3914,10 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
       const thicknessMm = get().draftSlabThicknessMm;
       const elevationOffsetMm =
-        kind === "roof" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
+        kind === "roof" || kind === "ceiling" ? (level?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) : 0;
 
       const slab: LayoutSlab = {
-        id: newLayoutId(kind === "roof" ? "roof" : "floor"),
+        id: newLayoutId(kind === "roof" ? "roof" : kind === "ceiling" ? "ceiling" : "floor"),
         projectId,
         levelId,
         kind,

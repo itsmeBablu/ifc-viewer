@@ -598,7 +598,7 @@ export default function ToolRibbon({
 
   const handleSelectLayoutTool = (id: LayoutToolId) => {
     setArmedTool(null);
-    const active = armedLayoutTool === id || ((id === "floor" || id === "roof") && sketchTargetKind === id);
+    const active = armedLayoutTool === id || ((id === "floor" || id === "ceiling" || id === "roof") && sketchTargetKind === id);
     setArmedLayoutTool(active ? null : id);
     setActiveDropdown(null);
   };
@@ -699,7 +699,7 @@ export default function ToolRibbon({
     <Cluster label="Build">
       <div className="relative">
         <RibbonBtn
-          active={["wall", "door", "window", "floor", "roof", "stair", "ramp", "lines"].includes(armedLayoutTool || "")}
+          active={["wall", "door", "window", "floor", "ceiling", "roof", "stair", "ramp", "lines"].includes(armedLayoutTool || "")}
           onClick={() => setActiveDropdown(activeDropdown === "build" ? null : "build")}
           title="Build Elements (Walls, Doors, Windows, Stairs, Ramps, Slabs, Lines)"
         >
@@ -725,6 +725,9 @@ export default function ToolRibbon({
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("floor"); setActiveDropdown(null); }}>
               <IconMarkupFloor className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Floor</span>
+            </button>
+            <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("ceiling"); setActiveDropdown(null); }}>
+              <IconMarkupFloor className="h-4 w-4 text-cyan-400" /> <span className="text-xs">Ceiling</span>
             </button>
             <button type="button" className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-[var(--glass-inset-bg)] text-[var(--text-body)]" onClick={() => { handleSelectLayoutTool("roof"); setActiveDropdown(null); }}>
               <IconMarkupRoof className="h-4 w-4 text-yellow-400" /> <span className="text-xs">Roof</span>

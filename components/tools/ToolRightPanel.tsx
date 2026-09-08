@@ -18,6 +18,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import gsap from "gsap";
 import MeasurementProperties from "./MeasurementProperties";
+import DrawingShapeOptions from "./DrawingShapeOptions";
 import {
   LuChevronRight,
   LuChevronLeft,
@@ -115,7 +116,7 @@ export default function ToolRightPanel({
   }, []);
 
   // -- Edit type, materials, and settings tabs in Properties -----------------
-  const [propTab, setPropTab] = useState<"properties" | "materials" | "settings">("properties");
+  const [propTab, setPropTab] = useState<"properties" | "mep" | "materials" | "settings">("properties");
   const [editTypeOpen, setEditTypeOpen] = useState(false);
   const [materialEditorOpen, setMaterialEditorOpen] = useState(false);
   const [types, setTypes] = useState<Record<string, ElementTypeDefinition>>(DEFAULT_ELEMENT_TYPES);
@@ -139,10 +140,10 @@ export default function ToolRightPanel({
 
   // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
-    identity: true,
+    identity: false,
     dimensions: true,
-    constraints: true,
-    materials: true,
+    constraints: false,
+    materials: false,
     ifc: false,
   });
   const toggleSection = (key: keyof typeof openSections) =>
@@ -222,6 +223,7 @@ export default function ToolRightPanel({
   const defaultBtnRef = useRef<HTMLButtonElement | null>(null);
   const materialsBtnRef = useRef<HTMLButtonElement | null>(null);
   const settingsBtnRef = useRef<HTMLButtonElement | null>(null);
+  const mepBtnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const track = tabTrackRef.current;
@@ -232,6 +234,7 @@ export default function ToolRightPanel({
     if (propTab === "properties") targetBtn = defaultBtnRef.current;
     else if (propTab === "materials") targetBtn = materialsBtnRef.current;
     else if (propTab === "settings") targetBtn = settingsBtnRef.current;
+    else if (propTab === "mep") targetBtn = mepBtnRef.current;
 
     if (targetBtn) {
       const trackRect = track.getBoundingClientRect();
@@ -554,7 +557,7 @@ export default function ToolRightPanel({
               ref={capsuleIndicatorRef}
               className="absolute top-0.5 bottom-0.5 left-0 rounded-full pointer-events-none transition-colors bg-white text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,1)] dark:bg-zinc-800 dark:text-zinc-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.3)]"
               style={{
-                width: "33.333%",
+                width: "25%",
               }}
             />
 
@@ -572,7 +575,18 @@ export default function ToolRightPanel({
               title="Default: Properties & Layout Inspector"
             >
               <LuSlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate hidden min-[260px]:inline">Default</span>
+              <span className="truncate hidden min-[260px]:inline">Properties</span>
+            </button>
+
+            <button
+              ref={mepBtnRef}
+              type="button"
+              onClick={() => setPropTab("mep")}
+              className={`relative z-10 flex flex-1 items-center justify-center gap-1.5 py-0.5 px-1.5 text-[10.5px] font-bold border-0 outline-none focus:outline-none shadow-none rounded-full transition-colors ${propTab === "mep" ? "!text-[var(--text-strong)] font-bold" : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"}`}
+              title="MEP systems, components and connections"
+            >
+              <LuBox className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+              <span className="truncate hidden min-[260px]:inline">MEP</span>
             </button>
 
             <button
@@ -623,7 +637,8 @@ export default function ToolRightPanel({
                   </span>
                 </div>
 
-                <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+                <div className="tool-properties-content compact-properties flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+                  <DrawingShapeOptions />
                   {measureMode ? <MeasurementProperties /> : hasSelection ? (
                     <>
                 {selectedElements.length > 1 ? (
@@ -1321,12 +1336,28 @@ export default function ToolRightPanel({
           <EmbeddedSettingsTab />
         </div>
       )}
+      {propTab === "mep" && <MepToolsPanel />}
       </aside>
     </>
   );
 }
 
 // -- Small helper components ---------------------------------------------------
+
+function MepToolsPanel() {
+  const store = useLayoutDrawingStore();
+  const [connection, setConnection] = useState("auto");
+  const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)]";
+  const section = "rounded-lg border border-sky-400/25 bg-sky-400/5 p-2.5";
+  const arm = (tool: LayoutToolId) => { store.setArmedLayoutTool(tool); store.setMepModeActive(true); };
+  return <div className="flex-1 min-h-0 overflow-y-auto p-2 compact-properties space-y-2 text-[11px]">
+    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-2.5"><p className="font-bold uppercase tracking-wide text-sky-400">MEP systems</p><p className="mt-1 text-[10px] text-[var(--text-muted)]">Route connected mechanical, electrical and plumbing services with endpoint snapping.</p></div>
+    <div className={section}><label className="property-field"><span>Discipline / family</span><select className={field} value={store.draftEquipmentCategory} onChange={(e) => store.setDraftEquipmentCategory(e.target.value as typeof store.draftEquipmentCategory)}><option value="air_terminal">Mechanical / HVAC terminal</option><option value="diffuser_supply">Supply diffuser</option><option value="diffuser_extract">Extract diffuser</option><option value="panel">Electrical panel</option><option value="socket">Socket / outlet</option><option value="lighting_fixture">Lighting fixture</option><option value="sprinkler">Sprinkler</option></select></label></div>
+    <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">Route components</p><div className="grid grid-cols-2 gap-1.5">{[...["duct", "Duct"], ["flex_duct", "Flex duct"], ["pipe", "Pipe"], ["cabletray", "Cable tray"], ["wire", "Wire"], ["equipment", "Equipment"]] .map(([tool, label]) => <button key={tool} type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-left text-[10px]" onClick={() => arm(tool as LayoutToolId)}>{label}</button>)}</div></div>
+    <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">Fittings &amp; connections</p><label className="property-field"><span>Connection type</span><select className={field} value={connection} onChange={(e) => setConnection(e.target.value)}><option value="auto">Auto route / trim</option><option value="elbow">Elbow 90°</option><option value="tee">T connection</option><option value="wye">Wye connection</option><option value="u">U connection</option><option value="reducer">Reducer / transition</option><option value="union">Union / coupling</option></select></label><div className="mt-2 grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-blue min-h-9 rounded-md px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-auto-connect", { detail: { connection } }))}>Auto connect</button><button type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-trim-connect", { detail: { connection } }))}>Trim / join</button></div></div>
+    <div className="grid grid-cols-2 gap-1.5"><label className="property-field"><span>Elevation (mm)</span><input className={field} type="number" value={store.draftDuctElevationMm} onChange={(e) => store.setDraftDuctElevationMm(Number(e.target.value))} /></label><label className="property-field"><span>System</span><select className={field} value={store.draftDuctSystem} onChange={(e) => store.setDraftDuctSystem(e.target.value as typeof store.draftDuctSystem)}><option value="supply">Supply</option><option value="return">Return</option><option value="extract">Extract</option><option value="exhaust">Exhaust</option><option value="outdoor">Outdoor air</option></select></label></div>
+  </div>;
+}
 
 function BulkSelectionProperties() {
   const selected = useLayoutDrawingStore((s) => s.selectedElements);
@@ -1402,6 +1433,7 @@ function PropSection({
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={open}
         className="flex w-full items-center justify-between py-1 px-1 font-bold text-[11px] text-[var(--text-strong)] hover:text-yellow-400 transition-colors cursor-pointer"
       >
         <span className="flex items-center gap-1.5">
@@ -1491,7 +1523,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
 
   const typeCategory: ElementTypeDefinition["category"] | null =
     tool === "wall" ? "Wall" : tool === "door" ? "Door" : tool === "window" ? "Window" :
-    tool === "floor" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
+    tool === "floor" ? "Floor" : tool === "ceiling" ? "Floor" : tool === "roof" ? "Roof" : tool === "stair" ? "Stair" :
     tool === "ramp" ? "Ramp" : tool === "column" ? "Column" : tool === "beam" ? "Beam" : null;
   const availableTypes = Object.values(DEFAULT_ELEMENT_TYPES).filter((item) => item.category === typeCategory);
   const [draftType, setDraftType] = useState<ElementTypeDefinition | null>((tool === "wall" ? availableTypes.find((item) => item.id === store.draftWallTypeId) : null) ?? availableTypes[0] ?? null);
@@ -1507,7 +1539,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
     ...(tool === "wall" ? { heightMm: wallHeight, thicknessMm: store.draftWallThicknessMm } : {}),
     ...(tool === "door" ? { widthMm: store.draftDoorWidthMm, heightMm: store.draftDoorHeightMm } : {}),
     ...(tool === "window" ? { widthMm: store.draftWindowWidthMm, heightMm: store.draftWindowHeightMm, sillHeightMm: store.draftWindowSillMm } : {}),
-    ...(tool === "floor" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
+    ...(tool === "floor" || tool === "ceiling" || tool === "roof" ? { thicknessMm: store.draftSlabThicknessMm } : {}),
     ...(tool === "stair" ? { widthMm: store.draftStairWidthMm } : {}),
     ...(tool === "ramp" ? { widthMm: store.draftRampWidthMm, thicknessMm: store.draftRampThicknessMm } : {}),
     ...(tool === "column" ? { widthMm: store.draftColumnWidthMm, depthMm: store.draftColumnDepthMm } : {}),
@@ -1524,7 +1556,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
       store.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
     } else if (tool === "window" && typeDef.widthMm && typeDef.heightMm) {
       store.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? store.draftWindowSillMm);
-    } else if ((tool === "floor" || tool === "roof") && typeDef.thicknessMm) {
+    } else if ((tool === "floor" || tool === "ceiling" || tool === "roof") && typeDef.thicknessMm) {
       store.setDraftSlabThicknessMm(typeDef.thicknessMm);
     } else if (tool === "stair") {
       if (typeDef.widthMm) store.setDraftStairWidthMm(typeDef.widthMm);
@@ -1543,10 +1575,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
   const heading = tool === "lines" ? "New drawing line" : `New ${tool}`;
   return (
     <div className="space-y-2">
-      <div className="rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-2.5 py-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">{heading} properties</p>
-        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Set these values before drawing. New elements will use them.</p>
-      </div>
+      <p className="property-caption">{heading}</p>
 
       {typeCategory && draftType && (
         <div className="space-y-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 p-2">
@@ -1563,7 +1592,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
           >
             {availableTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <EditTypeEmbeddedPanel inline typeDef={liveDraftType ?? draftType} onSave={applyDraftType} />
+          <details className="property-disclosure"><summary>Edit type definition</summary><EditTypeEmbeddedPanel inline typeDef={liveDraftType ?? draftType} onSave={applyDraftType} /></details>
         </div>
       )}
 
@@ -1604,7 +1633,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
         </div>
       )}
 
-      {(tool === "floor" || tool === "roof") && (
+      {(tool === "floor" || tool === "ceiling" || tool === "roof") && (
         <label className={labelClass}>Thickness (mm)<input className={fieldClass} type="number" min={20} value={store.draftSlabThicknessMm} onChange={(event) => store.setDraftSlabThicknessMm(Number(event.target.value))} /></label>
       )}
 
@@ -1728,13 +1757,14 @@ function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
     { name: "Dotted", pattern: "dotted" as const, thicknessPx: 2, dashSizeMm: 40, gapSizeMm: 100 },
     { name: "Dash dot", pattern: "dash-dot" as const, thicknessPx: 2, dashSizeMm: 300, gapSizeMm: 100 },
   ];
-  return <div className="space-y-2 rounded-lg border border-[var(--panel-divider)] p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Line type</p><div className="grid grid-cols-2 gap-1">{presets.map((preset) => <button key={preset.name} type="button" onClick={() => update(preset)} className={`btn-yellow-border-hover rounded-md border px-2 py-1.5 text-left text-[9px] font-semibold ${style.pattern === preset.pattern && style.thicknessPx === preset.thicknessPx ? "border-yellow-400 bg-yellow-400/15 text-yellow-500" : "border-[var(--panel-divider)]"}`}><span className="block">{preset.name}</span><span className="mt-1 block border-t border-current opacity-60" style={{ borderTopStyle: preset.pattern === "dotted" ? "dotted" : preset.pattern === "solid" ? "solid" : "dashed", borderTopWidth: preset.thicknessPx }} /></button>)}</div><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></div>;
+  return <details className="property-disclosure"><summary>Line appearance</summary><label className="property-field"><span>Preset</span><select aria-label="Line style preset" value={presets.find(preset => preset.pattern === style.pattern && preset.thicknessPx === style.thicknessPx)?.name ?? "custom"} onChange={event => { const preset = presets.find(item => item.name === event.target.value); if (preset) update(preset); }}><option value="custom" disabled>Custom</option>{presets.map(preset => <option key={preset.name} value={preset.name}>{preset.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></details>;
 }
 
 function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
+  const [open, setOpen] = useState(false);
   const store = useLayoutDrawingStore();
   const count = slab.boundary?.length ?? 4;
   const slopes = Array.from({ length: count }, (_, edgeIdx) => slab.edgeSlopes?.find((edge) => edge.edgeIdx === edgeIdx) ?? { edgeIdx, isSloped: true, pitchDeg: 30 });
   const update = (edgeIdx: number, patch: Partial<(typeof slopes)[number]>) => void store.updateSlab(slab.id, { edgeSlopes: slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge) });
-  return <PropSection open onToggle={() => {}} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
+  return <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
 }

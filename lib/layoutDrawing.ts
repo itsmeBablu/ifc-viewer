@@ -60,6 +60,8 @@ export type LayoutWall = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
+  /** Explicit signed sweep for modern three-point arcs; legacy arcs omit it. */
+  arcSweepDeg?: number;
   color?: string;
   /** Preset or custom material-library id. */
   material?: string;
@@ -114,7 +116,7 @@ export type LayoutSlab = {
   id: string;
   projectId: string;
   levelId: string;
-  kind: "floor" | "roof";
+  kind: "floor" | "ceiling" | "roof";
   // -- Legacy rectangle fields (kept for backwards compatibility) ---------
   /** Plan rectangle AABB (mm). Computed from boundary if polygon mode. */
   minXmm: number;
@@ -157,6 +159,7 @@ export function normalizeDoor(
 }
 
 export type LayoutSketchLine = {
+  arcSweepDeg?: number;
   elevationOffsetMm?: number;
   id: string;
   projectId: string;
@@ -1030,6 +1033,7 @@ export type LayoutToolId =
   | "door"
   | "window"
   | "floor"
+  | "ceiling"
   | "roof"
   | "column"
   | "beam"

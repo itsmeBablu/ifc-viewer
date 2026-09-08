@@ -87,7 +87,9 @@ export function trimBoundaryCorner(loop: BoundaryPoint[], first: number, firstPi
   for (const [start, end, keepStart, pickStart, keepEnd, pickEnd] of [
     [first, second, b, firstPick, c, secondPick], [second, first, d, secondPick, a, firstPick],
   ] as const) {
-    if (!sameSide(keepStart, pickStart) || !sameSide(keepEnd, pickEnd)) continue;
+    if (!sameSide(keepStart, pickStart) || !sameSide(keepEnd, pickEnd) ||
+      !on(p, keepStart, projectToEdge(pickStart, p, keepStart)) ||
+      !on(p, keepEnd, projectToEdge(pickEnd, p, keepEnd))) continue;
     const result = [{ ...p }];
     for (let i = (start + 1) % loop.length; ; i = (i + 1) % loop.length) {
       if (distance(loop[i], p) > EPS) result.push({ ...loop[i] });

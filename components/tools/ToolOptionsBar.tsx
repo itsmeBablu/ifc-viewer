@@ -8,6 +8,7 @@ import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import BoundarySketchOptions from "./BoundarySketchOptions";
 import ModifyTools from "./ModifyTools";
+import { DrawingModeSelect } from "./DrawingShapeOptions";
 import {
   LuTrash2,
   LuCopy,
@@ -22,8 +23,6 @@ import {
 export default function ToolOptionsBar() {
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const setArmedLayoutTool = useLayoutDrawingStore((s) => s.setArmedLayoutTool);
-  const draftDrawMode = useLayoutDrawingStore((s) => s.draftDrawMode);
-  const setDraftDrawMode = useLayoutDrawingStore((s) => s.setDraftDrawMode);
   const draftWallThicknessMm = useLayoutDrawingStore((s) => s.draftWallThicknessMm);
   const setDraftWallThicknessMm = useLayoutDrawingStore((s) => s.setDraftWallThicknessMm);
   const draftWallTypeId = useLayoutDrawingStore((s) => s.draftWallTypeId);
@@ -166,32 +165,7 @@ export default function ToolOptionsBar() {
             </span>
 
             {/* Draw Mode: Straight Line vs Arc / Curve */}
-            <div className="flex items-center gap-0.5 bg-[var(--surface-overlay)] p-0.5 rounded-lg border border-[var(--panel-divider)]">
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("line")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "line"
-                    ? "bg-amber-500 text-slate-950 shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="Straight Wall (Gerade Wand)"
-              >
-                ── Line
-              </button>
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("arc")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "arc"
-                    ? "bg-amber-500 text-slate-950 shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="3-Point Curved Arc Wall (Bogenwand)"
-              >
-                ⌒ Arc / Curve
-              </button>
-            </div>
+            <DrawingModeSelect />
 
             <div className="h-4 w-px bg-[var(--panel-divider)]" />
 
@@ -389,32 +363,7 @@ export default function ToolOptionsBar() {
             </span>
 
             {/* Draw Mode: Line vs Arc */}
-            <div className="flex items-center gap-0.5 bg-[var(--surface-overlay)] p-0.5 rounded-lg border border-[var(--panel-divider)]">
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("line")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "line"
-                    ? "bg-pink-500 text-white shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="Straight Line (Gerade Linie)"
-              >
-                ── Line
-              </button>
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("arc")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "arc"
-                    ? "bg-pink-500 text-white shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="Curved Arc (Bogen)"
-              >
-                ⌒ Arc / Curve
-              </button>
-            </div>
+            <DrawingModeSelect />
 
             <span className="text-[10px] text-[var(--text-muted)] italic">Draw closed boundary lines</span>
             <button
@@ -445,36 +394,11 @@ export default function ToolOptionsBar() {
             </span>
 
             {/* Draw Mode: Line vs Arc */}
-            <div className="flex items-center gap-0.5 bg-[var(--surface-overlay)] p-0.5 rounded-lg border border-[var(--panel-divider)]">
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("line")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "line"
-                    ? "bg-sky-500 text-white shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="Straight Line (Gerade Linie)"
-              >
-                ── Line
-              </button>
-              <button
-                type="button"
-                onClick={() => setDraftDrawMode("arc")}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                  draftDrawMode === "arc"
-                    ? "bg-sky-500 text-white shadow-sm"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-                }`}
-                title="Curved Arc Line (Bogenlinie)"
-              >
-                ⌒ Arc / Curve
-              </button>
-            </div>
+            <DrawingModeSelect />
 
             <span className="text-[10px] text-emerald-400 font-medium italic">Click start, then click endpoint · Angle & Length snap active</span>
           </div>
-        ) : (armedLayoutTool === "floor" || armedLayoutTool === "roof") && (
+        ) : (armedLayoutTool === "floor" || armedLayoutTool === "ceiling" || armedLayoutTool === "roof") && (
           <div className="flex items-center gap-3">
             <span className="font-bold text-amber-500 capitalize">{armedLayoutTool} Slab:</span>
             <div className="flex items-center gap-1.5">

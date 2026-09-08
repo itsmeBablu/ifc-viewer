@@ -83,6 +83,10 @@ export type Viewer3DHandle = {
   flyToRoom: (roomId: string) => Promise<void>;
   /** Capture PNG; scale>1 renders at higher resolution for PDF. */
   captureViewport: (opts?: { scale?: number }) => string | null;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  zoomFit: () => void;
+  goHome: () => void;
 };
 
 type Props = {
@@ -915,6 +919,26 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
         }
       }
     },
+    zoomIn: () => {
+      const controls = controlsRef.current;
+      if (controls) {
+        controls.dollyOut(1.25);
+        controls.update();
+      }
+    },
+    zoomOut: () => {
+      const controls = controlsRef.current;
+      if (controls) {
+        controls.dollyIn(1.25);
+        controls.update();
+      }
+    },
+    zoomFit: () => {
+      fitToVisible();
+    },
+    goHome: () => {
+      fitToVisible();
+    },
   }));
 
   useEffect(() => {
@@ -990,6 +1014,10 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       MIDDLE: MOUSE.DOLLY,
       // Right-drag pans; short right-click opens context menu (see ViewerContextMenu).
       RIGHT: MOUSE.PAN,
+    };
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
     };
 
     const overlays = new THREE.Group();
