@@ -410,8 +410,8 @@ type LayoutDrawingState = {
   setMepArchitectureLocked: (locked: boolean) => void;
   desktopArchCategory: "build" | "structure" | "annotate" | "insert";
   setDesktopArchCategory: (category: "build" | "structure" | "annotate" | "insert") => void;
-  desktopMepCategory: "all" | "hvac" | "piping" | "electrical";
-  setDesktopMepCategory: (category: "all" | "hvac" | "piping" | "electrical") => void;
+  desktopMepCategory: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components";
+  setDesktopMepCategory: (category: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components") => void;
   ductDraw: DuctDrawState;
   pipeDraw: PipeDrawState;
   cableTrayDraw: CableTrayDrawState;

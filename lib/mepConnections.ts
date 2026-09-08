@@ -27,8 +27,12 @@ export function connectMepSegment<T extends MepSegment>(kind: MepKind, row: T, s
   const result = { ...row };
   for (const endpoint of ["start", "end"] as const) {
     const point = endpointPoint(result, endpoint), requested = endpoint === "start" ? start : end;
-    const candidate = mepEndpoints(kind, state, row.levelId, endpoint === "end" ? mepOffset(result) : requested?.elevationMm ?? mepOffset(result)).find(p =>
-      p.mepEndpoint?.id !== row.id && Math.hypot(p.xMm - point.xMm, p.yMm - point.yMm) <= 1 && (!requested?.mepEndpoint || (requested.mepEndpoint.id === p.mepEndpoint?.id && requested.mepEndpoint.endpoint === p.mepEndpoint?.endpoint)));
+    const candidate = mepEndpoints(kind, state, row.levelId, endpoint === "end" ? mepOffset(result) : requested?.elevationMm ?? mepOffset(result)).find(p => {
+      if (!p.mepEndpoint || p.mepEndpoint.id === row.id || Math.hypot(p.xMm - point.xMm, p.yMm - point.yMm) > 25) return false;
+      if (requested?.mepEndpoint && (requested.mepEndpoint.id !== p.mepEndpoint.id || requested.mepEndpoint.endpoint !== p.mepEndpoint.endpoint)) return false;
+      const neighbour = mepRows(kind, state).find(item => item.id === p.mepEndpoint?.id);
+      return !neighbour || !mepMismatch(result, neighbour);
+    });
     if (candidate) {
       result[endpoint === "start" ? "startConnection" : "endConnection"] = candidate.mepEndpoint;
       result.elevationMm = candidate.elevationMm;

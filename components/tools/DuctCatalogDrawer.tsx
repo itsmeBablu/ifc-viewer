@@ -12,6 +12,9 @@ type CatalogItem = {
   size?: number;
   width?: number;
   height?: number;
+  domain?: "duct" | "piping" | "wiring" | "electrical" | "components";
+  pipeDiameter?: number;
+  equipmentCategory?: string;
 };
 
 const ITEMS: CatalogItem[] = [
@@ -24,6 +27,18 @@ const ITEMS: CatalogItem[] = [
   { id: "reducer", name: "Reducer", kind: "reducer" },
   { id: "transition", name: "Rect transition", kind: "transition" },
   { id: "cap", name: "End cap", kind: "cap" },
+  { id: "pipe-22", name: "Copper pipe · Ø22 mm", kind: "round", domain: "piping", pipeDiameter: 22 },
+  { id: "pipe-54", name: "Steel pipe · Ø54 mm", kind: "round", domain: "piping", pipeDiameter: 54 },
+  { id: "pipe-elbow", name: "Pipe elbow 90°", kind: "elbow", domain: "piping" },
+  { id: "pipe-tee", name: "Pipe tee", kind: "tee", domain: "piping" },
+  { id: "conduit-25", name: "Conduit · Ø25 mm", kind: "round", domain: "wiring", pipeDiameter: 25 },
+  { id: "tray-200", name: "Cable tray · 200 × 60", kind: "rect", domain: "wiring", width: 200, height: 60 },
+  { id: "socket", name: "Socket outlet", kind: "cap", domain: "electrical", equipmentCategory: "socket" },
+  { id: "light", name: "Light fixture", kind: "cap", domain: "electrical", equipmentCategory: "lighting_fixture" },
+  { id: "panel", name: "Distribution panel", kind: "rect", domain: "electrical", equipmentCategory: "panel" },
+  { id: "diffuser", name: "Air diffuser", kind: "cap", domain: "components", equipmentCategory: "diffuser_supply" },
+  { id: "sink", name: "Plumbing sink", kind: "cap", domain: "components", equipmentCategory: "sink" },
+  { id: "pump", name: "Circulation pump", kind: "rect", domain: "components", equipmentCategory: "generic_component" },
 ];
 
 function Thumbnail({ kind }: { kind: CatalogItem["kind"] }) {
@@ -36,18 +51,19 @@ function Thumbnail({ kind }: { kind: CatalogItem["kind"] }) {
   return <svg viewBox="0 0 120 64" aria-hidden="true"><ellipse cx="60" cy="32" rx="34" ry="22" fill="#0c4a6e"/><ellipse cx="60" cy="32" rx="25" ry="15" fill="#bae6fd"/></svg>;
 }
 
-export default function DuctCatalogDrawer({ onPick }: { onPick?: (item: CatalogItem) => void }) {
+export default function DuctCatalogDrawer({ domain = "duct", onPick }: { domain?: CatalogItem["domain"]; onPick?: (item: CatalogItem) => void }) {
   const [open, setOpen] = useState(true);
   const store = useLayoutDrawingStore();
   const pick = (item: CatalogItem) => {
-    if (item.shape) store.setDraftDuctShape(item.shape);
-    if (item.size) store.setDraftDuctSize(item.size, Math.round(item.size * 0.6), item.size);
-    if (item.width && item.height) store.setDraftDuctSize(item.width, item.height, Math.round((item.width + item.height) / 2));
-    store.setArmedLayoutTool("duct");
+    if (domain === "piping" && item.pipeDiameter) { store.setDraftPipeDiameterMm(item.pipeDiameter); store.setArmedLayoutTool("pipe"); }
+    else if (domain === "wiring") { if (item.width && item.height) store.setDraftCableTraySize(item.width, item.height); store.setArmedLayoutTool(item.id.startsWith("conduit") ? "cabletray" : "cabletray"); }
+    else if (domain === "electrical" || domain === "components") { if (item.equipmentCategory) store.setDraftEquipmentCategory(item.equipmentCategory as Parameters<typeof store.setDraftEquipmentCategory>[0]); store.setArmedLayoutTool("equipment"); }
+    else { if (item.shape) store.setDraftDuctShape(item.shape); if (item.size) store.setDraftDuctSize(item.size, Math.round(item.size * 0.6), item.size); if (item.width && item.height) store.setDraftDuctSize(item.width, item.height, Math.round((item.width + item.height) / 2)); store.setArmedLayoutTool("duct"); }
     onPick?.(item);
   };
-  return <section className={`duct-catalog-drawer ${open ? "is-open" : "is-collapsed"}`} aria-label="Duct catalog">
-    <button type="button" className="duct-catalog-handle" onClick={() => setOpen(value => !value)} aria-expanded={open}><span className="flex items-center gap-1.5"><span className="h-1 w-8 rounded-full bg-sky-300/60" /> Duct catalog</span>{open ? <LuChevronDown /> : <LuChevronUp />}</button>
-    {open && <div className="duct-catalog-scroller">{ITEMS.map(item => <button key={item.id} type="button" className="duct-catalog-card" onClick={() => pick(item)} title={`Use ${item.name}`}><Thumbnail kind={item.kind} /><span>{item.name}</span></button>)}</div>}
+  const title = domain === "duct" ? "Duct catalog" : domain === "piping" ? "Piping catalog" : domain === "wiring" ? "Wiring catalog" : domain === "electrical" ? "Electrical catalog" : "Components catalog";
+  return <section className={`duct-catalog-drawer ${open ? "is-open" : "is-collapsed"}`} aria-label={title}>
+    <button type="button" className="duct-catalog-handle" onClick={() => setOpen(value => !value)} aria-expanded={open}><span className="flex items-center gap-1.5"><span className="h-1 w-8 rounded-full bg-sky-300/60" /> {title}</span>{open ? <LuChevronDown /> : <LuChevronUp />}</button>
+    {open && <div className="duct-catalog-scroller">{ITEMS.filter(item => !item.domain || item.domain === domain).map(item => <button key={item.id} type="button" className="duct-catalog-card" onClick={() => pick(item)} title={`Use ${item.name}`}><Thumbnail kind={item.kind} /><span>{item.name}</span></button>)}</div>}
   </section>;
 }

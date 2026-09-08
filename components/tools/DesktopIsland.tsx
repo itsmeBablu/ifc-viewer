@@ -91,9 +91,11 @@ export const ARCH_TABS: DesktopCategoryTab[] = [
 
 export const MEP_TABS: DesktopCategoryTab[] = [
   { id: "all", label: "All" },
-  { id: "hvac", label: "HVAC" },
+  { id: "hvac", label: "Duct" },
   { id: "piping", label: "Piping" },
+  { id: "wiring", label: "Wiring" },
   { id: "electrical", label: "Electrical" },
+  { id: "components", label: "Components" },
 ];
 
 type CapsuleItem = {
@@ -606,6 +608,10 @@ export default function DesktopIsland() {
           return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "pipe" || i.id === "equipment");
         case "electrical":
           return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "cabletray" || i.id === "wire" || i.id === "equipment");
+        case "wiring":
+          return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "cabletray" || i.id === "wire");
+        case "components":
+          return MEP_ALL_ITEMS.filter((i) => i.id === "select" || i.id === "equipment");
         case "all":
         default:
           return MEP_ALL_ITEMS;
@@ -916,7 +922,7 @@ export default function DesktopIsland() {
                   key={tab.id}
                   ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
-                  onClick={() => setMepCategory(tab.id as "all" | "hvac" | "piping" | "electrical")}
+                  onClick={() => setMepCategory(tab.id as "all" | "hvac" | "piping" | "wiring" | "electrical" | "components")}
                   className={`desktop-clean-tab-btn ${mepCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
