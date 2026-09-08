@@ -59,6 +59,7 @@ import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import LayoutPropertiesPanel from "./LayoutPropertiesPanel";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
+import DuctCatalogDrawer from "./DuctCatalogDrawer";
 import {
   wallLengthMm,
   type LayoutLevel,
@@ -124,6 +125,9 @@ export default function ToolRightPanel({
   const accent = useStudioSettingsStore((s) => s.accent);
   const syncArchMep = useStudioSettingsStore((s) => s.syncArchMep);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+  useEffect(() => {
+    if (!mepModeActive && propTab === "mep") setPropTab("properties");
+  }, [mepModeActive, propTab]);
 
   const activeHighlightClass = mepModeActive
     ? "btn-v-blue btn-liquid-hover shadow-md shadow-sky-400/30 !text-slate-950 font-bold"
@@ -557,7 +561,7 @@ export default function ToolRightPanel({
               ref={capsuleIndicatorRef}
               className="absolute top-0.5 bottom-0.5 left-0 rounded-full pointer-events-none transition-colors bg-white text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,1)] dark:bg-zinc-800 dark:text-zinc-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.3)]"
               style={{
-                width: "25%",
+                width: mepModeActive ? "25%" : "33.333%",
               }}
             />
 
@@ -578,7 +582,7 @@ export default function ToolRightPanel({
               <span className="truncate hidden min-[260px]:inline">Properties</span>
             </button>
 
-            <button
+            {mepModeActive && <button
               ref={mepBtnRef}
               type="button"
               onClick={() => setPropTab("mep")}
@@ -587,7 +591,7 @@ export default function ToolRightPanel({
             >
               <LuBox className="h-3.5 w-3.5 shrink-0 text-sky-400" />
               <span className="truncate hidden min-[260px]:inline">MEP</span>
-            </button>
+            </button>}
 
             <button
               ref={materialsBtnRef}
@@ -1346,6 +1350,8 @@ export default function ToolRightPanel({
 
 function MepToolsPanel() {
   const store = useLayoutDrawingStore();
+  const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
+  const activeLevel = store.levels.find((level) => level.id === activeLevelId) ?? store.levels[0];
   const [connection, setConnection] = useState("auto");
   const subCategory = store.desktopMepCategory;
   const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[11px] text-[var(--text-strong)]";
@@ -1355,13 +1361,14 @@ function MepToolsPanel() {
   const routeTools = subCategory === "hvac" ? [["duct", "Duct run"], ["flex_duct", "Flex duct"], ["equipment", "Diffuser / grille"]] : subCategory === "piping" ? [["pipe", "Pipe run"], ["equipment", "Sink / toilet"]] : subCategory === "electrical" ? [["wire", "Wire run"], ["cabletray", "Conduit / tray"], ["equipment", "Outlet / light"]] : [["duct", "Duct"], ["pipe", "Pipe"], ["cabletray", "Cable tray"], ["wire", "Wire"], ["equipment", "Equipment"]];
   const mepSelected = store.selectedDuctId || store.selectedPipeId || store.selectedCableTrayId || store.selectedWireId || store.selectedEquipmentId;
   return <div className="relative flex-1 min-h-0 overflow-y-auto p-2 pb-16 compact-properties space-y-2 text-[11px]">
-    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-2.5"><p className="font-bold uppercase tracking-wide text-sky-400">MEP systems</p><p className="mt-1 text-[10px] text-[var(--text-muted)]">Route connected mechanical, electrical and plumbing services with endpoint snapping.</p></div>
+    <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 p-2.5"><div className="flex items-center justify-between"><p className="font-bold uppercase tracking-wide text-sky-400">MEP systems</p>{store.armedLayoutTool && <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[9px] font-semibold text-sky-300">Level: {activeLevel?.name ?? "—"}</span>}</div><p className="mt-1 text-[10px] text-[var(--text-muted)]">Route connected mechanical, electrical and plumbing services with endpoint snapping.</p></div>
     <div className="grid grid-cols-4 gap-1 rounded-lg border border-[var(--panel-divider)] p-1">{categories.map(([id, label]) => <button key={id} type="button" className={`min-h-8 rounded-md px-1 text-[9px] font-semibold ${subCategory === id ? "btn-v-blue text-slate-950" : "text-[var(--text-muted)] hover:bg-[var(--glass-inset-bg)]"}`} onClick={() => store.setDesktopMepCategory(id)}>{label}</button>)}</div>
     <div className={section}><label className="property-field"><span>Discipline / family</span><select className={field} value={store.draftEquipmentCategory} onChange={(e) => store.setDraftEquipmentCategory(e.target.value as typeof store.draftEquipmentCategory)}><option value="air_terminal">Mechanical / HVAC terminal</option><option value="diffuser_supply">Supply diffuser</option><option value="diffuser_extract">Extract diffuser</option><option value="panel">Electrical panel</option><option value="socket">Socket / outlet</option><option value="lighting_fixture">Lighting fixture</option><option value="sprinkler">Sprinkler</option></select></label></div>
     <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">{subCategory === "all" ? "Components" : categories.find(([id]) => id === subCategory)?.[1]} tools</p><div className="grid grid-cols-2 gap-1.5">{routeTools.map(([tool, label]) => <button key={`${tool}-${label}`} type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-left text-[10px]" onClick={() => arm(tool as LayoutToolId)}>{label}</button>)}</div></div>
     <div className={section}><p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-sky-400">Fittings &amp; connections</p><label className="property-field"><span>Connection type</span><select className={field} value={connection} onChange={(e) => setConnection(e.target.value)}><option value="auto">Auto route / trim</option><option value="elbow">Elbow 90°</option><option value="tee">T connection</option><option value="wye">Wye connection</option><option value="u">U connection</option><option value="reducer">Reducer / transition</option><option value="union">Union / coupling</option></select></label><div className="mt-2 grid grid-cols-2 gap-1.5"><button type="button" className="btn-v-blue min-h-9 rounded-md px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-auto-connect", { detail: { connection } }))}>Auto connect</button><button type="button" className="btn-yellow-border-hover min-h-9 rounded-md border border-[var(--panel-divider)] px-2 text-[10px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-trim-connect", { detail: { connection } }))}>Trim / join</button></div></div>
     <div className="grid grid-cols-2 gap-1.5"><label className="property-field"><span>Elevation (mm)</span><input className={field} type="number" value={store.draftDuctElevationMm} onChange={(e) => store.setDraftDuctElevationMm(Number(e.target.value))} /></label><label className="property-field"><span>System</span><select className={field} value={store.draftDuctSystem} onChange={(e) => store.setDraftDuctSystem(e.target.value as typeof store.draftDuctSystem)}><option value="supply">Supply</option><option value="return">Return</option><option value="extract">Extract</option><option value="exhaust">Exhaust</option><option value="outdoor">Outdoor air</option></select></label></div>
-    {mepSelected && <div className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center gap-1 border-t border-sky-400/25 bg-[var(--panel-bg)]/95 p-2 backdrop-blur"><span className="mr-auto text-[9px] font-semibold text-sky-400">Selected MEP</span><button type="button" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-connect-mode"))}>Connect</button><button type="button" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => store.setArmedLayoutTool("trim")}>Align</button><button type="button" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px] text-red-400" onClick={() => void store.deleteSelected()}>Delete</button></div>}
+    {subCategory === "hvac" && <DuctCatalogDrawer />}
+    {mepSelected && <div className="sticky bottom-0 z-10 -mx-2 mt-2 flex items-center gap-1 border-t border-sky-400/25 bg-[var(--panel-bg)]/95 p-2 backdrop-blur"><span className="mr-auto text-[9px] font-semibold text-sky-400">Selected MEP</span><button type="button" aria-label="Connect selected MEP" title="Connect" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-connect-mode"))}>↔</button><button type="button" aria-label="Align selected MEP" title="Align" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => store.setArmedLayoutTool("trim")}>⌗</button><button type="button" aria-label="Delete selected MEP" title="Delete" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px] text-red-400" onClick={() => void store.deleteSelected()}>⌫</button><button type="button" aria-label="More MEP actions" title="More" className="btn-yellow-border-hover rounded-md px-2 py-1.5 text-[9px]" onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-mep-more-actions"))}>⋯</button></div>}
   </div>;
 }
 
