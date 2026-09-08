@@ -4243,15 +4243,17 @@ body.werkzeug-active .werkzeug-ipad-tool-ribbon .werkzeug-tool-button:hover,
 body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-icon-action:hover,
 body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-theme-knob:hover {
   transform: translateY(-1px);
-  border-color: transparent;
+  border-color: rgba(255,255,255,.62);
   background: rgba(255,255,255,.24);
+  color: rgba(255,255,255,.88) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 4px 14px rgba(255,255,255,.12);
 }
 body.werkzeug-active.mep-mode-active .werkzeug-ipad-tool-ribbon .werkzeug-tool-button:hover,
 body.werkzeug-active.mep-mode-active .werkzeug-ipad-action-ribbon .werkzeug-icon-action:hover,
 body.werkzeug-active.mep-mode-active .werkzeug-ipad-action-ribbon .werkzeug-theme-knob:hover {
-  border-color: transparent;
+  border-color: rgba(255,255,255,.62);
   background: rgba(255,255,255,.24);
+  color: rgba(255,255,255,.88) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 4px 14px rgba(255,255,255,.12);
 }
 .werkzeug-ipad-tool-ribbon .werkzeug-tool-label { font-weight: 650; letter-spacing: .01em; }
@@ -4270,13 +4272,13 @@ body.werkzeug-active .desktop-capsule-btn :is(svg, span) { color: inherit !impor
 body.werkzeug-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
 body.werkzeug-active .desktop-capsule-btn:hover {
   transform: translateY(-1px);
-  border-color: transparent !important;
+  border-color: rgba(255,255,255,.62) !important;
   background: rgba(255,255,255,.24) !important;
-  color: rgba(255,255,255,.98) !important;
+  color: rgba(255,255,255,.88) !important;
 }
 body.werkzeug-active.mep-mode-active .werkzeug-ipad-modify-ribbon .werkzeug-modify-button:hover,
 body.werkzeug-active.mep-mode-active .desktop-capsule-btn:hover {
-  border-color: transparent !important;
+  border-color: rgba(255,255,255,.62) !important;
   background: rgba(255,255,255,.24) !important;
-  color: rgba(255,255,255,.98) !important;
+  color: rgba(255,255,255,.88) !important;
 }
