@@ -18,6 +18,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import gsap from "gsap";
 import MeasurementProperties from "./MeasurementProperties";
+import DrawingShapeOptions from "./DrawingShapeOptions";
 import {
   LuChevronRight,
   LuChevronLeft,
@@ -139,10 +140,10 @@ export default function ToolRightPanel({
 
   // -- Properties section collapse -------------------------------------------
   const [openSections, setOpenSections] = useState({
-    identity: true,
+    identity: false,
     dimensions: true,
-    constraints: true,
-    materials: true,
+    constraints: false,
+    materials: false,
     ifc: false,
   });
   const toggleSection = (key: keyof typeof openSections) =>
@@ -572,7 +573,7 @@ export default function ToolRightPanel({
               title="Default: Properties & Layout Inspector"
             >
               <LuSlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate hidden min-[260px]:inline">Default</span>
+              <span className="truncate hidden min-[260px]:inline">Properties</span>
             </button>
 
             <button
@@ -623,7 +624,8 @@ export default function ToolRightPanel({
                   </span>
                 </div>
 
-                <div className="tool-properties-content flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+                <div className="tool-properties-content compact-properties flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
+                  <DrawingShapeOptions />
                   {measureMode ? <MeasurementProperties /> : hasSelection ? (
                     <>
                 {selectedElements.length > 1 ? (
@@ -1402,6 +1404,7 @@ function PropSection({
       <button
         type="button"
         onClick={onToggle}
+        aria-expanded={open}
         className="flex w-full items-center justify-between py-1 px-1 font-bold text-[11px] text-[var(--text-strong)] hover:text-yellow-400 transition-colors cursor-pointer"
       >
         <span className="flex items-center gap-1.5">
@@ -1543,10 +1546,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
   const heading = tool === "lines" ? "New drawing line" : `New ${tool}`;
   return (
     <div className="space-y-2">
-      <div className="rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-2.5 py-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">{heading} properties</p>
-        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Set these values before drawing. New elements will use them.</p>
-      </div>
+      <p className="property-caption">{heading}</p>
 
       {typeCategory && draftType && (
         <div className="space-y-1.5 rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/40 p-2">
@@ -1563,7 +1563,7 @@ function GenericDraftToolProperties({ tool }: { tool: LayoutToolId }) {
           >
             {availableTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <EditTypeEmbeddedPanel inline typeDef={liveDraftType ?? draftType} onSave={applyDraftType} />
+          <details className="property-disclosure"><summary>Edit type definition</summary><EditTypeEmbeddedPanel inline typeDef={liveDraftType ?? draftType} onSave={applyDraftType} /></details>
         </div>
       )}
 
@@ -1728,13 +1728,14 @@ function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
     { name: "Dotted", pattern: "dotted" as const, thicknessPx: 2, dashSizeMm: 40, gapSizeMm: 100 },
     { name: "Dash dot", pattern: "dash-dot" as const, thicknessPx: 2, dashSizeMm: 300, gapSizeMm: 100 },
   ];
-  return <div className="space-y-2 rounded-lg border border-[var(--panel-divider)] p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Line type</p><div className="grid grid-cols-2 gap-1">{presets.map((preset) => <button key={preset.name} type="button" onClick={() => update(preset)} className={`btn-yellow-border-hover rounded-md border px-2 py-1.5 text-left text-[9px] font-semibold ${style.pattern === preset.pattern && style.thicknessPx === preset.thicknessPx ? "border-yellow-400 bg-yellow-400/15 text-yellow-500" : "border-[var(--panel-divider)]"}`}><span className="block">{preset.name}</span><span className="mt-1 block border-t border-current opacity-60" style={{ borderTopStyle: preset.pattern === "dotted" ? "dotted" : preset.pattern === "solid" ? "solid" : "dashed", borderTopWidth: preset.thicknessPx }} /></button>)}</div><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></div>;
+  return <details className="property-disclosure"><summary>Line appearance</summary><label className="property-field"><span>Preset</span><select aria-label="Line style preset" value={presets.find(preset => preset.pattern === style.pattern && preset.thicknessPx === style.thicknessPx)?.name ?? "custom"} onChange={event => { const preset = presets.find(item => item.name === event.target.value); if (preset) update(preset); }}><option value="custom" disabled>Custom</option>{presets.map(preset => <option key={preset.name} value={preset.name}>{preset.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></details>;
 }
 
 function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
+  const [open, setOpen] = useState(false);
   const store = useLayoutDrawingStore();
   const count = slab.boundary?.length ?? 4;
   const slopes = Array.from({ length: count }, (_, edgeIdx) => slab.edgeSlopes?.find((edge) => edge.edgeIdx === edgeIdx) ?? { edgeIdx, isSloped: true, pitchDeg: 30 });
   const update = (edgeIdx: number, patch: Partial<(typeof slopes)[number]>) => void store.updateSlab(slab.id, { edgeSlopes: slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge) });
-  return <PropSection open onToggle={() => {}} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
+  return <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof Edge Slopes"><div className="space-y-1.5">{slopes.map((edge) => <div key={edge.edgeIdx} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-2 rounded-md border border-[var(--panel-divider)] p-1.5"><span className="text-[10px] font-semibold">Edge {edge.edgeIdx + 1}</span><label className="flex items-center gap-1 text-[9px]"><input type="checkbox" checked={edge.isSloped} onChange={(e) => update(edge.edgeIdx, { isSloped: e.target.checked })}/>Slope</label><input aria-label={`Edge ${edge.edgeIdx + 1} pitch`} disabled={!edge.isSloped} className="h-7 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 text-right text-[10px]" type="number" min={0} max={89} value={edge.pitchDeg} onChange={(e) => update(edge.edgeIdx, { pitchDeg: Number(e.target.value) })}/></div>)}</div></PropSection>;
 }

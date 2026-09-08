@@ -43,6 +43,7 @@ import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
 import ToolRightPanel from "./ToolRightPanel";
 import ToolStatusBar from "./ToolStatusBar";
+import NavigationBar from "./NavigationBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import SheetViewDialog from "./SheetViewDialog";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
@@ -64,6 +65,7 @@ import LiquidGlassSpinner from "@/components/common/LiquidGlassSpinner";
 import ThemeTransition from "@/components/common/ThemeTransition";
 import ThemeHydration from "@/components/common/ThemeHydration";
 import { MATERIAL_DRAG_MIME } from "@/store/materialStore";
+import DrawingCommandBar from "./DrawingCommandBar";
 
 type LoadSource =
   | { kind: "registry"; modelId: string }
@@ -213,7 +215,7 @@ export default function WerkzeugApp() {
   useEffect(() => {
     let candidate: { startedAt: number; points: Array<{ x: number; y: number }> } | null = null;
     const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 2) {
+      if (!(event.target instanceof HTMLCanvasElement) || event.touches.length !== 2) {
         candidate = null;
         return;
       }
@@ -309,6 +311,7 @@ export default function WerkzeugApp() {
         layout.clearSelection();
         const markup = useToolMarkupStore.getState();
         markup.setArmedTool(null);
+        markup.setMeasureMode(false);
         markup.cancelPendingNote();
         markup.clearSelection();
         markup.setCubeDraw(null);
@@ -609,7 +612,15 @@ export default function WerkzeugApp() {
           />
         )}
 
+        <NavigationBar
+          onHome={() => viewerRef.current?.goHome()}
+          onZoomIn={() => viewerRef.current?.zoomIn()}
+          onZoomOut={() => viewerRef.current?.zoomOut()}
+          onZoomFit={() => viewerRef.current?.zoomFit()}
+          rightOffset={isDesktop && rightPanelOpen ? panelWidth + 16 : 16}
+        />
         <SceneBusyOverlay />
+        <DrawingCommandBar />
         <SceneBusyCursor
           x={pointer.x}
           y={pointer.y}

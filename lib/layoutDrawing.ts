@@ -60,6 +60,8 @@ export type LayoutWall = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
+  /** Explicit signed sweep for modern three-point arcs; legacy arcs omit it. */
+  arcSweepDeg?: number;
   color?: string;
   /** Preset or custom material-library id. */
   material?: string;
@@ -157,6 +159,7 @@ export function normalizeDoor(
 }
 
 export type LayoutSketchLine = {
+  arcSweepDeg?: number;
   elevationOffsetMm?: number;
   id: string;
   projectId: string;

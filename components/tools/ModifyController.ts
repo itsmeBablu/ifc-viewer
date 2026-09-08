@@ -213,6 +213,7 @@ export function installModifyController(options: {
     }
   }
   function down(event: PointerEvent) {
+    if (!event.isPrimary) return;
     if (!enabled() || event.button !== 0) return;
     mouse = { x: event.clientX, y: event.clientY }; alt = event.altKey;
     const state = useModifyStore.getState();
@@ -303,6 +304,7 @@ export function installModifyController(options: {
     lastOverlay = null;
     const controls = options.controls();
     if (controls) {
+      controls.enabled = true;
       const oc = controls as unknown as { state?: number; _pointers?: number[] };
       if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
       if (Array.isArray(oc._pointers) && oc._pointers.length > 0) oc._pointers.length = 0;
@@ -318,9 +320,12 @@ export function installModifyController(options: {
     }
   }
   function onWindowPointerUp(event: PointerEvent) {
-    if (event.buttons === 0) {
+    if (event.buttons === 0 || event.pointerType === "touch") {
       const controls = options.controls();
       if (controls) {
+        if (!previewing && !controls.enabled) {
+          controls.enabled = controlsEnabled;
+        }
         const oc = controls as unknown as { state?: number; _pointers?: number[] };
         if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
         if (Array.isArray(oc._pointers) && oc._pointers.length > 0) oc._pointers.length = 0;

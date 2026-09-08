@@ -39,6 +39,7 @@ import { snapMeshMeasurement } from "@/lib/measurementSnap";
 
 import { installBoundarySketchEditor } from "./BoundarySketchEditor";
 import { installModifyController } from "./ModifyController";
+import { installDrawingInteractionController } from "./DrawingInteractionController";
 import { useModifyStore } from "@/store/useModifyStore";
 import {
   forwardRef,
@@ -1168,16 +1169,50 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     },
     zoomIn: () => {
       const controls = controlsRef.current;
-      if (controls) {
-        controls.dollyIn(1.25);
+      if (!controls) return;
+      const cam = controls.object;
+      if (cam instanceof THREE.OrthographicCamera) {
+        cam.zoom = Math.min(cam.zoom * 1.25, 100);
+        cam.updateProjectionMatrix();
         controls.update();
+      } else {
+        controls.dollyOut(1.25);
+        controls.update();
+      }
+      const quadOn =
+        useAppStore.getState().toolMode &&
+        useToolMarkupStore.getState().quadView;
+      if (quadOn) {
+        const activeIdx = useToolMarkupStore.getState()
+          .quadActiveIndex as QuadIndex;
+        const slot = quadSlotsRef.current[activeIdx];
+        if (slot) {
+          slot.frustum = Math.max(0.5, slot.frustum / 1.25);
+        }
       }
     },
     zoomOut: () => {
       const controls = controlsRef.current;
-      if (controls) {
-        controls.dollyOut(1.25);
+      if (!controls) return;
+      const cam = controls.object;
+      if (cam instanceof THREE.OrthographicCamera) {
+        cam.zoom = Math.max(cam.zoom / 1.25, 0.01);
+        cam.updateProjectionMatrix();
         controls.update();
+      } else {
+        controls.dollyIn(1.25);
+        controls.update();
+      }
+      const quadOn =
+        useAppStore.getState().toolMode &&
+        useToolMarkupStore.getState().quadView;
+      if (quadOn) {
+        const activeIdx = useToolMarkupStore.getState()
+          .quadActiveIndex as QuadIndex;
+        const slot = quadSlotsRef.current[activeIdx];
+        if (slot) {
+          slot.frustum = Math.min(1000, slot.frustum * 1.25);
+        }
       }
     },
     zoomFit: () => {
@@ -2874,6 +2909,40 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
+      if (!typing) {
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          const controls = controlsRef.current;
+          if (controls) {
+            const cam = controls.object;
+            if (cam instanceof THREE.OrthographicCamera) {
+              cam.zoom = Math.min(cam.zoom * 1.25, 100);
+              cam.updateProjectionMatrix();
+              controls.update();
+            } else {
+              controls.dollyOut(1.25);
+              controls.update();
+            }
+          }
+          return;
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          const controls = controlsRef.current;
+          if (controls) {
+            const cam = controls.object;
+            if (cam instanceof THREE.OrthographicCamera) {
+              cam.zoom = Math.max(cam.zoom / 1.25, 0.01);
+              cam.updateProjectionMatrix();
+              controls.update();
+            } else {
+              controls.dollyIn(1.25);
+              controls.update();
+            }
+          }
+          return;
+        }
+      }
       if (e.key === "Tab") {
         const layout = useLayoutDrawingStore.getState();
         if (
@@ -4285,6 +4354,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         const oc = controls as unknown as { state?: number; _pointers?: number[] };
         if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
         if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
+        controls.enableRotate = true;
         if (!useAppStore.getState().viewerContextMenuOpen) {
           controls.enabled = true;
         }
@@ -7047,8 +7117,10 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       applyPickSelection(hit);
     };
 
-    let lastTapTime = 0;
     const handleDblClickOrTap = () => {
+      const layout = useLayoutDrawingStore.getState();
+      const markup = useToolMarkupStore.getState();
+      if (layout.armedLayoutTool || layout.slabBoundaryEdit || markup.armedTool || markup.measureMode || useModifyStore.getState().tool !== "select") return;
       // Double click / double tap: zoom in and fit all components in 3D / any view, or show complete graph if empty
       const presentation = useAppStore.getState().isPresentationView;
       fitToVisible(presentation ? 2000 : 850);
@@ -7056,27 +7128,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
 
     const onDblClick = (e: MouseEvent) => {
       e.preventDefault();
+      // Touch/Pencil taps place geometry; only a mouse double-click fits the view.
+      if (lastPointerType !== "mouse") return;
       handleDblClickOrTap();
     };
 
-    let lastTapX = 0;
-    let lastTapY = 0;
+    let lastPointerType = "mouse";
     const onPointerDown = (e: PointerEvent) => {
-      if (e.pointerType === "touch" || e.pointerType === "pen") {
-        const now = performance.now();
-        const dist = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY);
-        if (now - lastTapTime < 350 && dist < 40) {
-          e.preventDefault();
-          handleDblClickOrTap();
-          lastTapTime = 0;
-          lastTapX = 0;
-          lastTapY = 0;
-          return;
-        }
-        lastTapTime = now;
-        lastTapX = e.clientX;
-        lastTapY = e.clientY;
-      }
+      lastPointerType = e.pointerType;
+      if (!e.isPrimary) { suppressNextClick = true; return; }
       if (
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView
@@ -7100,9 +7160,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             useToolMarkupStore.getState().measureMode ||
             Boolean(transformControlsRef.current?.axis))
         ) {
-          // When drawing or measuring, disable orbit rotation so left-click places points reliably
+          // When drawing or measuring, disable orbit rotation so left-click places points reliably without locking zoom
           const controls = controlsRef.current;
-          if (controls) controls.enabled = false;
+          if (controls) controls.enableRotate = false;
         }
 
         if (
@@ -7185,7 +7245,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
                 layoutStore.selectUnderlay(hit.id);
                 const u = layoutStore.underlays.find((x) => x.id === hit.id);
                 if (u && !u.locked) pendingUnderlayMoveId = hit.id;
-              } else if (!hit && activeViewPresetRef.current !== "free") {
+              } else if (!hit && e.pointerType !== "touch" && activeViewPresetRef.current !== "free") {
                 // In 2D ortho/plan mode only: empty canvas drag starts marquee box selection
                 marqueeActive = true;
                 marqueeStartX = e.clientX;
@@ -7361,6 +7421,12 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       if (hit) applyPickSelection(hit);
     };
 
+    const disposeDrawingInteraction = installDrawingInteractionController({
+      canvas,
+      camera: (x, y) => preparePointerRayRef.current(x, y),
+      roots: () => [layoutLayerRef.current?.group, shellCloneRef.current, markupLayerRef.current?.group].filter((root): root is THREE.Group => Boolean(root)),
+      controls: () => controlsRef.current,
+    });
     const disposeModifyController = sceneRef.current ? installModifyController({
       canvas, scene: sceneRef.current,
       camera: (x, y) => preparePointerRayRef.current(x, y),
@@ -7379,12 +7445,29 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         const controls = controlsRef.current;
         if (controls) {
           const oc = controls as unknown as { state?: number; _pointers?: number[] };
-          if (oc.state !== undefined && oc.state !== 0) oc.state = 0;
-          if (Array.isArray(oc._pointers)) oc._pointers.length = 0;
+          if (oc.state !== undefined && oc.state !== 0 && !wallEditDragRef.current && !sectionEditDragRef.current) oc.state = 0;
+          if (Array.isArray(oc._pointers) && (e.pointerType === "touch" || e.buttons === 0)) oc._pointers.length = 0;
+          controls.enableRotate = true;
         }
       }
     };
     window.addEventListener("pointerup", onWindowPointerUp);
+    const onPointerCancel = () => {
+      pendingWallMoveId = null;
+      pendingUnderlayMoveId = null;
+      marqueeActive = false;
+      useLayoutDrawingStore.getState().setMarqueeBox(null);
+      suppressNextClick = true;
+      if (wallEditDragRef.current) endWallEditDrag();
+      if (sectionEditDragRef.current) {
+        suspendWerkzeugHistory(false);
+        sectionEditDragRef.current = null;
+      }
+      const controls = controlsRef.current;
+      if (controls && !useAppStore.getState().viewerContextMenuOpen) controls.enabled = true;
+    };
+    canvas.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("blur", onPointerCancel);
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("click", onClick);
@@ -7393,10 +7476,13 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
     return () => {
       componentPointRef.current = null;
       disposeBoundaryEditor();
+      disposeDrawingInteraction();
       disposeModifyController();
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
       window.removeEventListener("pointerup", onWindowPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("blur", onPointerCancel);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("click", onClick);

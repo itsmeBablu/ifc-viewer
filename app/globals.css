@@ -4084,3 +4084,134 @@ body.mep-mode-active .desktop-shape-option.is-active {
   background: rgba(56, 189, 248, 0.15);
   border-color: rgba(56, 189, 248, 0.5);
 }
+
+.drawing-live-hud {
+  display: none;
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 12px;
+  border: 1px solid #38bdf8;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #f8fafc;
+  font: 600 13px/1.5 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 16px #0004;
+}
+.drawing-command-bar {
+  position: fixed;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 10px;
+  border: 1px solid var(--panel-divider);
+  border-radius: 14px;
+  background: var(--surface-base);
+  box-shadow: 0 4px 24px #0003;
+}
+.drawing-command-bar button {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  touch-action: manipulation;
+}
+.drawing-command-bar button[aria-pressed="true"] { background: #38bdf830; }
+.drawing-command-bar button:disabled { opacity: .4; }
+.compact-properties .property-field,
+.property-field {
+  display: grid;
+  grid-template-columns: minmax(72px, .75fr) minmax(0, 1.25fr);
+  align-items: center;
+  gap: 8px;
+  padding-block: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.property-field :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 7px;
+  border: 1px solid var(--panel-divider);
+  border-radius: 6px;
+  background: var(--surface-overlay);
+  color: var(--text-strong);
+  font-size: 11px;
+}
+.property-disclosure { border-bottom: 1px solid var(--panel-divider); padding: 2px 0; }
+.property-disclosure > summary {
+  min-height: 30px;
+  padding: 6px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-strong);
+  cursor: pointer;
+  user-select: none;
+}
+.property-disclosure > summary::marker { color: var(--text-muted); font-size: 9px; }
+.property-disclosure[open] > summary { margin-bottom: 4px; }
+.property-section-body { padding: 2px 0 8px; }
+.property-summary-value { float: right; font-size: 10px; font-weight: 400; color: var(--text-muted); }
+.property-caption { margin: 0; padding: 2px 0; color: var(--text-muted); font-size: 10px; font-weight: 500; }
+.property-help { padding: 4px 0; font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+.compact-properties :is(input, select, button):focus-visible,
+.property-disclosure > summary:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+body.werkzeug-active .compact-properties :is(input, select) { border-radius: 6px; }
+@media (any-pointer: coarse) {
+  body.werkzeug-active :is(.compact-properties, .werkzeug-ipad-context) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select) {
+    height: 40px !important;
+    min-height: 40px !important;
+    font-size: 16px !important;
+  }
+  .property-disclosure > summary { min-height: 40px; padding-block: 10px; }
+  body.werkzeug-active .werkzeug-ipad-ribbons :is(.werkzeug-tool-button, .werkzeug-icon-action, .werkzeug-snap-trigger, .werkzeug-modify-button) {
+    min-height: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    width: auto !important;
+    flex: 0 0 auto;
+    padding-inline: 10px !important;
+    font-size: 11px !important;
+  }
+  body.werkzeug-active .werkzeug-ipad-tool-ribbon { overflow-x: auto !important; gap: 6px !important; touch-action: pan-x; }
+  body.werkzeug-active .werkzeug-ipad-tool-ribbon .werkzeug-tool-label { max-width: none !important; width: auto !important; opacity: 1 !important; font-size: 11px !important; }
+}
+@media (max-width: 500px) { .drawing-command-bar > span { display: none; } }
+.werkzeug-touch-options .werkzeug-options-bar {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  height: auto !important;
+  padding: 0;
+  gap: 12px;
+  border: 0;
+}
+.werkzeug-touch-options .werkzeug-options-bar > div,
+.werkzeug-touch-options .werkzeug-options-bar > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  overflow: visible;
+}
+.werkzeug-touch-options :is(input, select) { max-width: 100%; }
+@media (any-pointer: coarse) {
+  .werkzeug-ipad-panel-content :is(button, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select),
+  .werkzeug-ipad-popup button {
+    min-height: 44px !important;
+    touch-action: manipulation;
+  }
+  .tool-chrome :is(input, select, textarea) { font-size: 16px !important; }
+  .werkzeug-ipad-panel-content button { min-width: 44px; }
+  .werkzeug-ipad-panel-content { scroll-padding-block: 16px 48px; }
+  .werkzeug-ipad-panel-content label { line-height: 1.5; }
+}

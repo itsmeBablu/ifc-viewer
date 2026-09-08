@@ -3388,8 +3388,11 @@ export default class LayoutSceneLayer {
         const a1 = (l.arcStartAngleDeg * Math.PI) / 180;
         const a2 = (l.arcEndAngleDeg * Math.PI) / 180;
         let sweep = a2 - a1;
-        while (sweep > Math.PI) sweep -= 2 * Math.PI;
-        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        if (l.arcSweepDeg != null) sweep = l.arcSweepDeg * Math.PI / 180;
+        else {
+          while (sweep > Math.PI) sweep -= 2 * Math.PI;
+          while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        }
         const SEG_COUNT = 24;
         const arcPts: THREE.Vector3[] = [];
         for (let i = 0; i <= SEG_COUNT; i++) {
@@ -4395,9 +4398,9 @@ export default class LayoutSceneLayer {
       const x0 = rInner * Math.cos(startRad);
       const y0 = rInner * Math.sin(startRad);
       shape.moveTo(x0, y0);
-      shape.absarc(0, 0, rInner, startRad, endRad, false);
+      shape.absarc(0, 0, rInner, startRad, endRad, wall.arcSweepDeg != null && wall.arcSweepDeg < 0);
       shape.lineTo(rOuter * Math.cos(endRad), rOuter * Math.sin(endRad));
-      shape.absarc(0, 0, rOuter, endRad, startRad, true);
+      shape.absarc(0, 0, rOuter, endRad, startRad, !(wall.arcSweepDeg != null && wall.arcSweepDeg < 0));
       shape.lineTo(x0, y0);
 
       const extrudeSettings = {
@@ -4649,9 +4652,9 @@ export default class LayoutSceneLayer {
         const x0 = rInner * Math.cos(startRad);
         const y0 = rInner * Math.sin(startRad);
         shape.moveTo(x0, y0);
-        shape.absarc(0, 0, rInner, startRad, endRad, false);
+        shape.absarc(0, 0, rInner, startRad, endRad, wall.arcSweepDeg != null && wall.arcSweepDeg < 0);
         shape.lineTo(rOuter * Math.cos(endRad), rOuter * Math.sin(endRad));
-        shape.absarc(0, 0, rOuter, endRad, startRad, true);
+        shape.absarc(0, 0, rOuter, endRad, startRad, !(wall.arcSweepDeg != null && wall.arcSweepDeg < 0));
         shape.lineTo(x0, y0);
         shape.closePath();
 

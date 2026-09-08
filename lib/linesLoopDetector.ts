@@ -16,6 +16,7 @@ export type Segment2D = {
   arcRadiusMm?: number;
   arcStartAngleDeg?: number;
   arcEndAngleDeg?: number;
+  arcSweepDeg?: number;
 };
 
 export type ClosedLoop = {
@@ -55,8 +56,11 @@ function sampleArcPoints(seg: Segment2D, reversed: boolean, count = 12): Point2D
   const a1 = (seg.arcStartAngleDeg * Math.PI) / 180;
   const a2 = (seg.arcEndAngleDeg * Math.PI) / 180;
   let sweep = a2 - a1;
-  while (sweep > Math.PI) sweep -= 2 * Math.PI;
-  while (sweep < -Math.PI) sweep += 2 * Math.PI;
+  if (seg.arcSweepDeg != null) sweep = seg.arcSweepDeg * Math.PI / 180;
+  else {
+    while (sweep > Math.PI) sweep -= 2 * Math.PI;
+    while (sweep < -Math.PI) sweep += 2 * Math.PI;
+  }
 
   const pts: Point2D[] = [];
   for (let i = 1; i <= count; i++) {

@@ -155,7 +155,7 @@ export default function LayoutPropertiesPanel({
           </div>
 
           {/* Dimensions */}
-          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+          <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
             <div className="mb-2 grid grid-cols-2 gap-1.5">
               <LevelSelect
                 label="Base level"
@@ -408,7 +408,7 @@ export default function LayoutPropertiesPanel({
           <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
             {t(uiLanguage, "layoutDoor")}
           </p>
-          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+          <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
             <div className="grid grid-cols-2 gap-1.5">
               <MmInput
                 label="W mm"
@@ -487,7 +487,7 @@ export default function LayoutPropertiesPanel({
           <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
             {t(uiLanguage, "layoutWindow")}
           </p>
-          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+          <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
             <div className="grid grid-cols-2 gap-1.5">
               <MmInput
                 label={t(uiLanguage, "layoutWindowWidth")}
@@ -540,7 +540,7 @@ export default function LayoutPropertiesPanel({
               slab.kind === "roof" ? "layoutRoof" : "layoutFloor",
             )}
           </p>
-          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+          <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
             <div className="grid grid-cols-2 gap-1.5">
               <MmInput
                 label="X mm"
@@ -622,7 +622,7 @@ export default function LayoutPropertiesPanel({
             </div>
 
             {/* Dimensions */}
-            <Section title={t(uiLanguage, "layoutEditDimensions")}>
+            <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
               <div className="mb-2 grid grid-cols-2 gap-1.5">
                 <LevelSelect
                   label="Base level"
@@ -804,7 +804,7 @@ export default function LayoutPropertiesPanel({
           </p>
 
           {/* Dimensions */}
-          <Section title={t(uiLanguage, "layoutEditDimensions")}>
+          <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
             <div className="mb-2">
               <LevelSelect
                 label="Reference level"
@@ -1029,7 +1029,7 @@ export default function LayoutPropertiesPanel({
               </div>
             </Section>
 
-            <Section title="Dimensions & Shape">
+            <Section defaultOpen title="Dimensions & Shape">
               <div className="flex flex-col gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">Stair Type</span>
@@ -1194,7 +1194,7 @@ export default function LayoutPropertiesPanel({
               </div>
             </Section>
 
-            <Section title="Dimensions">
+            <Section defaultOpen title="Dimensions">
               <div className="grid grid-cols-2 gap-2">
                 <MmInput
                   label="Width"
@@ -1303,7 +1303,7 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Duct Geometry & Profile">
+            <Section defaultOpen title="Duct Geometry & Profile">
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Profile</span>
@@ -1430,7 +1430,7 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Pipe Properties">
+            <Section defaultOpen title="Pipe Properties">
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">System</span>
@@ -1516,7 +1516,7 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Tray Properties">
+            <Section defaultOpen title="Tray Properties">
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Tray Type</span>
@@ -1601,7 +1601,7 @@ export default function LayoutPropertiesPanel({
               </span>
             </div>
 
-            <Section title="Equipment Category">
+            <Section defaultOpen title="Equipment Category">
               <div className="flex flex-col gap-2">
                 <label className="flex flex-col gap-0.5">
                   <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Category</span>
@@ -1766,17 +1766,19 @@ export default function LayoutPropertiesPanel({
 function Section({
   title,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
+  defaultOpen?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--panel-divider)]/80 bg-white/40 p-2">
-      <p className="mb-1.5 text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+    <details className="property-disclosure" open={defaultOpen}>
+      <summary>
         {title}
-      </p>
-      {children}
-    </div>
+      </summary>
+      <div className="property-section-body">{children}</div>
+    </details>
   );
 }
 

@@ -203,6 +203,22 @@ export const idbDeleteLevel = (id: string) => deleteRow(LEVELS, id);
 export const idbListWalls = (projectId: string) =>
   listByProject<LayoutWall>(WALLS, projectId);
 export const idbPutWall = (row: LayoutWall) => putRow(WALLS, row);
+
+/** Persist a complete drawn shape atomically, including its project timestamp. */
+export async function idbPutDrawingShape(kind: "wall" | "lines", rows: (LayoutWall | LayoutSketchLine)[]) {
+  if (!rows.length) return;
+  const db = await openDb();
+  try {
+    const name = kind === "wall" ? WALLS : SKETCH_LINES;
+    const tx = db.transaction([name, PROJECTS], "readwrite");
+    const done = transactionDone(tx);
+    for (const row of rows) tx.objectStore(name).put(row);
+    const projects = tx.objectStore(PROJECTS), projectId = rows[0].projectId;
+    const request = projects.get(projectId);
+    request.onsuccess = () => projects.put({ ...(request.result ?? { id: projectId, name: projectNameFromId(projectId) }), lastModified: Date.now() });
+    await done;
+  } finally { db.close(); }
+}
 export const idbDeleteWall = (id: string) => deleteRow(WALLS, id);
 
 export const idbListDoors = (projectId: string) =>
