@@ -100,6 +100,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
+  distPointSeg,
   getEquipmentConnectors,
   nearestOffsetOnWallMm,
   nearestParallelFaceGapMm,
@@ -5646,28 +5647,39 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
           if (!camRay) return;
           raycaster.current.setFromCamera(pointerNdc.current, camRay);
           const layoutHit = layoutLayer.pickLayout(raycaster.current);
-          if (layoutHit?.kind === "wall") {
-            const wall = layoutStore.walls.find((w) => w.id === layoutHit.id);
-            if (wall) {
-              const roots: THREE.Object3D[] = [layoutLayer.group];
-              if (shellCloneRef.current) roots.push(shellCloneRef.current);
-              const surface = pickMarkupSurface(raycaster.current, roots);
-              if (surface) {
-                let p = surface.point.clone();
-                const ms = useToolMarkupStore.getState();
-                if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
-                const posMm = nearestOffsetOnWallMm(
-                  wall,
-                  toMm(p.x),
-                  toMm(p.z),
-                );
-                ms.setDragSnapHint({
-                  text: `${Math.round(posMm)} mm`,
-                  clientX: e.clientX,
-                  clientY: e.clientY,
-                });
+          let wall = layoutHit?.kind === "wall" ? layoutStore.walls.find((w) => w.id === layoutHit.id) : null;
+          let plan: { xMm: number; yMm: number } | null = null;
+          const roots: THREE.Object3D[] = [layoutLayer.group];
+          if (shellCloneRef.current) roots.push(shellCloneRef.current);
+          const surface = pickMarkupSurface(raycaster.current, roots);
+          if (surface) {
+            let p = surface.point.clone();
+            const ms = useToolMarkupStore.getState();
+            if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
+            plan = { xMm: toMm(p.x), yMm: toMm(p.z) };
+          }
+          if (!plan) plan = planMmFromPointer(e.clientX, e.clientY);
+
+          if (!wall && plan) {
+            let closestDist = Infinity;
+            for (const w of layoutStore.walls) {
+              const seg = distPointSeg(plan.xMm, plan.yMm, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
+              const tol = Math.max(w.thicknessMm, 400);
+              if (seg.dist < tol && seg.dist < closestDist) {
+                closestDist = seg.dist;
+                wall = w;
               }
             }
+          }
+
+          if (wall && plan) {
+            const posMm = nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm);
+            const toolLabel = layoutStore.armedLayoutTool === "door" ? "Door" : "Window";
+            useToolMarkupStore.getState().setDragSnapHint({
+              text: `${toolLabel}: ${Math.round(posMm)} mm`,
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
             canvas.style.cursor = "crosshair";
           } else {
             useToolMarkupStore.getState().setDragSnapHint(null);
@@ -6574,29 +6586,73 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
                 void layoutStore.confirmTraceCandidate();
                 return;
               }
-              const wallId: string | null =
-                layoutHit?.kind === "wall" ? layoutHit.id : null;
-              let posMm = 0;
-              if (wallId) {
-                const wall = layoutStore.walls.find((w) => w.id === wallId);
-                if (wall && layoutHit?.kind === "wall") {
-                  // Approximate from ray vs wall midpoint — better: ground/shell hit
-                  const roots: THREE.Object3D[] = [layoutLayer.group];
-                  if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                  const surface = pickMarkupSurface(raycaster.current, roots);
-                  if (surface) {
-                    const plan = planPointFromHit(surface.point);
-                    posMm = nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm);
-                  }
+              let wallId: string | null =
+                layoutHit?.kind === "wall" || layoutHit?.kind === "wall-endpoint"
+                  ? layoutHit.id
+                  : null;
+
+              // Calculate click point in world mm
+              let plan: { xMm: number; yMm: number } | null = null;
+              const roots: THREE.Object3D[] = [layoutLayer.group];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              const surface = pickMarkupSurface(raycaster.current, roots);
+              if (surface) {
+                plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
+              }
+              if (!plan) {
+                const activeLvl =
+                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
+                  layoutStore.levels[0];
+                const levelElevMm = activeLvl?.elevationMm ?? 0;
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
+                const targetPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
+                  plan = planPointFromHit(targetPt);
                 }
               }
-              if (wallId) {
-                if (layoutStore.armedLayoutTool === "door") {
-                  void layoutStore.placeDoorOnWall(wallId, posMm);
-                } else {
-                  void layoutStore.placeWindowOnWall(wallId, posMm);
+
+              // If ray missed wall mesh, find nearest wall to click point within tolerance
+              if (!wallId && plan) {
+                let closestDist = Infinity;
+                let closestWall: (typeof layoutStore.walls)[0] | null = null;
+                for (const w of layoutStore.walls) {
+                  const seg = distPointSeg(plan.xMm, plan.yMm, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
+                  const tol = Math.max(w.thicknessMm, 400);
+                  if (seg.dist < tol && seg.dist < closestDist) {
+                    closestDist = seg.dist;
+                    closestWall = w;
+                  }
                 }
-                return;
+                if (closestWall) wallId = closestWall.id;
+              }
+
+              if (wallId) {
+                const wall = layoutStore.walls.find((w) => w.id === wallId);
+                if (wall) {
+                  let posMm = 0;
+                  if (plan) {
+                    posMm = nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm);
+                  } else {
+                    const wallLen = Math.hypot(wall.endXmm - wall.startXmm, wall.endYmm - wall.startYmm);
+                    posMm = wallLen / 2;
+                  }
+                  const halfW =
+                    (layoutStore.armedLayoutTool === "door"
+                      ? layoutStore.draftDoorWidthMm
+                      : layoutStore.draftWindowWidthMm) / 2;
+                  const wallLen = Math.hypot(wall.endXmm - wall.startXmm, wall.endYmm - wall.startYmm);
+                  posMm = Math.max(halfW, Math.min(wallLen - halfW, posMm));
+
+                  if (layoutStore.armedLayoutTool === "door") {
+                    void layoutStore.placeDoorOnWall(wallId, posMm);
+                  } else {
+                    void layoutStore.placeWindowOnWall(wallId, posMm);
+                  }
+                  return;
+                }
               }
             }
 

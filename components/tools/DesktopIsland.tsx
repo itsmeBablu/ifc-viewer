@@ -942,6 +942,7 @@ export default function DesktopIsland() {
   const chooseElementType = (toolId: string, typeDef: ElementTypeDefinition) => {
     const layout = useLayoutDrawingStore.getState();
     clearSelection();
+    layout.applyElementType(toolId as LayoutToolId, typeDef);
     if (toolId === "wall") {
       layout.setDraftWallTypeId(typeDef.id);
       if (typeDef.thicknessMm) layout.setDraftWallThicknessMm(typeDef.thicknessMm);

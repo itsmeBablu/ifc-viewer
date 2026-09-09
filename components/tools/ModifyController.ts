@@ -349,9 +349,7 @@ export function installModifyController(options: {
             useToolMarkupStore.getState().selectPlacement(null);
           }
           useModifyStore.setState({ selection: hit, message: null, tool: "move" });
-        } else if (state.level === "element") {
-          useLayoutDrawingStore.getState().clearSelection();
-          useToolMarkupStore.getState().selectPlacement(null);
+        } else if (state.level === "element" && state.selection) {
           useModifyStore.setState({ selection: null });
         }
       }

@@ -3193,7 +3193,10 @@ export default class LayoutSceneLayer {
     const isMepTool = [
       "duct", "pipe", "cabletray", "wire", "equipment", "flex_duct", "mep_placeholder"
     ].includes(layoutState.armedLayoutTool || "");
-    const ignoreArchitecture = layoutState.mepModeActive || isMepTool || layoutState.mepArchitectureLocked;
+    const isArchTool = [
+      "wall", "door", "window", "slab", "floor", "roof", "ceiling", "column", "beam", "stair", "ramp", "component"
+    ].includes(layoutState.armedLayoutTool || "");
+    const ignoreArchitecture = !isArchTool && (isMepTool || (layoutState.mepModeActive && layoutState.mepArchitectureLocked));
 
     if (!ignoreArchitecture && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
@@ -5221,6 +5224,10 @@ export default class LayoutSceneLayer {
     }
 
 
+    boxGroup.traverse((c) => {
+      if (door) c.userData.layoutDoorId = door.id;
+      if (win) c.userData.layoutWindowId = win.id;
+    });
     g.add(boxGroup);
 
     // Position group in world coords

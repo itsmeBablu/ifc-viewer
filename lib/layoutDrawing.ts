@@ -1620,7 +1620,7 @@ function lineLineIntersection(
   return { x: ax + t * rX, y: ay + t * rY };
 }
 
-function distPointSeg(
+export function distPointSeg(
   px: number,
   py: number,
   ax: number,

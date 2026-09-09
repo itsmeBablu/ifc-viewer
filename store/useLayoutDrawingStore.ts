@@ -1729,6 +1729,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       tool === "wire" ||
       (tool === "equipment" && get().draftEquipmentCategory !== "furniture" && !get().draftComponentId.startsWith("bath-")) ||
       tool === "workplane";
+    const isArchTool =
+      tool === "wall" ||
+      tool === "door" ||
+      tool === "window" ||
+      tool === "slab" ||
+      tool === "floor" ||
+      tool === "roof" ||
+      tool === "ceiling" ||
+      tool === "column" ||
+      tool === "beam" ||
+      tool === "stair" ||
+      tool === "ramp" ||
+      (tool === "equipment" && (get().draftEquipmentCategory === "furniture" || get().draftComponentId.startsWith("bath-")));
     set((s) => ({
       armedLayoutTool: boundaryKind ? "lines" : tool,
       sketchTargetKind: boundaryKind,
@@ -1740,7 +1753,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedWindowId: null,
       selectedSlabId: null,
       selectedUnderlayId: null,
-      mepModeActive: isMepTool ? true : s.mepModeActive,
+      mepModeActive: isArchTool ? false : isMepTool ? true : s.mepModeActive,
     }));
     if (
       (tool === "wall" || tool === "door" || tool === "window") &&
@@ -4108,7 +4121,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     const editingGroup = get().groups.find(group => group.id === get().activeGroupId);
     if (editingGroup && !editingGroup.elementRefs.some(member => member.kind === ref.kind && member.id === ref.id)) return;
-    if (get().mepModeActive && architectureKinds.has(ref.kind)) return;
+    if (get().mepModeActive && get().mepArchitectureLocked && architectureKinds.has(ref.kind)) return;
     // If element belongs to a group and not currently editing inside that group:
     const group = get().groups.find((g) =>
       g.elementRefs.some((r) => r.kind === ref.kind && r.id === ref.id),
@@ -4169,7 +4182,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       refs = [...expanded.values()];
     }
     const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
-    const selectableRefs = get().mepModeActive
+    const selectableRefs = (get().mepModeActive && get().mepArchitectureLocked)
       ? refs.filter((ref) => !architectureKinds.has(ref.kind))
       : refs;
     let next: SelectedElementRef[] = [];
