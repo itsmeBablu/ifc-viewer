@@ -29,7 +29,7 @@ import {
   persistModelId,
   useAppStore,
 } from "@/store/useAppStore";
-import { WerkzeugModelSceneContext } from "./WerkzeugModelSceneContext";
+import { WerkzeugModelSceneContext, type CaptureViewportOptions } from "./WerkzeugModelSceneContext";
 import WerkzeugViewer3D, {
   type WerkzeugViewer3DHandle,
 } from "./WerkzeugViewer3D";
@@ -546,7 +546,7 @@ export default function WerkzeugApp() {
     [handleFile],
   );
 
-  const sceneValue = useMemo(() => ({ shellGroup, rooms, captureViewport: (opts?: { scale?: number }) => viewerRef.current?.captureViewport(opts) ?? null }), [shellGroup, rooms]);
+  const sceneValue = useMemo(() => ({ shellGroup, rooms, captureViewport: (opts?: CaptureViewportOptions) => viewerRef.current?.captureViewport(opts) ?? null }), [shellGroup, rooms]);
 
   const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
   const hasActiveWorkspace = Boolean(projectId || shellGroup);

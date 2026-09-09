@@ -222,6 +222,28 @@ export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
     functionType: "Exterior",
     fireRating: "T60",
   },
+  "door-garage-2500": {
+    id: "door-garage-2500",
+    doorStyle: "garage",
+    name: "Sectional Garage: 2500 x 2200mm",
+    category: "Door",
+    widthMm: 2500,
+    heightMm: 2200,
+    material: "Insulated Steel Panel",
+    functionType: "Exterior",
+    fireRating: "T30",
+  },
+  "door-garage-5000": {
+    id: "door-garage-5000",
+    doorStyle: "garage",
+    name: "Double Garage Door: 5000 x 2200mm",
+    category: "Door",
+    widthMm: 5000,
+    heightMm: 2200,
+    material: "Insulated Steel Panel",
+    functionType: "Exterior",
+    fireRating: "T30",
+  },
 
   // Window Types
   "win-fixed-1000": {

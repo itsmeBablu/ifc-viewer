@@ -13,10 +13,16 @@ import { createContext, useContext } from "react";
 import type { Group } from "three";
 import type { Room } from "@/lib/types";
 
+export type CaptureViewportOptions = {
+  scale?: number;
+  format?: "png" | "jpeg" | "webp";
+  quality?: number;
+};
+
 export type ModelSceneValue = {
   shellGroup: Group | null;
   rooms: Room[];
-  captureViewport?: (opts?: { scale?: number }) => string | null;
+  captureViewport?: (opts?: CaptureViewportOptions) => string | null;
 };
 
 export const WerkzeugModelSceneContext = createContext<ModelSceneValue>({

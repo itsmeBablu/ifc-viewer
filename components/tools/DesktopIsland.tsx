@@ -30,6 +30,8 @@ import {
   LuBox,
   LuCheck,
   LuChevronDown,
+  LuCircleDot,
+  LuCompass,
   LuCopy,
   LuDoorOpen,
   LuFileText,
@@ -144,11 +146,8 @@ const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
-  { id: "column", label: "Column", hint: "Place structural column (C)", icon: <IconMarkupColumn className="h-3 w-3 text-slate-300 shrink-0" /> },
-  { id: "beam", label: "Beam", hint: "Draw structural beam (B)", icon: <IconMarkupBeam className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
   { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <IconMarkupStair className="h-3 w-3 text-teal-400 shrink-0" /> },
   { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <IconMarkupRamp className="h-3 w-3 text-lime-400 shrink-0" /> },
-  { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
 ];
 
 const ARCH_STRUCTURE_ITEMS: CapsuleItem[] = [
@@ -174,9 +173,11 @@ const TYPE_CATEGORY: Partial<Record<string, ElementTypeDefinition["category"]>> 
 
 const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
-  { id: "lines", label: "Lines", hint: "Draw detail sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
-  { id: "dimension", label: "Dimension", hint: "Measure distance between elements", icon: <LuRuler className="h-3 w-3 text-yellow-400 shrink-0" /> },
-  { id: "note", label: "Note", hint: "Place text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
+  { id: "dimension-distance", label: "Aligned Dim", hint: "Measure linear distance between elements or points", icon: <LuRuler className="h-3.5 w-3.5 text-yellow-400 shrink-0" /> },
+  { id: "dimension-angle", label: "Angular Dim", hint: "Measure angle between two reference edges or lines", icon: <LuCompass className="h-3.5 w-3.5 text-sky-400 shrink-0" /> },
+  { id: "dimension-arc", label: "Arc / Radial", hint: "Measure arc radius and circumference segment length", icon: <LuCircleDot className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
+  { id: "note", label: "Note", hint: "Place 2D/3D text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
+  { id: "lines", label: "Lines", hint: "Draw 2D detail sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
 ];
 
 const ARCH_INSERT_ITEMS: CapsuleItem[] = [
@@ -330,7 +331,13 @@ export default function DesktopIsland() {
   const setMepCategory = useLayoutDrawingStore((s) => s.setDesktopMepCategory);
 
   const measureMode = useToolMarkupStore((s) => s.measureMode);
+  const measurementKind = useToolMarkupStore((s) => s.measurementKind);
   const armedMarkupTool = useToolMarkupStore((s) => s.armedTool);
+
+  /* ── Snapshot modal state ────────────────────────────── */
+  const [snapshotModalOpen, setSnapshotModalOpen] = useState(false);
+  const [snapshotFormat, setSnapshotFormat] = useState<"png" | "jpeg" | "webp">("png");
+  const [snapshotScale, setSnapshotScale] = useState<number>(2);
 
 
   /* ── Tab thumb refs & animations ──────────────────────── */
@@ -666,6 +673,20 @@ export default function DesktopIsland() {
       else if (id === "boundary-delete") layout.setBoundaryEditTool("delete");
       return;
     }
+    if (id === "dimension-distance" || id === "dimension-angle" || id === "dimension-arc") {
+      const targetKind = id.replace("dimension-", "") as "distance" | "angle" | "arc";
+      clearSelection();
+      useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+      useToolMarkupStore.getState().setArmedTool(null);
+      if (measureMode && measurementKind === targetKind) {
+        useToolMarkupStore.getState().setMeasureMode(false);
+      } else {
+        useToolMarkupStore.getState().setMeasurementKind(targetKind);
+        useToolMarkupStore.getState().setMeasureMode(true);
+      }
+      useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
     if (id === "dimension") {
       clearSelection();
       useLayoutDrawingStore.getState().setArmedLayoutTool(null);
@@ -811,13 +832,7 @@ export default function DesktopIsland() {
       return;
     }
     if (id === "render-capture") {
-      const data = captureViewport?.({ scale: 2 });
-      if (data) {
-        const link = document.createElement("a");
-        link.href = data;
-        link.download = "render-view.png";
-        link.click();
-      }
+      setSnapshotModalOpen(true);
       return;
     }
 
@@ -849,6 +864,9 @@ export default function DesktopIsland() {
 
   const isCapsuleActive = (id: string) => {
     if (id.startsWith("boundary-")) return id === `boundary-${boundaryEdit?.tool}`;
+    if (id === "dimension-distance") return measureMode && measurementKind === "distance";
+    if (id === "dimension-angle") return measureMode && measurementKind === "angle";
+    if (id === "dimension-arc") return measureMode && measurementKind === "arc";
     if (id === "dimension") return measureMode;
     if (["move", "rotate", "align", "mirror", "split", "attachTop", "attachBase", "joinRoof"].includes(id)) return modifyTool === id;
     if (id === "deselect" || id === "delete" || id === "copy" || id === "group") return false;
@@ -931,9 +949,34 @@ export default function DesktopIsland() {
         </div>
       </div>
 
-      {/* ── 2. Directly Below Header: Related Capsules (top-[60px] padding) ── */}
+      {/* ── Render View Floating Banner ── */}
+      {renderPreview && (
+        <div className="fixed top-[58px] left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-900/90 border border-amber-400/50 backdrop-blur-md shadow-lg shadow-amber-500/10 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+            </span>
+            <span className="text-[11px] font-bold tracking-wide text-amber-400 uppercase">
+              Render View Active
+            </span>
+          </div>
+          <div className="h-3 w-px bg-slate-700" />
+          <button
+            type="button"
+            onClick={() => useViewDisplayStore.getState().setRenderPreview(false)}
+            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition-all hover:scale-105 active:scale-95 shadow-sm"
+            title="Exit Render View"
+          >
+            <LuX className="h-3 w-3 stroke-[2.5]" />
+            <span>Exit Render View</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── 2. Directly Below Header: Related Capsules ── */}
       <div
-        className="desktop-capsules-container fixed top-[63px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none"
+        className={`desktop-capsules-container fixed ${renderPreview ? "top-[100px]" : "top-[63px]"} left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex items-center justify-center select-none transition-[top] duration-200`}
         style={{
           maxWidth: rightPanelOpen ? "calc(100vw - 360px)" : "calc(100vw - 48px)",
         }}
@@ -1139,6 +1182,126 @@ export default function DesktopIsland() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* ── 4. Portaled Snapshot Format & Resolution Modal ── */}
+      {snapshotModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export Render Snapshot"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSnapshotModalOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-900/95 p-5 shadow-2xl text-slate-100 backdrop-blur-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
+                  <LuCamera className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">Export Render Snapshot</h3>
+                  <p className="text-[11px] text-slate-400">Choose format and resolution for high-res export</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSnapshotModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+                title="Close"
+              >
+                <LuX className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Format selection */}
+              <div>
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-2">
+                  Image Format
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["png", "jpeg", "webp"] as const).map((fmt) => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      onClick={() => setSnapshotFormat(fmt)}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-2.5 transition-all ${
+                        snapshotFormat === fmt
+                          ? "border-yellow-400 bg-yellow-400/15 text-yellow-300 shadow-sm"
+                          : "border-slate-800 bg-slate-850 hover:border-slate-700 text-slate-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase">{fmt}</span>
+                      <span className="text-[9px] text-slate-400 mt-0.5">
+                        {fmt === "png" ? "Lossless" : fmt === "jpeg" ? "Compressed" : "Modern Web"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resolution / Scale selection */}
+              <div>
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-2">
+                  Resolution Scale
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { scale: 1, label: "1x Standard", desc: "Native Viewport" },
+                    { scale: 2, label: "2x Retina", desc: "Print & Presentation" },
+                    { scale: 4, label: "4x Ultra HD", desc: "4K High-Res ArchViz" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.scale}
+                      type="button"
+                      onClick={() => setSnapshotScale(opt.scale)}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-2.5 transition-all ${
+                        snapshotScale === opt.scale
+                          ? "border-yellow-400 bg-yellow-400/15 text-yellow-300 shadow-sm"
+                          : "border-slate-800 bg-slate-850 hover:border-slate-700 text-slate-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold">{opt.label}</span>
+                      <span className="text-[9px] text-slate-400 mt-0.5">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSnapshotModalOpen(false)}
+                className="rounded-xl px-3.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const data = captureViewport?.({ scale: snapshotScale, format: snapshotFormat, quality: 0.95 });
+                  if (data) {
+                    const link = document.createElement("a");
+                    link.href = data;
+                    link.download = `render-snapshot-${snapshotScale}x.${snapshotFormat}`;
+                    link.click();
+                    setSnapshotModalOpen(false);
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-4 py-1.5 text-xs font-bold text-slate-950 hover:bg-yellow-300 transition-all shadow-md active:scale-95"
+              >
+                <LuDownload className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span>Download Snapshot</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </>
   );

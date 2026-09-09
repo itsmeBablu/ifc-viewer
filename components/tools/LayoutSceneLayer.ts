@@ -3276,12 +3276,37 @@ export default class LayoutSceneLayer {
               end: o.userData.layoutWallEndpoint as "start" | "end",
             };
           }
-          if (o.userData.layoutWallId)
-            return { kind: "wall", id: o.userData.layoutWallId as string };
           if (o.userData.layoutDoorId)
             return { kind: "door", id: o.userData.layoutDoorId as string };
           if (o.userData.layoutWindowId)
             return { kind: "window", id: o.userData.layoutWindowId as string };
+          if (o.userData.layoutWallId) {
+            const wallId = o.userData.layoutWallId as string;
+            if (this.isPlanModeActive) {
+              const wall = layoutState.walls.find((w) => w.id === wallId);
+              if (wall) {
+                const hitXmm = h.point.x * 1000;
+                const hitYmm = h.point.z * 1000;
+                const wallDoors = layoutState.doors.filter((d) => d.wallId === wall.id);
+                for (const d of wallDoors) {
+                  const dPt = pointOnWallMm(wall, d.positionMm);
+                  const dist = Math.hypot(hitXmm - dPt.xMm, hitYmm - dPt.yMm);
+                  if (dist <= (d.widthMm / 2) + 160) {
+                    return { kind: "door", id: d.id };
+                  }
+                }
+                const wallWins = layoutState.windows.filter((w) => w.wallId === wall.id);
+                for (const w of wallWins) {
+                  const wPt = pointOnWallMm(wall, w.positionMm);
+                  const dist = Math.hypot(hitXmm - wPt.xMm, hitYmm - wPt.yMm);
+                  if (dist <= (w.widthMm / 2) + 160) {
+                    return { kind: "window", id: w.id };
+                  }
+                }
+              }
+            }
+            return { kind: "wall", id: wallId };
+          }
           if (o.userData.layoutSlabId)
             return { kind: "slab", id: o.userData.layoutSlabId as string };
           if (o.userData.layoutColumnId)
@@ -5103,6 +5128,7 @@ export default class LayoutSceneLayer {
 
   setPlanMode(planMode: boolean) {
     this.isPlanModeActive = planMode;
+    this.sketchGroup.visible = planMode;
     for (const grp of this.wallMeshes.values()) {
       const planCut = grp.children.find((c) => c.name === "wall-plan-cut");
       if (planCut) planCut.visible = planMode && !planCut.userData.outsidePlanCut;
@@ -5668,7 +5694,7 @@ export default class LayoutSceneLayer {
       );
       l1.renderOrder = 20; l2.renderOrder = 20;
       g.add(l1, l2);
-    } else if (door.style === "garage") {
+    } else if (door.style === "garage" || (door.typeId != null && door.typeId.includes("garage")) || (door.widthMm >= 2100 && door.style !== "double" && door.style !== "sliding")) {
       const p1 = pointOnWallMm(wall, door.positionMm - halfW);
       const p2 = pointOnWallMm(wall, door.positionMm + halfW);
       const p1x = fromMm(p1.xMm), p1z = fromMm(p1.yMm);
@@ -5808,21 +5834,63 @@ export default class LayoutSceneLayer {
       g.add(arc);
     }
 
-
-    // Invisible pick mesh covering the opening
-    const pick = new THREE.Mesh(
-      new THREE.BoxGeometry(leafLen, 0.05, fromMm(Math.max(wall.thicknessMm, 80))),
-      new THREE.MeshBasicMaterial({
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      }),
-    );
+    // Comprehensive 2D pick geometries: threshold opening + swing sector / tracks
+    const isGarage = door.style === "garage" || (door.typeId != null && door.typeId.includes("garage")) || (door.widthMm >= 2100 && door.style !== "double" && door.style !== "sliding");
+    const pickMat = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
     const mid = pointOnWallMm(wall, door.positionMm);
-    pick.position.set(fromMm(mid.xMm), y, fromMm(mid.yMm));
-    pick.rotation.y = -angle;
-    pick.userData.layoutDoorId = door.id;
-    g.add(pick);
+    const midX = fromMm(mid.xMm);
+    const midZ = fromMm(mid.yMm);
+
+    // 1. Opening threshold pick box (covers opening + wall thickness with generous hit area)
+    const threshPick = new THREE.Mesh(
+      new THREE.BoxGeometry(leafLen * 1.15, 0.15, fromMm(Math.max(wall.thicknessMm * 1.8, 260))),
+      pickMat
+    );
+    threshPick.position.set(midX, y, midZ);
+    threshPick.rotation.y = -angle;
+    threshPick.userData.layoutDoorId = door.id;
+    g.add(threshPick);
+
+    // 2. 2D planar swing sector or overhead tracks pick geometry
+    if (isGarage) {
+      const trackDepth = Math.max(1.8, Math.min(leafLen * 0.9, 2.5));
+      const trackPick = new THREE.Mesh(
+        new THREE.BoxGeometry(leafLen * 1.1, 0.1, trackDepth),
+        pickMat
+      );
+      trackPick.position.set(midX + perpX * (trackDepth / 2), y, midZ + perpZ * (trackDepth / 2));
+      trackPick.rotation.y = -angle;
+      trackPick.userData.layoutDoorId = door.id;
+      g.add(trackPick);
+    } else if (door.style === "double") {
+      const halfLeaf = leafLen / 2;
+      const doublePick = new THREE.Mesh(
+        new THREE.BoxGeometry(leafLen * 1.1, 0.1, halfLeaf * 1.1),
+        pickMat
+      );
+      doublePick.position.set(midX + perpX * (halfLeaf / 2), y, midZ + perpZ * (halfLeaf / 2));
+      doublePick.rotation.y = -angle;
+      doublePick.userData.layoutDoorId = door.id;
+      g.add(doublePick);
+    } else if (door.style !== "sliding") {
+      // Single door swing arc sector: box bounding the leaf sweep from hinge through 90° curve
+      const swingBox = new THREE.Mesh(
+        new THREE.BoxGeometry(leafLen * 1.1, 0.1, leafLen * 1.1),
+        pickMat
+      );
+      swingBox.position.set(
+        hx + (dirX * (door.hinge === "end" ? -1 : 1) * leafLen * 0.5) + perpX * (leafLen * 0.5),
+        y,
+        hz + (dirZ * (door.hinge === "end" ? -1 : 1) * leafLen * 0.5) + perpZ * (leafLen * 0.5)
+      );
+      swingBox.rotation.y = -angle;
+      swingBox.userData.layoutDoorId = door.id;
+      g.add(swingBox);
+    }
 
     return g;
   }
@@ -5926,9 +5994,9 @@ export default class LayoutSceneLayer {
 
     const pick = new THREE.Mesh(
       new THREE.BoxGeometry(
-        fromMm(win.widthMm),
-        0.05,
-        fromMm(Math.max(wall.thicknessMm, 80)),
+        fromMm(win.widthMm * 1.15),
+        0.15,
+        fromMm(Math.max(wall.thicknessMm * 2, 280)),
       ),
       new THREE.MeshBasicMaterial({
         transparent: true,
@@ -6746,8 +6814,8 @@ export default class LayoutSceneLayer {
             }
             const original = this.mepDimmingMaterialState.get(material)!;
             material.transparent = true;
-            material.opacity = original.opacity * opacityFactor;
-            material.depthWrite = false;
+            material.opacity = Math.max(0.75, original.opacity * opacityFactor);
+            material.depthWrite = true; // Retain depth writing to prevent reverse-sorting and flickering
           } else {
             const original = this.mepDimmingMaterialState.get(material);
             if (!original) continue;

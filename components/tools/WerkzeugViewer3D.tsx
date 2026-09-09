@@ -165,8 +165,8 @@ export type WerkzeugViewer3DHandle = {
   fitVisible: () => void;
   /** Search-only: fly camera to frame a room mesh (does zoom). */
   flyToRoom: (roomId: string) => Promise<void>;
-  /** Capture PNG; scale>1 renders at higher resolution for PDF. */
-  captureViewport: (opts?: { scale?: number }) => string | null;
+  /** Capture PNG, JPEG or WebP; scale>1 renders at higher resolution for PDF/4K. */
+  captureViewport: (opts?: { scale?: number; format?: "png" | "jpeg" | "webp"; quality?: number }) => string | null;
   zoomIn: () => void;
   zoomOut: () => void;
   zoomFit: () => void;
@@ -890,7 +890,9 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const lighting = useAppStore((s) => s.lighting);
   const configuredSceneBackground = useAppStore((s) => s.sceneBackground);
   const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
-  const sceneBackground = renderPreview || (colorTheme === "light" && autoSceneBackground) ? "coolGray" : configuredSceneBackground;
+  const renderPreset = useViewDisplayStore((s) => s.renderPreset);
+  const renderSkyBg = renderPreset === "golden" ? "summerSky" : renderPreset === "dusk" ? "summerSkyDark" : renderPreset === "overcast" ? "softGray" : renderPreset === "interior" ? "coolGray" : "sky";
+  const sceneBackground = renderPreview ? renderSkyBg : (colorTheme === "light" && autoSceneBackground ? "coolGray" : configuredSceneBackground);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
@@ -1182,7 +1184,10 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, cssW * (scale > 1 ? scale : 1), cssH * (scale > 1 ? scale : 1));
         renderCapture();
-        return el.toDataURL("image/png");
+        const format = opts?.format ?? "png";
+        const mimeType = format === "jpeg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png";
+        const quality = opts?.quality ?? (format === "png" ? undefined : 0.95);
+        return el.toDataURL(mimeType, quality);
       } catch {
         return null;
       } finally {
@@ -1595,7 +1600,9 @@ const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getStat
         }
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, sz.x, sz.y);
-const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
+        const isPlanTop = useToolMarkupStore.getState().viewPreset === "top";
+        layoutLayerRef.current?.setPlanMode(isPlanTop);
+const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
           const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(useToolMarkupStore.getState().viewPreset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
         const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
