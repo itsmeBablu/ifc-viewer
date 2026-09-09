@@ -6,6 +6,7 @@ import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
 
 import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
 import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
+import { useMaterialStore } from "./materialStore";
 
 import { create } from "zustand";
 import type { DrawingSegment } from "@/lib/drawingShapes";
@@ -408,8 +409,10 @@ type LayoutDrawingState = {
   setMepModeActive: (active: boolean) => void;
   mepArchitectureLocked: boolean;
   setMepArchitectureLocked: (locked: boolean) => void;
-  desktopArchCategory: "build" | "structure" | "annotate" | "insert";
-  setDesktopArchCategory: (category: "build" | "structure" | "annotate" | "insert") => void;
+  desktopArchCategory: "build" | "structure" | "annotate" | "insert" | "render";
+  setDesktopArchCategory: (category: "build" | "structure" | "annotate" | "insert" | "render") => void;
+  autoTextureArchitecture: () => Promise<void>;
+  applyCategoryTexture: (category: "walls" | "floors" | "roofs", materialId: string, colorHex?: string) => Promise<void>;
   desktopMepCategory: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components";
   setDesktopMepCategory: (category: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components") => void;
   ductDraw: DuctDrawState;
@@ -963,6 +966,121 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   mepArchitectureLocked: true,
   desktopArchCategory: "build",
   setDesktopArchCategory: (cat) => set({ desktopArchCategory: cat }),
+  autoTextureArchitecture: async () => {
+    const s = get();
+    pushWerkzeugHistory();
+    const materialStore = useMaterialStore.getState();
+
+    const wallMat = materialStore.getMaterial("concrete") || materialStore.getMaterial("concrete-smooth-architectural");
+    const floorMat = materialStore.getMaterial("hardwood-herringbone-oak") || materialStore.getMaterial("hardwood-floor") || materialStore.getMaterial("ceramic-floor-tile");
+    const roofMat = materialStore.getMaterial("facade-standing-seam-zinc") || materialStore.getMaterial("standing-seam-zinc") || materialStore.getMaterial("terracotta-roof-tile");
+    const steelMat = materialStore.getMaterial("steel") || materialStore.getMaterial("metal");
+    const glassMat = materialStore.getMaterial("glass") || materialStore.getMaterial("glass-fluted-reeded");
+    const woodMat = materialStore.getMaterial("wood") || materialStore.getMaterial("hardwood-floor");
+
+    const wallPatch = {
+      material: wallMat?.id || "concrete",
+      color: wallMat?.color || "#94a3b8",
+    };
+    const floorPatch = {
+      material: floorMat?.id || "hardwood-herringbone-oak",
+      color: floorMat?.color || "#b45309",
+    };
+    const roofPatch = {
+      material: roofMat?.id || "facade-standing-seam-zinc",
+      color: roofMat?.color || "#334155",
+    };
+    const colBeamPatch = {
+      material: steelMat?.id || "steel",
+      color: steelMat?.color || "#475569",
+    };
+    const doorPatch = {
+      material: woodMat?.id || "wood",
+      color: woodMat?.color || "#78350f",
+    };
+    const winPatch = {
+      material: glassMat?.id || "glass",
+      color: glassMat?.color || "#38bdf8",
+    };
+
+    const nextWalls = s.walls.map((w) => ({ ...w, ...wallPatch }));
+    const nextSlabs = s.slabs.map((slab) => ({
+      ...slab,
+      ...(slab.kind === "roof" ? roofPatch : floorPatch),
+    }));
+    const nextCols = s.columns.map((col) => ({ ...col, ...colBeamPatch }));
+    const nextBeams = s.beams.map((b) => ({ ...b, ...colBeamPatch }));
+    const nextDoors = s.doors.map((d) => ({ ...d, ...doorPatch }));
+    const nextWins = s.windows.map((w) => ({ ...w, ...winPatch }));
+
+    set({
+      walls: nextWalls,
+      slabs: nextSlabs,
+      columns: nextCols,
+      beams: nextBeams,
+      doors: nextDoors,
+      windows: nextWins,
+      lastMutatedAt: Date.now(),
+    });
+
+    await Promise.all([
+      ...nextWalls.map(idbPutWall),
+      ...nextSlabs.map(idbPutSlab),
+      ...nextCols.map(idbPutColumn),
+      ...nextBeams.map(idbPutBeam),
+      ...nextDoors.map(idbPutDoor),
+      ...nextWins.map(idbPutWindow),
+    ]);
+
+    useMaterialStore.setState({ selectedMaterialId: wallMat?.id || "concrete" });
+  },
+  applyCategoryTexture: async (category: "walls" | "floors" | "roofs", materialId: string, colorHex?: string) => {
+    const s = get();
+    pushWerkzeugHistory();
+    const mat = useMaterialStore.getState().getMaterial(materialId);
+    const effectiveColor = colorHex || mat?.color;
+    const patch = {
+      material: materialId,
+      ...(effectiveColor ? { color: effectiveColor } : {}),
+    };
+
+    if (category === "walls") {
+      const selectedWallIds = s.selectedWallId ? [s.selectedWallId] : s.selectedElements.filter((e) => e.kind === "wall").map((e) => e.id);
+      const applyAll = selectedWallIds.length === 0;
+      const nextWalls = s.walls.map((w) => {
+        if (applyAll || selectedWallIds.includes(w.id)) {
+          return { ...w, ...patch };
+        }
+        return w;
+      });
+      set({ walls: nextWalls, lastMutatedAt: Date.now() });
+      await Promise.all(nextWalls.filter((w) => applyAll || selectedWallIds.includes(w.id)).map(idbPutWall));
+    } else if (category === "roofs") {
+      const selectedRoofIds = s.selectedSlabId ? [s.selectedSlabId] : s.selectedElements.filter((e) => e.kind === "slab").map((e) => e.id);
+      const applyAll = selectedRoofIds.length === 0;
+      const nextSlabs = s.slabs.map((slab) => {
+        if (slab.kind === "roof" && (applyAll || selectedRoofIds.includes(slab.id))) {
+          return { ...slab, ...patch };
+        }
+        return slab;
+      });
+      set({ slabs: nextSlabs, lastMutatedAt: Date.now() });
+      await Promise.all(nextSlabs.filter((s) => s.kind === "roof" && (applyAll || selectedRoofIds.includes(s.id))).map(idbPutSlab));
+    } else if (category === "floors") {
+      const selectedFloorIds = s.selectedSlabId ? [s.selectedSlabId] : s.selectedElements.filter((e) => e.kind === "slab").map((e) => e.id);
+      const applyAll = selectedFloorIds.length === 0;
+      const nextSlabs = s.slabs.map((slab) => {
+        if (slab.kind !== "roof" && (applyAll || selectedFloorIds.includes(slab.id))) {
+          return { ...slab, ...patch };
+        }
+        return slab;
+      });
+      set({ slabs: nextSlabs, lastMutatedAt: Date.now() });
+      await Promise.all(nextSlabs.filter((s) => s.kind !== "roof" && (applyAll || selectedFloorIds.includes(s.id))).map(idbPutSlab));
+    }
+
+    useMaterialStore.setState({ selectedMaterialId: materialId });
+  },
   desktopMepCategory: "all",
   setDesktopMepCategory: (cat) => set({ desktopMepCategory: cat }),
 

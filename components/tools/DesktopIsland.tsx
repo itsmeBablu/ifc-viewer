@@ -51,7 +51,11 @@ import {
   LuArrowUpToLine,
   LuCylinder,
   LuCable,
-
+  LuCamera,
+  LuDownload,
+  LuSparkles,
+  LuSunMedium,
+  LuWand,
 } from "react-icons/lu";
 import {
   IconMarkupStair,
@@ -78,6 +82,9 @@ import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { MarkupShapeType } from "@/lib/toolMarkup";
 
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
+import { useViewDisplayStore, type RenderPreset } from "@/store/useViewDisplayStore";
+import { enterRenderView } from "./RenderViewControls";
+import { useModelScene } from "./WerkzeugModelSceneContext";
 
 
 
@@ -93,6 +100,7 @@ export const ARCH_TABS: DesktopCategoryTab[] = [
   { id: "structure", label: "Structure" },
   { id: "annotate", label: "Annotate" },
   { id: "insert", label: "Insert" },
+  { id: "render", label: "Render" },
 ];
 
 export const MEP_TABS: DesktopCategoryTab[] = [
@@ -178,6 +186,95 @@ const ARCH_INSERT_ITEMS: CapsuleItem[] = [
   { id: "note", label: "Note", hint: "Insert 3D text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
 ];
 
+export type RenderTextureOption = {
+  id: string;
+  name: string;
+  desc: string;
+  color: string;
+};
+
+export const WALL_TEXTURES: RenderTextureOption[] = [
+  { id: "concrete", name: "Architectural Concrete", desc: "Smooth exposed formwork grey", color: "#94a3b8" },
+  { id: "brick", name: "Red Brick", desc: "Classic running bond masonry", color: "#b91c1c" },
+  { id: "exterior-stucco-fine", name: "Fine White Stucco", desc: "Clean modern exterior finish", color: "#f8fafc" },
+  { id: "plaster-smooth-white", name: "Smooth Gypsum Plaster", desc: "Minimalist interior finish", color: "#f1f5f9" },
+  { id: "facade-timber-slat", name: "Timber Slat Cladding", desc: "Natural architectural wood louvers", color: "#b45309" },
+  { id: "marble-nero-marquina", name: "Nero Marquina Marble", desc: "High-contrast dark polished marble", color: "#18181b" },
+  { id: "marble-calacatta-gold", name: "Calacatta Gold Marble", desc: "Luxury Italian white & gold marble", color: "#f8fafc" },
+];
+
+export const ROOF_TEXTURES: RenderTextureOption[] = [
+  { id: "facade-standing-seam-zinc", name: "Standing Seam Anthracite", desc: "Architectural dark zinc seams", color: "#334155" },
+  { id: "standing-seam-zinc", name: "Titanium Zinc Seam", desc: "Light metallic standing seam", color: "#64748b" },
+  { id: "terracotta-roof-tile", name: "Terracotta Clay Tile", desc: "Traditional warm pitched roof", color: "#c2410c" },
+  { id: "slate-roof-tile", name: "Natural Slate Tile", desc: "Fine dark anthracite slate shingle", color: "#334155" },
+  { id: "flat-roof-bitumen", name: "Bituminous Gravel", desc: "Commercial aggregate flat roof", color: "#475569" },
+  { id: "roof-epdm-membrane-black", name: "EPDM Membrane", desc: "Smooth waterproof roof membrane", color: "#18181b" },
+];
+
+export const FLOOR_TEXTURES: RenderTextureOption[] = [
+  { id: "hardwood-herringbone-oak", name: "Herringbone Oak Parquet", desc: "Warm luxury French oak pattern", color: "#b45309" },
+  { id: "hardwood-floor", name: "Natural Plank Hardwood", desc: "Classic architectural timber boards", color: "#92400e" },
+  { id: "carrara-marble", name: "Carrara Polished Marble", desc: "Clean Italian white stone tiles", color: "#f8fafc" },
+  { id: "floor-terrazzo-venetian", name: "Venetian Terrazzo", desc: "Multi-tone mineral aggregate", color: "#d6d3d1" },
+  { id: "ceramic-floor-tile", name: "Porcelain Tile 60x60", desc: "Modern architectural grey grid", color: "#e2e8f0" },
+  { id: "concrete", name: "Polished Concrete", desc: "Reflective industrial loft finish", color: "#64748b" },
+];
+
+const ARCH_RENDER_ITEMS: CapsuleItem[] = [
+  {
+    id: "auto-textures",
+    label: "Auto Textures",
+    hint: "Automatically assign architectural PBR textures to walls, roofs, floors and render",
+    icon: <LuWand className="h-3.5 w-3.5 text-amber-400 shrink-0" />,
+  },
+  {
+    id: "walls-texture",
+    label: "Walls",
+    hint: "Apply PBR texture to walls (Concrete, Brick, Stucco, Timber, Marble...)",
+    icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" />,
+    hasDropdown: true,
+  },
+  {
+    id: "roofs-texture",
+    label: "Roofs",
+    hint: "Apply PBR texture to roofs (Standing Seam Zinc, Slate, Terracotta Tile...)",
+    icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />,
+    hasDropdown: true,
+  },
+  {
+    id: "floors-texture",
+    label: "Floors",
+    hint: "Apply PBR texture to floors (Oak Parquet, Polished Concrete, Marble, Terrazzo...)",
+    icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />,
+    hasDropdown: true,
+  },
+  {
+    id: "render-studio",
+    label: "Render Studio",
+    hint: "Toggle photorealistic Render Studio (lighting & shadows)",
+    icon: <LuCamera className="h-3.5 w-3.5 text-amber-400 shrink-0" />,
+  },
+  {
+    id: "render-sun",
+    label: "Sun & Sky",
+    hint: "Cycle atmosphere & sun presets (Noon, Golden, Overcast, Dusk, Interior)",
+    icon: <LuSunMedium className="h-3.5 w-3.5 text-yellow-400 shrink-0" />,
+  },
+  {
+    id: "render-shadows",
+    label: "Shadows",
+    hint: "Toggle real-time contact shadows",
+    icon: <LuSparkles className="h-3.5 w-3.5 text-sky-400 shrink-0" />,
+  },
+  {
+    id: "render-capture",
+    label: "Snapshot",
+    hint: "Export high-resolution rendered PNG image",
+    icon: <LuDownload className="h-3.5 w-3.5 text-emerald-400 shrink-0" />,
+  },
+];
+
 const MEP_ALL_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "duct", label: "Duct", hint: "Draw rectangular supply duct", icon: <LuBox className="h-4 w-4 shrink-0" /> },
@@ -253,6 +350,35 @@ export default function DesktopIsland() {
   const typeButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const typeMenuRef = useRef<HTMLDivElement>(null);
   const [typeMenu, setTypeMenu] = useState<{ toolId: string; top: number; left: number } | null>(null);
+
+  /* ── Render texture menu refs & state ─────────────────── */
+  const renderPreview = useViewDisplayStore((s) => s.renderPreview);
+  const shadowsEnabled = useViewDisplayStore((s) => s.shadowsEnabled);
+  const autoTextureArchitecture = useLayoutDrawingStore((s) => s.autoTextureArchitecture);
+  const { captureViewport } = useModelScene();
+  const [textureMenu, setTextureMenu] = useState<{ category: "walls" | "roofs" | "floors"; top: number; left: number } | null>(null);
+  const textureButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const textureMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!textureMenu) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const activeBtn = textureButtonRefs.current[`${textureMenu.category}-texture`];
+      if (!textureMenuRef.current?.contains(target) && !activeBtn?.contains(target)) {
+        setTextureMenu(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTextureMenu(null);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [textureMenu]);
 
   useEffect(() => {
     if (!typeMenu) return;
@@ -475,6 +601,8 @@ export default function DesktopIsland() {
           return ARCH_ANNOTATE_ITEMS;
         case "insert":
           return ARCH_INSERT_ITEMS;
+        case "render":
+          return ARCH_RENDER_ITEMS;
         case "build":
         default:
           return ARCH_BUILD_ITEMS;
@@ -639,6 +767,60 @@ export default function DesktopIsland() {
       return;
     }
 
+    if (id === "auto-textures") {
+      void autoTextureArchitecture().then(() => {
+        enterRenderView();
+      });
+      return;
+    }
+    if (id === "walls-texture" || id === "roofs-texture" || id === "floors-texture") {
+      setShapesDropdownOpen(false);
+      setTypeMenu(null);
+      const category = id.replace("-texture", "") as "walls" | "roofs" | "floors";
+      const button = textureButtonRefs.current[id];
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        const menuWidth = 280;
+        setTextureMenu((current) => current?.category === category ? null : {
+          category,
+          top: rect.bottom + 8,
+          left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
+        });
+      }
+      return;
+    }
+    if (id === "render-studio") {
+      if (renderPreview) {
+        useViewDisplayStore.getState().setRenderPreview(false);
+      } else {
+        enterRenderView();
+      }
+      return;
+    }
+    if (id === "render-sun") {
+      const presets: RenderPreset[] = ["architectural", "golden", "overcast", "dusk", "interior"];
+      const cur = useViewDisplayStore.getState().renderPreset;
+      const next = presets[(presets.indexOf(cur) + 1) % presets.length];
+      useViewDisplayStore.getState().applyRenderPreset(next);
+      if (!useViewDisplayStore.getState().renderPreview) enterRenderView();
+      return;
+    }
+    if (id === "render-shadows") {
+      useViewDisplayStore.getState().setRenderSetting("shadowsEnabled", !shadowsEnabled);
+      if (!useViewDisplayStore.getState().renderPreview) enterRenderView();
+      return;
+    }
+    if (id === "render-capture") {
+      const data = captureViewport?.({ scale: 2 });
+      if (data) {
+        const link = document.createElement("a");
+        link.href = data;
+        link.download = "render-view.png";
+        link.click();
+      }
+      return;
+    }
+
     clearSelection();
     useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
     useAppStore.getState().setRightPanelOpen(true);
@@ -679,6 +861,11 @@ export default function DesktopIsland() {
     if (id === "note") {
       return armedMarkupTool === "note";
     }
+    if (id === "render-studio") return renderPreview;
+    if (id === "render-shadows") return shadowsEnabled;
+    if (id === "walls-texture") return textureMenu?.category === "walls";
+    if (id === "roofs-texture") return textureMenu?.category === "roofs";
+    if (id === "floors-texture") return textureMenu?.category === "floors";
     if (id === "select") return !measureMode && armed === null && armedMarkupTool === null;
     return armed === id;
   };
@@ -719,7 +906,7 @@ export default function DesktopIsland() {
                   key={tab.id}
                   ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
-                  onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert")}
+                  onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert" | "render")}
                   className={`desktop-clean-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
@@ -760,6 +947,7 @@ export default function DesktopIsland() {
             const active = isCapsuleActive(item.id);
             const isShapes = item.id === "shapes";
             const isTypeSelector = Boolean(TYPE_CATEGORY[item.id]);
+            const isTextureSelector = item.id.endsWith("-texture");
             const activeShape = isShapes ? SHAPE_ITEMS.find((s) => s.id === armedMarkupTool) : null;
             const displayIcon = activeShape ? activeShape.icon : item.icon;
             const displayLabel = activeShape ? `Shapes (${activeShape.label.split(" ")[0]})` : item.label;
@@ -769,6 +957,7 @@ export default function DesktopIsland() {
                 ref={(element) => {
                   if (isShapes) shapesButtonRef.current = element;
                   if (isTypeSelector) typeButtonRefs.current[item.id] = element;
+                  if (isTextureSelector) textureButtonRefs.current[item.id] = element;
                 }}
                 type="button"
                 data-capsule-id={item.id}
@@ -777,7 +966,15 @@ export default function DesktopIsland() {
                 className={`desktop-capsule-btn ${active ? "is-active" : ""} ${item.isDanger ? "is-danger" : ""}`}
                 aria-pressed={active}
                 aria-haspopup={item.hasDropdown ? "menu" : undefined}
-                aria-expanded={isShapes ? shapesDropdownOpen : isTypeSelector ? typeMenu?.toolId === item.id : undefined}
+                aria-expanded={
+                  isShapes
+                    ? shapesDropdownOpen
+                    : isTypeSelector
+                    ? typeMenu?.toolId === item.id
+                    : isTextureSelector
+                    ? textureMenu?.category === item.id.replace("-texture", "")
+                    : undefined
+                }
                 title={item.label}
               >
                 {displayIcon}
@@ -785,7 +982,15 @@ export default function DesktopIsland() {
                 {item.hasDropdown && (
                   <LuChevronDown
                     className={`h-2.5 w-2.5 opacity-60 ml-0.5 transition-transform duration-200 ${
-                      (isShapes ? shapesDropdownOpen : typeMenu?.toolId === item.id) ? "rotate-180" : ""
+                      (isShapes
+                        ? shapesDropdownOpen
+                        : isTypeSelector
+                        ? typeMenu?.toolId === item.id
+                        : isTextureSelector
+                        ? textureMenu?.category === item.id.replace("-texture", "")
+                        : false)
+                        ? "rotate-180"
+                        : ""
                     }`}
                   />
                 )}
@@ -798,7 +1003,7 @@ export default function DesktopIsland() {
                 label={item.label}
                 hint={item.hint}
                 className="shrink-0"
-                disabled={isShapes && shapesDropdownOpen}
+                disabled={(isShapes && shapesDropdownOpen) || (isTextureSelector && textureMenu !== null)}
               >
                 {buttonContent}
               </GlassTooltip>
@@ -830,6 +1035,54 @@ export default function DesktopIsland() {
                   </span>
                 </button>
               ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* ── Portaled Category Texture Menu ── */}
+      {textureMenu && typeof document !== "undefined" && createPortal(
+        <div
+          ref={textureMenuRef}
+          style={{ top: textureMenu.top, left: textureMenu.left }}
+          className="desktop-shapes-dropdown fixed z-[9999] w-[280px] rounded-2xl p-2 animate-in fade-in zoom-in-95 duration-150"
+          role="menu"
+          aria-label={`Choose ${textureMenu.category} texture`}
+        >
+          <div className="mb-1.5 border-b border-[var(--panel-divider)] px-2 pb-1.5 flex items-center justify-between">
+            <div>
+              <strong className="block text-[10px] uppercase tracking-wider text-yellow-500">
+                {textureMenu.category === "walls" ? "Wall Textures" : textureMenu.category === "roofs" ? "Roof Textures" : "Floor Textures"}
+              </strong>
+              <span className="text-[9px] text-[var(--text-muted)]">Select a PBR texture to apply & render.</span>
+            </div>
+            <span className="text-[9px] font-bold text-[var(--text-muted)] px-1.5 py-0.5 rounded bg-[var(--glass-inset-bg)]">
+              {textureMenu.category === "walls" ? WALL_TEXTURES.length : textureMenu.category === "roofs" ? ROOF_TEXTURES.length : FLOOR_TEXTURES.length}
+            </span>
+          </div>
+          <div className="max-h-72 space-y-1 overflow-y-auto thin-scroll">
+            {(textureMenu.category === "walls" ? WALL_TEXTURES : textureMenu.category === "roofs" ? ROOF_TEXTURES : FLOOR_TEXTURES).map((tex) => (
+              <button
+                key={tex.id}
+                type="button"
+                role="menuitem"
+                onClick={async () => {
+                  await useLayoutDrawingStore.getState().applyCategoryTexture(textureMenu.category, tex.id, tex.color);
+                  enterRenderView();
+                  setTextureMenu(null);
+                }}
+                className="desktop-shape-option flex items-center gap-2.5 w-full rounded-xl px-2.5 py-2 text-left transition-colors"
+              >
+                <span
+                  className="h-5 w-5 rounded-lg border border-white/20 shrink-0 shadow-sm"
+                  style={{ backgroundColor: tex.color }}
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-bold text-[var(--text-strong)] leading-tight">{tex.name}</span>
+                  <span className="mt-0.5 block text-[9px] text-[var(--text-muted)] truncate">{tex.desc}</span>
+                </div>
+              </button>
+            ))}
           </div>
         </div>,
         document.body,

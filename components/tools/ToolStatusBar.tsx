@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   LuBox,
-  LuCamera,
   LuBuilding2,
   LuChevronDown,
   LuEye,
@@ -23,7 +22,6 @@ import type { RenderMode } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { enterRenderView } from "./RenderViewControls";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import ObjectSnapStrip from "./ObjectSnapStrip";
 import HoverTip from "@/components/common/HoverTip";
@@ -40,7 +38,6 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   onAttachDwgPdf?: (file: File) => void;
   onAttachIfc?: (file: File) => void;
 }) {
-  const renderPreview = useViewDisplayStore(s => s.renderPreview);
   const fileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [popup, setPopup] = useState<Popup>(null);
@@ -139,7 +136,6 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
           <button type="button" className="dock-menu-row" onClick={() => fileRef.current?.click()}><LuPaperclip /><span><strong>DWG / PDF</strong><small className="block text-[10px] opacity-70">Attach to active level</small></span></button>
         </Popover>}
       </div>
-      <DockButton icon={<LuCamera />} label="Render" hint="Open a clean rendered 3D view. Save a PNG from View Properties." active={renderPreview} onClick={() => renderPreview ? useViewDisplayStore.getState().setRenderPreview(false) : enterRenderView()} />
       <DockButton icon={<LuFootprints />} label="Walk" hint="Enter a strongly rendered first-person WASD walkthrough." active={walkthroughMode} onClick={toggleWalk} />
       <div className="relative">
         <DockButton icon={renderIcon} label={activeRenderMode.label} dropdown hint="Choose Realistic, Shaded, Light, or Wireframe rendering." active={popup === "render"} onClick={() => toggle("render")} />

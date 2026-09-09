@@ -88,14 +88,13 @@ export default function RenderViewControls() {
     setError("");
   };
 
-  const sliderCls =
-    "w-full h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-blue-600";
+  const sliderCls = "w-full v-yellow-slider";
 
   return (
     <details className="property-disclosure rounded-lg border border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]" open>
       <summary className="cursor-pointer select-none font-semibold flex items-center justify-between p-2 text-xs">
         <span className="flex items-center gap-1.5">
-          <LuCamera className="text-blue-500" />
+          <LuCamera className="text-amber-500" />
           Render Studio
         </span>
         {enabled ? (
@@ -112,10 +111,10 @@ export default function RenderViewControls() {
         {/* Toggle Mode Button */}
         <button
           type="button"
-          className={`flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 active:scale-[0.98] ${
             enabled
               ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30"
-              : "bg-blue-600 text-white hover:bg-blue-500"
+              : "btn-v-yellow btn-liquid-hover !text-zinc-950 shadow-md shadow-yellow-400/25 border-transparent"
           }`}
           onClick={() =>
             enabled
@@ -123,7 +122,7 @@ export default function RenderViewControls() {
               : enterRenderView()
           }
         >
-          {enabled ? <LuX className="text-sm" /> : <LuCamera className="text-sm" />}
+          {enabled ? <LuX className="text-sm" /> : <LuCamera className="text-sm text-zinc-950" />}
           {enabled ? "Exit Render Studio" : "Enter Render Studio"}
         </button>
 
