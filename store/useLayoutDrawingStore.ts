@@ -3355,14 +3355,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       doorSizes: rememberDoorSize(get().presets.doorSizes, widthMm, heightMm),
     };
     await persistPresets(projectId, presets);
+    const isContinuousDoor = get().armedLayoutTool === "door";
     set({
       doors: [...get().doors, door],
       presets,
-      selectedDoorId: door.id,
+      selectedDoorId: isContinuousDoor ? null : door.id,
       selectedWallId: null,
       selectedWindowId: null,
+      selectedElements: isContinuousDoor ? [] : [{ kind: "door", id: door.id }],
       // Continuous placement — stay on Door until Esc / other tool.
-      armedLayoutTool: get().armedLayoutTool ?? "door",
+      armedLayoutTool: isContinuousDoor ? "door" : get().armedLayoutTool,
       lastMutatedAt: Date.now(),
     });
     return door;
@@ -3507,14 +3509,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       ),
     };
     await persistPresets(projectId, presets);
+    const isContinuousWindow = get().armedLayoutTool === "window";
     set({
       windows: [...get().windows, win],
       presets,
-      selectedWindowId: win.id,
+      selectedWindowId: isContinuousWindow ? null : win.id,
       selectedWallId: null,
       selectedDoorId: null,
+      selectedElements: isContinuousWindow ? [] : [{ kind: "window", id: win.id }],
       // Continuous placement — stay on Window until Esc / other tool.
-      armedLayoutTool: get().armedLayoutTool ?? "window",
+      armedLayoutTool: isContinuousWindow ? "window" : get().armedLayoutTool,
       lastMutatedAt: Date.now(),
     });
     return win;

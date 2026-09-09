@@ -26,9 +26,24 @@ export type SceneBackgroundPreset = {
 };
 
 export const SCENE_BACKGROUND_PRESETS: SceneBackgroundPreset[] = [
-  { id: "softGray", label: "Soft gray", hex: "#e8eaed" },
-  { id: "coolGray", label: "Cool gray", hex: "#cfd5df" },
-  { id: "lightBlue", label: "Light blue", hex: "#c8d9ea" },
+  {
+    id: "softGray",
+    label: "Architectural Studio",
+    hex: "#b8c3d1",
+    gradient: { top: "#dde5f0", bottom: "#98a8bd" },
+  },
+  {
+    id: "coolGray",
+    label: "Cool slate",
+    hex: "#8fa0b5",
+    gradient: { top: "#cbd5e1", bottom: "#64748b" },
+  },
+  {
+    id: "lightBlue",
+    label: "Light blue",
+    hex: "#87aed6",
+    gradient: { top: "#c8dcf2", bottom: "#6ba2d6" },
+  },
   {
     id: "sky",
     label: "Sky",

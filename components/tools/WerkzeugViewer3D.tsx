@@ -2992,6 +2992,10 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         if (layout.calibrateUnderlayId) layout.cancelCalibrateUnderlay();
         if (layout.tracePreview) layout.clearTracePreview();
         if (layout.wallDraw) layout.finishWallDraw();
+        else if (layout.ductDraw) layout.cancelDuctDraw();
+        else if (layout.pipeDraw) layout.cancelPipeDraw();
+        else if (layout.cableTrayDraw) layout.cancelCableTrayDraw();
+        else if (layout.wireDraw) layout.cancelWireDraw();
         else if (layout.slabDraw) layout.cancelSlabDraw();
         else if (layout.stairDraw) layout.cancelStairDraw();
         else if (layout.rampDraw) layout.cancelRampDraw();
@@ -4338,7 +4342,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
     if (!canvas) return;
 
     /** Skip room pick when this click ends an orbit/pan drag. */
-    const DRAG_PX = 6;
+    const DRAG_PX = 12;
     let pointerDownX = 0;
     let pointerDownY = 0;
     let suppressNextClick = false;
@@ -4430,10 +4434,18 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       const levelId = markup.markupFloorId ?? state.levels[0]?.id;
       const camera = preparePointerRayRef.current(event.clientX, event.clientY);
       if (!levelId || !camera) return null;
+      const clickPlan = planMmFromPointer(event.clientX, event.clientY);
       const draw = kind === "duct" ? state.ductDraw : kind === "pipe" ? state.pipeDraw : kind === "wire" ? state.wireDraw : state.cableTrayDraw;
       const full = canvas.getBoundingClientRect();
       const rect = markup.quadView ? { left: full.left + (event.clientX >= full.left + full.width / 2 ? full.width / 2 : 0), top: full.top + (event.clientY >= full.top + full.height / 2 ? full.height / 2 : 0), width: full.width / 2, height: full.height / 2 } : full;
-      const snap = snapElevatedEndpoints(mepEndpoints(kind, state, levelId, draw?.elevationOffsetMm), { camera, canvas: { getBoundingClientRect: () => rect } as HTMLCanvasElement, clientPos: { x: event.clientX, y: event.clientY }, activeModes: state.planSnapModes });
+      const snap = snapElevatedEndpoints(mepEndpoints(kind, state, levelId, draw?.elevationOffsetMm), {
+        camera,
+        canvas: { getBoundingClientRect: () => rect } as HTMLCanvasElement,
+        clientPos: { x: event.clientX, y: event.clientY },
+        activeModes: state.planSnapModes,
+        refPlanMm: clickPlan,
+        maxWorldDistanceMm: 1500,
+      });
       if (snap) markup.setDragSnapHint({ text: "MEP endpoint: " + snap.elevationMm + " mm above level", clientX: event.clientX, clientY: event.clientY });
       return snap;
     };
@@ -6419,17 +6431,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
               layoutStore.armedLayoutTool === "mep_placeholder"
             ) {
               const toolKind = layoutStore.armedLayoutTool;
-              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
-              if (!plan) {
-                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
-              }
-              if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
+              let plan = planMmFromPointer(e.clientX, e.clientY);
+              if (!plan && (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay")) {
+                plan = planPointFromHit(layoutHit.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("duct", e) ?? plan;
@@ -6453,17 +6457,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             }
 
             if (layoutStore.armedLayoutTool === "pipe") {
-              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
-              if (!plan) {
-                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
-              }
-              if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
+              let plan = planMmFromPointer(e.clientX, e.clientY);
+              if (!plan && (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay")) {
+                plan = planPointFromHit(layoutHit.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("pipe", e) ?? plan;
@@ -6480,17 +6476,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             }
 
             if (layoutStore.armedLayoutTool === "cabletray") {
-              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
-              if (!plan) {
-                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
-              }
-              if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
+              let plan = planMmFromPointer(e.clientX, e.clientY);
+              if (!plan && (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay")) {
+                plan = planPointFromHit(layoutHit.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("cabletray", e) ?? plan;
@@ -6507,24 +6495,17 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             }
 
             if (layoutStore.armedLayoutTool === "wire") {
-              let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
-              if (!plan) {
-                const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
-              }
-              if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
+              let plan = planMmFromPointer(e.clientX, e.clientY);
+              if (!plan && (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay")) {
+                plan = planPointFromHit(layoutHit.point);
               }
               if (plan) {
+                const effectivePlan = snapMepEndpointAt("wire", e) ?? plan;
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
                 if (!layoutStore.wireDraw) {
-                  layoutStore.startWireDraw(levelId, snapMepEndpointAt("wire", e) ?? plan);
+                  layoutStore.startWireDraw(levelId, effectivePlan);
                 } else {
-                  layoutStore.updateWireDrawCursor(snapMepEndpointAt("wire", e) ?? plan);
+                  layoutStore.updateWireDrawCursor(effectivePlan);
                   void layoutStore.finishWireDraw();
                 }
                 return;

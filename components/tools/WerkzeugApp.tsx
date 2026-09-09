@@ -305,6 +305,10 @@ export default function WerkzeugApp() {
         layout.cancelSlabDraw();
         layout.cancelStairDraw();
         layout.cancelRampDraw();
+        layout.cancelDuctDraw();
+        layout.cancelPipeDraw();
+        layout.cancelCableTrayDraw();
+        layout.cancelWireDraw();
         layout.finishSketchLineDraw();
         layout.clearTracePreview();
         layout.setArmedLayoutTool(null);

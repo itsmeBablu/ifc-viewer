@@ -55,17 +55,17 @@ import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import type { RenderMode } from "@/lib/types";
 
-const WALL_COLOR = 0xcfd4dc;
+const WALL_COLOR = 0x525d6d;
 const WALL_SEL = 0xfacc15;
-const DOOR_COLOR = 0x78716c;
+const DOOR_COLOR = 0x5c3d2e;
 const WINDOW_COLOR = 0x38bdf8;
-const FLOOR_COLOR = 0xa8a29e;
+const FLOOR_COLOR = 0x525d6d;
 const FLOOR_SEL = 0xfacc15;
-const ROOF_COLOR = 0x78716c;
+const ROOF_COLOR = 0x334155;
 const ROOF_SEL = 0xfacc15;
-const STAIR_TREAD_COLOR = 0xd4a373;
+const STAIR_TREAD_COLOR = 0xa87140;
 const STAIR_SEL = 0xfacc15;
-const RAMP_COLOR = 0x94a3b8;
+const RAMP_COLOR = 0x64748b;
 const RAMP_SEL = 0xfacc15;
 
 export default class LayoutSceneLayer {
@@ -4160,21 +4160,21 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    let baseColor = 0xcfd4dc;
+    let baseColor = 0x525d6d;
     let hatchStyle: HatchStyle | null = null;
     if (matType === "concrete") {
-      baseColor = 0x9ca3af;
-      mat.roughness = 0.85;
+      baseColor = 0x525d6d;
+      mat.roughness = 0.88;
       mat.metalness = 0.05;
       hatchStyle = "concrete";
     } else if (matType === "brick") {
-      baseColor = 0xb94833;
-      mat.roughness = 0.82;
+      baseColor = 0xa33924;
+      mat.roughness = 0.85;
       mat.metalness = 0.02;
       hatchStyle = "brick";
     } else if (matType === "wood") {
-      baseColor = 0x92613b;
-      mat.roughness = 0.6;
+      baseColor = 0x8a5a32;
+      mat.roughness = 0.62;
       mat.metalness = 0.02;
       hatchStyle = "wood";
     } else if (matType === "glass") {
@@ -4189,22 +4189,22 @@ export default class LayoutSceneLayer {
         mat.clearcoatRoughness = 0.04;
       }
     } else if (matType === "metal" || matType === "duct" || matType === "cabletray") {
-      baseColor = 0xcbd5e1;
-      mat.roughness = 0.25;
-      mat.metalness = 0.88;
+      baseColor = 0x64748b;
+      mat.roughness = 0.3;
+      mat.metalness = 0.85;
       hatchStyle = "steel";
     } else if (matType === "pipe") {
-      baseColor = 0xc27d53;
+      baseColor = 0xb45309;
       mat.roughness = 0.28;
       mat.metalness = 0.85;
     } else if (matType === "plaster") {
-      baseColor = 0xf8fafc;
-      mat.roughness = 0.94;
+      baseColor = 0xd6d3ce;
+      mat.roughness = 0.90;
       mat.metalness = 0.0;
-      hatchStyle = "sand";
+      hatchStyle = "gypsum";
     } else if (matType === "roof" || matType === "tile") {
-      baseColor = 0x475569;
-      mat.roughness = 0.78;
+      baseColor = 0x334155;
+      mat.roughness = 0.75;
       hatchStyle = "tile";
     }
 
@@ -4216,7 +4216,7 @@ export default class LayoutSceneLayer {
 
     if (hatchStyle && matType !== "glass") {
       const hexStr = colorStr || ("#" + baseColor.toString(16).padStart(6, "0"));
-      const tex = getHatchCanvasTexture(hatchStyle, "#1e293b", hexStr, 200);
+      const tex = getHatchCanvasTexture(hatchStyle, "#0f172a", hexStr, 200);
       if (tex) {
         const materialTexture = tex.clone();
         materialTexture.wrapS = THREE.RepeatWrapping;
@@ -4240,22 +4240,22 @@ export default class LayoutSceneLayer {
     const t = wall.thicknessMm || 200;
     if (t >= 280) {
       return [
-        { id: "l-int", name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f8fafc" },
-        { id: "l-str", name: "Concrete Core", function: "structure", material: wall.material || "Concrete Core", thicknessMm: t - 130, color: "#8e9196" },
-        { id: "l-ins", name: "Mineral Wool Insulation", function: "insulation", material: "Mineral Wool", thicknessMm: 100, color: "#fef08a" },
-        { id: "l-ext", name: "Exterior Render", function: "finish2", material: "Stucco Render", thicknessMm: 15, color: "#e2e8f0" },
+        { id: "l-int", name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
+        { id: "l-str", name: "Concrete Core", function: "structure", material: wall.material || "Concrete Core", thicknessMm: t - 130, color: "#525d6d" },
+        { id: "l-ins", name: "Mineral Wool Insulation", function: "insulation", material: "Mineral Wool", thicknessMm: 100, color: "#eab308" },
+        { id: "l-ext", name: "Exterior Render", function: "finish2", material: "Stucco Render", thicknessMm: 15, color: "#c4beb5" },
       ];
     } else if (t === 100 || t === 125) {
       return [
-        { id: "l-g1", name: "Gypsum Board", function: "finish1", material: "Gypsum Board", thicknessMm: 12.5, color: "#f1f5f9" },
-        { id: "l-cav", name: "Stud Cavity", function: "core", material: "Stud Cavity", thicknessMm: t - 25, color: "#cbd5e1" },
-        { id: "l-g2", name: "Gypsum Board", function: "finish2", material: "Gypsum Board", thicknessMm: 12.5, color: "#f1f5f9" },
+        { id: "l-g1", name: "Gypsum Board", function: "finish1", material: "Gypsum Board", thicknessMm: 12.5, color: "#cbd5e1" },
+        { id: "l-cav", name: "Stud Cavity", function: "core", material: "Stud Cavity", thicknessMm: t - 25, color: "#475569" },
+        { id: "l-g2", name: "Gypsum Board", function: "finish2", material: "Gypsum Board", thicknessMm: 12.5, color: "#cbd5e1" },
       ];
     } else {
       return [
-        { id: "l-int", name: "Interior Finish", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#f8fafc" },
-        { id: "l-str", name: "Structural Core", function: "structure", material: wall.material || "Concrete", thicknessMm: Math.max(10, t - 30), color: wall.color || "#8e9196" },
-        { id: "l-ext", name: "Exterior Finish", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#f1f5f9" },
+        { id: "l-int", name: "Interior Finish", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
+        { id: "l-str", name: "Structural Core", function: "structure", material: wall.material || "Concrete", thicknessMm: Math.max(10, t - 30), color: wall.color || "#525d6d" },
+        { id: "l-ext", name: "Exterior Finish", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#c4beb5" },
       ];
     }
   }
@@ -4300,11 +4300,11 @@ export default class LayoutSceneLayer {
       const lightCol =
         layer.color ||
         (layer.function === "insulation" ? "#fef08a" :
-         layer.function === "structure" ? "#d4d4d8" :
-         layer.function === "finish1" ? "#f8fafc" :
-         layer.function === "finish2" ? "#fed7aa" :
-         layer.function === "core" ? "#cbd5e1" :
-         "#e2e8f0");
+         layer.function === "structure" ? "#525d6d" :
+         layer.function === "finish1" ? "#d6d3ce" :
+         layer.function === "finish2" ? "#c4beb5" :
+         layer.function === "core" ? "#475569" :
+         "#525d6d");
       mat.color.setStyle(lightCol);
       return;
     }
@@ -4340,15 +4340,15 @@ export default class LayoutSceneLayer {
         mat.thickness = (customMat.transmission ?? 0) > 0 ? 0.15 : 0;
       }
 
-      const effectiveColor = layer.color || customMat.color || wall.color || "#cfd4dc";
+      const effectiveColor = layer.color || customMat.color || wall.color || "#525d6d";
       mat.color.setStyle(effectiveColor);
 
       const hatchStyle = customMat.hatchStyle && customMat.hatchStyle !== "solid"
         ? customMat.hatchStyle
-        : (layer.function === "insulation" ? "zigzag" : layer.function === "structure" ? "concrete" : "solid");
+        : (layer.function === "insulation" ? "zigzag" : layer.function === "structure" ? "concrete" : layer.function === "finish2" ? "stucco" : "gypsum");
 
       if (hatchStyle && hatchStyle !== "solid") {
-        const strokeColor = "#1f2937";
+        const strokeColor = "#0f172a";
         const tex = getHatchCanvasTexture(
           hatchStyle,
           strokeColor,
@@ -4370,11 +4370,11 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    // Default realistic fallback per function
+    // Default realistic fallback per function with tactile hatches and darker architectural tones
     if (layer.function === "insulation") {
-      mat.color.setHex(0xfef08a);
+      mat.color.setHex(0xeab308);
       mat.roughness = 0.95;
-      const tex = getHatchCanvasTexture("zigzag", "#451a03", "#fef08a", 150);
+      const tex = getHatchCanvasTexture("zigzag", "#451a03", "#eab308", 150);
       if (tex) {
         const mt = tex.clone();
         mt.wrapS = THREE.RepeatWrapping;
@@ -4385,9 +4385,9 @@ export default class LayoutSceneLayer {
         mat.map = mt;
       }
     } else if (layer.function === "structure") {
-      mat.color.setHex(0x8e9196);
+      mat.color.setHex(0x525d6d);
       mat.roughness = 0.85;
-      const tex = getHatchCanvasTexture("concrete", "#18181b", "#8e9196", 200);
+      const tex = getHatchCanvasTexture("concrete", "#0f172a", "#525d6d", 200);
       if (tex) {
         const mt = tex.clone();
         mt.wrapS = THREE.RepeatWrapping;
@@ -4398,12 +4398,35 @@ export default class LayoutSceneLayer {
         mat.map = mt;
       }
     } else if (layer.function === "finish1") {
-      mat.color.setHex(0xf8fafc);
-      mat.roughness = 0.95;
-    } else if (layer.function === "finish2") {
-      mat.color.setHex(0xe2e8f0);
+      mat.color.setHex(0xd6d3ce);
       mat.roughness = 0.88;
-      const tex = getHatchCanvasTexture("sand", "#334155", "#e2e8f0", 180);
+      const tex = getHatchCanvasTexture("gypsum", "#1e293b", "#d6d3ce", 160);
+      if (tex) {
+        const mt = tex.clone();
+        mt.wrapS = THREE.RepeatWrapping;
+        mt.wrapT = THREE.RepeatWrapping;
+        mt.repeat.set(4, 4);
+        mt.userData.vstudioMaterialClone = true;
+        mt.needsUpdate = true;
+        mat.map = mt;
+      }
+    } else if (layer.function === "finish2") {
+      mat.color.setHex(0xc4beb5);
+      mat.roughness = 0.84;
+      const tex = getHatchCanvasTexture("stucco", "#18181b", "#c4beb5", 180);
+      if (tex) {
+        const mt = tex.clone();
+        mt.wrapS = THREE.RepeatWrapping;
+        mt.wrapT = THREE.RepeatWrapping;
+        mt.repeat.set(4, 4);
+        mt.userData.vstudioMaterialClone = true;
+        mt.needsUpdate = true;
+        mat.map = mt;
+      }
+    } else if (layer.function === "core") {
+      mat.color.setHex(0x475569);
+      mat.roughness = 0.82;
+      const tex = getHatchCanvasTexture("steel", "#0f172a", "#475569", 200);
       if (tex) {
         const mt = tex.clone();
         mt.wrapS = THREE.RepeatWrapping;
@@ -4414,8 +4437,18 @@ export default class LayoutSceneLayer {
         mat.map = mt;
       }
     } else {
-      mat.color.setStyle(layer.color || wall.color || "#94a3b8");
+      mat.color.setStyle(layer.color || wall.color || "#525d6d");
       mat.roughness = 0.85;
+      const tex = getHatchCanvasTexture("concrete", "#0f172a", layer.color || wall.color || "#525d6d", 200);
+      if (tex) {
+        const mt = tex.clone();
+        mt.wrapS = THREE.RepeatWrapping;
+        mt.wrapT = THREE.RepeatWrapping;
+        mt.repeat.set(4, 4);
+        mt.userData.vstudioMaterialClone = true;
+        mt.needsUpdate = true;
+        mat.map = mt;
+      }
     }
   }
 
@@ -4717,8 +4750,8 @@ export default class LayoutSceneLayer {
 
         const hatchTex = getHatchCanvasTexture(
           hatchStyle,
-          "#18181b",
-          layer.color || (layer.function === "insulation" ? "#fef08a" : "#f4f4f5"),
+          "#0f172a",
+          layer.color || (layer.function === "insulation" ? "#eab308" : layer.function === "structure" ? "#525d6d" : layer.function === "finish2" ? "#c4beb5" : "#d6d3ce"),
           160,
         );
 
@@ -4848,8 +4881,8 @@ export default class LayoutSceneLayer {
 
         const hatchTex = getHatchCanvasTexture(
           hatchStyle,
-          "#18181b",
-          layer.color || (layer.function === "insulation" ? "#fef08a" : "#f4f4f5"),
+          "#0f172a",
+          layer.color || (layer.function === "insulation" ? "#eab308" : layer.function === "structure" ? "#525d6d" : layer.function === "finish2" ? "#c4beb5" : "#d6d3ce"),
           160,
         );
 

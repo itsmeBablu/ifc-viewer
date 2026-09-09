@@ -74,10 +74,21 @@ export type GlobalSnapOptions = {
 const _projVec = new THREE.Vector3();
 
 /** Shared pixel aperture for elevated connector endpoints as well as sketch points. */
-export function snapElevatedEndpoints<T extends { xMm: number; yMm: number; worldElevationMm: number }>(points: T[], options: Pick<GlobalSnapOptions, "camera" | "canvas" | "clientPos" | "tolerancePx" | "activeModes">): T | null {
+export function snapElevatedEndpoints<T extends { xMm: number; yMm: number; worldElevationMm: number }>(
+  points: T[],
+  options: Pick<GlobalSnapOptions, "camera" | "canvas" | "clientPos" | "tolerancePx" | "activeModes"> & {
+    refPlanMm?: { xMm: number; yMm: number } | null;
+    maxWorldDistanceMm?: number;
+  },
+): T | null {
   if (options.activeModes?.endpoint === false) return null;
   let best: T | null = null, distance = options.tolerancePx ?? 14;
+  const maxWorldDist = options.maxWorldDistanceMm ?? 1500;
   for (const point of points) {
+    if (options.refPlanMm) {
+      const worldDist = Math.hypot(point.xMm - options.refPlanMm.xMm, point.yMm - options.refPlanMm.yMm);
+      if (worldDist > maxWorldDist) continue;
+    }
     const p = new THREE.Vector3(point.xMm / 1000, point.worldElevationMm / 1000, point.yMm / 1000);
     if (p.clone().applyMatrix4(options.camera.matrixWorldInverse).z >= 0) continue;
     const ndc = p.project(options.camera); if (ndc.z < -1 || ndc.z > 1) continue;
