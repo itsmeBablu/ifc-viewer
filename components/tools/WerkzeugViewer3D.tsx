@@ -778,6 +778,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const helpersRef = useRef<THREE.Group | null>(null);
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiRef = useRef<THREE.HemisphereLight | null>(null);
+  const groundShadowRef = useRef<THREE.Mesh | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
 
   useEffect(() => {
@@ -870,7 +872,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
   const activeTemperatureRange =
     dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
-  const renderPreview = useViewDisplayStore(s => s.renderPreview);
+  const renderPreview = useViewDisplayStore((s) => s.renderPreview);
+  const sunAzimuth = useViewDisplayStore((s) => s.sunAzimuth);
+  const sunElevation = useViewDisplayStore((s) => s.sunElevation);
+  const sunIntensity = useViewDisplayStore((s) => s.sunIntensity);
+  const ambientIntensity = useViewDisplayStore((s) => s.ambientIntensity);
+  const shadowsEnabled = useViewDisplayStore((s) => s.shadowsEnabled);
+  const exposure = useViewDisplayStore((s) => s.exposure);
+  const sunColor = useViewDisplayStore((s) => s.sunColor);
+  const skyColor = useViewDisplayStore((s) => s.skyColor);
+  const groundColor = useViewDisplayStore((s) => s.groundColor);
   const workspaceRenderMode = useAppStore((s) => s.renderMode);
   const planStyleLevel = useLayoutDrawingStore(s => s.levels);
   const planStyleMarkup = useToolMarkupStore();
@@ -1296,19 +1307,35 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     scene.add(ambient);
     ambientRef.current = ambient;
 
-    const sun = new THREE.DirectionalLight(0xfff5e8, 1.1);
+    const hemi = new THREE.HemisphereLight(0xe0f2fe, 0x334155, 0.45);
+    hemi.position.set(0, 50, 0);
+    scene.add(hemi);
+    hemiRef.current = hemi;
+
+    const sun = new THREE.DirectionalLight(0xfff8ec, 1.3);
     sun.position.set(40, 80, 30);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 250;
+    sun.shadow.camera.far = 300;
     sun.shadow.camera.left = -60;
     sun.shadow.camera.right = 60;
     sun.shadow.camera.top = 60;
     sun.shadow.camera.bottom = -60;
-    sun.shadow.bias = -0.0002;
+    sun.shadow.bias = -0.0001;
+    sun.shadow.normalBias = 0.02;
     scene.add(sun);
     sunRef.current = sun;
+
+    const groundShadowGeo = new THREE.PlaneGeometry(500, 500);
+    const groundShadowMat = new THREE.ShadowMaterial({ opacity: 0.28 });
+    const groundShadowPlane = new THREE.Mesh(groundShadowGeo, groundShadowMat);
+    groundShadowPlane.name = "architectural-ground-shadow";
+    groundShadowPlane.rotation.x = -Math.PI / 2;
+    groundShadowPlane.position.y = -0.01;
+    groundShadowPlane.receiveShadow = true;
+    scene.add(groundShadowPlane);
+    groundShadowRef.current = groundShadowPlane;
 
     const controls = new OrbitControls<
       THREE.PerspectiveCamera | THREE.OrthographicCamera
@@ -1614,6 +1641,13 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       overlaysRef.current = null;
       compareRootRef.current = null;
       helpersRef.current = null;
+      if (groundShadowRef.current) {
+        scene.remove(groundShadowRef.current);
+        groundShadowRef.current.geometry.dispose();
+        (groundShadowRef.current.material as THREE.Material).dispose();
+        groundShadowRef.current = null;
+      }
+      hemiRef.current = null;
       sunRef.current = null;
       ambientRef.current = null;
     };
@@ -2124,52 +2158,120 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
 
     const sun = sunRef.current;
     const ambient = ambientRef.current;
+    const hemi = hemiRef.current;
+    const groundShadow = groundShadowRef.current;
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
-    if (toolMode) {
-      if (renderMode === "light") {
-        if (sun) {
-          sun.intensity = 0.25 + lighting.shadow * 0.75;
-          sun.castShadow = lighting.shadow > 0.35;
-        }
-        if (ambient) ambient.intensity = 0.5 + lighting.indirectLight * 0.55;
-        if (renderer) {
-          renderer.toneMappingExposure = 1.0;
-          renderer.shadowMap.enabled = false;
-        }
-      } else if (renderMode === "realistic") {
-        if (sun) {
-          sun.intensity = 0.65 + lighting.shadow * 1.65;
-          sun.castShadow = lighting.shadow > 0.05;
-        }
-        if (ambient) ambient.intensity = 0.3 + lighting.indirectLight * 1.05;
-        if (renderer) {
-          renderer.toneMappingExposure = 0.85 + lighting.indirectLight * 0.3;
-          renderer.shadowMap.enabled = lighting.shadow > 0.05;
-        }
-      } else {
-        // fullColor / wireframe
-        if (sun) {
-          sun.intensity = 0.45 + lighting.shadow * 1.25;
-          sun.castShadow = renderMode !== "wireframe" && lighting.shadow > 0.05;
-        }
-        if (ambient) ambient.intensity = 0.45 + lighting.indirectLight * 0.85;
-        if (renderer) {
-          renderer.toneMappingExposure = 1.15;
-          renderer.shadowMap.enabled = renderMode !== "wireframe";
-        }
+
+    const radAzim = (sunAzimuth * Math.PI) / 180;
+    const radElev = (sunElevation * Math.PI) / 180;
+    const dist = 140;
+    const center = controlsRef.current?.target ? controlsRef.current.target.clone() : new THREE.Vector3(0, 0, 0);
+    const sunX = center.x + Math.cos(radElev) * Math.sin(radAzim) * dist;
+    const sunY = center.y + Math.sin(radElev) * dist;
+    const sunZ = center.z + Math.cos(radElev) * Math.cos(radAzim) * dist;
+
+    if (sun) {
+      sun.position.set(sunX, sunY, sunZ);
+      sun.target.position.copy(center);
+      if (!sun.target.parent && scene) scene.add(sun.target);
+
+      // Fit shadow camera frustum to active scene elements
+      const box = new THREE.Box3();
+      if (layoutLayerRef.current?.group) box.expandByObject(layoutLayerRef.current.group);
+      if (shellCloneRef.current) box.expandByObject(shellCloneRef.current);
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 20);
+        const halfFrustum = Math.max(40, maxDim * 0.85);
+        sun.shadow.camera.left = -halfFrustum;
+        sun.shadow.camera.right = halfFrustum;
+        sun.shadow.camera.top = halfFrustum;
+        sun.shadow.camera.bottom = -halfFrustum;
+        sun.shadow.camera.far = Math.max(300, dist + maxDim * 2);
+        sun.shadow.camera.updateProjectionMatrix();
       }
-    } else {
+    }
+
+    if (renderPreview) {
       if (sun) {
-        sun.intensity = 0.2 + lighting.shadow * 1.6;
-        sun.castShadow = lighting.shadow > 0.05;
+        sun.color.setStyle(sunColor);
+        sun.intensity = sunIntensity;
+        sun.castShadow = shadowsEnabled;
+        sun.shadow.bias = -0.0001;
+        sun.shadow.normalBias = 0.02;
+      }
+      if (hemi) {
+        hemi.color.setStyle(skyColor);
+        hemi.groundColor.setStyle(groundColor);
+        hemi.intensity = ambientIntensity;
+        hemi.visible = true;
       }
       if (ambient) {
-        ambient.intensity = 0.15 + lighting.indirectLight * 0.7;
+        ambient.intensity = 0.12 * ambientIntensity;
       }
       if (renderer) {
-        renderer.toneMappingExposure = 0.75 + lighting.indirectLight * 0.7;
-        renderer.shadowMap.enabled = lighting.shadow > 0.05;
+        renderer.toneMappingExposure = exposure;
+        renderer.shadowMap.enabled = shadowsEnabled;
+      }
+      if (groundShadow) {
+        groundShadow.visible = shadowsEnabled;
+      }
+    } else {
+      if (hemi) {
+        hemi.color.setHex(0xe0f2fe);
+        hemi.groundColor.setHex(0x334155);
+        hemi.intensity = 0.45 * (0.4 + lighting.indirectLight * 0.6);
+        hemi.visible = true;
+      }
+      if (groundShadow) {
+        groundShadow.visible = renderMode === "realistic" && lighting.shadow > 0.05;
+      }
+      if (toolMode) {
+        if (renderMode === "light") {
+          if (sun) {
+            sun.intensity = 0.25 + lighting.shadow * 0.75;
+            sun.castShadow = lighting.shadow > 0.35;
+          }
+          if (ambient) ambient.intensity = 0.5 + lighting.indirectLight * 0.55;
+          if (renderer) {
+            renderer.toneMappingExposure = 1.0;
+            renderer.shadowMap.enabled = false;
+          }
+        } else if (renderMode === "realistic") {
+          if (sun) {
+            sun.intensity = 0.65 + lighting.shadow * 1.65;
+            sun.castShadow = lighting.shadow > 0.05;
+          }
+          if (ambient) ambient.intensity = 0.3 + lighting.indirectLight * 1.05;
+          if (renderer) {
+            renderer.toneMappingExposure = 0.85 + lighting.indirectLight * 0.3;
+            renderer.shadowMap.enabled = lighting.shadow > 0.05;
+          }
+        } else {
+          // fullColor / wireframe
+          if (sun) {
+            sun.intensity = 0.45 + lighting.shadow * 1.25;
+            sun.castShadow = renderMode !== "wireframe" && lighting.shadow > 0.05;
+          }
+          if (ambient) ambient.intensity = 0.45 + lighting.indirectLight * 0.85;
+          if (renderer) {
+            renderer.toneMappingExposure = 1.15;
+            renderer.shadowMap.enabled = renderMode !== "wireframe";
+          }
+        }
+      } else {
+        if (sun) {
+          sun.intensity = 0.2 + lighting.shadow * 1.6;
+          sun.castShadow = lighting.shadow > 0.05;
+        }
+        if (ambient) {
+          ambient.intensity = 0.15 + lighting.indirectLight * 0.7;
+        }
+        if (renderer) {
+          renderer.toneMappingExposure = 0.75 + lighting.indirectLight * 0.7;
+          renderer.shadowMap.enabled = lighting.shadow > 0.05;
+        }
       }
     }
     if (scene) {
@@ -2190,7 +2292,21 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         });
       }
     }
-  }, [renderMode, lighting, toolMode]);
+  }, [
+    renderMode,
+    lighting,
+    toolMode,
+    renderPreview,
+    sunAzimuth,
+    sunElevation,
+    sunIntensity,
+    ambientIntensity,
+    shadowsEnabled,
+    exposure,
+    sunColor,
+    skyColor,
+    groundColor,
+  ]);
 
   // Live 3D material update subscription
   useEffect(() => {

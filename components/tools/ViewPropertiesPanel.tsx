@@ -45,7 +45,6 @@ export default function ViewPropertiesPanel() {
       if (isPlan && plan) update({ visualStyle: style === "inherit" ? undefined : style });
       else if (style !== "inherit") useAppStore.getState().setRenderMode(style);
     }}>{isPlan && plan && <option value="inherit">Use workspace style ({renderMode})</option>}{["realistic", "fullColor", "light", "wireframe", "render"].map(style => <option key={style} value={style}>{style}</option>)}</select></label>
-    <RenderViewControls />
     <details open className="property-disclosure"><summary>Visibility in current view</summary><fieldset className="space-y-1">{[...categories].sort().map(category => <label key={category} className="flex gap-2 py-0.5"><input type="checkbox" checked={!visibility.hiddenCategories.includes(category)} onChange={() => display.toggleCategory(viewKey, category)} />{category}</label>)}</fieldset><button type="button" className="mt-2 rounded border border-[var(--panel-divider)] px-2 py-1" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
     {plan && level && <>
       {!isPlan && <p className="text-[var(--text-muted)]">These range and visibility settings apply to {level.name}’s plan view.</p>}
@@ -61,5 +60,6 @@ export default function ViewPropertiesPanel() {
       <details className="property-disclosure"><summary>Model visibility <span className="property-summary-value">{categories.size}</span></summary><fieldset className="space-y-1">{[...categories].sort().map(category => <label key={category} className="flex gap-2"><input type="checkbox" checked={!plan.hiddenCategories.includes(category)} onChange={e => update({ hiddenCategories: e.target.checked ? plan.hiddenCategories.filter(c => c !== category) : [...plan.hiddenCategories, category] })}/>{category}</label>)}{!categories.size && <p>No model elements yet.</p>}</fieldset></details>
       <details className="property-disclosure"><summary>CAD / PDF references</summary><fieldset className="space-y-1">{layout.underlays.filter(u => u.levelId === level.id).map(u => <label key={u.id} className="flex gap-2"><input type="checkbox" checked={!plan.hiddenUnderlayIds.includes(u.id)} onChange={e => update({ hiddenUnderlayIds: e.target.checked ? plan.hiddenUnderlayIds.filter(id => id !== u.id) : [...plan.hiddenUnderlayIds, u.id] })}/>{u.sourceName}</label>)}{!layout.underlays.some(u => u.levelId === level.id) && <p>No references attached to this level. Attach them from Layout.</p>}</fieldset></details>
     </>}
+    <RenderViewControls />
   </div>;
 }

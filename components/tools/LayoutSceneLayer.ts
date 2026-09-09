@@ -781,6 +781,7 @@ export default class LayoutSceneLayer {
       levelById,
       opts,
     );
+    this.applyShadowConfig(this.group);
   }
 
   private buildIProfileGeometry(w: number, d: number, len: number, axis: "vertical" | "horizontal"): THREE.BufferGeometry {
@@ -4029,6 +4030,36 @@ export default class LayoutSceneLayer {
     for (const grp of this.rampMeshes.values()) {
       this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
+    this.applyShadowConfig(this.group);
+  }
+
+  applyShadowConfig(root: THREE.Object3D) {
+    root.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (
+          child.userData.isWireframeEnvelope ||
+          child.userData.isSectionHandle ||
+          child.userData.isMarkupPreview ||
+          child.userData.isSelectionOutline ||
+          child.userData.isLayoutGround ||
+          child.userData.isLayoutLevelSlab ||
+          child.name === "wall-plan-cut" ||
+          child.name === "plan-symbol" ||
+          child.name === "quad-edges" ||
+          child.name === "wall-wireframe-envelope"
+        ) {
+          return;
+        }
+        const mat = child.material as THREE.Material | THREE.Material[] | undefined;
+        const mainMat = Array.isArray(mat) ? mat[0] : mat;
+        const isGlass =
+          mainMat &&
+          ((mainMat as THREE.MeshPhysicalMaterial).transmission > 0.1 ||
+            (mainMat as THREE.Material).opacity < 0.6);
+        child.castShadow = !isGlass;
+        child.receiveShadow = true;
+      }
+    });
   }
 
   private updateWireframeEdges(mesh: THREE.Object3D, showEdges: boolean, isWireframe: boolean = false) {
