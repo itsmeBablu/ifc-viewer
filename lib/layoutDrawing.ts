@@ -1914,6 +1914,7 @@ export function joinedWallCenterlines(
       const endsA: Array<"start" | "end"> = ["start", "end"];
       const endsB: Array<"start" | "end"> = ["start", "end"];
       const maxThickness = Math.max(JOIN_EPS_MM, a.thicknessMm, b.thicknessMm);
+      const cornerTol = Math.max(160, maxThickness * 1.8);
 
       // L-corner: both walls have an endpoint near each other
       for (const ea of endsA) {
@@ -1922,9 +1923,9 @@ export function joinedWallCenterlines(
         for (const eb of endsB) {
           const bx = eb === "start" ? b.startXmm : b.endXmm;
           const by = eb === "start" ? b.startYmm : b.endYmm;
-          if (Math.hypot(ax - bx, ay - by) > maxThickness) continue;
+          if (Math.hypot(ax - bx, ay - by) > cornerTol) continue;
           // Intersection should lie near the shared corner
-          if (Math.hypot(hit.x - ax, hit.y - ay) > maxThickness * 2.5) continue;
+          if (Math.hypot(hit.x - ax, hit.y - ay) > cornerTol * 2.5) continue;
           const ra = result.get(a.id)!;
           const rb = result.get(b.id)!;
           if (ea === "start") {
@@ -1945,7 +1946,7 @@ export function joinedWallCenterlines(
       }
 
       // T-junction: endpoint of one wall sits mid-segment on the other
-      const joinTol = Math.max(a.thicknessMm, b.thicknessMm) * 0.9 + 50;
+      const joinTol = Math.max(160, Math.max(a.thicknessMm, b.thicknessMm) * 1.5);
       for (const [stem, through] of [
         [a, b],
         [b, a],
@@ -2085,7 +2086,8 @@ export function solveWallJunctions(
           );
           const tolerance = Math.max(
             JOIN_EPS_MM,
-            Math.min(180, (seed.halfThick + candidate.halfThick) * 0.75),
+            (seed.halfThick + candidate.halfThick) * 1.5,
+            160,
           );
           if (d <= tolerance) {
             cluster.push(candidate);

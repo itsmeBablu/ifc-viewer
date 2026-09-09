@@ -30,6 +30,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import MepConnectionProperties from "./MepConnectionProperties";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
+import MultiSelectionPanel from "./MultiSelectionPanel";
 import { isArchitecturalComponent } from "@/lib/componentCatalog";
 
 /**
@@ -126,6 +127,10 @@ export default function LayoutPropertiesPanel({
   const tray = cableTrays.find((t) => t.id === selectedCableTrayId) ?? null;
   const wire = useLayoutDrawingStore(s => s.wires.find(w => w.id === (s.selectedWireId ?? s.selectedElements.find(e => e.kind === "wire")?.id)));
   const equip = mepEquipment.find((eq) => eq.id === selectedEquipmentId) ?? null;
+
+  if (selectedElements.length > 1) {
+    return <MultiSelectionPanel className={className} />;
+  }
 
   if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip && !wire) return <ViewPropertiesPanel />;
 

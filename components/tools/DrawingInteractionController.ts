@@ -38,7 +38,14 @@ export function installDrawingInteractionController(options: Options) {
   const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
   const clear = () => { svg.replaceChildren(); hud.style.display = "none"; };
   const reset = () => { generation++; points = []; clear(); useDrawingInteractionStore.setState({ hasPoints: false, message: null, lengthMm: null, angleDeg: null }); };
-  const restore = () => { const controls = options.controls(); if (controls) { if (controls.enableRotate !== undefined) controls.enableRotate = true; controls.enabled = savedControls; } };
+  const restore = () => {
+    const controls = options.controls();
+    if (controls) {
+      const isFree3D = useToolMarkupStore.getState().viewPreset === "free";
+      if (controls.enableRotate !== undefined) controls.enableRotate = isFree3D;
+      controls.enabled = savedControls;
+    }
+  };
   const release = () => {
     const id = pointer?.id; pointer = null;
     if (id != null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);

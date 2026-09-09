@@ -4638,6 +4638,14 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
 
     const applyPickSelection = (hit: THREE.Intersection | null) => {
       const inTool = useAppStore.getState().toolMode;
+      const layoutStoreState = useLayoutDrawingStore.getState();
+      const isMepDiscipline = layoutStoreState.mepModeActive || [
+        "duct", "pipe", "cabletray", "wire", "equipment", "flex_duct", "mep_placeholder"
+      ].includes(layoutStoreState.armedLayoutTool || "");
+      if (isMepDiscipline) {
+        // In MEP mode, architectural elements (including IFC model) must be completely ignored
+        return;
+      }
       if (!hit) {
         setSelectedRoomId(null);
         setSelectedElement(null);
@@ -6401,16 +6409,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
               const toolKind = layoutStore.armedLayoutTool;
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
-              }
-              if (!plan) {
                 const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
                 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
                 const targetPt = new THREE.Vector3();
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("duct", e) ?? plan;
@@ -6436,16 +6443,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             if (layoutStore.armedLayoutTool === "pipe") {
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
-              }
-              if (!plan) {
                 const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
                 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
                 const targetPt = new THREE.Vector3();
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("pipe", e) ?? plan;
@@ -6464,16 +6470,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             if (layoutStore.armedLayoutTool === "cabletray") {
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
-              }
-              if (!plan) {
                 const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
                 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
                 const targetPt = new THREE.Vector3();
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
                 const effectivePlan = snapMepEndpointAt("cabletray", e) ?? plan;
@@ -6492,16 +6497,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             if (layoutStore.armedLayoutTool === "wire") {
               let plan = layoutHit?.kind === "ground" || layoutHit?.kind === "underlay" ? planPointFromHit(layoutHit.point) : null;
               if (!plan) {
-                const roots: THREE.Object3D[] = [layoutLayer.group];
-                if (shellCloneRef.current) roots.push(shellCloneRef.current);
-                const surface = pickMarkupSurface(raycaster.current, roots);
-                if (surface) plan = planPointFromHit(surface.point);
-              }
-              if (!plan) {
                 const level = layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
                 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
                 const targetPt = new THREE.Vector3();
                 if (raycaster.current.ray.intersectPlane(plane, targetPt)) plan = planPointFromHit(targetPt);
+              }
+              if (!plan) {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
               }
               if (plan) {
                 const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
@@ -7453,7 +7457,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
           const oc = controls as unknown as { state?: number; _pointers?: number[] };
           if (oc.state !== undefined && oc.state !== -1 && !wallEditDragRef.current && !sectionEditDragRef.current) oc.state = -1;
           if (Array.isArray(oc._pointers) && (e.pointerType === "touch" || e.buttons === 0)) oc._pointers.length = 0;
-          controls.enableRotate = true;
+          const ms = useToolMarkupStore.getState();
+          const is2DPlanOrOrtho = ms.viewPreset === "top" || ms.viewPreset === "north" || ms.viewPreset === "south" || ms.viewPreset === "east" || ms.viewPreset === "west" || ms.viewPreset === "section";
+          controls.enableRotate = !is2DPlanOrOrtho;
         }
       }
     };

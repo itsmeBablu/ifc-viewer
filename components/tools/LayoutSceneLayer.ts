@@ -3190,9 +3190,12 @@ export default class LayoutSceneLayer {
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
     const layoutState = useLayoutDrawingStore.getState();
-    const architectureLocked = layoutState.mepModeActive && layoutState.mepArchitectureLocked;
+    const isMepTool = [
+      "duct", "pipe", "cabletray", "wire", "equipment", "flex_duct", "mep_placeholder"
+    ].includes(layoutState.armedLayoutTool || "");
+    const ignoreArchitecture = layoutState.mepModeActive || isMepTool || layoutState.mepArchitectureLocked;
 
-    if (!architectureLocked && this.endpointGroup.visible) {
+    if (!ignoreArchitecture && this.endpointGroup.visible) {
       const epHits = raycaster.intersectObjects(
         this.endpointGroup.children,
         false,
@@ -3232,10 +3235,11 @@ export default class LayoutSceneLayer {
           return { kind: "cabletray", id: o.userData.layoutCableTrayId as string };
         if (o.userData.layoutEquipmentId)
           return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
+        if (o.userData.layoutWireId)
+          return { kind: "wire" as any, id: o.userData.layoutWireId as string };
 
-        // Architecture is reference-only by default in MEP mode. The toolbar
-        // override restores normal picking without affecting MEP selection.
-        if (!architectureLocked) {
+        // In MEP mode / MEP tool, architecture is completely ignored for picking
+        if (!ignoreArchitecture) {
           if (o.userData.layoutWallEndpoint && o.userData.layoutWallId) {
             return {
               kind: "wall-endpoint",
@@ -4105,24 +4109,7 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    // 2. Full Color / Shaded mode: Show ALL mesh in consistent default architectural gray
-    if (this.currentRenderMode === "fullColor") {
-      mat.roughness = 0.92;
-      mat.metalness = 0.0;
-      mat.map = null;
-      if (matType === "glass") {
-        mat.color.setHex(0xa0c4df);
-        mat.transparent = true;
-        mat.opacity = 0.45;
-      } else {
-        mat.color.setHex(0x94a3b8); // Uniform default architectural gray mesh
-        mat.transparent = false;
-        mat.opacity = 1.0;
-      }
-      return;
-    }
-
-    // 3. Realistic mode: render-quality PBR materials with high-res textures, bump, clearcoat, reflection
+    // 2. Full Color & Realistic modes: render-quality PBR materials with distinct roughness, metalness, and hatch textures
     if (customMat) {
       mat.roughness = customMat.roughness;
       mat.metalness = customMat.metalness;
@@ -4145,9 +4132,9 @@ export default class LayoutSceneLayer {
 
       const hatchStyle = customMat.hatchStyle && customMat.hatchStyle !== "solid"
         ? customMat.hatchStyle
-        : (this.currentRenderMode === "realistic" ? "concrete" : null);
+        : (customMat.category === "Masonry" ? "brick" : customMat.category === "Wood" ? "wood" : "concrete");
 
-      if (hatchStyle) {
+      if (hatchStyle && hatchStyle !== "solid") {
         const strokeColor = "#1f2937";
         const tex = getHatchCanvasTexture(
           hatchStyle,
@@ -4170,29 +4157,52 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    let baseColor = 0xcfd4dc; // default crisp architectural gray wall
+    let baseColor = 0xcfd4dc;
+    let hatchStyle: HatchStyle | null = null;
     if (matType === "concrete") {
       baseColor = 0x9ca3af;
       mat.roughness = 0.85;
+      mat.metalness = 0.05;
+      hatchStyle = "concrete";
     } else if (matType === "brick") {
-      baseColor = 0xa0522d;
-      mat.roughness = 0.9;
+      baseColor = 0xb94833;
+      mat.roughness = 0.82;
+      mat.metalness = 0.02;
+      hatchStyle = "brick";
     } else if (matType === "wood") {
-      baseColor = 0x8b5a2b;
-      mat.roughness = 0.7;
+      baseColor = 0x92613b;
+      mat.roughness = 0.6;
+      mat.metalness = 0.02;
+      hatchStyle = "wood";
     } else if (matType === "glass") {
-      baseColor = 0xe0f2fe;
-      mat.roughness = 0.1;
-      mat.metalness = 0.1;
+      baseColor = 0xa0c4df;
+      mat.roughness = 0.06;
+      mat.metalness = 0.08;
       mat.transparent = true;
-      mat.opacity = 0.3;
-    } else if (matType === "metal") {
-      baseColor = 0x94a3b8;
-      mat.roughness = 0.2;
-      mat.metalness = 0.9;
+      mat.opacity = 0.38;
+      if (mat instanceof THREE.MeshPhysicalMaterial) {
+        mat.transmission = 0.88;
+        mat.clearcoat = 1.0;
+        mat.clearcoatRoughness = 0.04;
+      }
+    } else if (matType === "metal" || matType === "duct" || matType === "cabletray") {
+      baseColor = 0xcbd5e1;
+      mat.roughness = 0.25;
+      mat.metalness = 0.88;
+      hatchStyle = "steel";
+    } else if (matType === "pipe") {
+      baseColor = 0xc27d53;
+      mat.roughness = 0.28;
+      mat.metalness = 0.85;
     } else if (matType === "plaster") {
       baseColor = 0xf8fafc;
-      mat.roughness = 0.95;
+      mat.roughness = 0.94;
+      mat.metalness = 0.0;
+      hatchStyle = "sand";
+    } else if (matType === "roof" || matType === "tile") {
+      baseColor = 0x475569;
+      mat.roughness = 0.78;
+      hatchStyle = "tile";
     }
 
     if (colorStr) {
@@ -4201,15 +4211,14 @@ export default class LayoutSceneLayer {
       mat.color.setHex(baseColor);
     }
 
-    if (this.currentRenderMode === "realistic" && matType !== "glass") {
-      const hatchType = matType === "brick" ? "brick" : matType === "wood" ? "diagonal" : "concrete";
-      const hexStr = "#" + (colorStr ? colorStr.replace("#", "") : baseColor.toString(16).padStart(6, "0"));
-      const tex = getHatchCanvasTexture(hatchType, "#374151", hexStr, 200);
+    if (hatchStyle && matType !== "glass") {
+      const hexStr = colorStr || ("#" + baseColor.toString(16).padStart(6, "0"));
+      const tex = getHatchCanvasTexture(hatchStyle, "#1e293b", hexStr, 200);
       if (tex) {
         const materialTexture = tex.clone();
         materialTexture.wrapS = THREE.RepeatWrapping;
         materialTexture.wrapT = THREE.RepeatWrapping;
-        materialTexture.repeat.set(5, 5);
+        materialTexture.repeat.set(4, 4);
         materialTexture.userData.vstudioMaterialClone = true;
         materialTexture.needsUpdate = true;
         mat.map = materialTexture;
@@ -4297,26 +4306,7 @@ export default class LayoutSceneLayer {
       return;
     }
 
-    // 2. Full Color (Shaded) mode: Pure architectural Lambert default gray for ALL materials & layers
-    if (renderMode === "fullColor") {
-      mat.roughness = 0.92;
-      mat.metalness = 0.0;
-      mat.map = null;
-      // All walls & materials in gray like default lambert material
-      const shadedTone =
-        layer.function === "structure" ? 0x8e95a0 :
-        layer.function === "insulation" ? 0xa8b0bc :
-        layer.function === "finish1" ? 0xbac2ce :
-        layer.function === "finish2" ? 0x7c8390 :
-        layer.function === "core" ? 0x868d99 :
-        0x94a3b8; // Default architectural gray
-      mat.color.setHex(shadedTone);
-      mat.transparent = false;
-      mat.opacity = 1.0;
-      return;
-    }
-
-    // 3. Realistic mode: render-quality PBR materials with high-res textures, bump, clearcoat, reflection
+    // 2. Realistic & Full Color modes: PBR materials with distinct roughness, metalness, textures, bump
     const matKey = layer.material || wall.material;
     let customMat = useMaterialStore.getState().getMaterial(matKey);
 
@@ -4819,10 +4809,10 @@ export default class LayoutSceneLayer {
         const p0x = seg.x1 + (isWallStart ? (tz1 * sLeftM + (1 - tz1) * sRightM) : 0);
         const p0z = z1;
 
-        const p1x = seg.x2 + (isWallEnd ? (tz1 * eLeftM + (1 - tz1) * eRightM) : 0);
+        const p1x = seg.x2 - (isWallEnd ? (tz1 * eLeftM + (1 - tz1) * eRightM) : 0);
         const p1z = z1;
 
-        const p2x = seg.x2 + (isWallEnd ? (tz0 * eLeftM + (1 - tz0) * eRightM) : 0);
+        const p2x = seg.x2 - (isWallEnd ? (tz0 * eLeftM + (1 - tz0) * eRightM) : 0);
         const p2z = z0;
 
         const p3x = seg.x1 + (isWallStart ? (tz0 * sLeftM + (1 - tz0) * sRightM) : 0);
@@ -5269,28 +5259,6 @@ export default class LayoutSceneLayer {
       return { frameMat, panelMat };
     }
 
-    if (this.currentRenderMode === "fullColor") {
-      frameMat.roughness = 0.92;
-      frameMat.metalness = 0;
-      frameMat.color.setHex(0x94a3b8);
-      if (category === "window" || style === "glass") {
-        panelMat = new THREE.MeshPhysicalMaterial({
-          color: 0xa0c4df,
-          transparent: true,
-          opacity: 0.45,
-          roughness: 0.92,
-          metalness: 0,
-        });
-      } else {
-        (panelMat as THREE.MeshPhysicalMaterial).color.setHex(0x868d99);
-        (panelMat as THREE.MeshPhysicalMaterial).roughness = 0.92;
-        (panelMat as THREE.MeshPhysicalMaterial).metalness = 0;
-        (panelMat as THREE.MeshPhysicalMaterial).transparent = false;
-        (panelMat as THREE.MeshPhysicalMaterial).opacity = 1.0;
-      }
-      return { frameMat, panelMat };
-    }
-
     const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
     if (customFrame) {
       frameMat.roughness = customFrame.roughness;
@@ -5344,6 +5312,10 @@ export default class LayoutSceneLayer {
         thickness: 0.02,
       });
       return { frameMat, panelMat: glassMat };
+    } else if (style === "garage") {
+      (panelMat as THREE.MeshStandardMaterial).color.setHex(0x475569);
+      (panelMat as THREE.MeshStandardMaterial).roughness = 0.42;
+      (panelMat as THREE.MeshStandardMaterial).metalness = 0.65;
     } else if (style === "wood" || category === "door") {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0x8b5a2b);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.65;
@@ -5592,6 +5564,109 @@ export default class LayoutSceneLayer {
       );
       l1.renderOrder = 20; l2.renderOrder = 20;
       g.add(l1, l2);
+    } else if (door.style === "garage") {
+      const p1 = pointOnWallMm(wall, door.positionMm - halfW);
+      const p2 = pointOnWallMm(wall, door.positionMm + halfW);
+      const p1x = fromMm(p1.xMm), p1z = fromMm(p1.yMm);
+      const p2x = fromMm(p2.xMm), p2z = fromMm(p2.yMm);
+      const wallHalfThick = fromMm(wall.thicknessMm || 200) / 2;
+
+      // 1. Double threshold sill lines across the opening
+      const sillMat = new THREE.LineBasicMaterial({ color: 0x78716c, depthTest: false });
+      const sill1 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p1x - perpX * wallHalfThick, y, p1z - perpZ * wallHalfThick),
+          new THREE.Vector3(p2x - perpX * wallHalfThick, y, p2z - perpZ * wallHalfThick),
+        ]),
+        sillMat
+      );
+      const sill2 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p1x + perpX * wallHalfThick, y, p1z + perpZ * wallHalfThick),
+          new THREE.Vector3(p2x + perpX * wallHalfThick, y, p2z + perpZ * wallHalfThick),
+        ]),
+        sillMat
+      );
+      sill1.renderOrder = 20; sill2.renderOrder = 20;
+      g.add(sill1, sill2);
+
+      // 2. Closed door panel line along wall opening
+      const doorLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p1x, y, p1z),
+          new THREE.Vector3(p2x, y, p2z),
+        ]),
+        lineMat
+      );
+      doorLine.renderOrder = 22;
+      g.add(doorLine);
+
+      // 3. Overhead tracks extending perpendicular into the garage interior
+      const trackDepth = Math.max(1.8, Math.min(leafLen * 0.9, 2.5));
+      const trackMat = new THREE.LineDashedMaterial({
+        color: 0x52525b,
+        dashSize: 0.15,
+        gapSize: 0.1,
+        depthTest: false,
+      });
+
+      const track1 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p1x, y, p1z),
+          new THREE.Vector3(p1x + perpX * trackDepth, y, p1z + perpZ * trackDepth),
+        ]),
+        trackMat
+      );
+      track1.computeLineDistances();
+      track1.renderOrder = 20;
+
+      const track2 = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p2x, y, p2z),
+          new THREE.Vector3(p2x + perpX * trackDepth, y, p2z + perpZ * trackDepth),
+        ]),
+        trackMat
+      );
+      track2.computeLineDistances();
+      track2.renderOrder = 20;
+      g.add(track1, track2);
+
+      // End stops / cross tie at track ends
+      const end1x = p1x + perpX * trackDepth;
+      const end1z = p1z + perpZ * trackDepth;
+      const end2x = p2x + perpX * trackDepth;
+      const end2z = p2z + perpZ * trackDepth;
+
+      const stopMat = new THREE.LineBasicMaterial({ color: 0x52525b, depthTest: false });
+      const endTie = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(end1x, y, end1z),
+          new THREE.Vector3(end2x, y, end2z),
+        ]),
+        stopMat
+      );
+      endTie.renderOrder = 20;
+      g.add(endTie);
+
+      // Sectional panel dash ticks along the overhead tracks
+      const panels = 4;
+      for (let i = 1; i < panels; i++) {
+        const frac = i / panels;
+        const px1 = p1x + perpX * (trackDepth * frac);
+        const pz1 = p1z + perpZ * (trackDepth * frac);
+        const px2 = p2x + perpX * (trackDepth * frac);
+        const pz2 = p2z + perpZ * (trackDepth * frac);
+        const panelLine = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(px1, y, pz1),
+            new THREE.Vector3(px2, y, pz2),
+          ]),
+          trackMat
+        );
+        panelLine.computeLineDistances();
+        panelLine.renderOrder = 20;
+        g.add(panelLine);
+      }
     } else {
       // Leaf in open position (90° into room).
       const leafEnd = new THREE.Vector3(
