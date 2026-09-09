@@ -1,3 +1,4 @@
+import { extendRoofEdge } from "./roofJoinGeometry";
 import * as THREE from "three";
 import type { LayoutWall } from "./layoutDrawing";
 import { slabBoundaryLoops, validateBoundary } from "./boundaryEditing";
@@ -53,6 +54,8 @@ export async function joinRoof(source: GeometrySelection, target: GeometrySelect
   const slab = store.slabs.find(s => s.id === source.id && s.kind === "roof");
   const targetRoof = store.slabs.find(s => s.id === target.id && s.kind === "roof");
   if (!slab || !targetRoof || slab.id === targetRoof.id) throw new Error("Pick a roof boundary edge, then a different roof face.");
+  if (store.lockedElementKeys.includes(`slab:${slab.id}`)) throw new Error("Unlock the source roof before joining it.");
+  if (slab.overhangMm) throw new Error("Set the source roof overhang to zero before joining its boundary edge.");
   const normal = target.geometry.normal && new THREE.Vector3().fromArray(target.geometry.normal);
   if (!normal || Math.abs(normal.y) < 0.05) throw new Error("Pick the target roof's top face.");
   const loops = slabBoundaryLoops(slab), boundary = loops[0];
@@ -64,6 +67,7 @@ export async function joinRoof(source: GeometrySelection, target: GeometrySelect
     const d = line.closestPointToPoint(new THREE.Vector3(point[0] * 1000, 0, point[2] * 1000), true, new THREE.Vector3()).distanceTo(new THREE.Vector3(point[0] * 1000, 0, point[2] * 1000));
     if (d < distance) { edge = i; distance = d; }
   }
+  if (distance > 2) throw new Error("Pick an outer roof boundary edge, not an interior ridge.");
   if (slab.edgeSlopes?.some(s => s.edgeIdx === edge && s.isSloped)) throw new Error("Choose a non-slope-defining roof edge for the join.");
   const targetPoint = new THREE.Vector3().fromArray(target.geometry.point);
   sourceMesh.updateMatrixWorld(true);
@@ -71,45 +75,20 @@ export async function joinRoof(source: GeometrySelection, target: GeometrySelect
   const positions = geometry.getAttribute("position");
   const vertices = Array.from({ length: positions.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(sourceMesh.matrixWorld));
   geometry.dispose();
-  const aBoundary = boundary[edge], bBoundary = boundary[(edge + 1) % boundary.length];
-  const matches = (v: THREE.Vector3, p: typeof aBoundary) => Math.hypot(v.x * 1000 - p.xMm, v.z * 1000 - p.yMm) < 1;
-  let sourcePlane: THREE.Plane | null = null;
-  for (let i = 0; i < vertices.length; i += 3) {
-    const triangle = vertices.slice(i, i + 3);
-    if (!triangle.some(v => matches(v, aBoundary)) || !triangle.some(v => matches(v, bBoundary))) continue;
-    const plane = new THREE.Plane().setFromCoplanarPoints(triangle[0], triangle[1], triangle[2]);
-    if (Math.abs(plane.normal.y) < 0.05) continue;
-    if (!sourcePlane || -(plane.normal.x * point[0] + plane.normal.z * point[2] + plane.constant) / plane.normal.y > -(sourcePlane.normal.x * point[0] + sourcePlane.normal.z * point[2] + sourcePlane.constant) / sourcePlane.normal.y) sourcePlane = plane;
-  }
-  if (!sourcePlane) throw new Error("Choose an outer eave edge adjoining one roof face.");
-  const sourceHeight = (x: number, z: number) => -(sourcePlane!.normal.x * x + sourcePlane!.normal.z * z + sourcePlane!.constant) / sourcePlane!.normal.y;
-  const originalBoundary = boundary.map(p => ({ ...p }));
-  for (const index of [edge, (edge + 1) % boundary.length]) {
-    const neighbour = index === edge ? (edge - 1 + boundary.length) % boundary.length : (edge + 2) % boundary.length;
-    const a = new THREE.Vector3(boundary[neighbour].xMm / 1000, sourceHeight(boundary[neighbour].xMm / 1000, boundary[neighbour].yMm / 1000), boundary[neighbour].yMm / 1000);
-    const b = new THREE.Vector3(boundary[index].xMm / 1000, sourceHeight(boundary[index].xMm / 1000, boundary[index].yMm / 1000), boundary[index].yMm / 1000);
-    const direction = b.clone().sub(a), denominator = normal.dot(direction);
-    if (Math.abs(denominator) < 1e-8) throw new Error("These roof faces have no unique intersection along the adjoining edges.");
-    const intersection = a.addScaledVector(direction, normal.dot(targetPoint.clone().sub(a)) / denominator);
-    let onFace = false;
-    const face = target.geometry.points;
-    for (let i = 0; i + 2 < face.length; i += 3) {
-      const triangle = new THREE.Triangle(...face.slice(i, i + 3).map(p => new THREE.Vector3().fromArray(p)) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]);
-      if (triangle.closestPointToPoint(intersection, new THREE.Vector3()).distanceTo(intersection) < 0.002) { onFace = true; break; }
-    }
-    if (!onFace) throw new Error("The extended edge must meet the selected roof face within its bounds.");
-    boundary[index] = { xMm: intersection.x * 1000, yMm: intersection.z * 1000 };
-  }
+  const joined = extendRoofEdge(vertices, boundary, edge, targetPoint, normal, target.geometry.points.map(p => new THREE.Vector3().fromArray(p)));
+  loops[0] = joined.boundary;
   const error = validateBoundary(loops); if (error) throw new Error(error);
   const inverse = sourceMesh.matrixWorld.clone().invert();
-  const joinedPositions: number[] = [];
-  for (const vertex of vertices) {
-    for (const index of [edge, (edge + 1) % boundary.length]) if (matches(vertex, originalBoundary[index])) {
-      const next = boundary[index];
-      vertex.y += sourceHeight(next.xMm / 1000, next.yMm / 1000) - sourceHeight(vertex.x, vertex.z);
-      vertex.x = next.xMm / 1000; vertex.z = next.yMm / 1000; break;
-    }
-    vertex.applyMatrix4(inverse); joinedPositions.push(vertex.x, vertex.y, vertex.z);
-  }
-  await store.updateSlab(slab.id, { boundary, minXmm: Math.min(...boundary.map(p => p.xMm)), maxXmm: Math.max(...boundary.map(p => p.xMm)), minYmm: Math.min(...boundary.map(p => p.yMm)), maxYmm: Math.max(...boundary.map(p => p.yMm)), autoBoundaryFromWalls: false, roofJoin: { positions: joinedPositions, targetId: targetRoof.id, originalBoundary: slab.roofJoin?.originalBoundary ?? slabBoundaryLoops(slab)[0] } });
+  const joinedPositions = joined.vertices.flatMap(vertex => vertex.applyMatrix4(inverse).toArray());
+  const nextBoundary = joined.boundary;
+  await store.updateSlab(slab.id, {
+    boundary: nextBoundary,
+    edgeSlopes: joined.sourceEdges.map((original, edgeIdx) => ({ ...(slab.edgeSlopes?.find(s => s.edgeIdx === original) ?? { pitchDeg: 30, isSloped: true }), edgeIdx })),
+    minXmm: Math.min(...nextBoundary.map(p => p.xMm)), maxXmm: Math.max(...nextBoundary.map(p => p.xMm)),
+    minYmm: Math.min(...nextBoundary.map(p => p.yMm)), maxYmm: Math.max(...nextBoundary.map(p => p.yMm)),
+    autoBoundaryFromWalls: false,
+    roofJoin: { positions: joinedPositions, targetId: targetRoof.id,
+      originalBoundary: slab.roofJoin?.originalBoundary ?? boundary,
+      originalEdgeSlopes: slab.roofJoin?.originalEdgeSlopes ?? slab.edgeSlopes },
+  });
 }

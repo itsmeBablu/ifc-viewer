@@ -31,8 +31,8 @@ export default function ModifyTools() {
   if (boundaryEdit) return null;
   const button = "rounded-lg border border-[var(--panel-divider)] px-2 py-1 text-[11px] disabled:opacity-40";
   const hints: Record<ModifyTool, string> = {
-    attachTop: "Select walls, then click the roof to attach their tops.",
-    attachBase: "Select walls, then click the roof to attach their bases.",
+    attachTop: "Select walls, then click a roof or floor to attach their tops.",
+    attachBase: "Select walls, then click a roof or floor to attach their bottoms.",
     joinRoof: "Pick the source roof boundary edge, then the target roof top face.",
     select: "Pick elements, faces, edges or vertices. Shift adds to selection.",
     move: "Drag an axis arrow, or the center to move in the view plane. Alt bypasses snapping.",
@@ -51,7 +51,7 @@ export default function ModifyTools() {
         const roof = layout.slabs.find(s => s.id === ref.id);
         if (roof?.roofJoin) {
           const boundary = roof.roofJoin.originalBoundary;
-          await layout.updateSlab(roof.id, { boundary, roofJoin: undefined, minXmm: Math.min(...boundary.map(p => p.xMm)), maxXmm: Math.max(...boundary.map(p => p.xMm)), minYmm: Math.min(...boundary.map(p => p.yMm)), maxYmm: Math.max(...boundary.map(p => p.yMm)) });
+          await layout.updateSlab(roof.id, { boundary, edgeSlopes: roof.roofJoin.originalEdgeSlopes, roofJoin: undefined, minXmm: Math.min(...boundary.map(p => p.xMm)), maxXmm: Math.max(...boundary.map(p => p.xMm)), minYmm: Math.min(...boundary.map(p => p.yMm)), maxYmm: Math.max(...boundary.map(p => p.yMm)) });
         }
       }
     })}>Detach / Unjoin</button>

@@ -1,4 +1,5 @@
 "use client";
+import WallAttachControl from "./WallAttachControl";
 import { activateModifyTool } from "./ModifyTools";
 import { useModifyStore } from "@/store/useModifyStore";
 
@@ -47,6 +48,8 @@ import {
   LuX,
   LuZap,
   LuArmchair,
+  LuArrowUpToLine,
+
 } from "react-icons/lu";
 import {
   IconMarkupStair,
@@ -642,6 +645,7 @@ export default function DesktopIsland() {
         ];
         if (isRoof) {
           slabItems.push(
+            { id: "joinRoof", label: "Join Roofs", hint: "Pick a roof boundary edge, then the other roof face", icon: <LuLayers3 /> },
             { id: "roof-hip", label: "Hip", hint: "Hip roof (all edges sloped 30°)", icon: <span className="text-[11px] font-bold text-yellow-400">◺</span> },
             { id: "roof-gable", label: "Gable", hint: "Gable roof (2 opposite slopes, 2 vertical ends)", icon: <span className="text-[11px] font-bold text-amber-400">∧</span> },
             { id: "roof-shed", label: "Shed", hint: "Shed / mono-pitch roof (single slope)", icon: <span className="text-[11px] font-bold text-orange-400">/</span> },
@@ -649,6 +653,13 @@ export default function DesktopIsland() {
           );
         }
         return [...slabItems, ...MODIFY_ITEMS];
+      }
+      if (selectedWallId || selectedElements.some((item) => item.kind === "wall")) {
+        return [
+          { id: "attach", label: "Attach", hint: "Attach wall top or bottom to a roof or floor", icon: <LuArrowUpToLine /> },
+
+          ...MODIFY_ITEMS,
+        ];
       }
       return MODIFY_ITEMS;
     }
@@ -682,7 +693,7 @@ export default function DesktopIsland() {
           return MEP_ALL_ITEMS;
       }
     }
-  }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing, selectedSlabId, slabs]);
+  }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing, selectedSlabId, slabs, selectedWallId, selectedElements]);
 
   const [renderedCapsules, setRenderedCapsules] = useState(activeCapsules);
   const renderedCapsulesRef = useRef(renderedCapsules);
@@ -908,7 +919,7 @@ export default function DesktopIsland() {
       }
       return;
     }
-    if (id === "move" || id === "rotate" || id === "align" || id === "mirror" || id === "split") {
+    if (id === "move" || id === "rotate" || id === "align" || id === "mirror" || id === "split" || id === "attachTop" || id === "attachBase" || id === "joinRoof") {
       activateModifyTool(id);
       return;
     }
@@ -951,7 +962,7 @@ export default function DesktopIsland() {
   const isCapsuleActive = (id: string) => {
     if (id.startsWith("boundary-")) return id === `boundary-${boundaryEdit?.tool}`;
     if (id === "dimension") return measureMode;
-    if (["move", "rotate", "align", "mirror", "split"].includes(id)) return modifyTool === id;
+    if (["move", "rotate", "align", "mirror", "split", "attachTop", "attachBase", "joinRoof"].includes(id)) return modifyTool === id;
     if (id === "deselect" || id === "delete" || id === "copy" || id === "group") return false;
     if (id === "trim") {
       return armed === "trim";
@@ -1039,6 +1050,7 @@ export default function DesktopIsland() {
           className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full"
         >
           {renderedCapsules.map((item) => {
+            if (item.id === "attach") return <WallAttachControl key={item.id} className="desktop-capsule-btn" />;
             const active = isCapsuleActive(item.id);
             const isShapes = item.id === "shapes";
             const isTypeSelector = Boolean(TYPE_CATEGORY[item.id]);

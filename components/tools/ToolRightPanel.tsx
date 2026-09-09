@@ -1008,7 +1008,7 @@ export default function ToolRightPanel({
                             <div className="mt-2 pt-2 border-t border-[var(--panel-divider)]">
                               <button
                                 type="button"
-                                onClick={() => store.beginSlabBoundaryEdit(selectedSlab.id)}
+                                onClick={() => useLayoutDrawingStore.getState().beginSlabBoundaryEdit(selectedSlab.id)}
                                 className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-xs font-semibold transition-colors"
                               >
                                 <LuPencil className="h-3.5 w-3.5" />
@@ -1760,7 +1760,7 @@ function SketchLineStyleEditor({ lineId }: { lineId?: string }) {
   return <details className="property-disclosure"><summary>Line appearance</summary><label className="property-field"><span>Preset</span><select aria-label="Line style preset" value={presets.find(preset => preset.pattern === style.pattern && preset.thicknessPx === style.thicknessPx)?.name ?? "custom"} onChange={event => { const preset = presets.find(item => item.name === event.target.value); if (preset) update(preset); }}><option value="custom" disabled>Custom</option>{presets.map(preset => <option key={preset.name} value={preset.name}>{preset.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-semibold text-[var(--text-muted)]">Pattern<select className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" value={style.pattern ?? "solid"} onChange={(e) => update({ pattern: e.target.value as NonNullable<typeof style.pattern> })}><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dash-dot">Dash dot</option></select></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Thickness<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={1} max={8} value={style.thicknessPx ?? 1} onChange={(e) => update({ thicknessPx: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Dash (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.dashSizeMm ?? 250} onChange={(e) => update({ dashSizeMm: Number(e.target.value) })}/></label><label className="text-[9px] font-semibold text-[var(--text-muted)]">Gap (mm)<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-2 text-[10px]" type="number" min={20} value={style.gapSizeMm ?? 140} onChange={(e) => update({ gapSizeMm: Number(e.target.value) })}/></label><label className="col-span-2 text-[9px] font-semibold text-[var(--text-muted)]">Color<input className="mt-1 h-8 w-full rounded-md border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" type="color" value={style.color ?? "#374151"} onChange={(e) => update({ color: e.target.value })}/></label></div></details>;
 }
 
-function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
+export function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
   const [open, setOpen] = useState(true);
   const store = useLayoutDrawingStore();
   const count = slab.boundary?.length ?? 4;
@@ -1768,12 +1768,12 @@ function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
   const update = (edgeIdx: number, patch: Partial<(typeof slopes)[number]>) => void store.updateSlab(slab.id, { edgeSlopes: slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge) });
 
   const setGlobalPitch = (pitch: number) => {
-    const updated = slopes.map((edge) => ({ ...edge, pitchDeg: pitch }));
+    const updated = slopes.map((edge) => edge.isSloped ? { ...edge, pitchDeg: pitch } : edge);
     store.updateSlab(slab.id, { edgeSlopes: updated });
   };
 
   return (
-    <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Revit Roof Generator & Slopes">
+    <PropSection open={open} onToggle={() => setOpen(value => !value)} icon={<LuSlidersHorizontal className="h-3.5 w-3.5 text-yellow-400"/>} label="Roof shape & angles">
       <div className="space-y-3 pt-1">
         {/* Revit Roof Presets */}
         <div>
@@ -1800,7 +1800,7 @@ function RoofEdgeSlopeEditor({ slab }: { slab: LayoutSlab }) {
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-semibold text-[var(--text-muted)]">Global Pitch</span>
-            <span className="text-[10px] font-mono text-amber-400 font-semibold">{slopes[0]?.pitchDeg ?? 30}°</span>
+            <span className="text-[10px] font-mono text-amber-400 font-semibold">{new Set(slopes.filter(edge => edge.isSloped).map(edge => edge.pitchDeg)).size > 1 ? "Mixed" : `${slopes.find(edge => edge.isSloped)?.pitchDeg ?? 0}°`}</span>
           </div>
           <div className="flex items-center gap-1.5">
             {[15, 25, 30, 45].map((angle) => (

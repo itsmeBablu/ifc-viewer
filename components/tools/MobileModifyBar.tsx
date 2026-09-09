@@ -1,5 +1,6 @@
 "use client";
 
+import WallAttachControl from "./WallAttachControl";
 import { useMemo } from "react";
 import {
   LuMousePointer2,
@@ -9,8 +10,8 @@ import {
   LuFlipHorizontal2,
   LuScissors,
   LuDivide,
-  LuArrowUpToLine,
-  LuArrowDownToLine,
+
+
   LuUnlink,
   LuBox,
   LuCopy,
@@ -253,32 +254,6 @@ export default function MobileModifyBar() {
     });
   }
 
-  // 8. attach top - for walls
-  if (hasWalls) {
-    tools.push({
-      id: "attachTop",
-      label: "Attach Top",
-      hint: "Attach wall top to roof or slab",
-      icon: <LuArrowUpToLine className="h-4 w-4" />,
-      iconColor: "text-teal-400 hover:text-teal-300",
-      isActive: state.tool === "attachTop",
-      onClick: () => activateModifyTool("attachTop"),
-    });
-  }
-
-  // 9. attach bottom - for walls
-  if (hasWalls) {
-    tools.push({
-      id: "attachBase",
-      label: "Attach Bottom",
-      hint: "Attach wall base to roof or slab",
-      icon: <LuArrowDownToLine className="h-4 w-4" />,
-      iconColor: "text-cyan-400 hover:text-cyan-300",
-      isActive: state.tool === "attachBase",
-      onClick: () => activateModifyTool("attachBase"),
-    });
-  }
-
   // 10. detach - for walls or roofs
   if (hasWalls || hasRoofs) {
     tools.push({
@@ -299,6 +274,7 @@ export default function MobileModifyBar() {
               const boundary = roof.roofJoin.originalBoundary;
               await layout.updateSlab(roof.id, {
                 boundary,
+                edgeSlopes: roof.roofJoin.originalEdgeSlopes,
                 roofJoin: undefined,
                 minXmm: Math.min(...boundary.map((p) => p.xMm)),
                 maxXmm: Math.max(...boundary.map((p) => p.xMm)),
@@ -327,6 +303,7 @@ export default function MobileModifyBar() {
           const boundary = selectedRoof.roofJoin!.originalBoundary;
           void useLayoutDrawingStore.getState().updateSlab(selectedRoof.id, {
             boundary,
+            edgeSlopes: selectedRoof.roofJoin!.originalEdgeSlopes,
             roofJoin: undefined,
             minXmm: Math.min(...boundary.map((p) => p.xMm)),
             maxXmm: Math.max(...boundary.map((p) => p.xMm)),
@@ -441,6 +418,7 @@ export default function MobileModifyBar() {
 
         {/* Small Icons Floating Directly on 3D View Without Any Background — Round Liquid Glass Button on Click */}
         <div className="flex items-center gap-1">
+          {hasWalls && <WallAttachControl className="werkzeug-tool-button shrink-0" />}
           {tools.map((tool) => (
             <button
               key={tool.id}

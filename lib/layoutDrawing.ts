@@ -112,7 +112,7 @@ export type LayoutWindow = {
 
 /** Horizontal slab — floor plate or roof plate. */
 export type LayoutSlab = {
-  roofJoin?: { positions: number[]; targetId: string; originalBoundary: { xMm: number; yMm: number }[] };
+  roofJoin?: { positions: number[]; targetId: string; originalBoundary: { xMm: number; yMm: number }[]; originalEdgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[] };
   id: string;
   projectId: string;
   levelId: string;

@@ -1,5 +1,6 @@
 import { createOperableWindow } from "@/lib/windowGeometry";
 import { roofWallProfile } from "@/lib/roofConnections";
+import { buildPlanarRoof, offsetRoofBoundary } from "@/lib/roofGeometry";
 /**
  * Imperative Three.js layer for layout walls / doors / windows (live 3D).
  */
@@ -601,7 +602,7 @@ export default class LayoutSceneLayer {
     const attachmentRoofs = new Map<string, THREE.Mesh>();
     for (const wall of walls) for (const id of [wall.attachedTopRoofId, wall.attachedBaseRoofId]) {
       if (!id || attachmentRoofs.has(id)) continue;
-      const roof = slabs.find(s => s.id === id && s.kind === "roof");
+      const roof = slabs.find(s => s.id === id && (s.kind === "roof" || s.kind === "floor"));
       if (roof) {
         let mesh = this.slabMeshes.get(id);
         if (!mesh) { mesh = this.createSlabMesh(roof, levelById.get(roof.levelId)?.elevationMm ?? 0); this.slabMeshes.set(id, mesh); this.group.add(mesh); }
@@ -3585,6 +3586,7 @@ export default class LayoutSceneLayer {
       for (let i = 0; i < slab.roofJoin.positions.length; i += 3) uv.push(slab.roofJoin.positions[i], slab.roofJoin.positions[i + 1]);
       geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
       geometry.computeVertexNormals(); geometry.computeBoundingSphere();
+      geometry.userData.isComplexRoof = true;
       return geometry;
     }
     const boundary = slab.boundary && slab.boundary.length >= 3 ? slab.boundary : [
@@ -3594,7 +3596,7 @@ export default class LayoutSceneLayer {
       { xMm: slab.minXmm, yMm: slab.maxYmm },
     ];
 
-    if (slab.kind === "roof" && !slab.holes?.length) {
+    if (slab.kind === "roof") {
       const roof = this.buildComplexRoofGeometry(slab, boundary);
       if (roof) return roof;
     }
@@ -3660,8 +3662,14 @@ export default class LayoutSceneLayer {
 
     const overhangMm = slab.overhangMm ?? 0;
     const boundary = overhangMm > 0
-      ? this.expandBoundaryPolygon(rawBoundary, overhangMm)
+      ? offsetRoofBoundary(rawBoundary, overhangMm)
       : rawBoundary;
+
+    const planarRoof = buildPlanarRoof(slab, boundary);
+    if (planarRoof) return planarRoof;
+    // The legacy concave solver does not cut openings; let the footprint
+    // extrusion below preserve holes rather than covering them.
+    if (slab.holes?.length) return null;
 
     const n = boundary.length;
     // Edge definitions: each edge i runs from boundary[i] to boundary[(i + 1) % n]
@@ -3818,56 +3826,6 @@ export default class LayoutSceneLayer {
     geo.computeBoundingSphere();
     geo.userData.isComplexRoof = true;
     return geo;
-  }
-
-  /** Expand a 2D boundary polygon outward by offsetMm. */
-  private expandBoundaryPolygon(
-    boundary: { xMm: number; yMm: number }[],
-    offsetMm: number,
-  ): { xMm: number; yMm: number }[] {
-    if (boundary.length < 3 || offsetMm <= 0) return boundary;
-    const n = boundary.length;
-    const cx = boundary.reduce((sum, p) => sum + p.xMm, 0) / n;
-    const cy = boundary.reduce((sum, p) => sum + p.yMm, 0) / n;
-    const result: { xMm: number; yMm: number }[] = [];
-
-    for (let i = 0; i < n; i++) {
-      const prev = boundary[(i - 1 + n) % n];
-      const curr = boundary[i];
-      const next = boundary[(i + 1) % n];
-
-      const v1x = curr.xMm - prev.xMm;
-      const v1y = curr.yMm - prev.yMm;
-      const len1 = Math.hypot(v1x, v1y) || 1;
-      const n1x = -v1y / len1;
-      const n1y = v1x / len1;
-
-      const v2x = next.xMm - curr.xMm;
-      const v2y = next.yMm - curr.yMm;
-      const len2 = Math.hypot(v2x, v2y) || 1;
-      const n2x = -v2y / len2;
-      const n2y = v2x / len2;
-
-      let nx = (n1x + n2x) * 0.5;
-      let ny = (n1y + n2y) * 0.5;
-      const nLen = Math.hypot(nx, ny) || 1;
-      nx /= nLen;
-      ny /= nLen;
-
-      // Ensure normal points outward away from center
-      const toPtX = curr.xMm - cx;
-      const toPtY = curr.yMm - cy;
-      if (nx * toPtX + ny * toPtY < 0) {
-        nx = -nx;
-        ny = -ny;
-      }
-
-      result.push({
-        xMm: Math.round(curr.xMm + nx * offsetMm),
-        yMm: Math.round(curr.yMm + ny * offsetMm),
-      });
-    }
-    return result;
   }
 
   private createSlabMesh(slab: LayoutSlab, elevMm: number): THREE.Mesh {

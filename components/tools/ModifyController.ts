@@ -252,14 +252,22 @@ export function installModifyController(options: {
     if (state.tool === "attachTop" || state.tool === "attachBase") {
       void run(async () => {
         const layout = useLayoutDrawingStore.getState();
-        const roof = layout.slabs.find(s => s.id === hit.id && s.kind === "roof");
-        if (!roof) throw new Error("Select a roof as the attachment target.");
+        const roof = layout.slabs.find(s => s.id === hit.id && (s.kind === "roof" || s.kind === "floor"));
+        if (!roof) throw new Error("Select a roof or floor as the attachment target.");
         let mesh: THREE.Mesh | undefined;
         for (const root of options.roots()) root.traverse(o => { if (o instanceof THREE.Mesh && o.userData.layoutSlabId === roof.id) mesh = o; });
-        if (!mesh) throw new Error("The roof mesh is not available.");
+        if (!mesh) throw new Error("The roof or floor mesh is not available.");
         const walls = expandedSelection(currentModifySelection()).filter(r => r.kind === "wall").map(r => layout.walls.find(w => w.id === r.id)!).filter(Boolean);
         if (!walls.length) throw new Error("Select one or more walls before activating Attach Top/Base.");
-        for (const wall of walls) roofWallProfile(wall, (layout.levels.find(l => l.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0), state.tool === "attachTop" ? mesh : undefined, state.tool === "attachBase" ? mesh : undefined);
+        const findSlabMesh = (id?: string) => {
+          let found: THREE.Mesh | undefined;
+          if (id) for (const root of options.roots()) root.traverse(object => { if (object instanceof THREE.Mesh && object.userData.layoutSlabId === id) found = object; });
+          return found;
+        };
+        for (const wall of walls) {
+          if (layout.lockedElementKeys.includes(`wall:${wall.id}`)) throw new Error("Unlock the selected walls before attaching them.");
+          roofWallProfile(wall, (layout.levels.find(l => l.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0), state.tool === "attachTop" ? mesh : findSlabMesh(wall.attachedTopRoofId), state.tool === "attachBase" ? mesh : findSlabMesh(wall.attachedBaseRoofId));
+        }
         for (const wall of walls) await layout.updateWall(wall.id, state.tool === "attachTop" ? { attachedTopRoofId: roof.id } : { attachedBaseRoofId: roof.id });
       }); return;
     }

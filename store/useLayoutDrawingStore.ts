@@ -691,6 +691,8 @@ type LayoutDrawingState = {
         | "roofJoin"
         | "autoBoundaryFromWalls"
         | "edgeSlopes"
+        | "overhangMm"
+        | "roofPreset"
         | "color"
         | "material"
       >
@@ -2634,7 +2636,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (!cur) return;
     pushWerkzeugHistory();
     const next = { ...cur, ...patch };
-    if (!("roofJoin" in patch) && (patch.boundary || patch.holes || patch.edgeSlopes || patch.thicknessMm != null)) next.roofJoin = undefined;
+    if (patch.edgeSlopes) next.edgeSlopes = patch.edgeSlopes.map(edge => ({ ...edge, pitchDeg: Number.isFinite(edge.pitchDeg) ? Math.min(85, Math.max(0, edge.pitchDeg)) : 30 }));
+    if (!("roofJoin" in patch) && (patch.boundary || patch.holes || patch.edgeSlopes || patch.thicknessMm != null || patch.overhangMm != null)) next.roofJoin = undefined;
+    if (patch.edgeSlopes && !("roofPreset" in patch)) next.roofPreset = "custom";
     if (next.minXmm > next.maxXmm) {
       const t = next.minXmm;
       next.minXmm = next.maxXmm;
@@ -2933,6 +2937,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   applyRoofPreset: async (slabId, preset, defaultPitch = 30) => {
+    if (get().lockedElementKeys.includes(`slab:${slabId}`)) return;
+    defaultPitch = Number.isFinite(defaultPitch) ? Math.min(85, Math.max(0, defaultPitch)) : 30;
     const slab = get().slabs.find((s) => s.id === slabId && s.kind === "roof");
     if (!slab) return;
     const boundary = slab.boundary && slab.boundary.length >= 3 ? slab.boundary : [
@@ -2982,6 +2988,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       ...slab,
       roofPreset: preset,
       edgeSlopes: nextSlopes,
+      roofJoin: undefined,
     };
     pushWerkzeugHistory();
     await idbPutSlab(nextSlab);

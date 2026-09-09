@@ -5,7 +5,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import {
-  LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3,
+  LuArmchair, LuBox, LuChevronDown, LuChevronLeft, LuDoorOpen, LuEye, LuFolderOpen, LuLayers3, LuRuler, LuShapes,
   LuBuilding2, LuGrid2X2, LuLock, LuLockOpen, LuMoon, LuMousePointer2, LuPalette, LuPaperclip, LuRedo2, LuSave, LuScale, LuSlidersHorizontal, LuSparkles, LuSun, LuSunMedium, LuUndo2, LuZap,
 } from "react-icons/lu";
 import { IconMarkupFloor, IconMarkupRoof, IconMarkupWall, IconMarkupWindow } from "./MarkupIcons";
@@ -29,8 +29,11 @@ import MobileModifyBar from "./MobileModifyBar";
 import BoundarySketchOptions from "./BoundarySketchOptions";
 import ToolOptionsBar from "./ToolOptionsBar";
 import DrawingShapeOptions from "./DrawingShapeOptions";
+import { RoofEdgeSlopeEditor } from "./ToolRightPanel";
+import MarkupToolsSection from "./MarkupToolsSection";
+import { MEP_TABS } from "./DesktopIsland";
 
-type PanelKey = "levels" | "materials" | LayoutToolId;
+type PanelKey = "levels" | "materials" | "shapes" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
 type DockEdge = "top" | "bottom";
 
@@ -43,6 +46,12 @@ const TOOL_ITEMS: Array<{ id: PanelKey; label: string; icon: React.ReactNode }> 
   { id: "floor", label: "Floor", icon: <IconMarkupFloor /> },
   { id: "ceiling", label: "Ceiling", icon: <IconMarkupFloor /> },
   { id: "lines", label: "Lines", icon: <span className="font-bold">L</span> },
+  { id: "component", label: "Components", icon: <LuArmchair /> },
+  { id: "column", label: "Column", icon: <LuBuilding2 /> },
+  { id: "beam", label: "Beam", icon: <LuBox /> },
+  { id: "stair", label: "Stair", icon: <LuLayers3 /> },
+  { id: "ramp", label: "Ramp", icon: <IconMarkupFloor /> },
+  { id: "shapes", label: "Shapes / Note", icon: <LuShapes /> },
   { id: "materials", label: "Materials", icon: <LuPalette /> },
 ];
 
@@ -133,6 +142,8 @@ export default function WerkzeugWorkspaceChrome({
   const armed = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const boundaryEdit = useLayoutDrawingStore((s) => s.slabBoundaryEdit);
   const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
+  const mepCategory = useLayoutDrawingStore((s) => s.desktopMepCategory);
+  const measureMode = useToolMarkupStore((s) => s.measureMode);
   const setMepModeActive = useLayoutDrawingStore((s) => s.setMepModeActive);
   const walls = useLayoutDrawingStore((s) => s.walls);
   const doors = useLayoutDrawingStore((s) => s.doors);
@@ -470,7 +481,8 @@ export default function WerkzeugWorkspaceChrome({
     setPanelHidden(false);
     setPanelTab("properties");
     const alreadyDrawingBoundary = (id === "floor" || id === "ceiling" || id === "roof") && store.sketchTargetKind === id && store.armedLayoutTool === "lines";
-    if (!alreadyDrawingBoundary) store.setArmedLayoutTool(id === "levels" || id === "materials" ? null : id);
+    if (!alreadyDrawingBoundary) store.setArmedLayoutTool(id === "levels" || id === "materials" || id === "shapes" ? null : id);
+    useToolMarkupStore.getState().setMeasureMode(false);
     useToolMarkupStore.getState().setArmedTool(null);
   };
   const save = async () => {
@@ -515,6 +527,7 @@ export default function WerkzeugWorkspaceChrome({
             onClick={() => {
               useLayoutDrawingStore.getState().setArmedLayoutTool(null);
               useToolMarkupStore.getState().setArmedTool(null);
+              useToolMarkupStore.getState().setMeasureMode(false);
               setPanelKey(null);
             }}
             className={`werkzeug-tool-button ${!armed && !panelKey ? "is-active btn-v-yellow" : ""}`}
@@ -527,10 +540,23 @@ export default function WerkzeugWorkspaceChrome({
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button></div>
           <button type="button" onClick={() => attachRef.current?.click()} className="werkzeug-tool-button"><LuPaperclip /><span className="werkzeug-tool-label">Attach</span></button>
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("elements", event.currentTarget)} className={`werkzeug-tool-button ${armed === "column" || armed === "beam" ? "is-active btn-v-yellow" : ""}`}><LuBox /><span className="werkzeug-tool-label">Elements</span><LuChevronDown /></button></div>
-          {(mepModeActive ? MEP_TOOL_ITEMS : TOOL_ITEMS.filter((item) => item.id !== "levels")).map((item) => {
+          {mepModeActive && <select aria-label="MEP category" className="werkzeug-tool-button shrink-0" value={mepCategory} onChange={(event) => useLayoutDrawingStore.getState().setDesktopMepCategory(event.target.value as typeof mepCategory)}>{MEP_TABS.map((tab) => <option key={tab.id} value={tab.id}>{tab.label}</option>)}</select>}
+          {(mepModeActive ? MEP_TOOL_ITEMS.filter((item) => {
+            if (mepCategory === "hvac") return ["duct", "flex_duct", "mep_placeholder", "equipment"].includes(item.id);
+            if (mepCategory === "piping") return ["pipe", "equipment"].includes(item.id);
+            if (mepCategory === "wiring") return ["cabletray", "wire"].includes(item.id);
+            if (mepCategory === "electrical") return ["cabletray", "wire", "equipment"].includes(item.id);
+            if (mepCategory === "components") return item.id === "equipment";
+            return true;
+          }) : TOOL_ITEMS.filter((item) => item.id !== "levels")).map((item) => {
             const active = (!panelHidden && panelKey === item.id) || armed === item.id;
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
+          {!mepModeActive && <button type="button" aria-pressed={measureMode} onClick={() => {
+            useLayoutDrawingStore.getState().setArmedLayoutTool(null);
+            useToolMarkupStore.getState().setArmedTool(null);
+            useToolMarkupStore.getState().setMeasureMode(!measureMode);
+          }} className={`werkzeug-tool-button ${measureMode ? "is-active btn-v-yellow" : ""}`}><LuRuler /><span className="werkzeug-tool-label">Dimension</span></button>}
         </div>
         {boundaryEdit ? (
           <div className="werkzeug-ipad-modify-ribbon" aria-label="Modify">
@@ -600,7 +626,7 @@ export default function WerkzeugWorkspaceChrome({
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
             </div>
-            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
+            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : panelKey === "shapes" ? <MarkupToolsSection /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
             {!collapsed && <>
               {!portrait && <button type="button" onPointerDown={beginLandscapeResize} className="werkzeug-ipad-height-resize absolute inset-x-0 bottom-0 z-20 h-5 touch-none cursor-ns-resize" aria-label="Drag down to increase options height"><span /></button>}
             </>}
@@ -661,7 +687,7 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   }
   if ((panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof") && slab) {
     const boundary = slab.boundary?.length ? slab.boundary : [{ xMm: slab.minXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.minYmm }, { xMm: slab.maxXmm, yMm: slab.maxYmm }, { xMm: slab.minXmm, yMm: slab.maxYmm }];
-    return <div className="space-y-3"><label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input disabled={locked} type="number" value={slab.thicknessMm} onChange={(e) => void store.updateSlab(slab.id, { thicknessMm: Number(e.target.value) })} className={field}/></label><div className="grid grid-cols-2 gap-2"><button disabled={locked} type="button" onClick={() => store.beginSlabBoundaryEdit(slab.id)} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Edit vertices</button><button disabled={locked} type="button" onClick={() => store.beginSlabRedraw(slab.id)} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Redraw boundary</button>{store.slabBoundaryEdit?.slabId === slab.id && <><button type="button" onClick={() => void store.commitSlabBoundaryEdit()} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Commit</button><button type="button" onClick={store.cancelSlabBoundaryEdit} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Cancel</button></>}</div>{store.slabBoundaryEdit?.slabId === slab.id && <div className="space-y-2"><p className="text-[10px] text-[var(--text-muted)]">Boundary vertices · Escape restores the original polygon</p>{boundary.map((point, index) => <div key={index} className="grid grid-cols-[2rem_1fr_1fr] items-center gap-2"><span className="text-[10px] text-[var(--text-muted)]">{index + 1}</span><input aria-label={`Vertex ${index + 1} X`} type="number" value={point.xMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, xMm: Number(e.target.value) })}/><input aria-label={`Vertex ${index + 1} Y`} type="number" value={point.yMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, yMm: Number(e.target.value) })}/></div>)}</div>}</div>;
+    return <div className="space-y-3">{slab.kind === "roof" && <RoofEdgeSlopeEditor slab={slab} />}<label className="block text-[10px] font-semibold text-[var(--text-muted)]">Thickness (mm)<input disabled={locked} type="number" value={slab.thicknessMm} onChange={(e) => void store.updateSlab(slab.id, { thicknessMm: Number(e.target.value) })} className={field}/></label><div className="grid grid-cols-2 gap-2"><button disabled={locked} type="button" onClick={() => store.beginSlabBoundaryEdit(slab.id)} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Edit vertices</button><button disabled={locked} type="button" onClick={() => store.beginSlabRedraw(slab.id)} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Redraw boundary</button>{store.slabBoundaryEdit?.slabId === slab.id && <><button type="button" onClick={() => void store.commitSlabBoundaryEdit()} className="btn-v-yellow min-h-11 rounded-xl px-3 text-xs">Commit</button><button type="button" onClick={store.cancelSlabBoundaryEdit} className="btn-yellow-border-hover min-h-11 rounded-xl border border-[var(--panel-divider)] px-3 text-xs">Cancel</button></>}</div>{store.slabBoundaryEdit?.slabId === slab.id && <div className="space-y-2"><p className="text-[10px] text-[var(--text-muted)]">Boundary vertices · Escape restores the original polygon</p>{boundary.map((point, index) => <div key={index} className="grid grid-cols-[2rem_1fr_1fr] items-center gap-2"><span className="text-[10px] text-[var(--text-muted)]">{index + 1}</span><input aria-label={`Vertex ${index + 1} X`} type="number" value={point.xMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, xMm: Number(e.target.value) })}/><input aria-label={`Vertex ${index + 1} Y`} type="number" value={point.yMm} className={field} onChange={(e) => store.updateSlabBoundaryVertex(index, { ...point, yMm: Number(e.target.value) })}/></div>)}</div>}</div>;
   }
   if (panelKey === "lines") {
     const selectedLine = store.sketchLines.find((line) => line.id === store.selectedSketchLineId);
