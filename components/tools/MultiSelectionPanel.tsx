@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { useLayoutDrawingStore, type SelectedElementRef, type LayoutElementKind } from "@/store/useLayoutDrawingStore";
 import {
-  LuCheckSquare,
+  LuSquareCheck,
   LuCopy,
   LuTrash2,
   LuLayers,
@@ -296,7 +296,7 @@ export default function MultiSelectionPanel({ className = "" }: MultiSelectionPa
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--panel-divider)]/40 pb-2">
         <div className="flex items-center gap-1.5">
-          <LuCheckSquare className="h-4 w-4 text-yellow-400" />
+          <LuSquareCheck className="h-4 w-4 text-yellow-400" />
           <span className="font-bold uppercase tracking-wider text-[var(--text-strong)] text-[10px]">
             {selected.length} Objects Selected
           </span>

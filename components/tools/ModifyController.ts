@@ -21,11 +21,13 @@ export function installModifyController(options: {
   const initialCamera = options.camera(rect.left + rect.width / 2, rect.top + rect.height / 2);
   if (!initialCamera) return () => {};
   const tc = new TransformControls(initialCamera, canvas);
-  tc.setSpace("world"); tc.setSize(0.85); tc.enabled = false;
+  tc.setSpace("world"); tc.setSize(0.42); tc.enabled = false;
   const pivot = new THREE.Object3D(), overlay = new THREE.Group(), helper = tc.getHelper();
   overlay.renderOrder = 9999;
   scene.add(pivot, overlay, helper); helper.visible = false;
   let mouse = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  let pointerDownPos: { x: number; y: number } | null = null;
+  let pointerDownHit: GeometrySelection | null = null;
   let axisStart: THREE.Vector3 | null = null;
   let hover: GeometrySelection | null = null;
   let lastOverlay: [GeometrySelection | null, GeometrySelection | null, GeometrySelection | null] | null = null;
@@ -217,14 +219,17 @@ export function installModifyController(options: {
     if (!enabled() || event.button !== 0) return;
     mouse = { x: event.clientX, y: event.clientY }; alt = event.altKey;
     const state = useModifyStore.getState();
-    if (state.busy) { block(event); return; }
     if (tc.enabled && tc.axis) {
       const controls = options.controls();
       if (controls) controls.enabled = false;
       return;
     }
-    // Preserve IFC/background picking, but own selectable layout/markup geometry so groups behave uniformly.
-    if (state.tool === "select" && state.level === "element" && !state.placingGroupId && !geometryPick()) return;
+    const modalTools = ["mirror", "split", "joinRoof", "attachTop", "attachBase", "align"];
+    if (!state.placingGroupId && !modalTools.includes(state.tool)) {
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+      pointerDownHit = geometryPick();
+      return;
+    }
     block(event);
     if (state.placingGroupId) {
       const point = planPoint(); if (point) void run(() => placeGroup(state.placingGroupId!, point)); return;
@@ -301,7 +306,8 @@ export function installModifyController(options: {
   function stopLegacy(event: Event) {
     if (event.type === "pointerup") return;
     const state = useModifyStore.getState();
-    if (enabled() && (state.tool !== "select" || state.level !== "element" || state.placingGroupId)) {
+    const modalTools = ["mirror", "split", "joinRoof", "attachTop", "attachBase", "align"];
+    if (enabled() && (state.placingGroupId || (modalTools.includes(state.tool) && state.level !== "element"))) {
       if (event instanceof MouseEvent && event.button !== 0) return;
       event.stopImmediatePropagation();
     }
@@ -328,6 +334,30 @@ export function installModifyController(options: {
     }
   }
   function onWindowPointerUp(event: PointerEvent) {
+    if (pointerDownPos) {
+      const dist = Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y);
+      if (dist < 5) {
+        const hit = pointerDownHit ?? geometryPick();
+        const state = useModifyStore.getState();
+        if (hit) {
+          useLayoutDrawingStore.getState().selectElement(hit, event.shiftKey ? "toggle" : "replace");
+          if (hit.kind === "placement") {
+            useToolMarkupStore.getState().selectPlacement(
+              useLayoutDrawingStore.getState().selectedElements.some((ref) => ref.kind === "placement" && ref.id === hit.id) ? hit.id : null,
+            );
+          } else {
+            useToolMarkupStore.getState().selectPlacement(null);
+          }
+          useModifyStore.setState({ selection: hit, message: null, tool: "move" });
+        } else if (state.level === "element") {
+          useLayoutDrawingStore.getState().clearSelection();
+          useToolMarkupStore.getState().selectPlacement(null);
+          useModifyStore.setState({ selection: null });
+        }
+      }
+      pointerDownPos = null;
+      pointerDownHit = null;
+    }
     if (event.buttons === 0 || event.pointerType === "touch") {
       const controls = options.controls();
       if (controls) {

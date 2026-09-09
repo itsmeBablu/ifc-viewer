@@ -1316,7 +1316,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     };
 
     const transform = new TransformControls(camera, renderer.domElement);
-    transform.setSize(0.85);
+    transform.setSize(0.42);
     transform.enabled = false;
     const transformHelper = transform.getHelper();
     transformHelper.visible = false;
@@ -7248,10 +7248,11 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
                 suppressNextClick = true;
               } else if (
                 hit?.kind === "wall" &&
-                layoutStore.selectedWallId === hit.id
+                layoutStore.selectedWallId === hit.id &&
+                activeViewPresetRef.current !== "free"
               ) {
                 pendingWallMoveId = hit.id;
-              } else if (hit?.kind === "underlay") {
+              } else if (hit?.kind === "underlay" && activeViewPresetRef.current !== "free") {
                 layoutStore.selectUnderlay(hit.id);
                 const u = layoutStore.underlays.find((x) => x.id === hit.id);
                 if (u && !u.locked) pendingUnderlayMoveId = hit.id;
