@@ -5694,7 +5694,7 @@ export default class LayoutSceneLayer {
       );
       l1.renderOrder = 20; l2.renderOrder = 20;
       g.add(l1, l2);
-    } else if (door.style === "garage" || (door.typeId != null && door.typeId.includes("garage")) || (door.widthMm >= 2100 && door.style !== "double" && door.style !== "sliding")) {
+    } else if (door.style === "garage" || (door.typeId != null && door.typeId.includes("garage")) || door.widthMm >= 2100) {
       const p1 = pointOnWallMm(wall, door.positionMm - halfW);
       const p2 = pointOnWallMm(wall, door.positionMm + halfW);
       const p1x = fromMm(p1.xMm), p1z = fromMm(p1.yMm);
