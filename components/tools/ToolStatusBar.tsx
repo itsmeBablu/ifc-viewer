@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   LuBox,
+  LuCamera,
   LuBuilding2,
   LuChevronDown,
   LuEye,
@@ -22,6 +23,8 @@ import type { RenderMode } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { enterRenderView } from "./RenderViewControls";
+import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import ObjectSnapStrip from "./ObjectSnapStrip";
 import HoverTip from "@/components/common/HoverTip";
 
@@ -37,6 +40,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   onAttachDwgPdf?: (file: File) => void;
   onAttachIfc?: (file: File) => void;
 }) {
+  const renderPreview = useViewDisplayStore(s => s.renderPreview);
   const fileRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [popup, setPopup] = useState<Popup>(null);
@@ -63,9 +67,8 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const hiddenCategories = useLayoutDrawingStore((s) => s.hiddenCategories);
   const isolatedElementIds = useLayoutDrawingStore((s) => s.isolatedElementIds);
   const revealHiddenMode = useLayoutDrawingStore((s) => s.revealHiddenMode);
-  const hideSelected = useLayoutDrawingStore((s) => s.hideSelected);
-  const isolateSelected = useLayoutDrawingStore((s) => s.isolateSelected);
-  const toggleHideCategory = useLayoutDrawingStore((s) => s.toggleHideCategory);
+  const hideSelected = () => { const { key, ids } = currentSelection(); useViewDisplayStore.getState().hide(key, ids); useLayoutDrawingStore.getState().clearSelection(); };
+  const isolateSelected = () => { const { key, ids } = currentSelection(); useViewDisplayStore.getState().isolate(key, ids); };
   const unhideAll = useLayoutDrawingStore((s) => s.unhideAll);
   const toggleRevealHiddenMode = useLayoutDrawingStore((s) => s.toggleRevealHiddenMode);
 
@@ -79,6 +82,8 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const selectedCableTrayId = useLayoutDrawingStore((s) => s.selectedCableTrayId);
   const selectedEquipmentId = useLayoutDrawingStore((s) => s.selectedEquipmentId);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
+  const selectedWireId = useLayoutDrawingStore((s) => s.selectedWireId);
+  const selectedSketchLineId = useLayoutDrawingStore((s) => s.selectedSketchLineId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
 
   const hasSelection = Boolean(
@@ -91,10 +96,14 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
     selectedCableTrayId ||
     selectedEquipmentId ||
     selectedStairId ||
-    selectedRampId ||
+    selectedRampId || selectedWireId || selectedSketchLineId ||
     selectedElements.length > 0
   );
-  const hasHidden = hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null;
+  const scopedViews = useViewDisplayStore(s => s.views);
+  const markupState = useToolMarkupStore();
+  const activeViewKey = viewDisplayKey(markupState.quadView ? markupState.quadPresets[markupState.quadActiveIndex] : markupState.viewPreset, markupState.markupFloorId, useLayoutDrawingStore.getState().activeSectionId);
+  const scoped = scopedViews[activeViewKey];
+  const hasHidden = Boolean(scoped && (scoped.hiddenIds.length || scoped.hiddenCategories.length || scoped.isolatedIds)) || hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null;
 
   useEffect(() => {
     if (!popup) return;
@@ -120,7 +129,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const renderIcon = renderModeIcon(renderMode);
 
   return (
-    <div ref={rootRef} className="werkzeug-status-dock fixed bottom-3 left-1/2 z-40 flex h-10 w-[610px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] px-1.5 select-none" aria-label="Viewer controls">
+    <div ref={rootRef} className="werkzeug-status-dock fixed bottom-3 left-1/2 z-40 flex h-10 w-[690px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] px-1.5 select-none" aria-label="Viewer controls">
       <DockButton icon={<LuMousePointer2 />} label="Select" hint="Exit the active tool and click a model element to select it." onClick={enterSelectMode} />
       <DockDivider />
       <div className="relative">
@@ -130,11 +139,12 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
           <button type="button" className="dock-menu-row" onClick={() => fileRef.current?.click()}><LuPaperclip /><span><strong>DWG / PDF</strong><small className="block text-[10px] opacity-70">Attach to active level</small></span></button>
         </Popover>}
       </div>
+      <DockButton icon={<LuCamera />} label="Render" hint="Open a clean rendered 3D view. Save a PNG from View Properties." active={renderPreview} onClick={() => renderPreview ? useViewDisplayStore.getState().setRenderPreview(false) : enterRenderView()} />
       <DockButton icon={<LuFootprints />} label="Walk" hint="Enter a strongly rendered first-person WASD walkthrough." active={walkthroughMode} onClick={toggleWalk} />
       <div className="relative">
         <DockButton icon={renderIcon} label={activeRenderMode.label} dropdown hint="Choose Realistic, Shaded, Light, or Wireframe rendering." active={popup === "render"} onClick={() => toggle("render")} />
         {popup === "render" && <Popover title="Visual style" wide>
-          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"}`} onClick={() => setRenderMode(mode.id)}><span className="text-sm">{renderModeIcon(mode.id)}</span><span>{mode.label}</span></button>)}</div>
+          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"}`} onClick={() => { useViewDisplayStore.getState().setRenderPreview(false); setRenderMode(mode.id); }}><span className="text-sm">{renderModeIcon(mode.id)}</span><span>{mode.label}</span></button>)}</div>
           <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
           <DockSlider label="Space opacity" value={lighting.spaceTransparency} onChange={(value) => setLighting({ spaceTransparency: value })} />
           <DockSlider label="Color" value={lighting.color} onChange={(value) => setLighting({ color: value })} />
@@ -153,7 +163,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
           onClick={() => toggle("visibility")}
         />
         {popup === "visibility" && (
-          <Popover title="Element Visibility & Isolate" wide>
+          <Popover title="Visibility in current view" wide>
             <div className="space-y-2">
               {/* Quick Actions: Hide / Isolate / Unhide */}
               <div className="grid grid-cols-3 gap-1">
@@ -189,6 +199,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
                   type="button"
                   disabled={!hasHidden}
                   onClick={() => {
+                    useViewDisplayStore.getState().reset(activeViewKey);
                     unhideAll();
                     setPopup(null);
                   }}
@@ -227,19 +238,23 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
                 <p className="mb-1 text-[8.5px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Category Visibility</p>
                 <div className="grid grid-cols-2 gap-1">
                   {[
-                    { id: "walls", label: "Walls" },
-                    { id: "doors", label: "Doors" },
-                    { id: "windows", label: "Windows" },
-                    { id: "slabs", label: "Floors / Roofs" },
-                    { id: "structural", label: "Columns / Beams" },
-                    { id: "mep", label: "MEP Systems" },
+                    { id: "Walls", label: "Walls" },
+                    { id: "Doors", label: "Doors" },
+                    { id: "Windows", label: "Windows" },
+                    { id: "Floors / Roofs", label: "Floors / Roofs" },
+                    { id: "Columns", label: "Columns" }, { id: "Beams", label: "Beams" },
+                    { id: "Stairs", label: "Stairs" }, { id: "Ramps", label: "Ramps" },
+                    { id: "Ducts", label: "Ducts" }, { id: "Pipes", label: "Pipes" },
+                    { id: "Cable trays", label: "Cable trays" }, { id: "Wires", label: "Wires" },
+                    { id: "Equipment / Furniture", label: "Equipment / Furniture" }, { id: "Lines", label: "Detail lines" },
                   ].map((cat) => {
-                    const isHidden = hiddenCategories.has(cat.id);
+                    const isHidden = scoped?.hiddenCategories.includes(cat.id) ?? false;
                     return (
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => toggleHideCategory(cat.id)}
+                        aria-pressed={!isHidden}
+                        onClick={() => useViewDisplayStore.getState().toggleCategory(activeViewKey, cat.id)}
                         className={`flex items-center justify-between rounded-lg px-2 py-1 text-[9.5px] font-medium border transition-colors ${
                           isHidden
                             ? "border-red-400/40 bg-red-500/10 text-red-400"
@@ -284,4 +299,11 @@ function Popover({ title, wide = false, children }: { title: string; wide?: bool
 function DockSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   const progress = `${Math.round(value * 100)}%`;
   return <label className="grid grid-cols-[92px_1fr_34px] items-center gap-2 py-1 text-[10px]"><span>{label}</span><input type="range" min={0} max={1} step={0.05} value={value} onChange={(event) => onChange(Number(event.target.value))} className="material-slider w-full" style={{ "--slider-progress": progress } as React.CSSProperties} /><span className="text-right font-mono text-[9px] font-semibold text-[var(--text-primary)]">{Math.round(value * 100)}%</span></label>;
+}
+
+function currentSelection() {
+  const s = useLayoutDrawingStore.getState();
+  const m = useToolMarkupStore.getState();
+  const ids = [...s.selectedElements.map(e => e.id), s.selectedWallId, s.selectedDoorId, s.selectedWindowId, s.selectedSlabId, s.selectedDuctId, s.selectedPipeId, s.selectedCableTrayId, s.selectedEquipmentId, s.selectedStairId, s.selectedRampId, s.selectedWireId, s.selectedSketchLineId].filter((id): id is string => Boolean(id));
+  return { key: viewDisplayKey(m.quadView ? m.quadPresets[m.quadActiveIndex] : m.viewPreset, m.markupFloorId, s.activeSectionId), ids: [...new Set(ids)] };
 }

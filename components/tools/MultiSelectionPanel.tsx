@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useLayoutDrawingStore, type SelectedElementRef, type LayoutElementKind } from "@/store/useLayoutDrawingStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import type { SelectedElementRef } from "@/lib/layoutDrawing";
+type LayoutElementKind = SelectedElementRef["kind"];
 import {
   LuSquareCheck,
   LuCopy,
@@ -53,7 +56,7 @@ export default function MultiSelectionPanel({ className = "" }: MultiSelectionPa
   const mepEquipment = useLayoutDrawingStore((s) => s.mepEquipment);
   const wires = useLayoutDrawingStore((s) => s.wires);
   const levels = useLayoutDrawingStore((s) => s.levels);
-  const activeLevelId = useLayoutDrawingStore((s) => s.activeLevelId);
+  const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
 
   // Store actions
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
@@ -232,7 +235,7 @@ export default function MultiSelectionPanel({ className = "" }: MultiSelectionPa
     for (const item of selected) {
       if (item.kind === "wall") void updateWall(item.id, { levelId });
       else if (item.kind === "slab") void updateSlab(item.id, { levelId });
-      else if (item.kind === "column") void updateColumn(item.id, { baseLevelId: levelId });
+      else if (item.kind === "column") void updateColumn(item.id, { levelId });
       else if (item.kind === "beam") void updateBeam(item.id, { levelId });
       else if (item.kind === "duct") void updateDuct(item.id, { levelId });
       else if (item.kind === "pipe") void updatePipe(item.id, { levelId });

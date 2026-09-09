@@ -29,10 +29,10 @@ export function ownerOf(object: THREE.Object3D): SelectedElementRef | null {
 }
 export function selectionKey(ref: SelectedElementRef) { return `${ref.kind}:${ref.id}`; }
 const cache = new WeakMap<THREE.BufferGeometry, Float32Array>();
-export function pickGeometry(ray: THREE.Raycaster, roots: THREE.Object3D[], camera: THREE.Camera, rect: { left: number; top: number; width: number; height: number }, x: number, y: number, mode: SelectionLevel): GeometrySelection | null {
+export function pickGeometry(ray: THREE.Raycaster, roots: THREE.Object3D[], camera: THREE.Camera, rect: { left: number; top: number; width: number; height: number }, x: number, y: number, mode: SelectionLevel, allowed: (object: THREE.Object3D) => boolean = () => true): GeometrySelection | null {
   const hits = ray.intersectObjects(roots, true).filter(hit => {
     for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) if (!o.visible) return false;
-    return ownerOf(hit.object) && !hit.object.userData.isLayoutGround &&
+    return allowed(hit.object) && ownerOf(hit.object) && !hit.object.userData.isLayoutGround &&
       (mode !== "face" || hit.object instanceof THREE.Mesh || ownerOf(hit.object)?.kind === "line");
   });
   const hit = hits[0];

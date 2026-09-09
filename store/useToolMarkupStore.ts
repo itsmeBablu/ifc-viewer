@@ -459,6 +459,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   setDefaultColor: (color) => set({ defaultColor: color }),
 
   loadForModel: async (modelKey) => {
+    if (modelKey && get().modelKey === modelKey) return;
     clearWerkzeugHistory();
     if (!modelKey) {
       set({
@@ -481,6 +482,8 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         idbListPlacements(modelKey),
         idbListNotes(modelKey),
       ]);
+      // A concurrent caller may have already loaded and selected a floor.
+      if (get().modelKey === modelKey) return;
       set({
         modelKey,
         placements: rawPlacements.map((p) => normalizePlacement(p)),

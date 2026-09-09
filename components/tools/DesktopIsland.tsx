@@ -21,10 +21,10 @@ import { useModifyStore } from "@/store/useModifyStore";
 
 import React, { useMemo, useRef, useLayoutEffect, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { flushSync } from "react-dom";
+
 import gsap from "gsap";
-import { Flip } from "gsap/Flip";
-import { MorphSVGPlugin } from "gsap/MorphSVGPlugin";
+
+
 import {
   LuAlignCenterHorizontal,
   LuBox,
@@ -49,6 +49,8 @@ import {
   LuZap,
   LuArmchair,
   LuArrowUpToLine,
+  LuCylinder,
+  LuCable,
 
 } from "react-icons/lu";
 import {
@@ -74,10 +76,10 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
 import type { MarkupShapeType } from "@/lib/toolMarkup";
-import { groupCapsulesForMorph } from "@/lib/capsuleMorph";
+
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 
-gsap.registerPlugin(Flip, MorphSVGPlugin);
+
 
 /* ───── types & tab definitions ──────────────────────────────────── */
 
@@ -178,9 +180,9 @@ const ARCH_INSERT_ITEMS: CapsuleItem[] = [
 
 const MEP_ALL_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
-  { id: "duct", label: "Duct", hint: "Draw rectangular supply duct", icon: <span className="font-bold text-sky-400 text-xs shrink-0">▭</span> },
-  { id: "pipe", label: "Pipe", hint: "Draw hydronic & sanitary piping", icon: <span className="font-bold text-cyan-400 text-xs shrink-0">○</span> },
-  { id: "cabletray", label: "Tray", hint: "Route electrical cable tray", icon: <span className="font-bold text-amber-400 text-xs shrink-0">≋</span> },
+  { id: "duct", label: "Duct", hint: "Draw rectangular supply duct", icon: <LuBox className="h-4 w-4 shrink-0" /> },
+  { id: "pipe", label: "Pipe", hint: "Draw hydronic & sanitary piping", icon: <LuCylinder className="h-4 w-4 shrink-0" /> },
+  { id: "cabletray", label: "Tray", hint: "Route electrical cable tray", icon: <LuCable className="h-4 w-4 shrink-0" /> },
   { id: "wire", label: "Wire", hint: "Draw electrical circuits & wiring", icon: <LuZap className="h-3 w-3 text-yellow-400 shrink-0" /> },
   { id: "equipment", label: "Equipment", hint: "Place mechanical & electrical equipment", icon: <LuBox className="h-3 w-3 text-orange-400 shrink-0" /> },
   { id: "workplane", label: "Work Plane", hint: "Set reference drawing plane (G)", icon: <LuGrid2X2 className="h-3 w-3 text-blue-400 shrink-0" /> },
@@ -207,183 +209,6 @@ const BOUNDARY_ITEMS: CapsuleItem[] = [
   { id: "boundary-finish", label: "Finish", hint: "Save the valid boundary sketch", icon: <LuCheck className="h-3 w-3 text-emerald-400 shrink-0" /> },
   { id: "boundary-cancel", label: "Cancel", hint: "Restore the original boundary and holes", icon: <LuX className="h-3 w-3 text-rose-400 shrink-0" /> },
 ];
-
-function appendCellularMorph(
-  timeline: gsap.core.Timeline,
-  outgoing: HTMLElement[],
-  incoming: HTMLElement[],
-  fusionLayer: HTMLElement,
-) {
-  // Keep the organic phases compact: the entire row settles in 230–280 ms.
-  timeline.timeScale(1.9);
-  const groupDelay = 0.01;
-  const approach = 0.12;
-  const fusion = 0.15;
-  const resolve = 0.13;
-  const pinchAt = approach + fusion;
-  const settleAt = pinchAt + resolve;
-  // This timeline inherits overwrite:true. Phases intentionally share targets,
-  // so their local tweens must coexist instead of killing the next phase.
-  const phase = { overwrite: false };
-  const ns = "http://www.w3.org/2000/svg";
-  const sourceRects = new Map(outgoing.map((node) => [node, node.getBoundingClientRect()]));
-  const targetRects = new Map(incoming.map((node) => [node, node.getBoundingClientRect()]));
-
-  const pill = (cx: number, cy: number, width: number, height: number) => {
-    const r = Math.min(height, width) / 2, k = r * 0.55228475;
-    const l = cx - width / 2, t = cy - height / 2, b = cy + height / 2, right = cx + width / 2;
-    return `M${l + r},${t} H${right - r} C${right - r + k},${t} ${right},${t + r - k} ${right},${t + r}
-      V${b - r} C${right},${b - r + k} ${right - r + k},${b} ${right - r},${b}
-      H${l + r} C${l + r - k},${b} ${l},${b - r + k} ${l},${b - r}
-      V${t + r} C${l},${t + r - k} ${l + r - k},${t} ${l + r},${t} Z`;
-  };
-  // Smooth lobes joined by narrow necks: every split point pinches together.
-  const lobes = (cx: number, cy: number, width: number, height: number, count: number) => {
-    const l = cx - width / 2, step = width / count, neck = height * 0.07;
-    let d = `M${l},${cy}`;
-    for (let i = 0; i < count; i++) {
-      const x = l + i * step, endY = i === count - 1 ? cy : cy - neck;
-      d += ` C${x},${cy - height * 0.65} ${x + step},${cy - height * 0.65} ${x + step},${endY}`;
-    }
-    for (let i = count - 1; i >= 0; i--) {
-      const x = l + i * step, endY = i === 0 ? cy : cy + neck;
-      d += ` C${x + step},${cy + height * 0.65} ${x},${cy + height * 0.65} ${x},${endY}`;
-    }
-    return `${d} Z`;
-  };
-  const body = (reference: HTMLElement, shape: string) => {
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("aria-hidden", "true");
-    Object.assign(svg.style, { position: "fixed", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" });
-    const computed = getComputedStyle(reference);
-    const colors = computed.backgroundImage.match(/rgba?\([^)]+\)/g);
-    const gradientId = `capsule-blob-${gsap.utils.random(0, 1e9, 1)}`;
-    const defs = document.createElementNS(ns, "defs");
-    const gradient = document.createElementNS(ns, "linearGradient");
-    gradient.id = gradientId;
-    gradient.setAttribute("x2", "0"); gradient.setAttribute("y2", "1");
-    [colors?.[0] ?? computed.backgroundColor, colors?.at(-1) ?? computed.backgroundColor].forEach((color, i) => {
-      const stop = document.createElementNS(ns, "stop");
-      stop.setAttribute("offset", String(i)); stop.setAttribute("stop-color", color); gradient.appendChild(stop);
-    });
-    defs.appendChild(gradient); svg.appendChild(defs);
-    const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", shape); path.setAttribute("fill", `url(#${gradientId})`);
-    path.setAttribute("stroke", computed.borderTopColor); path.setAttribute("stroke-width", "1");
-    path.style.opacity = "0";
-    svg.appendChild(path); fusionLayer.appendChild(svg);
-    return path;
-  };
-  const morph = (path: SVGPathElement, from: string, to: string, at: number, duration: number, ease: string) => {
-    timeline.fromTo(path, { morphSVG: from }, {
-      ...phase, morphSVG: { shape: to, shapeIndex: 0 }, duration, ease, immediateRender: false,
-    }, at);
-  };
-  const reveal = (target: HTMLElement, path: SVGPathElement, at: number) => {
-    // Real buttons (including their labels) arrive only after the body settles.
-    timeline.to(target, { ...phase, autoAlpha: 1, duration: 0.07, ease: "sine.out" }, at + 0.36);
-    timeline.to(path, { ...phase, opacity: 0, duration: 0.04, ease: "sine.out" }, at + settleAt);
-  };
-  const same = (source: HTMLElement, target: HTMLElement, offset: number) => {
-    const first = sourceRects.get(source)!, last = targetRects.get(target)!;
-    const dx = last.left - first.left, dy = last.top - first.top;
-    gsap.set(target, { autoAlpha: 0, x: -dx, y: -dy, scaleX: first.width / last.width, transformOrigin: "left center" });
-    timeline.to(source, { ...phase, x: dx, y: dy, width: last.width, scaleY: 1.04, borderRadius: "50%", duration: 0.28, ease: "back.inOut(1.15)" }, offset);
-    timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.1);
-    timeline.to(target, { ...phase, x: 0, y: 0, scaleX: 1, duration: 0.28, ease: "back.inOut(1.15)" }, offset);
-    timeline.to(target, { ...phase, autoAlpha: 1, duration: 0.12, ease: "sine.inOut" }, offset + 0.14);
-    timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.1 }, offset + 0.16);
-    timeline.to(target, { ...phase, scaleY: 1, duration: 0.08, ease: "elastic.out(1, .7)" }, offset + 0.28);
-  };
-
-  if (outgoing.length === incoming.length) {
-    outgoing.forEach((source, index) => same(source, incoming[index], index * groupDelay));
-    return;
-  }
-
-  if (outgoing.length > incoming.length) {
-    const groups = groupCapsulesForMorph(outgoing, incoming.length);
-    incoming.forEach((target, groupIndex) => {
-      const group = groups[groupIndex] ?? [];
-      if (!group.length) return;
-      const offset = groupIndex * groupDelay;
-      if (group.length === 1) { same(group[0], target, offset); return; }
-      const targetRect = targetRects.get(target)!;
-      const targetCenter = targetRect.left + targetRect.width / 2;
-      const sourceCenter = group.reduce((sum, source) => { const r = sourceRects.get(source)!; return sum + r.left + r.width / 2; }, 0) / group.length;
-      const center = sourceCenter + (targetCenter - sourceCenter) * 0.45;
-      const cy = targetRect.top + targetRect.height / 2;
-      const diameter = targetRect.height * 1.2;
-      const joinedWidth = diameter * (1 + (group.length - 1) * 0.65);
-      const joined = lobes(center, cy, joinedWidth, diameter, group.length);
-      const absorbed = pill(center, cy, diameter * 1.15, diameter);
-      const final = pill(targetCenter, cy, targetRect.width, targetRect.height);
-      const blob = body(target, joined);
-      gsap.set(target, { autoAlpha: 0 });
-      group.forEach((source, i) => {
-        const rect = sourceRects.get(source)!;
-        const firstCenter = rect.left + rect.width / 2;
-        const beadWidth = Math.max(diameter, rect.width * 0.62);
-        timeline.to(source, { ...phase,
-          x: center + (firstCenter - sourceCenter) * 0.4 - rect.left - beadWidth / 2,
-          y: cy - rect.top - rect.height / 2, width: beadWidth,
-          scaleX: 0.92, scaleY: 0.94, borderRadius: "50%",
-          duration: approach, ease: "power2.inOut",
-        }, offset);
-        timeline.to(source, { ...phase,
-          x: center + (i - (group.length - 1) / 2) * diameter * 0.65 - rect.left - diameter / 2,
-          width: diameter, scaleX: 0.8, scaleY: 1.14, borderRadius: "50%",
-          duration: fusion, ease: "back.inOut(1.5)",
-        }, offset + approach);
-        timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.07);
-        timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.08 }, offset + 0.15);
-      });
-      timeline.to(blob, { ...phase, opacity: 1, duration: 0.06 }, offset + approach);
-      morph(blob, joined, absorbed, offset + approach, fusion, "back.inOut(1.4)");
-      morph(blob, absorbed, final, offset + pinchAt, resolve, "elastic.out(1, .65)");
-      reveal(target, blob, offset);
-    });
-    return;
-  }
-
-  const targetGroups = groupCapsulesForMorph(incoming, outgoing.length);
-  outgoing.forEach((source, groupIndex) => {
-    const targets = targetGroups[groupIndex] ?? [];
-    if (!targets.length) return;
-    const offset = groupIndex * groupDelay;
-    if (targets.length === 1) { same(source, targets[0], offset); return; }
-    const first = sourceRects.get(source)!;
-    const rects = targets.map((target) => targetRects.get(target)!);
-    const sourceCenter = first.left + first.width / 2;
-    const finalCenter = (rects[0].left + rects.at(-1)!.right) / 2;
-    const center = sourceCenter + (finalCenter - sourceCenter) * 0.45;
-    const cy = first.top + first.height / 2;
-    const width = Math.max(first.width * 1.25, targets.length * first.height * 0.85);
-    const swelled = pill(sourceCenter, cy, first.width * 1.08, first.height * 1.12);
-    const pinched = lobes(center, cy, width, first.height * 1.12, targets.length);
-    const blob = body(source, swelled);
-    timeline.to(source, { ...phase, scaleX: 1.08, scaleY: 1.12, borderRadius: "50%", duration: approach, ease: "back.out(1.3)" }, offset);
-    timeline.to(source.children, { ...phase, autoAlpha: 0, duration: 0.07 }, offset + 0.07);
-    timeline.to(source, { ...phase, autoAlpha: 0, duration: 0.05 }, offset + approach);
-    timeline.to(blob, { ...phase, opacity: 1, duration: 0.05 }, offset + approach);
-    morph(blob, swelled, pinched, offset + approach, fusion, "back.inOut(1.5)");
-    timeline.set(blob, { ...phase, opacity: 0 }, offset + pinchAt);
-    targets.forEach((target, i) => {
-      const rect = rects[i];
-      const pieceCenter = center - width / 2 + (i + 0.5) * width / targets.length;
-      const seed = lobes(pieceCenter, cy, width / targets.length, first.height * 1.12, 1);
-      const final = pill(rect.left + rect.width / 2, rect.top + rect.height / 2, rect.width, rect.height);
-      const piece = body(target, seed);
-      gsap.set(target, { autoAlpha: 0 });
-      timeline.set(piece, { ...phase, opacity: 1 }, offset + pinchAt);
-      morph(piece, seed, final, offset + pinchAt, resolve, "elastic.out(1, .65)");
-      reveal(target, piece, offset);
-    });
-  });
-}
-
-
-/* ───── component ───────────────────────────────────────────────── */
 
 export default function DesktopIsland() {
   /* ── store subscriptions ─────────────────────────────── */
@@ -418,11 +243,6 @@ export default function DesktopIsland() {
 
   /* ── Capsules animation ref ──────────────────────────── */
   const capsulesRowRef = useRef<HTMLDivElement>(null);
-  const capsuleTransitionRef = useRef<gsap.core.Timeline | null>(null);
-  const selectFlipRef = useRef<gsap.core.Timeline | null>(null);
-  const morphGenerationRef = useRef(0);
-  const morphClonesRef = useRef<HTMLElement[]>([]);
-  const morphLayerRef = useRef<HTMLDivElement | null>(null);
   const modifyLabelRef = useRef<HTMLDivElement>(null);
 
   /* ── Shapes dropdown refs & state ────────────────────── */
@@ -491,7 +311,7 @@ export default function DesktopIsland() {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const insetX = 10;
-    const toX = target.offsetLeft + insetX;
+    const toX = target.getBoundingClientRect().left - thumb.parentElement!.getBoundingClientRect().left + insetX;
     const toW = Math.max(target.offsetWidth - insetX * 2, 12);
     const properties = {
       x: toX,
@@ -506,25 +326,8 @@ export default function DesktopIsland() {
       return;
     }
 
-    const fromX = Number(gsap.getProperty(thumb, "x"));
-    const fromW = Number(gsap.getProperty(thumb, "width"));
-    const midX = fromX + (toX - fromX) * 0.5;
-    const midW = Math.max(18, Math.min(fromW, toW) * 0.45);
-    gsap.timeline({ overwrite: true })
-      .to(thumb, {
-        x: midX + (fromW - midW) / 2,
-        width: midW,
-        opacity: 1,
-        backgroundColor: properties.backgroundColor,
-        duration: 0.18,
-        ease: "power2.in",
-      })
-      .to(thumb, {
-        x: toX,
-        width: toW,
-        duration: 0.26,
-        ease: "power3.out",
-      });
+    gsap.to(thumb, { ...properties, duration: 0.14, ease: "power2.out", overwrite: true });
+    return () => { gsap.killTweensOf(thumb); };
   }, [archCategory, mepCategory, mepModeActive, hasContextSelection]);
 
   // Keep thumb aligned on resize
@@ -537,7 +340,7 @@ export default function DesktopIsland() {
       if (!target || !thumb) return;
       const insetX = 10;
       gsap.set(thumb, {
-        x: target.offsetLeft + insetX,
+        x: target.getBoundingClientRect().left - thumb.parentElement!.getBoundingClientRect().left + insetX,
         width: Math.max(target.offsetWidth - insetX * 2, 12),
       });
     };
@@ -695,117 +498,19 @@ export default function DesktopIsland() {
     }
   }, [hasContextSelection, mepModeActive, archCategory, mepCategory, isBoundaryEditing, selectedSlabId, slabs, selectedWallId, selectedElements]);
 
-  const [renderedCapsules, setRenderedCapsules] = useState(activeCapsules);
-  const renderedCapsulesRef = useRef(renderedCapsules);
-
-  /* FLIP + grouped many-to-few liquid-glass morph. Old buttons briefly live
-     as fixed clones while React renders and measures the destination row. */
+  // Keep controls interactive throughout a short, non-spatial transition.
+  const renderedCapsules = activeCapsules;
   useLayoutEffect(() => {
     const row = capsulesRowRef.current;
-    if (!row) return;
-    const generation = ++morphGenerationRef.current;
-    const previous = renderedCapsulesRef.current;
-    const previousIds = previous.map((item) => item.id).join("|");
-    const nextIds = activeCapsules.map((item) => item.id).join("|");
-    if (previousIds === nextIds) {
-      renderedCapsulesRef.current = activeCapsules;
-      setRenderedCapsules(activeCapsules);
-      return;
-    }
-
-    capsuleTransitionRef.current?.kill();
-    selectFlipRef.current?.kill();
-    morphLayerRef.current?.remove();
-    morphLayerRef.current = null;
-    morphClonesRef.current.forEach((clone) => clone.remove());
-    morphClonesRef.current = [];
-    gsap.set(row.querySelectorAll(".desktop-capsule-btn"), { clearProps: "all" });
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      renderedCapsulesRef.current = activeCapsules;
-      queueMicrotask(() => {
-        if (generation === morphGenerationRef.current) {
-          flushSync(() => setRenderedCapsules(activeCapsules));
-        }
-      });
-      return;
-    }
-
-    const outgoingButtons = Array.from(row.querySelectorAll<HTMLElement>("[data-capsule-id]"));
-    const oldSelect = outgoingButtons.find((button) => button.dataset.capsuleId === "select");
-    const selectState = oldSelect ? Flip.getState(oldSelect) : null;
-    const fusionLayer = document.createElement("div");
-    fusionLayer.className = "desktop-capsule-morph-layer";
-    document.body.appendChild(fusionLayer);
-    morphLayerRef.current = fusionLayer;
-    const clones = outgoingButtons.map((button) => {
-      const rect = button.getBoundingClientRect();
-      const clone = button.cloneNode(true) as HTMLElement;
-      clone.classList.add("desktop-capsule-morph-clone");
-      Object.assign(clone.style, {
-        position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`,
-        width: `${rect.width}px`, height: `${rect.height}px`, margin: "0px",
-      });
-      fusionLayer.appendChild(clone);
-      return clone;
-    });
-    morphClonesRef.current = clones;
-
-    queueMicrotask(() => {
-    if (generation !== morphGenerationRef.current || !row.isConnected) {
-      clones.forEach((clone) => clone.remove());
-      fusionLayer.remove();
-      if (morphLayerRef.current === fusionLayer) morphLayerRef.current = null;
-      return;
-    }
-    renderedCapsulesRef.current = activeCapsules;
-    flushSync(() => setRenderedCapsules(activeCapsules));
-    const incomingButtons = Array.from(row.querySelectorAll<HTMLElement>("[data-capsule-id]"));
-    gsap.set(incomingButtons, {
-      transition: "none",
-      backdropFilter: "none",
-      WebkitBackdropFilter: "none",
-    });
-    const incomingSelect = incomingButtons.find((button) => button.dataset.capsuleId === "select");
-    const outgoingMerge = clones.filter((clone) => clone.dataset.capsuleId !== "select");
-    const incomingMerge = incomingButtons.filter((button) => button.dataset.capsuleId !== "select");
-    const timeline = gsap.timeline({
-      defaults: { overwrite: true },
-      onComplete: () => {
-        clones.forEach((clone) => clone.remove());
-        fusionLayer.remove();
-        if (morphLayerRef.current === fusionLayer) morphLayerRef.current = null;
-        morphClonesRef.current = [];
-        gsap.set(incomingButtons, { clearProps: "all" });
-      },
-    });
-    capsuleTransitionRef.current = timeline;
-
-    appendCellularMorph(timeline, outgoingMerge, incomingMerge, fusionLayer);
-
-    const outgoingSelect = clones.find((clone) => clone.dataset.capsuleId === "select");
-    if (selectState && incomingSelect) {
-      selectFlipRef.current = Flip.from(selectState, { targets: incomingSelect, duration: 0.22, ease: "back.inOut(1.2)", absolute: true });
-      outgoingSelect?.remove();
-    } else if (outgoingSelect) {
-      timeline.to(outgoingSelect, { autoAlpha: 0, scale: 0.35, duration: 0.2, ease: "power3.in" }, 0);
-    } else if (incomingSelect) {
-      timeline.fromTo(incomingSelect, { autoAlpha: 0, scale: 0.4 }, { autoAlpha: 1, scale: 1, duration: 0.24, ease: "sine.out" }, 0.12);
-    }
-    });
+    if (!row || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const animation = row.animate([{ opacity: 0.65 }, { opacity: 1 }], { duration: 120, easing: "ease-out" });
+    return () => animation.cancel();
   }, [activeCapsules]);
 
   useLayoutEffect(() => {
     if (!hasContextSelection || !modifyLabelRef.current) return;
     gsap.fromTo(modifyLabelRef.current, { autoAlpha: 0, y: -7 }, { autoAlpha: 1, y: 0, duration: 0.28, ease: "power3.out" });
   }, [hasContextSelection, modifyTitle]);
-
-  useEffect(() => () => {
-    morphGenerationRef.current += 1;
-    capsuleTransitionRef.current?.kill();
-    selectFlipRef.current?.kill();
-    morphLayerRef.current?.remove();
-    morphClonesRef.current.forEach((clone) => clone.remove());
-  }, []);
 
   /* ── actions ─────────────────────────────────────────── */
   const clearSelection = () => {
@@ -987,7 +692,7 @@ export default function DesktopIsland() {
           {!hasContextSelection && (
             <div
               ref={tabThumbRef}
-              className="pointer-events-none absolute bottom-0.5 left-0 h-0.5 rounded-full z-[1]"
+              className="pointer-events-none absolute bottom-1.5 left-0 h-0.5 rounded-full z-[1]"
               aria-hidden="true"
             />
           )}

@@ -4367,3 +4367,30 @@ body.werkzeug-active .werkzeug-ipad-action-ribbon .werkzeug-icon-action:hover {
   color: rgba(255,255,255,.96) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,.08) !important;
 }
+
+/* Compact, stable drafting controls. Keep pointer targets stationary. */
+body.werkzeug-active .desktop-clean-tabs-row { padding: 2px 8px 7px; }
+body.werkzeug-active .desktop-clean-tab-btn { min-height: 30px; padding: 3px 14px; }
+body.werkzeug-active .desktop-capsule-btn {
+  min-height: 30px;
+  border-radius: 7px !important;
+  gap: 6px;
+  box-shadow: none;
+  transform: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+body.werkzeug-active .desktop-capsule-btn:hover,
+body.werkzeug-active .desktop-capsule-btn:active { transform: none !important; }
+body.werkzeug-active .desktop-capsule-btn::before { display: none; }
+body.werkzeug-active .desktop-capsule-btn svg { width: 16px; height: 16px; stroke-width: 1.8; }
+body.werkzeug-active .desktop-capsule-row-inner { perspective: none; overflow-x: auto !important; }
+body.werkzeug-active .werkzeug-status-dock { border-radius: 10px; }
+body.werkzeug-active .werkzeug-dock-button { border-radius: 6px; min-height: 32px; }
+body.werkzeug-active :is(.desktop-clean-tab-btn, .desktop-capsule-btn, .werkzeug-dock-button):focus-visible {
+  outline: 2px solid var(--accent-custom-hex, #eab308); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.werkzeug-active *, body.werkzeug-active *::before, body.werkzeug-active *::after {
+    animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;
+  }
+}

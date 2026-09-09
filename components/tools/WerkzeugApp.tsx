@@ -180,8 +180,15 @@ export default function WerkzeugApp() {
   useEffect(() => {
     if (!activeModelId) return;
     // Auto initialize project & default Erdgeschoss level so drawing/placement works instantly
-    void useLayoutDrawingStore.getState().loadForProject(activeModelId, activeModelId.startsWith("empty:")).then(() => {
+    void Promise.all([
+      useLayoutDrawingStore.getState().projectId === activeModelId ? Promise.resolve() : useLayoutDrawingStore.getState().loadForProject(activeModelId, activeModelId.startsWith("empty:")),
+      useToolMarkupStore.getState().loadForModel(activeModelId),
+    ]).then(() => {
       const store = useLayoutDrawingStore.getState();
+      if (store.projectId !== activeModelId) return;
+      const selectedId = useAppStore.getState().selectedFloor;
+      const level = store.levels.find(l => l.id === selectedId) ?? store.levels.find(l => l.elevationMm === 0) ?? store.levels[0];
+      if (level && !useToolMarkupStore.getState().markupFloorId) useToolMarkupStore.getState().setMarkupFloorId(level.id);
       if (store.levels.length === 0) {
         void store.addLevel({ name: "Erdgeschoss", elevationMm: 0, heightMm: 3000 });
       }
@@ -539,7 +546,7 @@ export default function WerkzeugApp() {
     [handleFile],
   );
 
-  const sceneValue = useMemo(() => ({ shellGroup, rooms }), [shellGroup, rooms]);
+  const sceneValue = useMemo(() => ({ shellGroup, rooms, captureViewport: (opts?: { scale?: number }) => viewerRef.current?.captureViewport(opts) ?? null }), [shellGroup, rooms]);
 
   const showWerkzeugEntry = !isLoadingModel && !loadError && rooms.length === 0 && !shellGroup && !projectId;
   const hasActiveWorkspace = Boolean(projectId || shellGroup);

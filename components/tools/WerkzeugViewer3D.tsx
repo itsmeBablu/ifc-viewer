@@ -3,6 +3,8 @@ import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
 import { applyFeatureWireframe } from "@/lib/featureWireframe";
 import { buildMepJointGeometry } from "./MepJointGeometry";
 import { applyPlanViewDisplay } from "./PlanViewDisplay";
+import { applyViewVisibility, applyRenderPresentation, isObjectVisibleInView } from "@/lib/viewVisibility";
+import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 
 import { alignKitchenPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
 import { componentPreset } from "@/lib/componentCatalog";
@@ -868,13 +870,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const coolingTemperatureRange = useAppStore((s) => s.coolingTemperatureRange);
   const activeTemperatureRange =
     dataViewMode === "kuhllast" ? coolingTemperatureRange : temperatureRange;
+  const renderPreview = useViewDisplayStore(s => s.renderPreview);
   const workspaceRenderMode = useAppStore((s) => s.renderMode);
   const planStyleLevel = useLayoutDrawingStore(s => s.levels);
   const planStyleMarkup = useToolMarkupStore();
   const planStylePreset = planStyleMarkup.quadView ? planStyleMarkup.quadPresets[planStyleMarkup.quadActiveIndex] : planStyleMarkup.viewPreset;
-  const renderMode = (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
+  const renderMode = renderPreview ? "realistic" : (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
   const lighting = useAppStore((s) => s.lighting);
-  const sceneBackground = useAppStore((s) => s.sceneBackground);
+  const configuredSceneBackground = useAppStore((s) => s.sceneBackground);
+  const autoSceneBackground = useAppStore((s) => s.autoSceneBackground);
+  const sceneBackground = renderPreview || (colorTheme === "light" && autoSceneBackground) ? "coolGray" : configuredSceneBackground;
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const isPresentationView = useAppStore((s) => s.isPresentationView);
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
@@ -1139,6 +1144,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       if (!renderer || !scene || !camera) return null;
       const scale = Math.max(1, Math.min(4, opts?.scale ?? 1));
       const el = renderer.domElement;
+      const previousRatio = renderer.getPixelRatio();
+      const previousSize = renderer.getSize(new THREE.Vector2());
+      const previousViewport = renderer.getViewport(new THREE.Vector4());
+      const previousScissor = renderer.getScissor(new THREE.Vector4());
+      const previousScissorTest = renderer.getScissorTest();
       const prevW = el.width;
       const prevH = el.height;
       const cssW = el.clientWidth || prevW;
@@ -1148,24 +1158,30 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const wireMode = (level?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
       const renderCapture = () => {
         const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], level);
+        const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(markupState.quadView ? markupState.quadPresets[markupState.quadActiveIndex] : markupState.viewPreset, markupState.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
-        try { renderer.render(scene, camera); } finally { restoreWire(); restoreRange(); }
+        try { renderer.render(scene, camera); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
       };
       try {
         if (scale > 1) {
           renderer.setPixelRatio(1);
           renderer.setSize(cssW * scale, cssH * scale, false);
         }
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, cssW * (scale > 1 ? scale : 1), cssH * (scale > 1 ? scale : 1));
         renderCapture();
         return el.toDataURL("image/png");
       } catch {
         return null;
       } finally {
         if (scale > 1) {
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-          renderer.setSize(cssW, cssH, false);
-          renderCapture();
+          renderer.setPixelRatio(previousRatio);
+          renderer.setSize(previousSize.x, previousSize.y, false);
         }
+        renderer.setViewport(previousViewport);
+        renderer.setScissor(previousScissor);
+        renderer.setScissorTest(previousScissorTest);
       }
     },
     zoomIn: () => {
@@ -1479,9 +1495,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           renderer.setScissor(rect.x, rect.y, rect.w, rect.h);
 const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
+          const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(slots[index].preset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
           const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
-          const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
-          try { renderer.render(scene, cam); } finally { restoreWire(); restoreRange(); }
+          const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+        const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
+          try { renderer.render(scene, cam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         }
         // Restore display mode for the active pane (picking / labels).
         layoutLayerRef.current?.setPlanMode(
@@ -1552,9 +1570,11 @@ const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getStat
         renderer.setViewport(0, 0, sz.x, sz.y);
 const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayoutDrawingStore.getState().levels.find(l => l.id === useToolMarkupStore.getState().markupFloorId) : undefined;
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
+          const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(useToolMarkupStore.getState().viewPreset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
         const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
-        try { renderer.render(scene, activeCam); } finally { restoreWire(); restoreRange(); }
+        try { renderer.render(scene, activeCam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         markup?.render(activeCam);
         viewCube.updateViewport(sz.x, sz.y);
         if (activeCam instanceof THREE.PerspectiveCamera) {
@@ -2112,9 +2132,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
           sun.intensity = 0.25 + lighting.shadow * 0.75;
           sun.castShadow = lighting.shadow > 0.35;
         }
-        if (ambient) ambient.intensity = 0.85 + lighting.indirectLight * 0.75;
+        if (ambient) ambient.intensity = 0.5 + lighting.indirectLight * 0.55;
         if (renderer) {
-          renderer.toneMappingExposure = 1.35;
+          renderer.toneMappingExposure = 1.0;
           renderer.shadowMap.enabled = false;
         }
       } else if (renderMode === "realistic") {
@@ -2124,7 +2144,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         }
         if (ambient) ambient.intensity = 0.3 + lighting.indirectLight * 1.05;
         if (renderer) {
-          renderer.toneMappingExposure = 0.9 + lighting.indirectLight * 0.65;
+          renderer.toneMappingExposure = 0.85 + lighting.indirectLight * 0.3;
           renderer.shadowMap.enabled = lighting.shadow > 0.05;
         }
       } else {
@@ -2542,17 +2562,6 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
     return () => cancelAnimationFrame(id);
   }, [toolMode]);
 
-  // Load / sync Werkzeug markup for the active model.
-  useEffect(() => {
-    const key =
-      activeModelId ??
-      (activeModelLabel ? `label:${activeModelLabel}` : null);
-    void useToolMarkupStore.getState().loadForModel(key);
-    void useLayoutDrawingStore
-      .getState()
-      .loadForProject(key, Boolean(key?.startsWith("empty:")));
-  }, [activeModelId, activeModelLabel]);
-
   useEffect(() => {
     markupLayerRef.current?.setVisible(toolMode);
     const layout = layoutLayerRef.current;
@@ -2696,12 +2705,14 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         selectedStairIds: selStairIds,
         showAllLevels,
         planMode: isPlanView,
+        ...visOpts,
       });
       layer.syncRamps(s.ramps || [], s.levels, {
         activeLevelId: markupFloor,
         selectedRampIds: selRampIds,
         showAllLevels,
         planMode: isPlanView,
+        ...visOpts,
       });
       const jointInputs = [s.ducts, s.pipes, s.cableTrays, s.wires, s.levels, markupFloor, showAllLevels, s.hiddenElementIds, s.hiddenCategories, s.isolatedElementIds, s.revealHiddenMode];
       if (!jointDisplay || jointInputs.some((input, i) => input !== jointSources[i])) {
@@ -2714,30 +2725,35 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         selectedDuctIds: selDuctIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+        ...visOpts,
       });
       layer.syncPipes(jointDisplay.network.pipes, s.levels, {
         activeLevelId: markupFloor,
         selectedPipeIds: selPipeIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+        ...visOpts,
       });
       layer.syncCableTrays(jointDisplay.network.cableTrays, s.levels, {
         activeLevelId: markupFloor,
         selectedCableTrayIds: selTrayIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+        ...visOpts,
       });
       layer.syncMepEquipment(s.mepEquipment || [], s.levels, {
         activeLevelId: markupFloor,
         selectedEquipmentIds: selEquipIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+        ...visOpts,
       });
       layer.syncWires(jointDisplay.network.wires, s.levels, {
         activeLevelId: markupFloor,
         selectedWireIds: selWireIds,
         showAllLevels,
         fallbackElevMm: activeLevel?.elevationMm ?? 0,
+        ...visOpts,
       });
       layer.syncWorkPlane(s.activeWorkPlane, activeLevel?.elevationMm ?? 0);
       layer.setMepModeDimming(s.mepModeActive);
@@ -2839,7 +2855,7 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       );
       // Sync Lines sketch layer
       layer.syncSketch(
-        s.sketchLines || [],
+        (s.sketchLines || []).filter(line => !isPlanView || markupFloor == null || line.levelId === markupFloor),
         s.sketchDraw,
         s.gapHighlightPoints || [],
         s.levels || [],
@@ -2853,6 +2869,22 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         s.armedLayoutTool !== "grid"
       ) {
         layer.setStructuralPreview(null, null, null, 0, 3000, 300, 300);
+      }
+      const isMepOrCompTool =
+        s.armedLayoutTool === "equipment" ||
+        s.armedLayoutTool === "component" ||
+        s.armedLayoutTool === "duct" ||
+        s.armedLayoutTool === "flex_duct" ||
+        s.armedLayoutTool === "mep_placeholder" ||
+        s.armedLayoutTool === "pipe" ||
+        s.armedLayoutTool === "cabletray" ||
+        s.armedLayoutTool === "wire" ||
+        s.armedLayoutTool === "workplane";
+      if (!isMepOrCompTool) {
+        layer.clearMepPreview();
+      }
+      if (!s.armedLayoutTool) {
+        layer.clearAllPreviews();
       }
       const tp = s.tracePreview;
       const cand = tp?.candidates[tp.index] ?? null;
@@ -2868,7 +2900,33 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         layer.setTracePreview(null, 0, 3000);
       }
     };
-    const unsubLayout = useLayoutDrawingStore.subscribe(sync);
+    // Pointer movement may update several stores; rebuild at most once per frame.
+    let pendingSync = 0;
+    const scheduleSync = () => {
+      if (!pendingSync) pendingSync = requestAnimationFrame(() => { pendingSync = 0; sync(); });
+    };
+    const unsubLayout = useLayoutDrawingStore.subscribe(scheduleSync);
+    const unsubArmed = useLayoutDrawingStore.subscribe((state, prev) => {
+      if (state.armedLayoutTool !== prev.armedLayoutTool) {
+        const isCompOrMep =
+          state.armedLayoutTool === "component" ||
+          state.armedLayoutTool === "equipment" ||
+          state.armedLayoutTool === "duct" ||
+          state.armedLayoutTool === "flex_duct" ||
+          state.armedLayoutTool === "mep_placeholder" ||
+          state.armedLayoutTool === "pipe" ||
+          state.armedLayoutTool === "cabletray" ||
+          state.armedLayoutTool === "wire" ||
+          state.armedLayoutTool === "workplane";
+        if (!isCompOrMep) {
+          layoutLayerRef.current?.clearMepPreview();
+          useToolMarkupStore.getState().setDragSnapHint(null);
+        }
+        if (!state.armedLayoutTool) {
+          layoutLayerRef.current?.clearAllPreviews();
+        }
+      }
+    });
     const unsubMarkup = useToolMarkupStore.subscribe((s, prev) => {
       if (
         s.viewPreset !== prev.viewPreset ||
@@ -2881,8 +2939,10 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
     });
     sync();
     return () => {
+      cancelAnimationFrame(pendingSync);
       jointDisplay?.dispose();
       unsubLayout();
+      unsubArmed();
       unsubMarkup();
     };
   }, [toolMode, activeModelId, activeModelLabel, markupFloorIdForLayout]);
@@ -3001,6 +3061,8 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         else if (layout.rampDraw) layout.cancelRampDraw();
         else layout.setArmedLayoutTool(null);
         layout.clearLayoutSelection();
+        layoutLayerRef.current?.clearAllPreviews();
+        useToolMarkupStore.getState().setDragSnapHint(null);
       }
       if (
         (e.key === "Delete" || e.key === "Backspace") &&
@@ -4616,7 +4678,9 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
         targets.push(shellCloneRef.current);
       }
 
-      const hits = raycaster.current.intersectObjects(targets, true);
+      const ms = useToolMarkupStore.getState();
+      const visibility = useViewDisplayStore.getState().views[viewDisplayKey(ms.quadView ? ms.quadPresets[ms.quadActiveIndex] : ms.viewPreset, ms.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)];
+      const hits = raycaster.current.intersectObjects(targets, true).filter(hit => isObjectVisibleInView(hit.object, visibility));
       const usable = hits.filter(
         (h) =>
           !h.object.userData.isClipStencil &&
@@ -5005,11 +5069,17 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             });
             ms.setDragSnapHint({ text: `${componentPreset(layoutStore.draftComponentId)?.name ?? "Component"} · ${placement.label} · ${layoutStore.draftEquipmentRotationDeg}° · Space: rotate`, clientX: e.clientX, clientY: e.clientY });
           } else {
-            layoutLayer.setMepPreview(null, null, null);
+            layoutLayer.clearMepPreview();
             ms.setDragSnapHint({ text: "Select a base level in Properties before placing in 3D", clientX: e.clientX, clientY: e.clientY });
           }
           canvas.style.cursor = placement ? "crosshair" : "not-allowed";
           return;
+        }
+        const isMepTool = [
+          "duct", "flex_duct", "mep_placeholder", "pipe", "cabletray", "wire", "workplane"
+        ].includes(layoutStore.armedLayoutTool || "");
+        if (!isComponentTool && !isMepTool && layoutLayer?.hasMepPreview()) {
+          layoutLayer.clearMepPreview();
         }
         if (layoutStore.wallDraw && cam && layoutLayer) {
           const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
@@ -5943,6 +6013,15 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
       viewCubeRef.current?.clearHover();
       setHoveredRoom(null);
       canvas.style.cursor = "default";
+      const layoutStore = useLayoutDrawingStore.getState();
+      if (
+        layoutStore.armedLayoutTool === "component" ||
+        layoutStore.armedLayoutTool === "equipment" ||
+        !layoutStore.armedLayoutTool
+      ) {
+        layoutLayerRef.current?.clearMepPreview();
+      }
+      useToolMarkupStore.getState().setDragSnapHint(null);
       onPointerLeave?.();
     };
 
@@ -6540,6 +6619,16 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
             }
 
             if (layoutStore.armedLayoutTool === "equipment" || layoutStore.armedLayoutTool === "component") {
+              if (layoutHit?.kind === "equipment") {
+                layoutStore.setArmedLayoutTool(null);
+                layoutStore.selectElement(
+                  { kind: "equipment", id: layoutHit.id },
+                  e.shiftKey || e.ctrlKey || e.metaKey ? "toggle" : "replace",
+                );
+                layoutLayer.clearMepPreview();
+                useToolMarkupStore.getState().setDragSnapHint(null);
+                return;
+              }
               const placement = componentPoint(e.clientX, e.clientY, e.altKey);
               if (placement) {
                 const preset = componentPreset(layoutStore.draftComponentId);
@@ -6555,6 +6644,8 @@ const rangeLevel = useToolMarkupStore.getState().viewPreset === "top" ? useLayou
                   flowM3h: layoutStore.draftEquipmentFlowM3h, airflowM3h: layoutStore.draftEquipmentFlowM3h,
                   powerWatts: layoutStore.draftEquipmentHeatingWatts, coolingWatts: layoutStore.draftEquipmentCoolingWatts,
                 });
+                layoutLayer.clearMepPreview();
+                useToolMarkupStore.getState().setDragSnapHint(null);
               } else useAppStore.getState().setRightPanelOpen(true);
               return;
             }

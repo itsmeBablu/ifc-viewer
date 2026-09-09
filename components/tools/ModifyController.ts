@@ -1,3 +1,5 @@
+import { isObjectVisibleInView } from "@/lib/viewVisibility";
+import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import { joinRoof, roofWallProfile } from "@/lib/roofConnections";
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -64,7 +66,9 @@ export function installModifyController(options: {
     const ctx = prepare(); if (!ctx) return null;
     const state = useModifyStore.getState();
     const level = state.tool === "joinRoof" ? (state.reference ? "face" : "edge") : state.tool === "mirror" && state.mirrorAxis === "pick" ? "edge" : state.tool === "align" && state.level === "element" ? "face" : state.level;
-    const hit = pickGeometry(ray, options.roots(), ctx.cam, ctx.bounds, mouse.x, mouse.y, level);
+    const ms = useToolMarkupStore.getState();
+    const visibility = useViewDisplayStore.getState().views[viewDisplayKey(ms.quadView ? ms.quadPresets[ms.quadActiveIndex] : ms.viewPreset, ms.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)];
+    const hit = pickGeometry(ray, options.roots(), ctx.cam, ctx.bounds, mouse.x, mouse.y, level, obj => isObjectVisibleInView(obj, visibility));
     if (hit?.kind === "line") {
       const layout = useLayoutDrawingStore.getState(), line = layout.sketchLines.find(l => l.id === hit.id);
       if (line && !line.curved) {

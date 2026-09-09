@@ -679,6 +679,7 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutSlab,
+        | "levelId"
         | "kind"
         | "minXmm"
         | "minYmm"
@@ -985,6 +986,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (s.selectedStairId) toHide.add(s.selectedStairId);
     if (s.selectedRampId) toHide.add(s.selectedRampId);
     if (s.selectedSketchLineId) toHide.add(s.selectedSketchLineId);
+    if (s.selectedWireId) toHide.add(s.selectedWireId);
     for (const el of s.selectedElements) toHide.add(el.id);
     set({ hiddenElementIds: toHide });
     get().clearSelection();
@@ -1004,6 +1006,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     if (s.selectedStairId) isolated.add(s.selectedStairId);
     if (s.selectedRampId) isolated.add(s.selectedRampId);
     if (s.selectedSketchLineId) isolated.add(s.selectedSketchLineId);
+    if (s.selectedWireId) isolated.add(s.selectedWireId);
     for (const el of s.selectedElements) isolated.add(el.id);
     if (isolated.size > 0) {
       set({ isolatedElementIds: isolated });
@@ -1032,6 +1035,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       s.pipes.forEach((p) => isolated.add(p.id));
       s.cableTrays.forEach((c) => isolated.add(c.id));
       s.mepEquipment.forEach((e) => isolated.add(e.id));
+      s.wires.forEach((w) => isolated.add(w.id));
     }
     if (isolated.size > 0) {
       set({ isolatedElementIds: isolated, hiddenCategories: new Set<string>() });
@@ -1679,6 +1683,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   setArmedLayoutTool: (tool) => {
+    if ((tool as any) === "select" || (tool as any) === "deselect" || (tool as any) === "none") {
+      tool = null;
+    }
     const boundaryEdit = get().slabBoundaryEdit;
     if (boundaryEdit && !(tool === "lines" && get().editingSlabId)) {
       if (tool) set({ slabBoundaryEdit: { ...boundaryEdit, error: "Finish or cancel the boundary sketch before starting another drawing tool." } });
@@ -1733,7 +1740,6 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       tool === "wall" ||
       tool === "door" ||
       tool === "window" ||
-      tool === "slab" ||
       tool === "floor" ||
       tool === "roof" ||
       tool === "ceiling" ||

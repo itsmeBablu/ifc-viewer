@@ -73,7 +73,7 @@ export type MaterialDefinition = {
   isPreset?: boolean;
 };
 
-export const SEED_MATERIALS: MaterialDefinition[] = [
+const RAW_SEED_MATERIALS: MaterialDefinition[] = [
   // ==========================================
   // 0. HIGH-END ARCHITECTURAL & INTERIOR SPEC
   // ==========================================
@@ -1165,6 +1165,8 @@ export const SEED_MATERIALS: MaterialDefinition[] = [
   },
 ];
 
+export const SEED_MATERIALS: MaterialDefinition[] = [...new Map(RAW_SEED_MATERIALS.map(material => [material.id, material])).values()];
+
 type MaterialState = {
   materials: MaterialDefinition[];
   selectedMaterialId: string | null;
@@ -1242,6 +1244,11 @@ export const useMaterialStore = create<MaterialState>()(
     }),
     {
       name: "vstudio-materials-storage-v2",
+      merge: (persisted, current) => {
+        const saved = (persisted as Partial<MaterialState> | undefined)?.materials;
+        const materials = Array.isArray(saved) ? [...new Map([...SEED_MATERIALS, ...saved].map(material => [material.id, material])).values()] : SEED_MATERIALS;
+        return { ...current, materials };
+      },
       partialize: (state) => ({
         materials: state.materials,
       }),

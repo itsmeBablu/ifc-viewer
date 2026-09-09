@@ -26,15 +26,22 @@ export default function ToolUnderlineTabs<T extends TabId>({
     const btn = btnRefs.current.get(value);
     const row = rowRef.current;
     if (!btn || !row) return;
-    const rr = row.getBoundingClientRect();
-    const br = btn.getBoundingClientRect();
-    setBar({ left: br.left - rr.left, width: br.width });
+    const align = () => {
+      const rr = row.getBoundingClientRect();
+      const br = btn.getBoundingClientRect();
+      setBar({ left: br.left - rr.left + row.scrollLeft + 8, width: Math.max(12, br.width - 16) });
+    };
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(row);
+    observer.observe(btn);
+    return () => observer.disconnect();
   }, [value, tabs]);
 
   return (
     <div
       ref={rowRef}
-      className={`relative flex gap-1 border-b border-[var(--panel-divider)] ${className}`}
+      className={`relative flex justify-center gap-1 border-b border-[var(--panel-divider)] ${className}`}
     >
       {tabs.map((tab) => (
         <button

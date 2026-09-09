@@ -96,7 +96,13 @@ export const useStudioSettingsStore = create<StudioSettingsState>((set) => {
     if (typeof window === "undefined") return fallback;
     try {
       const v = localStorage.getItem(key);
-      return v ? (JSON.parse(v) as T) : fallback;
+      if (!v) return fallback;
+      const parsed: unknown = JSON.parse(v);
+      if (key === ACCENT_KEY && !(typeof parsed === "string" && Object.hasOwn(STUDIO_ACCENTS, parsed))) return fallback;
+      if (key === FONT_KEY && !["inter", "jakarta", "mono"].includes(String(parsed))) return fallback;
+      if (key === FONT_SCALE_KEY && !["compact", "default", "spacious"].includes(String(parsed))) return fallback;
+      if (key === SYNC_ACCENTS_KEY && typeof parsed !== "boolean") return fallback;
+      return parsed as T;
     } catch {
       return fallback;
     }

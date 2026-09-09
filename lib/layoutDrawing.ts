@@ -16,7 +16,7 @@ export const DEFAULT_WINDOW_SILL_MM = 900;
 export type LayoutLevel = {
   /** Settings belong to this level's plan view, not to the model elements. */
   planView?: {
-    visualStyle?: "realistic" | "light" | "wireframe";
+    visualStyle?: "realistic" | "fullColor" | "light" | "wireframe";
     topMm: number;
     cutMm: number;
     bottomMm: number;

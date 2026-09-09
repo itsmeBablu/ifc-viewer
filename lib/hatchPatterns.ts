@@ -743,6 +743,89 @@ export function getHatchCanvasTexture(
     ctx.lineCap = "round";
 
     switch (hatchStyle) {
+      case "herringbone":
+      case "chevron":
+      case "basketweave": {
+        ctx.lineWidth = 2;
+        for (let y = -128; y < size + 128; y += 64) {
+          for (let x = -128; x < size + 128; x += 128) {
+            ctx.save();
+            ctx.translate(x + (Math.floor(y / 64) % 2) * 64, y);
+            if (hatchStyle !== "basketweave") ctx.rotate(Math.PI / 4);
+            ctx.strokeRect(0, 0, 96, 24);
+            ctx.strokeRect(0, 24, 24, 96);
+            ctx.restore();
+          }
+        }
+        break;
+      }
+      case "marble": {
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.45;
+        for (let i = -2; i < 8; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * 100, 0);
+          ctx.bezierCurveTo(i * 100 + 180, 180, i * 100 - 120, 300, i * 100 + 80, size);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(i * 100 + 70, 170);
+          ctx.bezierCurveTo(i * 100 + 10, 230, i * 100 + 190, 270, i * 100 + 160, 360);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "terrazzo":
+      case "granite": {
+        const count = hatchStyle === "granite" ? 600 : 110;
+        for (let i = 0; i < count; i++) {
+          const x = (i * 73.37) % size, y = (i * 137.91) % size;
+          const r = hatchStyle === "granite" ? 1 + i % 3 : 3 + i % 9;
+          ctx.fillStyle = i % 3 === 0 ? "#e2ddd5" : strokeColor;
+          ctx.globalAlpha = 0.25 + (i % 5) * 0.1;
+          ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x, y - r);
+          ctx.lineTo(x + r, y + r / 2); ctx.lineTo(x - r / 2, y + r); ctx.closePath(); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "hex-tile":
+      case "expanded-mesh": {
+        const r = 32, h = Math.sqrt(3) * r;
+        ctx.lineWidth = 2;
+        for (let col = -1; col < 12; col++) for (let row = -1; row < 11; row++) {
+          const x = col * r * 1.5, y = row * h + (col % 2) * h / 2;
+          ctx.beginPath();
+          for (let k = 0; k <= 6; k++) {
+            const angle = k * Math.PI / 3;
+            ctx.lineTo(x + r * Math.cos(angle), y + r * Math.sin(angle));
+          }
+          ctx.stroke();
+        }
+        break;
+      }
+      case "perforated-metal":
+      case "penny-round": {
+        ctx.lineWidth = 2;
+        for (let row = -1; row < 18; row++) for (let col = -1; col < 18; col++) {
+          ctx.beginPath(); ctx.arc(col * 32 + (row % 2) * 16, row * 32, hatchStyle === "penny-round" ? 13 : 6, 0, Math.PI * 2);
+          if (hatchStyle === "perforated-metal") { ctx.fillStyle = strokeColor; ctx.fill(); } else ctx.stroke();
+        }
+        break;
+      }
+      case "standing-seam":
+      case "fluted-wood":
+      case "acoustic-slat":
+      case "reeded-glass": {
+        const spacing = hatchStyle === "standing-seam" ? 128 : 32;
+        for (let x = 0; x < size; x += spacing) {
+          const gradient = ctx.createLinearGradient(x, 0, x + spacing, 0);
+          gradient.addColorStop(0, strokeColor); gradient.addColorStop(0.22, bgColor);
+          gradient.addColorStop(0.8, bgColor); gradient.addColorStop(1, strokeColor);
+          ctx.fillStyle = gradient; ctx.fillRect(x, 0, spacing, size);
+        }
+        break;
+      }
       case "horizontal":
         for (let y = 32; y < size; y += 64) {
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke();
@@ -1000,6 +1083,7 @@ export function getHatchCanvasTexture(
   }
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   const repeat = Math.max(0.5, Math.min(50, 1000 / scaleMm));

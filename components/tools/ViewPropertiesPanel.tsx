@@ -1,5 +1,7 @@
 "use client";
 
+import RenderViewControls, { enterRenderView } from "./RenderViewControls";
+import { useViewDisplayStore, viewDisplayKey, EMPTY_VIEW_VISIBILITY } from "@/store/useViewDisplayStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
@@ -15,6 +17,9 @@ export default function ViewPropertiesPanel() {
   const level = layout.levels.find(l => l.id === markup.markupFloorId);
   const plan = level ? planViewSettings(level) : null;
   const isPlan = preset === "top";
+  const display = useViewDisplayStore();
+  const viewKey = viewDisplayKey(preset, markup.markupFloorId, layout.activeSectionId);
+  const visibility = display.views[viewKey] ?? EMPTY_VIEW_VISIBILITY;
   const field = "w-full rounded border border-[var(--panel-divider)] bg-transparent px-2 py-1 text-xs";
   const categories = new Set<string>();
   const collections = [
@@ -34,10 +39,14 @@ export default function ViewPropertiesPanel() {
     <p className="property-caption">{isPlan ? "Floor plan" : preset === "free" ? "3D view" : preset === "section" ? "Section" : `Elevation · ${preset}`}</p>
     {level && <label className="property-field"><span>Level</span><input aria-label="Level name" className={field} value={level.name} onChange={e => void layout.updateLevel(level.id, { name: e.target.value })}/></label>}
     <label className="property-field"><span>Visual style</span><select className={field} value={isPlan && plan ? plan.visualStyle ?? "inherit" : renderMode} onChange={e => {
-      const style = e.target.value as "realistic" | "light" | "wireframe" | "inherit";
+      if (e.target.value === "render") { enterRenderView(); return; }
+      display.setRenderPreview(false);
+      const style = e.target.value as "realistic" | "fullColor" | "light" | "wireframe" | "inherit";
       if (isPlan && plan) update({ visualStyle: style === "inherit" ? undefined : style });
       else if (style !== "inherit") useAppStore.getState().setRenderMode(style);
-    }}>{isPlan && plan && <option value="inherit">Use workspace style ({renderMode})</option>}{["realistic", "light", "wireframe"].map(style => <option key={style} value={style}>{style}</option>)}</select></label>
+    }}>{isPlan && plan && <option value="inherit">Use workspace style ({renderMode})</option>}{["realistic", "fullColor", "light", "wireframe", "render"].map(style => <option key={style} value={style}>{style}</option>)}</select></label>
+    <RenderViewControls />
+    <details open className="property-disclosure"><summary>Visibility in current view</summary><fieldset className="space-y-1">{[...categories].sort().map(category => <label key={category} className="flex gap-2 py-0.5"><input type="checkbox" checked={!visibility.hiddenCategories.includes(category)} onChange={() => display.toggleCategory(viewKey, category)} />{category}</label>)}</fieldset><button type="button" className="mt-2 rounded border border-[var(--panel-divider)] px-2 py-1" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
     {plan && level && <>
       {!isPlan && <p className="text-[var(--text-muted)]">These range and visibility settings apply to {level.name}’s plan view.</p>}
       <details className="property-disclosure"><summary>View range <span className="property-summary-value">mm</span></summary>

@@ -16,6 +16,7 @@ import type { Room } from "@/lib/types";
 export type ModelSceneValue = {
   shellGroup: Group | null;
   rooms: Room[];
+  captureViewport?: (opts?: { scale?: number }) => string | null;
 };
 
 export const WerkzeugModelSceneContext = createContext<ModelSceneValue>({

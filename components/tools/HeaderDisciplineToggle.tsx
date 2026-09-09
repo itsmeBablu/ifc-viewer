@@ -36,7 +36,7 @@ export default function HeaderDisciplineToggle() {
       return;
     }
 
-    gsap.to(thumb, { ...properties, duration: 0.38, ease: "power3.inOut", overwrite: true });
+    gsap.to(thumb, { ...properties, duration: 0.14, ease: "power3.inOut", overwrite: true });
     return () => {
       gsap.killTweensOf(thumb);
     };
@@ -46,6 +46,7 @@ export default function HeaderDisciplineToggle() {
     const next = !mepModeActive;
     useLayoutDrawingStore.getState().setArmedLayoutTool(null);
     useToolMarkupStore.getState().setArmedTool(null);
+    useToolMarkupStore.getState().setMeasureMode(false);
     useLayoutDrawingStore.getState().clearSelection();
     useToolMarkupStore.getState().clearSelection();
     setMepModeActive(next);

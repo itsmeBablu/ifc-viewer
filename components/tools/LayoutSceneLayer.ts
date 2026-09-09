@@ -1,3 +1,6 @@
+import { isObjectVisibleInView } from "@/lib/viewVisibility";
+import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { createOperableWindow } from "@/lib/windowGeometry";
 import { roofWallProfile } from "@/lib/roofConnections";
 import { buildPlanarRoof, offsetRoofBoundary } from "@/lib/roofGeometry";
@@ -50,7 +53,7 @@ import {
 } from "@/lib/referenceUnderlay";
 import { fromMm } from "@/lib/markupUnits";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
-import { useMaterialStore } from "@/store/materialStore";
+import { useMaterialStore, type HatchStyle } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import type { RenderMode } from "@/lib/types";
@@ -536,28 +539,30 @@ export default class LayoutSceneLayer {
     return { isHidden: true, showMesh: false, isGhosted: false };
   }
 
+  private ghostMaterials = new WeakMap<THREE.Material, { opacity: number; transparent: boolean; depthWrite: boolean; emissive?: THREE.Color; emissiveIntensity?: number }>();
+
   private applyGhostMaterial(obj: THREE.Object3D, isGhosted: boolean) {
     obj.userData.isHiddenGhost = isGhosted;
-    if (!isGhosted) return;
-    obj.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        if (Array.isArray(child.material)) {
-          for (const m of child.material) {
-            m.transparent = true;
-            m.opacity = 0.35;
-            if ("emissive" in m) {
-              (m as any).emissive?.setHex?.(0xec4899);
-              (m as any).emissiveIntensity = 0.5;
-            }
+    obj.traverse(child => {
+      if (!(child instanceof THREE.Mesh)) return;
+      for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
+        const original = this.ghostMaterials.get(material);
+        if (!isGhosted) {
+          if (!original) continue;
+          material.opacity = original.opacity; material.transparent = original.transparent; material.depthWrite = original.depthWrite;
+          if (material instanceof THREE.MeshStandardMaterial && original.emissive) {
+            material.emissive.copy(original.emissive); material.emissiveIntensity = original.emissiveIntensity ?? 0;
           }
+          this.ghostMaterials.delete(material);
         } else {
-          child.material.transparent = true;
-          child.material.opacity = 0.35;
-          if ("emissive" in child.material) {
-            (child.material as any).emissive?.setHex?.(0xec4899);
-            (child.material as any).emissiveIntensity = 0.5;
-          }
+          if (!original) this.ghostMaterials.set(material, {
+            opacity: material.opacity, transparent: material.transparent, depthWrite: material.depthWrite,
+            ...(material instanceof THREE.MeshStandardMaterial ? { emissive: material.emissive.clone(), emissiveIntensity: material.emissiveIntensity } : {}),
+          });
+          material.transparent = true; material.opacity = 0.35; material.depthWrite = false;
+          if (material instanceof THREE.MeshStandardMaterial) { material.emissive.setHex(0xec4899); material.emissiveIntensity = 0.5; }
         }
+        material.needsUpdate = true;
       }
     });
   }
@@ -591,6 +596,8 @@ export default class LayoutSceneLayer {
     const planLevel = levels.find(l => l.id === opts.activeLevelId);
     this.planCutElevationMm = (planLevel?.elevationMm ?? 0) + (planLevel?.planView?.cutMm ?? 1200);
     this.isPlanModeActive = planMode;
+    this.sketchGroup.visible = planMode || useLayoutDrawingStore.getState().armedLayoutTool === "lines";
+    this.sectionGroup.visible = planMode;
     const levelById = new Map(levels.map((l) => [l.id, l]));
     const wallKeep = new Set(walls.map((w) => w.id));
     for (const [id, grp] of this.wallMeshes) {
@@ -1341,6 +1348,10 @@ export default class LayoutSceneLayer {
     stairs: LayoutStair[],
     levels: LayoutLevel[],
     opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
       activeLevelId: string | null;
       selectedStairIds: Set<string>;
       showAllLevels: boolean;
@@ -1367,9 +1378,11 @@ export default class LayoutSceneLayer {
         stair.topLevelId === opts.activeLevelId;
 
       let grp = this.stairMeshes.get(stair.id);
-      if (grp) {
+      const geometryKey = JSON.stringify([stair, levels, isSelected, planMode]);
+      const rebuild = !grp || grp.userData.geometryKey !== geometryKey;
+      if (grp && rebuild) {
         this.clearGroupContents(grp);
-      } else {
+      } else if (!grp) {
         grp = new THREE.Group();
         grp.name = `stair-${stair.id}`;
         grp.userData.layoutStairId = stair.id;
@@ -1378,8 +1391,10 @@ export default class LayoutSceneLayer {
         this.group.add(grp);
       }
 
-      this.buildStairGeometry(grp, stair, levels, isSelected, planMode);
-      grp.visible = isVisible;
+      if (rebuild) { this.buildStairGeometry(grp, stair, levels, isSelected, planMode); grp.userData.geometryKey = geometryKey; }
+      const vis = this.checkElementVisibility(stair.id, "circulation", opts);
+      grp.visible = isVisible && vis.showMesh;
+      this.applyGhostMaterial(grp, vis.isGhosted);
     }
   }
 
@@ -1387,6 +1402,10 @@ export default class LayoutSceneLayer {
     ramps: LayoutRamp[],
     levels: LayoutLevel[],
     opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
       activeLevelId: string | null;
       selectedRampIds: Set<string>;
       showAllLevels: boolean;
@@ -1413,9 +1432,11 @@ export default class LayoutSceneLayer {
         ramp.topLevelId === opts.activeLevelId;
 
       let grp = this.rampMeshes.get(ramp.id);
-      if (grp) {
+      const geometryKey = JSON.stringify([ramp, levels, isSelected, planMode]);
+      const rebuild = !grp || grp.userData.geometryKey !== geometryKey;
+      if (grp && rebuild) {
         this.clearGroupContents(grp);
-      } else {
+      } else if (!grp) {
         grp = new THREE.Group();
         grp.name = `ramp-${ramp.id}`;
         grp.userData.layoutRampId = ramp.id;
@@ -1424,8 +1445,10 @@ export default class LayoutSceneLayer {
         this.group.add(grp);
       }
 
-      this.buildRampGeometry(grp, ramp, levels, isSelected, planMode);
-      grp.visible = isVisible;
+      if (rebuild) { this.buildRampGeometry(grp, ramp, levels, isSelected, planMode); grp.userData.geometryKey = geometryKey; }
+      const vis = this.checkElementVisibility(ramp.id, "circulation", opts);
+      grp.visible = isVisible && vis.showMesh;
+      this.applyGhostMaterial(grp, vis.isGhosted);
     }
   }
 
@@ -3212,7 +3235,9 @@ export default class LayoutSceneLayer {
         if (end && id) return { kind: "wall-endpoint", id, end };
       }
     }
-    const hits = raycaster.intersectObjects(this.group.children, true);
+    const ms = useToolMarkupStore.getState();
+    const visibility = useViewDisplayStore.getState().views[viewDisplayKey(ms.quadView ? ms.quadPresets[ms.quadActiveIndex] : ms.viewPreset, ms.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)];
+    const hits = raycaster.intersectObjects(this.group.children, true).filter(hit => isObjectVisibleInView(hit.object, visibility));
     for (const h of hits) {
       // Skip hidden CAD/solid sibling so Top picks the symbol, 3D the box.
       if (!h.object.visible) continue;
@@ -3906,7 +3931,7 @@ export default class LayoutSceneLayer {
 
     const isWireframe = mode === "wireframe";
     const showEdgesInShaded = mode === "fullColor";
-    const showEdges = isWireframe || showEdgesInShaded;
+    const showEdges = showEdgesInShaded;
 
     for (const [id, grp] of this.wallMeshes) {
       const wall = state.walls.find((w) => w.id === id);
@@ -4043,18 +4068,9 @@ export default class LayoutSceneLayer {
       edges.visible = true;
       if (mesh.material instanceof THREE.Material) {
         if ("wireframe" in mesh.material) (mesh.material as any).wireframe = false;
-        if (isWireframe) {
-          mesh.material.transparent = true;
-          mesh.material.opacity = 0.12;
-          (mesh.material as any).polygonOffset = false;
-        } else {
-          // Shaded with edges view: opaque solid surface with polygonOffset so lines never z-fight
-          (mesh.material as any).polygonOffset = true;
-          (mesh.material as any).polygonOffsetFactor = 1.0;
-          (mesh.material as any).polygonOffsetUnits = 1.0;
-          mesh.material.transparent = false;
-          mesh.material.opacity = 1.0;
-        }
+        mesh.material.polygonOffset = !isWireframe;
+        mesh.material.polygonOffsetFactor = 1;
+        mesh.material.polygonOffsetUnits = 1;
       }
     } else if (mesh instanceof THREE.Group) {
       mesh.traverse((child) => {
@@ -4082,6 +4098,10 @@ export default class LayoutSceneLayer {
     mat.opacity = 1.0;
     if (mat.map?.userData.vstudioMaterialClone) mat.map.dispose();
     mat.map = null;
+    mat.bumpMap = null;
+    mat.bumpScale = 0;
+    mat.depthWrite = true;
+    mat.needsUpdate = true;
     mat.emissive.setHex(0x000000);
     mat.emissiveIntensity = 0;
     if (mat instanceof THREE.MeshPhysicalMaterial) {
@@ -4105,10 +4125,12 @@ export default class LayoutSceneLayer {
         matType === "wood" ? "#fde68a" :
         matType === "glass" ? "#e0f2fe" :
         matType === "metal" ? "#e2e8f0" :
-        matType === "concrete" ? "#d4d4d8" :
-        "#f1f5f9"
+        matType === "concrete" ? "#9ca3af" :
+        "#94a3b8"
       );
       mat.color.setStyle(lightCol);
+      const brightness = Math.max(mat.color.r, mat.color.g, mat.color.b);
+      if (brightness > 0.58) mat.color.multiplyScalar(0.58 / brightness);
       return;
     }
 
@@ -4133,9 +4155,7 @@ export default class LayoutSceneLayer {
       const effectiveColor = customMat.color || colorStr || "#cfd4dc";
       mat.color.setStyle(effectiveColor);
 
-      const hatchStyle = customMat.hatchStyle && customMat.hatchStyle !== "solid"
-        ? customMat.hatchStyle
-        : (customMat.category === "Masonry" ? "brick" : customMat.category === "Wood" ? "wood" : "concrete");
+      const hatchStyle = customMat.hatchStyle;
 
       if (hatchStyle && hatchStyle !== "solid") {
         const strokeColor = "#1f2937";
@@ -4155,6 +4175,9 @@ export default class LayoutSceneLayer {
           materialTexture.userData.vstudioMaterialClone = true;
           materialTexture.needsUpdate = true;
           mat.map = materialTexture;
+          mat.color.setHex(0xffffff); // The texture already contains the material color.
+          mat.bumpMap = materialTexture;
+          mat.bumpScale = Math.min(0.01, (customMat.bumpScale ?? 0.2) * 0.01);
         }
       }
       return;
@@ -4274,6 +4297,10 @@ export default class LayoutSceneLayer {
     mat.opacity = 1.0;
     if (mat.map?.userData.vstudioMaterialClone) mat.map.dispose();
     mat.map = null;
+    mat.bumpMap = null;
+    mat.bumpScale = 0;
+    mat.depthWrite = true;
+    mat.needsUpdate = true;
     mat.emissive.setHex(0x000000);
     mat.emissiveIntensity = 0;
     if (mat instanceof THREE.MeshPhysicalMaterial) {
@@ -4306,6 +4333,8 @@ export default class LayoutSceneLayer {
          layer.function === "core" ? "#475569" :
          "#525d6d");
       mat.color.setStyle(lightCol);
+      const brightness = Math.max(mat.color.r, mat.color.g, mat.color.b);
+      if (brightness > 0.58) mat.color.multiplyScalar(0.58 / brightness);
       return;
     }
 
@@ -4343,9 +4372,7 @@ export default class LayoutSceneLayer {
       const effectiveColor = layer.color || customMat.color || wall.color || "#525d6d";
       mat.color.setStyle(effectiveColor);
 
-      const hatchStyle = customMat.hatchStyle && customMat.hatchStyle !== "solid"
-        ? customMat.hatchStyle
-        : (layer.function === "insulation" ? "zigzag" : layer.function === "structure" ? "concrete" : layer.function === "finish2" ? "stucco" : "gypsum");
+      const hatchStyle = customMat.hatchStyle;
 
       if (hatchStyle && hatchStyle !== "solid") {
         const strokeColor = "#0f172a";
@@ -4365,6 +4392,9 @@ export default class LayoutSceneLayer {
           materialTexture.userData.vstudioMaterialClone = true;
           materialTexture.needsUpdate = true;
           mat.map = materialTexture;
+          mat.color.setHex(0xffffff); // The texture already contains the material color.
+          mat.bumpMap = materialTexture;
+          mat.bumpScale = Math.min(0.01, (customMat.bumpScale ?? 0.2) * 0.01);
         }
       }
       return;
@@ -4940,6 +4970,9 @@ export default class LayoutSceneLayer {
     windows: LayoutWindow[] = [],
     miter?: WallMiterOffsets,
   ) {
+    const geometryKey = JSON.stringify([wall, elevMm, cl, doors, windows, miter, this.planCutElevationMm, this.currentRenderMode]);
+    if (grp.userData.geometryKey === geometryKey) return;
+    grp.userData.geometryKey = geometryKey;
     this.clearGroupContents(grp);
 
     const layers = this.resolveWallLayers(wall);
@@ -5884,6 +5917,10 @@ export default class LayoutSceneLayer {
     wires: LayoutWire[],
     levels: LayoutLevel[],
     opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
       activeLevelId: string | null;
       selectedWireIds: Set<string>;
       showAllLevels: boolean;
@@ -5918,9 +5955,12 @@ export default class LayoutSceneLayer {
       const col = wire.systemType === "lighting" ? 0xfacc15 : wire.systemType === "data" ? 0x06b6d4 : wire.systemType === "control" ? 0xa855f7 : 0xeab308;
 
       let grp = this.wireMeshes.get(wire.id);
+      const geometryKey = JSON.stringify([wire, isSelected]);
+      if (grp && grp.userData.geometryKey !== geometryKey) { this.disposeGroup(grp); this.wireMeshes.delete(wire.id); grp = undefined; }
       if (!grp) {
         grp = new THREE.Group();
         grp.name = `wire-${wire.id}`;
+        grp.userData.geometryKey = geometryKey;
         grp.userData.layoutWireId = wire.id;
         grp.userData.kind = "wire";
         this.wireMeshes.set(wire.id, grp);
@@ -5950,12 +5990,13 @@ export default class LayoutSceneLayer {
 
       grp.position.set(midX, centerY, midZ);
       grp.rotation.y = -angle;
-      grp.visible =
-        opts.showAllLevels ||
+      const vis = this.checkElementVisibility(wire.id, "mep", opts);
+      grp.visible = vis.showMesh && (opts.showAllLevels ||
         opts.activeLevelId == null ||
         wire.levelId == null ||
         wire.levelId === "default-level" ||
-        wire.levelId === opts.activeLevelId;
+        wire.levelId === opts.activeLevelId);
+      this.applyGhostMaterial(grp, vis.isGhosted);
     }
   }
 
@@ -5996,6 +6037,10 @@ export default class LayoutSceneLayer {
     equipment: LayoutMepEquipment[],
     levels: LayoutLevel[],
     opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
       activeLevelId: string | null;
       selectedEquipmentIds: Set<string>;
       showAllLevels: boolean;
@@ -6487,18 +6532,53 @@ export default class LayoutSceneLayer {
       grp.position.set(fromMm(item.xMm), centerY, fromMm(item.yMm));
       grp.rotation.y = -rot;
       grp.scale.z = item.mirrored ? -1 : 1;
-      grp.visible =
-        opts.showAllLevels ||
+      const vis = this.checkElementVisibility(item.id, "mep", opts);
+      grp.visible = vis.showMesh && (opts.showAllLevels ||
         opts.activeLevelId == null ||
         item.levelId == null ||
         item.levelId === "default-level" ||
-        item.levelId === opts.activeLevelId;
+        item.levelId === opts.activeLevelId);
+      this.applyGhostMaterial(grp, vis.isGhosted);
 
       // Selection outline for primary child
       const primaryChild = grp.children[0] as THREE.Mesh | undefined;
       if (primaryChild) {
         this.setMeshSelectionOutline(primaryChild, isSelected);
       }
+    }
+  }
+
+  clearMepPreview(): void {
+    this.clearGroupContents(this.mepPreview);
+  }
+
+  hasMepPreview(): boolean {
+    return this.mepPreview.children.length > 0;
+  }
+
+  clearAllPreviews(): void {
+    this.clearGroupContents(this.mepPreview);
+    this.clearGroupContents(this.structuralPreview);
+    this.clearGroupContents(this.sectionPreviewGroup);
+    if (this.previewLine) {
+      this.disposeGroup(this.previewLine);
+      this.previewLine = null;
+    }
+    if (this.slabPreview) {
+      this.disposeGroup(this.slabPreview);
+      this.slabPreview = null;
+    }
+    if (this.stairPreview) {
+      this.disposeGroup(this.stairPreview);
+      this.stairPreview = null;
+    }
+    if (this.rampPreview) {
+      this.disposeGroup(this.rampPreview);
+      this.rampPreview = null;
+    }
+    if (this.tracePreviewGroup) {
+      this.disposeGroup(this.tracePreviewGroup);
+      this.tracePreviewGroup = null;
     }
   }
 
