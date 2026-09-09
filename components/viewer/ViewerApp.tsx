@@ -9,9 +9,19 @@ import {
   loadIfcModel,
   type IfcSource,
 } from "@/lib/ifcClient";
-import { clearFloorSnapshots } from "@/lib/floorSnapshot";
+import {
+  clearFloorSnapshots,
+} from "@/lib/floorSnapshot";
 import { debugLog } from "@/lib/debugLog";
 import { getModelById } from "@/lib/modelRegistry";
+import {
+  extractEmbeddedProjectData,
+  parseFragFile,
+  setCachedIfcBytes,
+  buildMarkupOnlyIfc,
+} from "@/lib/markupFragSave";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import {
   hydratePanelState,
   persistModelId,
@@ -253,7 +263,64 @@ export default function ViewerApp() {
           if (!entry) throw new Error(`Unknown model: ${source.modelId}`);
           ifcSource = entry.ifcPath;
         } else {
-          ifcSource = source.file;
+          const nameLower = source.file.name.toLowerCase();
+          const isFrag = nameLower.endsWith(".frag");
+          if (isFrag) {
+            const { meta, ifcBytes } = await parseFragFile(source.file);
+            if (meta.layout) {
+              await useLayoutDrawingStore
+                .getState()
+                .restoreFromProjectPayload(meta.layout, id);
+            }
+            if (meta.placements?.length || meta.notes?.length) {
+              await useToolMarkupStore
+                .getState()
+                .restoreMarkup(
+                  id,
+                  meta.placements ?? [],
+                  meta.notes ?? [],
+                );
+            }
+            if (ifcBytes && ifcBytes.byteLength > 0) {
+              setCachedIfcBytes(id, ifcBytes);
+              ifcSource = ifcBytes;
+            } else {
+              const blob = buildMarkupOnlyIfc({
+                modelLabel: meta.modelLabel || source.name,
+                placements: meta.placements ?? [],
+                notes: meta.notes ?? [],
+                layout: meta.layout,
+              });
+              const ab = await blob.arrayBuffer();
+              const bytes = new Uint8Array(ab);
+              setCachedIfcBytes(id, bytes);
+              ifcSource = bytes;
+            }
+          } else {
+            const buf = await source.file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            setCachedIfcBytes(id, bytes);
+            try {
+              const dec = new TextDecoder("latin1");
+              const text = dec.decode(bytes);
+              const embedded = extractEmbeddedProjectData(text);
+              if (embedded) {
+                if (embedded.layout) {
+                  await useLayoutDrawingStore
+                    .getState()
+                    .restoreFromProjectPayload(embedded.layout, id);
+                }
+                if (embedded.placements?.length || embedded.notes?.length) {
+                  await useToolMarkupStore
+                    .getState()
+                    .restoreMarkup(id, embedded.placements, embedded.notes);
+                }
+              }
+            } catch (e) {
+              debugLog("ViewerApp", "Error checking embedded project data", "warn", e);
+            }
+            ifcSource = bytes;
+          }
         }
 
         const result = await loadIfcModel(ifcSource, (p) => {
@@ -313,6 +380,7 @@ export default function ViewerApp() {
     const name = file.name.toLowerCase();
     return (
       name.endsWith(".ifc") ||
+      name.endsWith(".frag") ||
       file.type === "application/x-step" ||
       file.type === "application/octet-stream"
     );
@@ -350,9 +418,12 @@ export default function ViewerApp() {
       if (!files?.length) return;
       const file =
         [...files].find((f) => isIfcFile(f)) ??
-        [...files].find((f) => f.name.toLowerCase().endsWith(".ifc"));
+        [...files].find((f) => {
+          const l = f.name.toLowerCase();
+          return l.endsWith(".ifc") || l.endsWith(".frag");
+        });
       if (!file) {
-        debugLog("ViewerApp", "drop ignored — not an IFC file", "warn");
+        debugLog("ViewerApp", "drop ignored — not an IFC or FRAG file", "warn");
         return;
       }
       handleFile(file);

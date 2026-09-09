@@ -170,6 +170,11 @@ type ToolMarkupState = {
   bumpQuadPoseToken: () => void;
   setDefaultColor: (color: string) => void;
   loadForModel: (modelKey: string | null) => Promise<void>;
+  restoreMarkup: (
+    modelKey: string,
+    placements: MarkupPlacement[],
+    notes: MarkupNote[],
+  ) => Promise<void>;
   placeShape: (
     type: MarkupShapeType,
     pos: { x: number; y: number; z: number },
@@ -512,6 +517,26 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
         measurements: [],
       });
     }
+  },
+
+  restoreMarkup: async (modelKey, placements, notes) => {
+    const normPlacements = (placements || []).map((p) => normalizePlacement(p));
+    const normNotes = (notes || []).map((n) => normalizeNote(n));
+    try {
+      await Promise.all([
+        ...normPlacements.map((p) => idbPutPlacement(p)),
+        ...normNotes.map((n) => idbPutNote(n)),
+      ]);
+    } catch (e) {
+      console.warn("Markup IDB error during restore:", e);
+    }
+    set({
+      modelKey,
+      placements: normPlacements,
+      notes: normNotes,
+      selectedPlacementId: null,
+      selectedNoteId: null,
+    });
   },
 
   placeShape: async (type, pos, meta) => {

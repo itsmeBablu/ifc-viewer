@@ -4,11 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { MARKUP_COLOR_PALETTE } from "@/lib/toolMarkup";
 import {
-  buildFragBlob,
-  downloadBlob,
-  getCachedIfcBytes,
-  mergeMarkupIntoIfc,
-  buildMarkupOnlyIfc,
+  exportAndDownloadFrag,
+  exportAndDownloadIfc,
 } from "@/lib/markupFragSave";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -107,89 +104,22 @@ export default function ToolModifyPanel({
     setSelectedFloor(floorId);
     if (floorId) setViewPreset("top");
   };
-
   const saveAs = (kind: "frag" | "ifc") => {
-    if (!modelKey) return;
-    const base = (activeModelLabel ?? modelKey)
-      .replace(/\.ifc$/i, "")
-      .replace(/[^\w.-]+/g, "_");
+    const label = activeModelLabel ?? modelKey ?? "project";
     if (kind === "frag") {
-      const layout = useLayoutDrawingStore.getState();
-      const ifcBytes = getCachedIfcBytes(modelKey);
-      const blob = buildFragBlob({
-        modelKey,
-        modelLabel: activeModelLabel,
-        placements,
-        notes,
-        ifcBytes,
-        layout: layout.projectId
-          ? {
-              levels: layout.levels,
-              walls: layout.walls,
-              doors: layout.doors,
-              windows: layout.windows,
-              slabs: layout.slabs,
-              underlays: layout.underlays,
-            }
-          : undefined,
+      exportAndDownloadFrag({
+        modelKey: modelKey ?? undefined,
+        modelLabel: label,
       });
-      downloadBlob(blob, `${base}.frag`);
       markSaved();
       setSaveMsg(t(uiLanguage, "markupSavedFrag"));
     } else {
-      const endpoint = process.env.NEXT_PUBLIC_MARKUP_IFC_EXPORT_URL;
-      const finish = (blob: Blob) => {
-        downloadBlob(blob, `${base}_marked.ifc`);
-        markSaved();
-        setSaveMsg(t(uiLanguage, "markupSavedIfc"));
-      };
-      if (endpoint) {
-        void fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            modelKey,
-            modelLabel: activeModelLabel,
-            placements,
-            notes,
-          }),
-        })
-          .then(async (res) => {
-            if (!res.ok) throw new Error(`Export failed (${res.status})`);
-            finish(await res.blob());
-          })
-          .catch(() => {
-            const cached = getCachedIfcBytes(modelKey);
-            finish(
-              cached
-                ? mergeMarkupIntoIfc({
-                    baseIfc: cached,
-                    placements,
-                    notes,
-                  })
-                : buildMarkupOnlyIfc({
-                    modelLabel: activeModelLabel,
-                    placements,
-                    notes,
-                  }),
-            );
-          });
-      } else {
-        const cached = getCachedIfcBytes(modelKey);
-        finish(
-          cached
-            ? mergeMarkupIntoIfc({
-                baseIfc: cached,
-                placements,
-                notes,
-              })
-            : buildMarkupOnlyIfc({
-                modelLabel: activeModelLabel,
-                placements,
-                notes,
-              }),
-        );
-      }
+      exportAndDownloadIfc({
+        modelKey: modelKey ?? undefined,
+        modelLabel: label,
+      });
+      markSaved();
+      setSaveMsg(t(uiLanguage, "markupSavedIfc"));
     }
     if (tipTimer.current) clearTimeout(tipTimer.current);
     tipTimer.current = setTimeout(() => setSaveMsg(null), 3200);

@@ -82,11 +82,8 @@ import StudioSettingsDropdown from "./StudioSettingsDropdown";
 import StudioSettingsModal from "./StudioSettingsModal";
 import { useStudioSettingsStore } from "@/store/useStudioSettingsStore";
 import {
-  buildFragBlob,
-  buildMarkupOnlyIfc,
-  downloadBlob,
-  getCachedIfcBytes,
-  mergeMarkupIntoIfc,
+  exportAndDownloadFrag,
+  exportAndDownloadIfc,
 } from "@/lib/markupFragSave";
 import type { MarkupShapeType, MarkupViewPreset } from "@/lib/toolMarkup";
 import type { LayoutToolId } from "@/lib/layoutDrawing";
@@ -617,17 +614,7 @@ export default function ToolRibbon({
   const handleSaveFrag = async () => {
     setSaveMenuOpen(false);
     try {
-      const placements = useToolMarkupStore.getState().placements;
-      const notes = useToolMarkupStore.getState().notes;
-      const key = activeModelLabel || "model";
-      const blob = await buildFragBlob({
-        modelKey: key,
-        modelLabel: activeModelLabel,
-        placements,
-        notes,
-        ifcBytes: getCachedIfcBytes(key),
-      });
-      downloadBlob(blob, `${activeModelLabel || "vstudio-model"}.frag`);
+      exportAndDownloadFrag(activeModelLabel);
     } catch (err) {
       console.error(err);
     }
@@ -636,14 +623,7 @@ export default function ToolRibbon({
   const handleSaveIfc = async () => {
     setSaveMenuOpen(false);
     try {
-      const key = activeModelLabel || "model";
-      const cached = getCachedIfcBytes(key);
-      const placements = useToolMarkupStore.getState().placements;
-      const notes = useToolMarkupStore.getState().notes;
-      const blob = cached
-        ? mergeMarkupIntoIfc({ baseIfc: cached, placements, notes })
-        : buildMarkupOnlyIfc({ modelLabel: activeModelLabel, placements, notes });
-      downloadBlob(blob, `${activeModelLabel || "model"}-markup.ifc`);
+      exportAndDownloadIfc(activeModelLabel);
     } catch (err) {
       console.error(err);
     }

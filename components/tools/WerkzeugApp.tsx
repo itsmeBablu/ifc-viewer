@@ -21,6 +21,7 @@ import {
   loadIfcModel,
   type IfcSource,
 } from "@/lib/ifcClient";
+import { parseFragFile, extractEmbeddedProjectData, cacheIfcBytes } from "@/lib/markupFragSave";
 import { clearFloorSnapshots } from "@/lib/floorSnapshot";
 import { debugLog } from "@/lib/debugLog";
 import { getModelById } from "@/lib/modelRegistry";
@@ -443,6 +444,93 @@ export default function WerkzeugApp() {
       setLoadProgress(0);
 
       try {
+        if (source.kind === "file") {
+          const fileName = source.file.name.toLowerCase();
+
+          // ── Case 1: .frag project container ──
+          if (fileName.endsWith(".frag")) {
+            setLoadProgress(0.2, "Unpacking .frag project…");
+            const { meta, ifcBytes } = await parseFragFile(source.file);
+
+            if (meta.layout) {
+              setLoadProgress(0.5, "Restoring building & MEP elements…");
+              await useLayoutDrawingStore
+                .getState()
+                .restoreFromProjectPayload(meta.layout, meta.modelKey || source.name);
+            }
+            if (meta.placements || meta.notes) {
+              await useToolMarkupStore
+                .getState()
+                .restoreMarkup(
+                  meta.modelKey || source.name,
+                  meta.placements || [],
+                  meta.notes || [],
+                );
+            }
+
+            if (ifcBytes && ifcBytes.byteLength > 0) {
+              setLoadProgress(0.7, "Loading 3D model geometry…");
+              cacheIfcBytes(meta.modelKey || source.name, meta.modelLabel || source.name, ifcBytes);
+              const result = await loadIfcModel(ifcBytes, (p) => {
+                setLoadProgress(p.progress < 0 ? -1 : p.progress, p.message);
+              });
+              loadedRef.current = result;
+              setFloors(result.floors);
+              setRooms(result.rooms);
+              setShellGroup(result.shellGroup);
+            } else {
+              loadedRef.current = null;
+              setFloors([]);
+              setRooms([]);
+              setShellGroup(null);
+            }
+
+            setIsLoadingModel(false);
+            setTimeout(() => viewerRef.current?.fitVisible?.(), 200);
+            return;
+          }
+
+          // ── Case 2: .ifc file (with potential embedded rework data) ──
+          if (fileName.endsWith(".ifc")) {
+            setLoadProgress(0.1, "Reading IFC file…");
+            const buffer = await source.file.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            cacheIfcBytes(source.name, source.name, bytes);
+
+            const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+            const projectData = extractEmbeddedProjectData(text);
+            if (projectData) {
+              setLoadProgress(0.3, "Restoring editable project elements…");
+              if (projectData.layout) {
+                await useLayoutDrawingStore
+                  .getState()
+                  .restoreFromProjectPayload(projectData.layout, source.name);
+              }
+              if (projectData.placements || projectData.notes) {
+                await useToolMarkupStore
+                  .getState()
+                  .restoreMarkup(
+                    source.name,
+                    projectData.placements || [],
+                    projectData.notes || [],
+                  );
+              }
+            }
+
+            setLoadProgress(0.5, "Parsing 3D IFC geometry…");
+            const result = await loadIfcModel(bytes, (p) => {
+              setLoadProgress(p.progress < 0 ? -1 : p.progress, p.message);
+            });
+            loadedRef.current = result;
+            setFloors(result.floors);
+            setRooms(result.rooms);
+            setShellGroup(result.shellGroup);
+            setIsLoadingModel(false);
+            setTimeout(() => viewerRef.current?.fitVisible?.(), 200);
+            return;
+          }
+        }
+
         let ifcSource: IfcSource;
         if (source.kind === "registry") {
           const entry = getModelById(source.modelId);

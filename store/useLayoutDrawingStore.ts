@@ -136,6 +136,7 @@ import {
   idbPutPipe,
   idbPutPresets,
   idbPutRamp,
+  idbPutRoom,
   idbPutSlab,
   idbPutStair,
   idbPutUnderlay,
@@ -492,6 +493,10 @@ type LayoutDrawingState = {
   setElementsCategoryFilter: (val: string) => void;
 
   loadForProject: (projectId: string | null, isEmpty?: boolean) => Promise<void>;
+  restoreFromProjectPayload: (
+    layout?: import("@/lib/markupFragSave").FragSavePayload["layout"] | null,
+    fallbackProjectId?: string,
+  ) => Promise<void>;
   createEmptyProject: (name: string) => Promise<{
     projectId: string;
     level: LayoutLevel;
@@ -1404,6 +1409,97 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setBrowserSearch: (val) => set({ browserSearch: val }),
   elementsCategoryFilter: "all",
   setElementsCategoryFilter: (val) => set({ elementsCategoryFilter: val }),
+
+  restoreFromProjectPayload: async (layout, fallbackProjectId) => {
+    clearWerkzeugHistory();
+    const pid = layout?.projectId || fallbackProjectId || `project_${Date.now()}`;
+
+    const levels = (layout?.levels || []).map((r) => ({ ...r, projectId: pid }));
+    const walls = (layout?.walls || []).map((r) => ({ ...r, projectId: pid }));
+    const doors = (layout?.doors || []).map((r) => ({ ...r, projectId: pid }));
+    const windows = (layout?.windows || []).map((r) => ({ ...r, projectId: pid }));
+    const slabs = (layout?.slabs || []).map((r) => ({ ...r, projectId: pid }));
+    const columns = (layout?.columns || []).map((r) => ({ ...r, projectId: pid }));
+    const beams = (layout?.beams || []).map((r) => ({ ...r, projectId: pid }));
+    const stairs = (layout?.stairs || []).map((r) => ({ ...r, projectId: pid }));
+    const ramps = (layout?.ramps || []).map((r) => ({ ...r, projectId: pid }));
+    const ducts = (layout?.ducts || []).map((r) => ({ ...r, projectId: pid }));
+    const pipes = (layout?.pipes || []).map((r) => ({ ...r, projectId: pid }));
+    const cableTrays = (layout?.cableTrays || []).map((r) => ({ ...r, projectId: pid }));
+    const mepEquipment = (layout?.mepEquipment || []).map((r) => ({ ...r, projectId: pid }));
+    const wires = (layout?.wires || []).map((r) => ({ ...r, projectId: pid }));
+    const gridLines = (layout?.gridLines || []).map((r) => ({ ...r, projectId: pid }));
+    const groups = (layout?.groups || []).map((r) => ({ ...r, projectId: pid }));
+    const wallTypes = (layout?.wallTypes || []).map((r) => ({ ...r, projectId: pid }));
+    const sketchLines = (layout?.sketchLines || []).map((r) => ({ ...r, projectId: pid }));
+    const underlays = (layout?.underlays || []).map((r) => ({ ...r, projectId: pid }));
+    const layoutRooms = (layout?.layoutRooms || []).map((r) => ({ ...r, projectId: pid }));
+
+    try {
+      await Promise.all([
+        ...levels.map(idbPutLevel),
+        ...walls.map(idbPutWall),
+        ...doors.map(idbPutDoor),
+        ...windows.map(idbPutWindow),
+        ...slabs.map(idbPutSlab),
+        ...columns.map(idbPutColumn),
+        ...beams.map(idbPutBeam),
+        ...stairs.map(idbPutStair),
+        ...ramps.map(idbPutRamp),
+        ...ducts.map(idbPutDuct),
+        ...pipes.map(idbPutPipe),
+        ...cableTrays.map(idbPutCableTray),
+        ...mepEquipment.map(idbPutMepEquipment),
+        ...wires.map(idbPutWire),
+        ...gridLines.map(idbPutGridLine),
+        ...groups.map(idbPutGroup),
+        ...wallTypes.map(idbPutWallType),
+        ...sketchLines.map(idbPutSketchLine),
+        ...underlays.map(idbPutUnderlay),
+        ...layoutRooms.map(idbPutRoom),
+      ]);
+    } catch (e) {
+      console.warn("IndexedDB persist during restore had warnings:", e);
+    }
+
+    set({
+      projectId: pid,
+      isEmptyProject: false,
+      lastMutatedAt: Date.now(),
+      levels,
+      walls,
+      doors,
+      windows,
+      slabs,
+      columns,
+      beams,
+      stairs,
+      ramps,
+      ducts,
+      pipes,
+      cableTrays,
+      mepEquipment,
+      wires,
+      gridLines,
+      groups,
+      wallTypes,
+      sketchLines,
+      underlays,
+      layoutRooms,
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
+      selectedElements: [],
+      armedLayoutTool: null,
+    });
+  },
 
   loadForProject: async (projectId, isEmpty = false) => {
     clearWerkzeugHistory();
