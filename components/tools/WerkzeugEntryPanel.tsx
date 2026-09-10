@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuChevronDown, LuClock3, LuDownload, LuFolderOpen, LuSearch, LuTrash2 } from "react-icons/lu";
+import { LuBox, LuChevronDown, LuClock3, LuDownload, LuFolderOpen, LuSearch, LuTrash2, LuX } from "react-icons/lu";
+import SavedProjectPreview from "./SavedProjectPreview";
 import GlassPanel from "@/components/common/GlassPanel";
 import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
 import GsapOverlay from "@/components/common/GsapOverlay";
@@ -42,6 +43,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
   const [projectSearch, setProjectSearch] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<StoredLayoutProject | null>(null);
   const [projectToDownload, setProjectToDownload] = useState<StoredLayoutProject | null>(null);
+  const [projectFor3dView, setProjectFor3dView] = useState<StoredLayoutProject | null>(null);
   const projectListRef = useRef<HTMLDivElement>(null);
   const projectCardRefs = useRef(new Map<string, HTMLElement>());
   const [scrollCue, setScrollCue] = useState({ visible: false, top: 0, height: 0 });
@@ -175,7 +177,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     const resizeObserver = new ResizeObserver(updateScrollCue);
     const mutationObserver = new MutationObserver(updateScrollCue);
     resizeObserver.observe(list);
-    mutationObserver.observe(list, { childList: true, subtree: true, attributes: true });
+    mutationObserver.observe(list, { childList: true });
     window.addEventListener("resize", updateScrollCue);
     return () => {
       window.cancelAnimationFrame(frame);
@@ -312,7 +314,24 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
                                   </div>
                                 </div>
                               )}
+                              <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-400/25 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent p-2.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="grid size-7 place-items-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                    <LuBox className="size-4" />
+                                  </div>
+                                  <span className="text-[11px] font-medium text-[var(--text-strong)]">Interactive 3D Model</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => setProjectFor3dView(project)}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg bg-amber-500/20 px-2.5 text-[11px] font-bold text-amber-700 transition hover:bg-amber-500/30 dark:text-amber-300"
+                                >
+                                  Preview 3D
+                                </button>
+                              </div>
                               <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                <button type="button" disabled={busy} onClick={() => setProjectFor3dView(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-amber-700 dark:text-amber-400 transition hover:bg-amber-100/50 dark:hover:bg-amber-950/50 disabled:opacity-45"><LuBox className="size-4" />3D View</button>
                                 <button type="button" disabled={busy} onClick={() => setProjectToDownload(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-sky-700 dark:text-sky-400 transition hover:bg-sky-100/40 dark:hover:bg-sky-950/40 disabled:opacity-45"><LuDownload className="size-4" />Download</button>
                                 <button type="button" disabled={busy} onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-red-600 dark:text-red-400 transition hover:bg-red-100/60 dark:hover:bg-red-950/40 disabled:opacity-45"><LuTrash2 className="size-4" />Delete</button>
                                 <button type="button" disabled={busy} onClick={() => void activateProject(project)} className="btn-v-yellow btn-liquid-hover h-9 rounded-xl px-4 text-xs font-bold text-[#09090b] transition disabled:opacity-45">Open project</button>
@@ -384,6 +403,81 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
               <button type="button" disabled={busy || !projectToDelete} onClick={() => { if (projectToDelete) void deleteProject(projectToDelete); }} className="h-9 rounded-xl bg-red-500 px-4 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-45">{busy ? "Deleting…" : "Confirm Delete"}</button>
             </div>
           </div>
+        </GlassPanel>
+      </GsapOverlay>
+
+      {/* ─── Interactive 3D Model Modal ─── */}
+      <GsapOverlay
+        show={Boolean(projectFor3dView)}
+        className="pointer-events-auto fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-md sm:p-6"
+      >
+        <GlassPanel
+          variant="panel"
+          zIndex={141}
+          preferCss
+          wrapperClassName="liquid-entry-glass flex h-[88vh] max-h-[720px] w-full max-w-4xl flex-col rounded-3xl border border-white/55 shadow-[0_24px_70px_rgba(15,23,42,0.45)] overflow-hidden"
+        >
+          {projectFor3dView && (
+            <div className="flex h-full min-h-0 flex-1 flex-col">
+              {/* Modal Header */}
+              <div className="flex shrink-0 items-center justify-between border-b border-white/40 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-9 place-items-center rounded-xl bg-amber-100/80 text-amber-700 shadow-sm dark:bg-amber-900/40 dark:text-amber-300">
+                    <LuBox className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-[var(--text-strong)] sm:text-base">
+                      {projectFor3dView.name}
+                    </h2>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      {projectFor3dView.elementCount} elements · {projectFor3dView.levelCount} levels
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProjectFor3dView(null)}
+                  className="grid size-8 place-items-center rounded-xl text-[var(--text-muted)] transition hover:bg-white/40 hover:text-[var(--text-strong)]"
+                  aria-label="Close 3D View"
+                >
+                  <LuX className="size-5" />
+                </button>
+              </div>
+
+              {/* 3D Viewport */}
+              <div className="relative min-h-0 flex-1 bg-gradient-to-b from-slate-900/15 to-slate-950/30">
+                <SavedProjectPreview projectId={projectFor3dView.id} isModal={true} />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex shrink-0 items-center justify-between border-t border-white/40 px-5 py-3">
+                <span className="hidden text-[11px] text-[var(--text-muted)] sm:inline">
+                  Drag to rotate · Right-drag to pan · Scroll to zoom
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProjectFor3dView(null)}
+                    className="h-9 rounded-xl bg-white/35 px-4 text-xs font-semibold text-[var(--text-strong)] transition hover:bg-white/55"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const proj = projectFor3dView;
+                      setProjectFor3dView(null);
+                      void activateProject(proj);
+                    }}
+                    className="btn-v-yellow btn-liquid-hover inline-flex h-9 items-center gap-1.5 rounded-xl px-5 text-xs font-bold text-[#09090b] transition disabled:opacity-45"
+                  >
+                    Open in CAD Studio
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </GlassPanel>
       </GsapOverlay>
     </div>
