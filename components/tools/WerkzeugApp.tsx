@@ -647,7 +647,7 @@ export default function WerkzeugApp() {
       <ThemeTransition />
       <div
         ref={rootRef}
-        className="werkzeug-compact-ui tool-chrome relative h-dvh w-dvw overflow-hidden bg-[var(--surface-base)] text-[var(--text-strong)] select-none"
+        className={`werkzeug-compact-ui tool-chrome relative h-dvh w-dvw overflow-hidden bg-[var(--surface-base)] text-[var(--text-strong)] select-none${showWerkzeugEntry ? " pointer-events-none" : ""}`}
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={onDragOver}
@@ -809,7 +809,7 @@ export default function WerkzeugApp() {
         {/* Welcome / Empty Project Starter Panel */}
         <GsapOverlay
           show={showWerkzeugEntry}
-          className="fixed inset-0 z-[90]"
+          className="pointer-events-auto fixed inset-0 z-[90]"
         >
           <WerkzeugEntryPanel onFile={handleFile} />
         </GsapOverlay>
