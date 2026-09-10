@@ -89,6 +89,7 @@ export type LayoutDoor = {
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
   material?: string;
+  panelMaterial?: string;
 };
 
 export type LayoutWindow = {
@@ -108,6 +109,7 @@ export type LayoutWindow = {
   typeId?: string;
   color?: string;
   material?: string;
+  panelMaterial?: string;
 };
 
 /** Horizontal slab — floor plate or roof plate. */

@@ -57,7 +57,6 @@ import {
   LuDownload,
   LuSparkles,
   LuSunMedium,
-  LuSquare,
   LuWand,
 } from "react-icons/lu";
 import {
@@ -147,7 +146,6 @@ const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
-  { id: "rectangle", label: "Rectangle", hint: "Draw rectangular walls or lines (2 corners)", icon: <LuSquare className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "stair", label: "Stair", hint: "Create architectural stairs (S)", icon: <IconMarkupStair className="h-3 w-3 text-teal-400 shrink-0" /> },
   { id: "ramp", label: "Ramp", hint: "Create access ramps (R)", icon: <IconMarkupRamp className="h-3 w-3 text-lime-400 shrink-0" /> },
 ];
@@ -838,14 +836,6 @@ export default function DesktopIsland() {
       return;
     }
 
-    if (id === "rectangle") {
-      clearSelection();
-      useLayoutDrawingStore.getState().setArmedLayoutTool("wall");
-      useDrawingInteractionStore.setState({ shape: "rectangle", navigating: false, message: null });
-      window.dispatchEvent(new CustomEvent("werkzeug-drawing-reset"));
-      useAppStore.getState().setRightPanelOpen(true);
-      return;
-    }
 
     clearSelection();
     useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
@@ -896,7 +886,6 @@ export default function DesktopIsland() {
     if (id === "roofs-texture") return textureMenu?.category === "roofs";
     if (id === "floors-texture") return textureMenu?.category === "floors";
     if (id === "select") return !measureMode && armed === null && armedMarkupTool === null;
-    if (id === "rectangle") return (armed === "wall" || armed === "lines") && useDrawingInteractionStore.getState().shape === "rectangle";
     return armed === id;
   };
 

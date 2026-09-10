@@ -33,6 +33,7 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useMaterialStore } from "@/store/materialStore";
+import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import MepConnectionProperties from "./MepConnectionProperties";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
@@ -1909,7 +1910,7 @@ const FUNCTION_CONFIG: Record<
   },
 };
 
-function WallLayersSection({
+export function WallLayersSection({
   wall,
   updateWall,
 }: {
@@ -1917,7 +1918,8 @@ function WallLayersSection({
   updateWall: (id: string, patch: Partial<LayoutWall>) => Promise<void> | void;
 }) {
   const materials = useMaterialStore((s) => s.materials);
-  const layers = useMemo(() => resolveWallLayers(wall), [wall]);
+  const wallTypes = useLayoutDrawingStore((s) => s.wallTypes);
+  const layers = useMemo(() => resolveWallLayers(wall, [...wallTypes, ...Object.values(DEFAULT_ELEMENT_TYPES)]), [wall, wallTypes]);
   const totalThickness = useMemo(
     () => layers.reduce((acc, l) => acc + (l.thicknessMm || 0), 0),
     [layers],
@@ -2019,6 +2021,7 @@ function WallLayersSection({
               onChange={(e) => handleOverallMaterialChange(e.target.value)}
               className="h-6 max-w-[140px] rounded border border-[var(--panel-divider)] bg-white/80 px-1.5 text-[10px] font-medium outline-none focus:border-amber-400 dark:bg-slate-800"
             >
+              {!materials.some((m) => m.id === activeExtMat) && <option value={activeExtMat}>{activeExtMat}</option>}
               {materials.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -2133,6 +2136,7 @@ function WallLayersSection({
                         }}
                         className="h-7 w-full rounded-md border border-[var(--panel-divider)] bg-white/70 px-1.5 text-[10px] outline-none focus:border-amber-400 dark:bg-slate-800"
                       >
+                        {!currentMat && <option value={layer.material}>{layer.material}</option>}
                         {materials.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name}

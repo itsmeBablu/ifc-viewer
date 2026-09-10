@@ -1,4 +1,5 @@
 "use client";
+import { isMepSelectionLocked } from "@/lib/mepSelectionLock";
 import { connectMepSegment, mepOffset, mepEndpoints, type MepSnapPoint } from "@/lib/mepConnections";
 
 import { reflowKitchenRun } from "@/lib/componentPlacement";
@@ -1200,11 +1201,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({ revealHiddenMode: !get().revealHiddenMode });
   },
   setMepModeActive: (active) => set((state) => {
-    if (!active || !state.mepArchitectureLocked) return { mepModeActive: active };
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    if (!active) return { mepModeActive: active };
     return {
       mepModeActive: true,
-      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedEquipmentId: state.selectedEquipmentId && isMepSelectionLocked({ ...state, mepModeActive: true }, { kind: "equipment", id: state.selectedEquipmentId }) ? null : state.selectedEquipmentId,
+      selectedElements: state.selectedElements.filter((ref) => !isMepSelectionLocked({ ...state, mepModeActive: true }, ref)),
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -1215,10 +1216,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   }),
   setMepArchitectureLocked: (locked) => set((state) => {
     if (!locked || !state.mepModeActive) return { mepArchitectureLocked: locked };
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     return {
       mepArchitectureLocked: true,
-      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedElements: state.selectedElements.filter((ref) => !isMepSelectionLocked({ ...state, mepArchitectureLocked: true }, ref)),
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -4342,16 +4342,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().clearSelection();
       return;
     }
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     const editingGroup = get().groups.find(group => group.id === get().activeGroupId);
     if (editingGroup && !editingGroup.elementRefs.some(member => member.kind === ref.kind && member.id === ref.id)) return;
-    if (get().mepModeActive && get().mepArchitectureLocked && architectureKinds.has(ref.kind)) return;
+    if (isMepSelectionLocked(get(), ref)) return;
     // If element belongs to a group and not currently editing inside that group:
     const group = get().groups.find((g) =>
       g.elementRefs.some((r) => r.kind === ref.kind && r.id === ref.id),
     );
     const refsToSelect: SelectedElementRef[] =
-      group && get().activeGroupId !== group.id ? group.elementRefs : [ref];
+      (group && get().activeGroupId !== group.id ? group.elementRefs : [ref]).filter((member) => !isMepSelectionLocked(get(), member));
 
     let next: SelectedElementRef[] = [];
     if (mode === "replace") {
@@ -4405,10 +4404,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       }
       refs = [...expanded.values()];
     }
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
-    const selectableRefs = (get().mepModeActive && get().mepArchitectureLocked)
-      ? refs.filter((ref) => !architectureKinds.has(ref.kind))
-      : refs;
+    const selectableRefs = refs.filter((ref) => !isMepSelectionLocked(get(), ref));
     let next: SelectedElementRef[] = [];
     if (mode === "replace") {
       next = [...selectableRefs];
@@ -6136,6 +6132,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   updateEquipment: async (id, patch) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return;
     const prev = get().mepEquipment.find((e) => e.id === id);
     if (!prev) return;
     pushWerkzeugHistory();
@@ -6157,6 +6154,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteEquipment: async (id) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return;
     pushWerkzeugHistory();
     await idbDeleteMepEquipment(id);
     set((s) => ({
@@ -6179,6 +6177,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   duplicateEquipment: async (id) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return null;
     const eq = get().mepEquipment.find((item) => item.id === id);
     if (!eq) return null;
     pushWerkzeugHistory();

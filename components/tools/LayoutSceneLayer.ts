@@ -1,3 +1,4 @@
+import { isMepSelectionLocked } from "@/lib/mepSelectionLock";
 import { isObjectVisibleInView } from "@/lib/viewVisibility";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
@@ -3263,8 +3264,11 @@ export default class LayoutSceneLayer {
           return { kind: "pipe", id: o.userData.layoutPipeId as string };
         if (o.userData.layoutCableTrayId)
           return { kind: "cabletray", id: o.userData.layoutCableTrayId as string };
-        if (o.userData.layoutEquipmentId)
-          return { kind: "equipment", id: o.userData.layoutEquipmentId as string };
+        if (o.userData.layoutEquipmentId) {
+          const ref = { kind: "equipment" as const, id: o.userData.layoutEquipmentId as string };
+          if (isMepSelectionLocked(layoutState, ref)) break;
+          return ref;
+        }
         if (o.userData.layoutWireId)
           return { kind: "wire" as any, id: o.userData.layoutWireId as string };
 
@@ -4025,7 +4029,7 @@ export default class LayoutSceneLayer {
       if (door && wall) {
         const level = state.levels.find((l) => l.id === wall.levelId);
         const elev = level?.elevationMm ?? 0;
-        this.placeOpening(g, wall, door.positionMm, door.widthMm, door.heightMm, elev, 0);
+        this.placeOpening(g, wall, door.positionMm, door.widthMm, door.heightMm, elev, 0, door);
       }
       this.updateWireframeEdges(g, showEdges, isWireframe);
     }
@@ -4035,7 +4039,7 @@ export default class LayoutSceneLayer {
       if (win && wall) {
         const level = state.levels.find((l) => l.id === wall.levelId);
         const elev = level?.elevationMm ?? 0;
-        this.placeOpening(g, wall, win.positionMm, win.widthMm, win.heightMm, elev, win.sillHeightMm);
+        this.placeOpening(g, wall, win.positionMm, win.widthMm, win.heightMm, elev, win.sillHeightMm, undefined, win);
       }
       this.updateWireframeEdges(g, showEdges, isWireframe);
     }
@@ -4643,7 +4647,10 @@ export default class LayoutSceneLayer {
       ];
 
       for (const op of openings) {
-        const holeCenterX = fromMm(op.posMm) - halfLen;
+        // Openings retain their world position when a wall endpoint extends to a join.
+        const openingPoint = pointOnWallMm(wall, op.posMm);
+        const offsetAlongJoinedWall = ((openingPoint.xMm - cl.startXmm) * dx + (openingPoint.yMm - cl.startYmm) * dy) / len;
+        const holeCenterX = fromMm(offsetAlongJoinedWall) - halfLen;
         const holeHalfW = fromMm(op.widthMm) / 2;
         const holeYBottom = fromMm(op.sillMm) - halfHeight;
         const holeYTop = fromMm(op.sillMm + op.heightMm) - halfHeight;
@@ -4651,8 +4658,10 @@ export default class LayoutSceneLayer {
         const holeTol = 0.0015;
         const x1 = holeCenterX - holeHalfW - holeTol;
         const x2 = holeCenterX + holeHalfW + holeTol;
-        const y1 = Math.max(-halfHeight - 0.002, holeYBottom - (op.sillMm > 0 ? holeTol : 0.002));
-        const y2 = Math.min(halfHeight + 0.002, holeYTop + holeTol);
+        // ExtrudeGeometry holes must stay inside the outer contour. Crossing the
+        // floor edge makes triangulation fill parts of the doorway with wall faces.
+        const y1 = Math.max(-halfHeight + 0.0001, holeYBottom - holeTol);
+        const y2 = Math.min(halfHeight - 0.0001, holeYTop + holeTol);
 
         // Verify valid opening geometry inside wall boundaries
         if (x2 > -halfLen && x1 < halfLen && y2 > y1) {
@@ -5276,19 +5285,32 @@ export default class LayoutSceneLayer {
       style,
       colorStr,
       door?.material || win?.material,
-      (door as any)?.panelMaterial || (win as any)?.panelMaterial,
+      door?.panelMaterial || win?.panelMaterial,
     );
 
-    // 1. Frame Mesh: 4mm proud on interior and exterior to eliminate coplanar face Z-fighting
-    const frameDepth = d + 0.008;
+    // Frame projects 12mm past each wall face to keep the reveal visible.
+    const frameDepth = d + 0.024;
     const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: frameDepth, bevelEnabled: false });
     frameGeo.translate(0, 0, -frameDepth / 2);
     const frameMesh = new THREE.Mesh(frameGeo, frameMat);
     frameMesh.name = "opening-frame";
     boxGroup.add(frameMesh);
 
+    // Face casings overlap the wall finish on both sides, rather than ending inside the reveal.
+    for (const side of [-1, 1]) {
+      const casingShape = buildOutlineShape(w + 0.08, h + 0.04, headShape);
+      casingShape.holes.push(inner.clone());
+      const casingGeo = new THREE.ExtrudeGeometry(casingShape, { depth: 0.018, bevelEnabled: false });
+      casingGeo.translate(0, 0, -0.009);
+      const casing = new THREE.Mesh(casingGeo, frameMat);
+      casing.name = "opening-casing";
+      casing.position.z = side * (d / 2 + 0.022);
+      boxGroup.add(casing);
+    }
+
     // 2. Panel Mesh (door leaf or window glass pane)
     const panelThick = category === "door" ? 0.04 : 0.012; // 40mm leaf, 12mm glass
+    const leafOffset = (door?.swing ?? 1) * Math.max(0, d / 2 - panelThick / 2);
     if (category === "door") {
       if (style === "double") {
         const leafW = (w - frameThick * 2) / 2;
@@ -5333,7 +5355,7 @@ export default class LayoutSceneLayer {
           boxGroup.add(slat);
         }
       } else {
-        const panelShape = buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+        const panelShape = inner.clone();
         const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
         panelGeo.translate(0, 0, -panelThick / 2);
         const panelMesh = new THREE.Mesh(panelGeo, panelMat);
@@ -5343,7 +5365,7 @@ export default class LayoutSceneLayer {
     } else {
       // Windows
       const innerW = w - frameThick * 2;
-      const innerH = Math.max(0.01, h - frameThick);
+      const innerH = Math.max(0.01, h - frameThick * 2);
       if (headShape === "round") {
         const rad = Math.max(0.01, Math.min(w / 2, h / 2) - frameThick);
         const paneShape = new THREE.Shape();
@@ -5387,7 +5409,7 @@ export default class LayoutSceneLayer {
           }
         }
       } else {
-        const panelShape = buildOutlineShape(innerW, innerH, headShape);
+        const panelShape = inner.clone();
         const panelGeo = new THREE.ExtrudeGeometry(panelShape, { depth: panelThick, bevelEnabled: false });
         panelGeo.translate(0, 0, -panelThick / 2);
         const panelMesh = new THREE.Mesh(panelGeo, panelMat);
@@ -5396,6 +5418,36 @@ export default class LayoutSceneLayer {
       }
     }
 
+
+    for (const child of boxGroup.children) {
+      if (child === frameMesh || child.name === "opening-casing") continue;
+      if (category === "door") child.position.z += leafOffset;
+      if (category === "window" && headShape !== "round" && child.name !== "opening-panel") child.position.y += frameThick;
+      const bounds = new THREE.Box3().setFromObject(child);
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      if (child.name.startsWith("opening-panel")) {
+        const sx = Math.max(0.01, size.x - 0.006) / Math.max(size.x, 0.01);
+        const sy = Math.max(0.01, size.y - 0.012) / Math.max(size.y, 0.01);
+        child.scale.set(sx, sy, 1);
+        child.position.x += (center.x - child.position.x) * (1 - sx);
+        child.position.y += center.y * (1 - sy) + (category === "door" && style === "double" ? 0.008 : 0);
+      }
+    }
+
+    if (door && style !== "garage") {
+      const hardware = new THREE.MeshStandardMaterial({ color: 0xb8bdc5, metalness: 0.8, roughness: 0.25 });
+      const latchX = (door.hinge === "end" ? -1 : 1) * (w / 2 - frameThick - 0.09);
+      for (const side of [-1, 1]) {
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.018, 0.022), hardware);
+        handle.name = "door-handle";
+        handle.position.set(latchX, Math.min(1.05, h * 0.5), leafOffset + side * (panelThick / 2 + 0.035));
+        boxGroup.add(handle);
+        const stem = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 0.035), hardware);
+        stem.position.set(latchX, handle.position.y, leafOffset + side * (panelThick / 2 + 0.0175));
+        boxGroup.add(stem);
+      }
+    }
 
     boxGroup.traverse((c) => {
       if (door) c.userData.layoutDoorId = door.id;
@@ -5420,6 +5472,7 @@ export default class LayoutSceneLayer {
     panelMatId?: string,
   ) {
     const frameMat = new THREE.MeshPhysicalMaterial({
+      side: THREE.DoubleSide,
       roughness: 0.6,
       metalness: 0.1,
       polygonOffset: true,
@@ -5427,6 +5480,7 @@ export default class LayoutSceneLayer {
       polygonOffsetUnits: -1,
     });
     let panelMat: THREE.Material = new THREE.MeshPhysicalMaterial({
+      side: THREE.DoubleSide,
       roughness: 0.8,
       metalness: 0.05,
       polygonOffset: true,
@@ -5437,18 +5491,6 @@ export default class LayoutSceneLayer {
     if (this.currentRenderMode === "wireframe") {
       frameMat.wireframe = false;
       (panelMat as THREE.MeshPhysicalMaterial).wireframe = false;
-    }
-
-    if (this.currentRenderMode === "light") {
-      frameMat.color.setHex(0xf8fafc);
-      frameMat.roughness = 0.95;
-      frameMat.metalness = 0;
-      (panelMat as THREE.MeshPhysicalMaterial).color.setHex(0xf8fafc);
-      (panelMat as THREE.MeshPhysicalMaterial).roughness = 0.95;
-      (panelMat as THREE.MeshPhysicalMaterial).metalness = 0;
-      (panelMat as THREE.MeshPhysicalMaterial).transparent = false;
-      (panelMat as THREE.MeshPhysicalMaterial).opacity = 1.0;
-      return { frameMat, panelMat };
     }
 
     const customFrame = useMaterialStore.getState().getMaterial(frameMatId);
@@ -5495,6 +5537,7 @@ export default class LayoutSceneLayer {
 
     if (category === "window" || style === "glass") {
       const glassMat = new THREE.MeshPhysicalMaterial({
+        side: THREE.DoubleSide,
         color: 0xa8d8ea,
         transparent: true,
         opacity: 0.35,
@@ -5508,10 +5551,20 @@ export default class LayoutSceneLayer {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0x475569);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.42;
       (panelMat as THREE.MeshStandardMaterial).metalness = 0.65;
-    } else if (style === "wood" || category === "door") {
+    } else if (style === "wood" || (category === "door" && style !== "metal")) {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0x8b5a2b);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.65;
       (panelMat as THREE.MeshStandardMaterial).metalness = 0.02;
+      const wood = getHatchCanvasTexture("wood", "#633b20", "#ac794b", 500);
+      if (wood) {
+        const texture = wood.clone();
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(2, 1);
+        texture.userData.vstudioMaterialClone = true;
+        texture.needsUpdate = true;
+        (panelMat as THREE.MeshStandardMaterial).map = texture;
+        (panelMat as THREE.MeshStandardMaterial).color.setHex(0xffffff);
+      }
     } else if (style === "metal") {
       (panelMat as THREE.MeshStandardMaterial).color.setHex(0xd1d5db);
       (panelMat as THREE.MeshStandardMaterial).roughness = 0.3;

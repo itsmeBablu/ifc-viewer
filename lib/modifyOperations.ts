@@ -1,3 +1,4 @@
+import { isMepSelectionLocked } from "./mepSelectionLock";
 import * as THREE from "three";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
@@ -173,7 +174,7 @@ export async function transformElements(refs: SelectedElementRef[], matrix: THRE
   const expanded = expandedSelection(refs);
   if (!expanded.length) throw new Error("Select elements first.");
   if (expanded.some(ref => state.lockedElementKeys.includes(selectionKey(ref)))) throw new Error("The selection contains a locked element.");
-  if (state.mepModeActive && state.mepArchitectureLocked && expanded.some(ref => ["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"].includes(ref.kind))) throw new Error("Architecture is locked in the current MEP view.");
+  if (expanded.some(ref => isMepSelectionLocked(state, ref))) throw new Error("Architecture is locked in the current MEP view.");
   const activeGroup = state.groups.find(group => group.id === state.activeGroupId);
   if (activeGroup && expanded.some(ref => !activeGroup.elementRefs.some(member => selectionKey(member) === selectionKey(ref)))) throw new Error("Finish group editing before modifying elements outside this group.");
   const source = entriesFor(expanded), wallIds = new Set(source.filter(e => e.kind === "wall").map(e => e.row.id));
