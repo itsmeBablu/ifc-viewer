@@ -4648,10 +4648,11 @@ export default class LayoutSceneLayer {
         const holeYBottom = fromMm(op.sillMm) - halfHeight;
         const holeYTop = fromMm(op.sillMm + op.heightMm) - halfHeight;
 
-        const x1 = holeCenterX - holeHalfW;
-        const x2 = holeCenterX + holeHalfW;
-        const y1 = Math.max(-halfHeight - 0.001, holeYBottom);
-        const y2 = Math.min(halfHeight + 0.001, holeYTop);
+        const holeTol = 0.0015;
+        const x1 = holeCenterX - holeHalfW - holeTol;
+        const x2 = holeCenterX + holeHalfW + holeTol;
+        const y1 = Math.max(-halfHeight - 0.002, holeYBottom - (op.sillMm > 0 ? holeTol : 0.002));
+        const y2 = Math.min(halfHeight + 0.002, holeYTop + holeTol);
 
         // Verify valid opening geometry inside wall boundaries
         if (x2 > -halfLen && x1 < halfLen && y2 > y1) {
@@ -5227,7 +5228,47 @@ export default class LayoutSceneLayer {
           s.absarc(0, h / 2, rad, 0, Math.PI * 2, false);
           return s;
         })()
-      : buildOutlineShape(w - frameThick * 2, Math.max(0.01, h - frameThick), headShape);
+      : category === "window"
+      ? (() => {
+          // Window has a 4-sided frame with bottom sill
+          const s = new THREE.Shape();
+          const halfW = (w - frameThick * 2) / 2;
+          const rectH = Math.max(0.01, h - frameThick * 2);
+          if (headShape === "arched") {
+            const archH = Math.max(0.01, rectH - halfW);
+            s.moveTo(-halfW, frameThick);
+            s.lineTo(-halfW, frameThick + archH);
+            s.absarc(0, frameThick + archH, halfW, Math.PI, 0, false);
+            s.lineTo(halfW, frameThick);
+          } else {
+            s.moveTo(-halfW, frameThick);
+            s.lineTo(-halfW, h - frameThick);
+            s.lineTo(halfW, h - frameThick);
+            s.lineTo(halfW, frameThick);
+          }
+          s.closePath();
+          return s;
+        })()
+      : (() => {
+          // Door frame has small 8mm threshold so hole is strictly inside outer frame boundary
+          const s = new THREE.Shape();
+          const halfW = (w - frameThick * 2) / 2;
+          const threshH = 0.008;
+          if (headShape === "arched") {
+            const archH = Math.max(0.01, h - frameThick - halfW);
+            s.moveTo(-halfW, threshH);
+            s.lineTo(-halfW, threshH + archH);
+            s.absarc(0, threshH + archH, halfW, Math.PI, 0, false);
+            s.lineTo(halfW, threshH);
+          } else {
+            s.moveTo(-halfW, threshH);
+            s.lineTo(-halfW, h - frameThick);
+            s.lineTo(halfW, h - frameThick);
+            s.lineTo(halfW, threshH);
+          }
+          s.closePath();
+          return s;
+        })();
     outer.holes.push(inner);
 
     const { frameMat, panelMat } = this.getOpeningMaterials(
@@ -5238,9 +5279,10 @@ export default class LayoutSceneLayer {
       (door as any)?.panelMaterial || (win as any)?.panelMaterial,
     );
 
-    // 1. Frame Mesh
-    const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: d, bevelEnabled: false });
-    frameGeo.translate(0, 0, -d / 2);
+    // 1. Frame Mesh: 4mm proud on interior and exterior to eliminate coplanar face Z-fighting
+    const frameDepth = d + 0.008;
+    const frameGeo = new THREE.ExtrudeGeometry(outer, { depth: frameDepth, bevelEnabled: false });
+    frameGeo.translate(0, 0, -frameDepth / 2);
     const frameMesh = new THREE.Mesh(frameGeo, frameMat);
     frameMesh.name = "opening-frame";
     boxGroup.add(frameMesh);
@@ -5377,8 +5419,20 @@ export default class LayoutSceneLayer {
     frameMatId?: string,
     panelMatId?: string,
   ) {
-    const frameMat = new THREE.MeshPhysicalMaterial({ roughness: 0.6, metalness: 0.1 });
-    let panelMat: THREE.Material = new THREE.MeshPhysicalMaterial({ roughness: 0.8, metalness: 0.05 });
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      roughness: 0.6,
+      metalness: 0.1,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    let panelMat: THREE.Material = new THREE.MeshPhysicalMaterial({
+      roughness: 0.8,
+      metalness: 0.05,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
 
     if (this.currentRenderMode === "wireframe") {
       frameMat.wireframe = false;

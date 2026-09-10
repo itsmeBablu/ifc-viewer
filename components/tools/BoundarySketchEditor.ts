@@ -105,19 +105,61 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     Object.assign(overlay.style, { display: "block", left: `${ctx.bounds.left}px`, top: `${ctx.bounds.top}px`, width: `${ctx.bounds.width}px`, height: `${ctx.bounds.height}px` });
     const loops = drag?.preview ?? slabBoundaryLoops(ctx.slab);
     const xy = (p: BoundaryPoint) => { const q = ctx.project(p); return { x: q.clientX - ctx.bounds.left, y: q.clientY - ctx.bounds.top }; };
+
+    // ── Edge + vertex rendering ──────────────────────────────────────────────
     loops.forEach((loop, ring) => {
       loop.forEach((p, index) => {
         const a = xy(p), b = xy(loop[(index + 1) % loop.length]);
         const active = matches(selected, ring, index, "edge") || matches(firstTrim?.hit ?? null, ring, index, "edge");
-        element("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: active ? "#facc15" : matches(hover, ring, index, "edge") ? "#38bdf8" : "#ec4899", "stroke-width": active ? 4 : 2 });
+        const isHovered = matches(hover, ring, index, "edge");
+        const stroke = active ? "#facc15" : isHovered ? "#22d3ee" : "#ec4899";
+        const width = active ? 4 : isHovered ? 3 : 2;
+        element("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke, "stroke-width": width });
+        // Midpoint dot on hovered edge — makes it obviously interactive
+        if (isHovered && !active) {
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          element("circle", { cx: mx, cy: my, r: 4, fill: "#22d3ee", stroke: "#0e7490", "stroke-width": 1.5 });
+        }
       });
       loop.forEach((p, index) => {
         const a = xy(p), endpoint = selected?.kind === "edge" && selected.ring === ring && (selected.index === index || (selected.index + 1) % loop.length === index);
         const active = endpoint || matches(selected, ring, index, "vertex");
         const size = active ? 11 : 8;
-        element("rect", { x: a.x - size / 2, y: a.y - size / 2, width: size, height: size, fill: matches(hover, ring, index, "vertex") ? "#38bdf8" : active ? "#facc15" : "#fff", stroke: "#be185d", "stroke-width": 2 });
+        element("rect", { x: a.x - size / 2, y: a.y - size / 2, width: size, height: size, fill: matches(hover, ring, index, "vertex") ? "#22d3ee" : active ? "#facc15" : "#fff", stroke: "#be185d", "stroke-width": 2 });
       });
     });
+
+    // ── Unclosed / degenerate loop warning ───────────────────────────────────
+    let hasOpenLoop = false;
+    loops.forEach((loop) => {
+      if (loop.length < 3) {
+        hasOpenLoop = true;
+        // Draw pulsing rose circles on every vertex in the broken loop
+        loop.forEach((p) => {
+          const a = xy(p);
+          const circle = element("circle", { cx: a.x, cy: a.y, r: 7, fill: "#f43f5e", stroke: "#881337", "stroke-width": 2, opacity: 1 });
+          // CSS animation via style attribute
+          circle.setAttribute("style", "animation: boundary-open-pulse 1s ease-in-out infinite");
+        });
+      }
+    });
+    if (hasOpenLoop) {
+      const bg = element("rect", { x: 8, y: 8, width: 230, height: 26, rx: 6, fill: "#1e1e2e", opacity: 0.82 });
+      bg.setAttribute("aria-hidden", "true");
+      const warn = element("text", { x: 18, y: 26, fill: "#f43f5e", "font-size": 13, "font-weight": "bold" });
+      warn.textContent = "⚠ Boundary not closed — needs ≥ 3 vertices";
+    }
+
+    // ── Validation / move error label ────────────────────────────────────────
+    const errMsg = ctx.edit.error;
+    if (errMsg && !hasOpenLoop) {
+      const bg2 = element("rect", { x: 8, y: 8, width: Math.min(errMsg.length * 6.5 + 20, ctx.bounds.width - 16), height: 24, rx: 5, fill: "#18181b", opacity: 0.75 });
+      bg2.setAttribute("aria-hidden", "true");
+      const errLabel = element("text", { x: 16, y: 25, fill: "#fbbf24", "font-size": 12 });
+      errLabel.textContent = errMsg;
+    }
+
+    // ── Snap indicator ───────────────────────────────────────────────────────
     if (snap?.snapped) {
       const a = xy(snap.worldMm);
       const attrs = { stroke: "#22d3ee", "stroke-width": 2, fill: "none" };

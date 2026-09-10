@@ -11,6 +11,9 @@ import {
 import { rasterizePdfPage } from "./pdfRasterize";
 import type { UnderlaySnapSegment } from "./referenceUnderlay";
 import { strokesToSnapSegmentsUv } from "./underlaySnap";
+import { dwgMillimetersPerUnit, dwgViewport } from "./dwgScale";
+
+export type DwgImage = CompressedImage & { snapSegments: UnderlaySnapSegment[]; mmPerPixel?: number };
 
 type Pt = { x: number; y: number };
 type Stroke = { points: Pt[] };
@@ -335,7 +338,7 @@ function strokesToCanvas(
 
 async function rasterizeDwgWithLibreDwg(
   file: File,
-): Promise<CompressedImage & { snapSegments: UnderlaySnapSegment[] }> {
+): Promise<DwgImage> {
   const { LibreDwg, Dwg_File_Type } = await import("@mlightcad/libredwg-web");
   const libredwg = await LibreDwg.create("/wasm/libredwg/");
   const buf = await file.arrayBuffer();
@@ -343,6 +346,7 @@ async function rasterizeDwgWithLibreDwg(
   if (ptr == null) throw new Error("DWG parse failed");
   try {
     const db = libredwg.convert(ptr) as unknown as {
+      header?: { INSUNITS?: number };
       entities?: unknown[];
       tables?: {
         BLOCK_RECORD?:
@@ -362,10 +366,12 @@ async function rasterizeDwgWithLibreDwg(
       }
       throw new Error("DWG has no drawable geometry");
     }
-    const snapSegments = strokesToSnapSegmentsUv(strokes, bounds);
-    const canvas = strokesToCanvas(strokes, bounds);
+    const viewport = dwgViewport(bounds);
+    const snapSegments = strokesToSnapSegmentsUv(strokes, viewport.bounds);
+    const canvas = strokesToCanvas(strokes, viewport.bounds);
     const img = await compressCanvasImage(canvas, DWG_MAX_EDGE, 0.92);
-    return { ...img, snapSegments };
+    const mmPerUnit = dwgMillimetersPerUnit(db.header?.INSUNITS);
+    return { ...img, snapSegments, mmPerPixel: mmPerUnit === undefined ? undefined : viewport.unitsPerPixel * mmPerUnit * viewport.width / img.width };
   } finally {
     try {
       libredwg.dwg_free(ptr);
@@ -419,13 +425,13 @@ async function tryOdaConvert(
 /** Convert a DWG file into a compressed JPEG underlay image + snap lines. */
 export async function rasterizeDwg(
   file: File,
-): Promise<CompressedImage & { snapSegments: UnderlaySnapSegment[] }> {
-  const viaOda = await tryOdaConvert(file);
-  if (viaOda) {
-    return {
-      ...viaOda,
-      snapSegments: viaOda.snapSegments ?? [],
-    };
+): Promise<DwgImage> {
+  // Read model units before falling back to conversions that may only return an image.
+  try {
+    return await rasterizeDwgWithLibreDwg(file);
+  } catch (error) {
+    const viaOda = await tryOdaConvert(file);
+    if (viaOda) return { ...viaOda, snapSegments: viaOda.snapSegments ?? [] };
+    throw error;
   }
-  return rasterizeDwgWithLibreDwg(file);
 }

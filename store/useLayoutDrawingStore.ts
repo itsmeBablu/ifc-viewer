@@ -6128,8 +6128,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set((state) => ({
       mepEquipment: [...state.mepEquipment, equip],
       groups: [...state.groups, ...parametricGroups],
-      selectedElements: [{ kind: "equipment", id: equip.id }],
-      selectedEquipmentId: equip.id,
+      selectedElements: state.armedLayoutTool === "component" || state.armedLayoutTool === "equipment" ? [] : [{ kind: "equipment", id: equip.id }],
+      selectedEquipmentId: state.armedLayoutTool === "component" || state.armedLayoutTool === "equipment" ? null : equip.id,
       lastMutatedAt: Date.now(),
     }));
     return equip;

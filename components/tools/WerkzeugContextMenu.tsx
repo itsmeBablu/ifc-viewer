@@ -44,27 +44,27 @@ type MenuState = {
 type SidePanel = "save" | "floor" | "shapes" | null;
 
 const ctxMenuSurface =
-  "context-menu-surface isolate overflow-hidden rounded-[22px] border border-white/80 bg-gradient-to-br from-white/95 via-white/82 to-slate-100/72 text-zinc-800 shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.12),0_18px_50px_rgba(15,23,42,0.22)] backdrop-blur-2xl";
+  "context-menu-surface isolate overflow-hidden rounded-[22px] border border-white/80 dark:border-white/10 bg-gradient-to-br from-white/95 via-white/82 to-slate-100/72 dark:from-zinc-900/95 dark:via-zinc-900/90 dark:to-zinc-950/90 text-zinc-800 dark:text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-1px_0_rgba(148,163,184,0.12),0_18px_50px_rgba(15,23,42,0.22)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-2xl";
 
 const ctxItemIdle =
-  "flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-zinc-700 transition hover:border-white hover:bg-white/80 hover:text-zinc-950 hover:shadow-[0_5px_16px_rgba(15,23,42,0.08)] disabled:opacity-40";
+  "flex w-full items-center justify-between gap-2 overflow-hidden rounded-xl border border-transparent px-2.5 py-2 text-left text-xs font-medium text-zinc-700 dark:text-zinc-200 transition hover:border-white dark:hover:border-white/15 hover:bg-white/80 dark:hover:bg-white/8 hover:text-zinc-950 dark:hover:text-white hover:shadow-[0_5px_16px_rgba(15,23,42,0.08)] disabled:opacity-40";
 
 const ctxItemActive =
-  "overflow-hidden rounded-xl border-white bg-white/90 text-zinc-950 shadow-[inset_0_1px_0_white,0_5px_16px_rgba(15,23,42,0.10)]";
+  "overflow-hidden rounded-xl border-white dark:border-white/15 bg-white/90 dark:bg-white/10 text-zinc-950 dark:text-white shadow-[inset_0_1px_0_white,0_5px_16px_rgba(15,23,42,0.10)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]";
 
 const ctxChipOn =
-  "overflow-hidden rounded-lg border border-white bg-white text-zinc-900 shadow-[inset_0_1px_0_white,0_3px_10px_rgba(15,23,42,0.10)]";
+  "overflow-hidden rounded-lg border border-white dark:border-white/20 bg-white dark:bg-white/12 text-zinc-900 dark:text-white shadow-[inset_0_1px_0_white,0_3px_10px_rgba(15,23,42,0.10)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]";
 
 const ctxChipOff =
-  "overflow-hidden rounded-lg border border-transparent bg-white/35 text-zinc-500 transition hover:border-white hover:bg-white/80 hover:text-zinc-900";
+  "overflow-hidden rounded-lg border border-transparent bg-white/35 dark:bg-white/6 text-zinc-500 dark:text-zinc-400 transition hover:border-white dark:hover:border-white/15 hover:bg-white/80 dark:hover:bg-white/12 hover:text-zinc-900 dark:hover:text-zinc-100";
 
 const ctxToggleOn = "bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.55)]";
-const ctxToggleOff = "ctx-toggle-off bg-amber-200/70";
+const ctxToggleOff = "ctx-toggle-off bg-amber-200/70 dark:bg-zinc-700";
 
 const ctxLabel = "text-[10px] font-semibold tracking-wide text-[var(--text-muted)]";
 
 const ctxPrimaryBtn =
-  "w-full rounded-xl border border-white bg-white/85 px-2 py-1.5 text-xs font-semibold text-zinc-800 shadow-[inset_0_1px_0_white,0_4px_14px_rgba(15,23,42,0.10)] transition hover:bg-white disabled:opacity-40";
+  "w-full rounded-xl border border-white dark:border-white/12 bg-white/85 dark:bg-white/10 px-2 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-100 shadow-[inset_0_1px_0_white,0_4px_14px_rgba(15,23,42,0.10)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:bg-white dark:hover:bg-white/18 disabled:opacity-40";
 
 function getCategoryInfo(kind: string): { id: string; label: string } {
   switch (kind) {
@@ -460,12 +460,12 @@ export default function WerkzeugContextMenu({
               {toolMode ? (
                 <>
                   {primaryLayoutSelection && (
-                    <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1 shadow-[inset_0_1px_0_white]">
+                    <div className="rounded-2xl border border-white/90 dark:border-white/10 bg-white/55 dark:bg-white/6 p-1 shadow-[inset_0_1px_0_white] dark:shadow-none">
                       <div className="flex items-center justify-between px-2 py-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
                           {layoutSelectionLabel}
                         </span>
-                        <span className="rounded-full bg-zinc-900 px-1.5 py-0.5 text-[8px] font-bold text-white">
+                        <span className="rounded-full bg-zinc-900 dark:bg-zinc-700 px-1.5 py-0.5 text-[8px] font-bold text-white">
                           Selected
                         </span>
                       </div>
@@ -549,8 +549,8 @@ export default function WerkzeugContextMenu({
                         const isCatHidden = hiddenCategories.has(cat.id);
 
                         return (
-                          <div className="mt-1 border-t border-slate-200/80 pt-1">
-                            <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-400">
+                          <div className="mt-1 border-t border-slate-200/80 dark:border-white/8 pt-1">
+                            <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                               Visibility & Isolate
                             </div>
 
@@ -580,8 +580,8 @@ export default function WerkzeugContextMenu({
                                   close();
                                 }}
                               >
-                                <span className="flex items-center gap-1.5 font-medium text-zinc-700">
-                                  <LuEyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                                <span className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-200">
+                                  <LuEyeOff className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
                                   <span>Hide {layoutSelectionLabel}</span>
                                 </span>
                               </button>
@@ -597,7 +597,7 @@ export default function WerkzeugContextMenu({
                                 close();
                               }}
                             >
-                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-200">
                                 {isCatHidden ? (
                                   <>
                                     <LuEye className="h-3.5 w-3.5 text-pink-600" />
@@ -605,7 +605,7 @@ export default function WerkzeugContextMenu({
                                   </>
                                 ) : (
                                   <>
-                                    <LuEyeOff className="h-3.5 w-3.5 text-zinc-500" />
+                                    <LuEyeOff className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
                                     <span>Hide All {cat.label}</span>
                                   </>
                                 )}
@@ -622,8 +622,8 @@ export default function WerkzeugContextMenu({
                                 close();
                               }}
                             >
-                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
-                                <LuFocus className="h-3.5 w-3.5 text-zinc-500" />
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-200">
+                                <LuFocus className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
                                 <span>Isolate {layoutSelectionLabel}</span>
                               </span>
                             </button>
@@ -638,7 +638,7 @@ export default function WerkzeugContextMenu({
                                 close();
                               }}
                             >
-                              <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                              <span className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-200">
                                 <LuFocus className="h-3.5 w-3.5 text-amber-500" />
                                 <span>Isolate All {cat.label}</span>
                               </span>
@@ -666,7 +666,7 @@ export default function WerkzeugContextMenu({
                       })()}
 
                       {/* Dynamic Type Switcher for selected element */}
-                      <div className="mt-1 border-t border-slate-200/80 p-1">
+                      <div className="mt-1 border-t border-slate-200/80 dark:border-white/8 p-1">
                         <ToolTypeChoices
                           tool={primaryLayoutSelection.kind === "slab" ? "floor" : (primaryLayoutSelection.kind as any)}
                           selectedElement={primaryLayoutSelection}
@@ -676,8 +676,8 @@ export default function WerkzeugContextMenu({
                     </div>
                   )}
                   {!primaryLayoutSelection && selectedPlacementId && (
-                    <div className="rounded-2xl border border-white/90 bg-white/55 p-1">
-                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">3D shape</p>
+                    <div className="rounded-2xl border border-white/90 dark:border-white/10 bg-white/55 dark:bg-white/6 p-1">
+                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">3D shape</p>
                       {(["translate", "rotate", "scale"] as const).map((mode) => <button key={mode} type="button" className={itemCls()} onClick={() => { setTransformMode(mode); close(); }}><span className="capitalize">{mode === "translate" ? "Move" : mode}</span></button>)}
                       <button type="button" className={itemCls()} onClick={() => { const p = placements.find((item) => item.id === selectedPlacementId); if (p) void placeShape(p.type, { x: p.posX + .4, y: p.posY, z: p.posZ + .4 }, { floorId: p.floorId, rot: { x: p.rotX, y: p.rotY, z: p.rotZ }, sizeX: p.sizeX, sizeY: p.sizeY, sizeZ: p.sizeZ }); close(); }}><span>{t(uiLanguage, "layoutDuplicate")}</span></button>
                       <button type="button" className={itemCls()} onClick={() => { if (selectedPlacementId) { void updatePlacement(selectedPlacementId, { color: defaultColor }); } close(); }}><span>{t(uiLanguage, "markupColor")}</span></button>
@@ -685,8 +685,8 @@ export default function WerkzeugContextMenu({
                     </div>
                   )}
                   {!primaryLayoutSelection && !selectedPlacementId && toolSelectedExpressId != null && (
-                    <div className="rounded-2xl border border-white/90 bg-white/55 p-1">
-                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">IFC component</p>
+                    <div className="rounded-2xl border border-white/90 dark:border-white/10 bg-white/55 dark:bg-white/6 p-1">
+                      <p className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">IFC component</p>
                       <button type="button" className={itemCls()} onClick={() => { setRightPanelOpen(true); requestToolReveal(toolSelectedExpressId); close(); }}><span>Properties</span></button>
                       <button type="button" className={itemCls()} onClick={() => { isolateElements([toolSelectedExpressId]); requestToolReveal(toolSelectedExpressId); close(); }}><span>{t(uiLanguage, "layoutIsolate")}</span></button>
                       <button type="button" className={itemCls()} onClick={() => { setArmedTool("note"); close(); }}><span>{t(uiLanguage, "layoutAddNote")}</span></button>
@@ -722,8 +722,8 @@ export default function WerkzeugContextMenu({
                       ) : (
                         <>
                           {(hiddenElementIds.size > 0 || hiddenCategories.size > 0 || isolatedElementIds !== null || revealHiddenMode) && (
-                            <div className="mb-1.5 rounded-2xl border border-white/90 bg-white/55 p-1">
-                              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                            <div className="mb-1.5 rounded-2xl border border-white/90 dark:border-white/10 bg-white/55 dark:bg-white/6 p-1">
+                              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                                 <span>Visibility</span>
                                 {revealHiddenMode && <span className="rounded-full bg-pink-500 px-1.5 py-0.5 text-[8px] font-bold text-white">Ghost Mode</span>}
                               </div>
@@ -735,7 +735,7 @@ export default function WerkzeugContextMenu({
                                   close();
                                 }}
                               >
-                                <span className="flex items-center gap-1.5 text-zinc-700">
+                                <span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
                                   <LuEye className="h-3.5 w-3.5 text-pink-500" />
                                   <span>{revealHiddenMode ? "Exit Ghost Mode" : "Reveal Hidden (Ghost Mode)"}</span>
                                 </span>

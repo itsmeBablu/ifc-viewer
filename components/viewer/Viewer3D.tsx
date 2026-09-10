@@ -994,13 +994,15 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
     sun.position.set(40, 80, 30);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.radius = 6;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 250;
-    sun.shadow.camera.left = -60;
-    sun.shadow.camera.right = 60;
-    sun.shadow.camera.top = 60;
-    sun.shadow.camera.bottom = -60;
+    sun.shadow.camera.left = -50;
+    sun.shadow.camera.right = 50;
+    sun.shadow.camera.top = 50;
+    sun.shadow.camera.bottom = -50;
     sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.05;
     scene.add(sun);
     sunRef.current = sun;
 

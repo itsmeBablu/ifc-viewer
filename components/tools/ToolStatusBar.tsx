@@ -126,7 +126,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
   const renderIcon = renderModeIcon(renderMode);
 
   return (
-    <div ref={rootRef} className="werkzeug-status-dock fixed bottom-3 left-1/2 z-40 flex h-10 w-[690px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-[18px] px-1.5 select-none" aria-label="Viewer controls">
+    <div ref={rootRef} className="werkzeug-status-dock fixed bottom-3 left-1/2 z-40 flex h-[32px] w-[690px] max-w-[calc(100vw-24px)] -translate-x-1/2 items-center justify-center gap-0.5 rounded-xl px-1.5 select-none" aria-label="Viewer controls">
       <DockButton icon={<LuMousePointer2 />} label="Select" hint="Exit the active tool and click a model element to select it." onClick={enterSelectMode} />
       <DockDivider />
       <div className="relative">
@@ -286,9 +286,9 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
 
 function DockButton({ icon, label, title, hint, active = false, strong = false, dropdown = false, onClick }: { icon: ReactNode; label: string; title?: string; hint: string; active?: boolean; strong?: boolean; dropdown?: boolean; onClick: () => void }) {
   const tipLabel = label || title || "Viewer control";
-  return <HoverTip label={tipLabel} hint={hint} disabled={active}><button type="button" aria-label={title ?? label} onClick={onClick} className={`werkzeug-dock-button flex h-8 shrink-0 items-center justify-center gap-1 rounded-xl border px-2 text-[9px] font-semibold transition ${active || strong ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-transparent bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-[var(--panel-divider)]"}`}><span className="text-[14px]">{icon}</span>{label && <span className="whitespace-nowrap">{label}</span>}{dropdown && <LuChevronDown className={`h-3 w-3 transition-transform ${active ? "rotate-180" : ""}`} />}</button></HoverTip>;
+  return <HoverTip label={tipLabel} hint={hint} disabled={active}><button type="button" aria-label={title ?? label} onClick={onClick} className={`werkzeug-dock-button flex h-[26px] shrink-0 items-center justify-center gap-1 rounded-lg border px-1.5 text-[9px] font-semibold transition ${active || strong ? "btn-v-yellow btn-liquid-hover border-transparent" : "btn-yellow-border-hover border-transparent bg-[var(--glass-inset-bg)] text-[var(--text-body)] hover:border-[var(--panel-divider)]"}`}><span className="text-[13px]">{icon}</span>{label && <span className="whitespace-nowrap">{label}</span>}{dropdown && <LuChevronDown className={`h-2.5 w-2.5 transition-transform ${active ? "rotate-180" : ""}`} />}</button></HoverTip>;
 }
-function DockDivider() { return <span className="mx-0.5 h-5 w-px shrink-0 bg-[var(--panel-divider)]" />; }
+function DockDivider() { return <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--panel-divider)]" />; }
 function Popover({ title, wide = false, children }: { title: string; wide?: boolean; children: ReactNode }) {
   return <div className={`absolute bottom-[calc(100%+10px)] left-1/2 z-50 -translate-x-1/2 rounded-[20px] border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-2.5 text-[var(--text-primary)] shadow-[inset_0_1px_0_var(--glass-specular),0_18px_48px_rgba(0,0,0,0.28)] backdrop-blur-2xl ${wide ? "w-72" : "w-52"}`}><p className="mb-2 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--text-muted)]">{title}</p>{children}</div>;
 }
