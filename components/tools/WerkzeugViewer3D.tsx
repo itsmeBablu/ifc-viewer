@@ -942,7 +942,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     const update = () => {
       const canvas = rendererRef.current?.domElement, camera = cameraRef.current;
       const layout = useLayoutDrawingStore.getState();
-      if (!selectedLayoutElement || selectedDoor || selectedWindow || !canvas || !camera) { setComponentActionPosition(null); return; }
+      if (!selectedLayoutElement || selectedLayoutElement.kind === "wall" || selectedDoor || selectedWindow || !canvas || !camera) { setComponentActionPosition(null); return; }
       const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`];
       const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id);
       if (!row) { setComponentActionPosition(null); return; }
@@ -950,6 +950,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const y = Number.isFinite(row.yMm) ? row.yMm : Number.isFinite(row.startYmm) ? (row.startYmm + row.endYmm) / 2 : (row.minYmm + row.maxYmm) / 2;
       const level = layout.levels.find(item => item.id === row.levelId)?.elevationMm ?? 0;
       const screen = projectPointToClient(new THREE.Vector3(fromMm(x), fromMm(level + 20), fromMm(y)), camera, canvas);
+      if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) { setComponentActionPosition(null); return; }
       setComponentActionPosition({ left: screen.x + 14, top: screen.y - 34 });
       frame = requestAnimationFrame(update);
     };
@@ -7866,8 +7867,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           ><LuRotate3D className="size-4" /></button>
         </div>
       )}
-      {componentActionPosition && selectedLayoutElement && !selectedDoor && !selectedWindow && (
-        <div className="pointer-events-auto fixed z-[1200] flex items-center gap-1 rounded-xl border border-white/20 bg-white/10 p-0.5 backdrop-blur-xl" style={{ left: componentActionPosition.left, top: componentActionPosition.top }} onPointerDown={event => event.stopPropagation()}>
+      {componentActionPosition && selectedLayoutElement && selectedLayoutElement.kind !== "wall" && !selectedDoor && !selectedWindow && (
+        <div className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5" style={{ left: componentActionPosition.left, top: componentActionPosition.top }} onPointerDown={event => event.stopPropagation()}>
           <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Rotate selected component 90°" aria-label="Rotate selected component" onClick={() => { const layout = useLayoutDrawingStore.getState(); const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`]; const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id); if (row) void layout.rotateSelected({ xMm: row.xMm ?? (row.minXmm + row.maxXmm) / 2, yMm: row.yMm ?? (row.minYmm + row.maxYmm) / 2 }, 90); }}><LuRotate3D className="size-4" /></button>
           <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Flip selected component horizontally" aria-label="Flip selected component" onClick={() => { const layout = useLayoutDrawingStore.getState(); const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`]; const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id); if (row) void layout.rotateSelected({ xMm: row.xMm ?? (row.minXmm + row.maxXmm) / 2, yMm: row.yMm ?? (row.minYmm + row.maxYmm) / 2 }, 180); }}><LuFlipHorizontal2 className="size-4" /></button>
           <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Auto-align to the nearest compatible connector" aria-label="Auto-align connector" onClick={() => useModifyStore.setState({ tool: "align", message: "Select a compatible connector or face to align this component." })}><LuLink2 className="size-4" /></button>

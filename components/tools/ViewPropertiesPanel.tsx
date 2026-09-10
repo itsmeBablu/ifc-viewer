@@ -35,12 +35,15 @@ export default function ViewPropertiesPanel() {
   const update = (patch: Partial<NonNullable<typeof plan>>) => {
     if (level && plan) void layout.updateLevel(level.id, { planView: { ...plan, ...patch } });
   };
-  const categoryRows = (hidden: string[], toggle: (category: string) => void) => <fieldset className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/35 p-2">
-    {[...categories].sort().map((category, index) => <label key={category} className={`group flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-amber-500/10 ${index % 2 ? "border-l-2 border-amber-400/75 pl-3.5" : "border border-transparent"}`}>
-      <input type="checkbox" checked={!hidden.includes(category)} onChange={() => toggle(category)} className="size-3.5 accent-amber-500" />
-      <span className="truncate font-medium text-[var(--text-body)]">{category}</span>
-    </label>)}
-    {!categories.size && <p className="col-span-2 px-2 py-3 text-center text-[10px] text-[var(--text-muted)]">No model elements in this view.</p>}
+  const categoryRows = (hidden: string[], toggle: (category: string) => void) => <fieldset className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 py-1">
+    {[...categories].sort().map((category, index) => <span key={category} className="inline-flex items-center gap-1.5">
+      {index > 0 && <span aria-hidden="true" className="font-semibold text-amber-400">|</span>}
+      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 transition-colors hover:bg-amber-500/10">
+        <input type="checkbox" checked={!hidden.includes(category)} onChange={() => toggle(category)} className="size-3.5 accent-amber-500" />
+        <span className="font-medium text-[var(--text-body)]">{category}</span>
+      </label>
+    </span>)}
+    {!categories.size && <p className="px-1 py-2 text-[10px] text-[var(--text-muted)]">No model elements in this view.</p>}
   </fieldset>;
   return <div className="compact-properties space-y-3 rounded-xl bg-[var(--surface-base)]/20 p-1 text-xs">
     <p className="property-caption">{isPlan ? "Floor plan" : preset === "free" ? "3D view" : preset === "section" ? "Section" : `Elevation · ${preset}`}</p>
@@ -52,7 +55,7 @@ export default function ViewPropertiesPanel() {
       if (isPlan && plan) update({ visualStyle: style === "inherit" ? undefined : style });
       else if (style !== "inherit") useAppStore.getState().setRenderMode(style);
     }}>{isPlan && plan && <option value="inherit">Use workspace style ({renderMode})</option>}{["realistic", "fullColor", "light", "wireframe", "render"].map(style => <option key={style} value={style}>{style}</option>)}</select></label>
-    <details open className="property-disclosure rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card)]/60 p-2 shadow-sm"><summary className="mb-2 cursor-pointer font-semibold text-[var(--text-strong)]">Visibility in current view</summary>{categoryRows(visibility.hiddenCategories, category => display.toggleCategory(viewKey, category))}<button type="button" className="mt-2 rounded-lg border border-amber-400/50 px-3 py-1.5 text-[10px] font-semibold text-amber-500 transition-colors hover:bg-amber-500/10" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
+    <details open className="property-disclosure p-1"><summary className="mb-1 cursor-pointer font-semibold text-[var(--text-strong)]">Visibility in current view</summary>{categoryRows(visibility.hiddenCategories, category => display.toggleCategory(viewKey, category))}<button type="button" className="mt-1 rounded-lg border border-amber-400/50 px-3 py-1.5 text-[10px] font-semibold text-amber-500 transition-colors hover:bg-amber-500/10" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
     {plan && level && <>
       {!isPlan && <p className="text-[var(--text-muted)]">These range and visibility settings apply to {level.name}’s plan view.</p>}
       <details className="property-disclosure"><summary>View range <span className="property-summary-value">mm</span></summary>
