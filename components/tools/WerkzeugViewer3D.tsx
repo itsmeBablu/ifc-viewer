@@ -2866,6 +2866,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         selectedDoorId: s.selectedDoorId,
         selectedWindowId: s.selectedWindowId,
         selectedSlabId: s.selectedSlabId,
+        editingSlabId: s.slabBoundaryEdit?.slabId ?? null,
         selectedWallIds: selWallIds,
         selectedDoorIds: selDoorIds,
         selectedWindowIds: selWinIds,
@@ -7801,7 +7802,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   const marqueeBox = useLayoutDrawingStore((s) => s.marqueeBox);
 
   return (
-    <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
+    <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
       {doorActionPosition && (selectedDoor || selectedWindow) && (
         <div

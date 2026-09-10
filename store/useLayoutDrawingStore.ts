@@ -360,6 +360,7 @@ type LayoutDrawingState = {
     originalRoofJoin?: LayoutSlab["roofJoin"];
     originalSketchLines: LayoutSketchLine[];
     tool: "modify" | "trim" | "insert" | "delete";
+    selectedEdge: { ring: number; index: number } | null;
     error: string | null;
   } | null;
   lockedElementKeys: string[];
@@ -723,6 +724,7 @@ type LayoutDrawingState = {
   beginSlabBoundaryEdit: (id: string) => void;
   applySlabBoundaryLoops: (loops: BoundaryLoops) => boolean;
   setBoundaryEditTool: (tool: "modify" | "trim" | "insert" | "delete") => void;
+  setBoundarySelectedEdge: (edge: { ring: number; index: number } | null) => void;
   updateSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   deleteSlabBoundaryVertex: (index: number) => void;
@@ -3066,13 +3068,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       editingSlabId: id,
       sketchLines: boundaryLines,
       sketchTargetKind: slab.kind,
-      armedLayoutTool: "lines",
+      // Boundary editing owns the pointer interaction. The generic line tool
+      // would swallow these events before the boundary editor can handle them.
+      armedLayoutTool: null,
       selectedSlabId: id,
       selectedElements: [],
       slabBoundaryEdit: {
         slabId: id,
         phase: "editing",
         tool: "modify",
+        selectedEdge: null,
         error: null,
         originalHoles: slab.holes?.map(loop => loop.map(p => ({ ...p }))),
         originalEdgeSlopes: slab.edgeSlopes?.map(edge => ({ ...edge })),
@@ -3087,6 +3092,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setBoundaryEditTool: (tool) => {
     const edit = get().slabBoundaryEdit;
     if (edit) set({ slabBoundaryEdit: { ...edit, tool, error: null } });
+  },
+
+  setBoundarySelectedEdge: (edge) => {
+    const edit = get().slabBoundaryEdit;
+    if (edit) set({ slabBoundaryEdit: { ...edit, selectedEdge: edge, error: null } });
   },
 
   applySlabBoundaryLoops: (loops) => {

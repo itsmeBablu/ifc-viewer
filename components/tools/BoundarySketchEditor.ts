@@ -41,7 +41,9 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     const quad = markup.quadView;
     const ix = x >= rect.left + rect.width / 2 ? 1 : 0, iy = y >= rect.top + rect.height / 2 ? 1 : 0;
     const preset = quad ? markup.quadPresets[iy * 2 + ix] : markup.viewPreset;
-    if (preset !== "top") return null;
+    // Boundary geometry lies on the level plane, so the same handles can be
+    // projected into plan, axonometric, and perspective views. This keeps
+    // editing consistent between 2D and 3D instead of silently disabling it.
     const bounds = { left: rect.left + (quad ? ix * rect.width / 2 : 0), top: rect.top + (quad ? iy * rect.height / 2 : 0), width: rect.width / (quad ? 2 : 1), height: rect.height / (quad ? 2 : 1) };
     const cam = camera(x, y);
     if (!cam) return null;
@@ -187,7 +189,8 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
     synchronizeSession(ctx.edit);
     if (drag) return;
     const hit = pick(ctx, e.clientX, e.clientY, ctx.edit.tool === "trim" || ctx.edit.tool === "insert");
-    if (!hit) { selected = null; firstTrim = null; return; }
+    if (!hit) { selected = null; firstTrim = null; ctx.state.setBoundarySelectedEdge(null); return; }
+    if (hit.kind === "edge") ctx.state.setBoundarySelectedEdge(hit);
     const loops = slabBoundaryLoops(ctx.slab);
     if (ctx.edit.tool === "trim") {
       selected = hit;
@@ -196,14 +199,14 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
       const result = trimBoundaryCorner(loops[hit.ring], firstTrim.hit.index, firstTrim.point, hit.index, ctx.point);
       if (!result) { error("These portions cannot form a closed corner. Select the parts to keep."); firstTrim = null; return; }
       loops[hit.ring] = result;
-      ctx.state.applySlabBoundaryLoops(loops); firstTrim = null; selected = null;
+      ctx.state.applySlabBoundaryLoops(loops); firstTrim = null; selected = null; ctx.state.setBoundarySelectedEdge(null);
       return;
     }
     if (ctx.edit.tool === "insert" || ctx.edit.tool === "delete") {
       if (ctx.edit.tool === "insert") loops[hit.ring].splice(hit.index + 1, 0, projectToEdge(ctx.point, loops[hit.ring][hit.index], loops[hit.ring][(hit.index + 1) % loops[hit.ring].length]));
       else if (hit.kind === "vertex") loops[hit.ring].splice(hit.index, 1);
       else return;
-      ctx.state.applySlabBoundaryLoops(loops); selected = null;
+      ctx.state.applySlabBoundaryLoops(loops); selected = null; ctx.state.setBoundarySelectedEdge(null);
       return;
     }
     const endpointEdge = hit.kind === "vertex" && selected?.kind === "edge" && selected.ring === hit.ring &&

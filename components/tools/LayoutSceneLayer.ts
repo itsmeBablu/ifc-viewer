@@ -582,6 +582,7 @@ export default class LayoutSceneLayer {
       selectedDoorId: string | null;
       selectedWindowId: string | null;
       selectedSlabId: string | null;
+      editingSlabId?: string | null;
       selectedWallIds?: Set<string>;
       selectedDoorIds?: Set<string>;
       selectedWindowIds?: Set<string>;
@@ -763,7 +764,7 @@ export default class LayoutSceneLayer {
       } else {
         this.updateSlabMesh(mesh, slab, elev);
       }
-      mesh.visible = visible;
+      mesh.visible = visible && opts.editingSlabId !== slab.id;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const isSlabSelected = slab.id === opts.selectedSlabId || Boolean(opts.selectedSlabIds?.has(slab.id));
       mat.emissive.setHex(0x000000);
