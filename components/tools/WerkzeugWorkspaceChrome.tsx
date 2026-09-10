@@ -29,6 +29,7 @@ import MobileModifyBar from "./MobileModifyBar";
 import BoundarySketchOptions from "./BoundarySketchOptions";
 import ToolOptionsBar from "./ToolOptionsBar";
 import DrawingShapeOptions from "./DrawingShapeOptions";
+import RenderViewControls, { enterRenderView } from "./RenderViewControls";
 import { RoofEdgeSlopeEditor } from "./ToolRightPanel";
 import MarkupToolsSection from "./MarkupToolsSection";
 import { MEP_TABS } from "./DesktopIsland";
@@ -510,6 +511,8 @@ export default function WerkzeugWorkspaceChrome({
   const activeRenderMode =
     RENDER_MODES.find((mode) => mode.id === renderMode) ?? RENDER_MODES[0];
   const activeLevel = levels.find((level) => level.id === markupFloorId) ?? levels[0] ?? null;
+  const desktopCategory = useLayoutDrawingStore(s => s.desktopArchCategory);
+  const setDesktopCategory = useLayoutDrawingStore(s => s.setDesktopArchCategory);
   const activeViewLabel = viewItems.find((view) => view.value === viewPreset)?.label ?? "3D";
   return (
     <>
@@ -520,6 +523,9 @@ export default function WerkzeugWorkspaceChrome({
         style={{ "--werkzeug-ipad-panel-width": `${landscapePanelWidth}px` } as CSSProperties}
       >
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
+        {!mepModeActive && <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-1 py-1" aria-label="Architecture categories">
+          {(["build", "structure", "annotate", "insert", "render"] as const).map(category => <button key={category} type="button" onClick={() => { setDesktopCategory(category); if (category === "render") enterRenderView(); }} className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold capitalize ${desktopCategory === category ? "btn-v-yellow !text-zinc-950" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}>{category}</button>)}
+        </div>}
         <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-snap-left"><ObjectSnapStrip compact iconOnly showCount={false} /></div>
         <div className="werkzeug-ipad-tool-ribbon">
@@ -627,7 +633,7 @@ export default function WerkzeugWorkspaceChrome({
                 {selectedRef && <button type="button" onClick={() => useLayoutDrawingStore.getState().toggleElementLock(selectedRef)} className="btn-yellow-border-hover flex h-9 w-9 items-center justify-center rounded-lg border border-transparent" title={locked ? "Unlock" : "Lock"}>{locked ? <LuLock /> : <LuLockOpen />}</button>}
               </div>
             </div>
-            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : panelKey === "shapes" ? <MarkupToolsSection /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</div>}
+            {!collapsed && <div ref={contentRef} className="werkzeug-ipad-panel-content min-h-0 flex-1 overflow-y-auto p-2 thin-scroll">{desktopCategory === "render" ? <RenderViewControls /> : <>{(panelKey === "lines" || panelKey === "floor" || panelKey === "ceiling" || panelKey === "roof" || (!armed && panelKey === "wall")) && <DrawingShapeOptions />}{panelKey === "levels" || panelTab === "layout" ? <LevelsPanel /> : panelKey === "materials" || panelTab === "materials" ? <MaterialEditorPanel isOpen embedded onClose={() => panelKey === "materials" ? setPanelHidden(true) : setPanelTab("properties")} /> : panelKey === "shapes" ? <MarkupToolsSection /> : <ToolContent panelKey={panelKey} locked={locked} tab={panelTab} />}</>}</div>}
             {!collapsed && <>
               {!portrait && <button type="button" onPointerDown={beginLandscapeResize} className="werkzeug-ipad-height-resize absolute inset-x-0 bottom-0 z-20 h-5 touch-none cursor-ns-resize" aria-label="Drag down to increase options height"><span /></button>}
             </>}
