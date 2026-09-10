@@ -147,7 +147,7 @@ export default function RenderViewControls() {
                   }}
                   className={`flex flex-col items-center justify-center p-1.5 rounded border text-[10px] transition-colors ${
                     isSelected
-                      ? "border-blue-500 bg-blue-500/20 font-semibold text-blue-400 shadow-sm"
+                      ? "btn-v-yellow font-semibold !text-zinc-950 shadow-sm"
                       : "border-[var(--panel-divider)] bg-[var(--popover-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-neutral-500"
                   }`}
                   title={`${label} Atmosphere`}

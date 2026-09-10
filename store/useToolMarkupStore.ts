@@ -662,17 +662,6 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     const doorId = meta?.doorId ?? null;
     const windowId = meta?.windowId ?? null;
     const underlayId = meta?.underlayId ?? null;
-    if (
-      expressId == null &&
-      !placementId &&
-      !wallId &&
-      !doorId &&
-      !windowId &&
-      !underlayId
-    ) {
-      set({ notePlaceHint: "markupNoteMustAttach" });
-      return;
-    }
     set({
       pendingNote: {
         posX: pos.x,
@@ -702,17 +691,6 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     if (!modelKey || !pending) return;
     const trimmed = text.trim();
     if (!trimmed) {
-      set({ pendingNote: null });
-      return;
-    }
-    if (
-      pending.expressId == null &&
-      !pending.placementId &&
-      !pending.wallId &&
-      !pending.doorId &&
-      !pending.windowId &&
-      !pending.underlayId
-    ) {
       set({ pendingNote: null });
       return;
     }

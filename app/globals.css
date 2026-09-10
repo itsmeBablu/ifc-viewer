@@ -1719,6 +1719,15 @@ body.werkzeug-active :is(input[type="checkbox"], input[type="radio"]):disabled {
     box-shadow: 0 5px 16px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.38);
     backdrop-filter: blur(14px) saturate(145%);
   }
+.werkzeug-tool-button > span:first-child svg { display: block; width: 1.05rem; height: 1.05rem; flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .werkzeug-ipad-action-ribbon { max-width: calc(100vw - 16px); overflow-x: auto; overflow-y: hidden; justify-content: flex-start; flex-wrap: nowrap; scrollbar-width: none; touch-action: pan-x; }
+  .werkzeug-ipad-action-ribbon::-webkit-scrollbar { display: none; }
+  .werkzeug-ipad-action-ribbon > * { flex: 0 0 auto; }
+  .werkzeug-ipad-action-ribbon svg { display: block !important; width: 1rem; height: 1rem; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action > span { display: none !important; }
+  .werkzeug-ipad-action-ribbon .werkzeug-icon-action { min-width: 34px; width: 34px; justify-content: center; padding-inline: 0; }
+}
   .werkzeug-ipad-ribbons[data-dock="top"] .werkzeug-tool-button,
   .werkzeug-ipad-ribbons[data-dock="bottom"] .werkzeug-tool-button {
     width: auto;

@@ -51,7 +51,7 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { LuFlipHorizontal2, LuRotate3D, LuMove3D } from "react-icons/lu";
+import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2 } from "react-icons/lu";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -898,6 +898,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedWindow = useLayoutDrawingStore((s) => s.windows.find((window) => window.id === s.selectedWindowId) ?? null);
   const [doorActionPosition, setDoorActionPosition] = useState<{ left: number; top: number } | null>(null);
+  const [componentActionPosition, setComponentActionPosition] = useState<{ left: number; top: number } | null>(null);
+  const selectedLayoutElement = useLayoutDrawingStore((s) => s.selectedElements[0] ?? null);
   const renderMode = renderPreview ? "realistic" : (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
   const lighting = useAppStore((s) => s.lighting);
   const configuredSceneBackground = useAppStore((s) => s.sceneBackground);
@@ -935,6 +937,26 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     frame = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frame);
   }, [selectedDoor, selectedDoorId, selectedWindow, selectedWindowId, planStylePreset]);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      const canvas = rendererRef.current?.domElement, camera = cameraRef.current;
+      const layout = useLayoutDrawingStore.getState();
+      if (!selectedLayoutElement || selectedLayoutElement.kind === "wall" || selectedDoor || selectedWindow || !canvas || !camera) { setComponentActionPosition(null); return; }
+      const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`];
+      const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id);
+      if (!row) { setComponentActionPosition(null); return; }
+      const x = Number.isFinite(row.xMm) ? row.xMm : Number.isFinite(row.startXmm) ? (row.startXmm + row.endXmm) / 2 : (row.minXmm + row.maxXmm) / 2;
+      const y = Number.isFinite(row.yMm) ? row.yMm : Number.isFinite(row.startYmm) ? (row.startYmm + row.endYmm) / 2 : (row.minYmm + row.maxYmm) / 2;
+      const level = layout.levels.find(item => item.id === row.levelId)?.elevationMm ?? 0;
+      const screen = projectPointToClient(new THREE.Vector3(fromMm(x), fromMm(level + 20), fromMm(y)), camera, canvas);
+      if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) { setComponentActionPosition(null); return; }
+      setComponentActionPosition({ left: screen.x + 14, top: screen.y - 34 });
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [selectedLayoutElement, selectedDoor, selectedWindow, planStylePreset]);
   const selectedVentilationZoneKey = useAppStore(
     (s) => s.selectedVentilationZoneKey,
   );
@@ -1935,6 +1957,29 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     void flyTo(camera, controls, position, target, 900);
     // Only react to focus requests — not every selectedRoomId change.
   }, [roomFocusToken]);
+
+  // Revit-style focus: F frames the current selection in any view.
+  useEffect(() => {
+    const onFocusSelection = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "f" || event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true]")) return;
+      const camera = perspectiveCameraRef.current, controls = controlsRef.current;
+      if (!camera || !controls) return;
+      const layout = useLayoutDrawingStore.getState(), markup = useToolMarkupStore.getState();
+      const keys = new Set(layout.selectedElements.map(item => `${item.kind}:${item.id}`));
+      for (const [kind, id] of [["wall", layout.selectedWallId], ["door", layout.selectedDoorId], ["window", layout.selectedWindowId], ["slab", layout.selectedSlabId], ["stair", layout.selectedStairId], ["ramp", layout.selectedRampId]] as const) if (id) keys.add(`${kind}:${id}`);
+      if (markup.selectedPlacementId) keys.add(`placement:${markup.selectedPlacementId}`);
+      for (const item of layout.selectedElements) if (item.kind === "equipment") keys.add(`mepequipment:${item.id}`);
+      const box = new THREE.Box3();
+      const visit = (object: THREE.Object3D) => { const direct = Object.entries(object.userData).find(([name, value]) => name.startsWith("layout") && name.endsWith("Id") && typeof value === "string"); const owner = direct ? `${direct[0].slice("layout".length, -2).toLowerCase()}:${direct[1]}` : object.userData.markupId ? `placement:${object.userData.markupId}` : null; if (owner && keys.has(owner)) box.expandByObject(object); object.children.forEach(visit); };
+      sceneRef.current?.children.forEach(visit);
+      if (box.isEmpty()) return;
+      event.preventDefault();
+      const pose = frameBoundingBox(box, camera, 1.55, { keepDirection: camera.position.clone().sub(controls.target) });
+      void flyTo(camera, controls, pose.position, pose.target, 650);
+    };
+    window.addEventListener("keydown", onFocusSelection, true);
+    return () => window.removeEventListener("keydown", onFocusSelection, true);
+  }, []);
 
   // Heizlast + Temperature compare: twin copy (temp colors) offset from primary (heizlast)
   useEffect(() => {
@@ -7317,10 +7362,6 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 (surface.object.userData.markupId as string | undefined) ??
                 null;
               const expressId = ids.expressId ?? null;
-              if (!markupId && expressId == null) {
-                markupStore.setNotePlaceHint("markupNoteMustAttach");
-                return;
-              }
               const elName =
                 useAppStore.getState().selectedElement?.name ??
                 (markupId
@@ -7341,10 +7382,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             return;
           }
 
-          if (armed === "note" && !surface) {
-            markupStore.setNotePlaceHint("markupNoteMustAttach");
-            return;
-          }
+          if (armed === "note" && !surface) return;
 
           const picked = layer.pickMarkup(raycaster.current);
           if (picked?.kind === "placement") {
@@ -7812,7 +7850,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         >
           <button
             type="button"
-            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100"
             title="Flip inside / outside"
             aria-label="Flip inside or outside"
             onClick={() => {
@@ -7823,7 +7861,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           ><LuMove3D className="size-4" /></button>
           <button
             type="button"
-            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100"
             title="Flip left / right"
             aria-label="Flip left or right"
             onClick={() => {
@@ -7834,7 +7872,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           ><LuFlipHorizontal2 className="size-4" /></button>
           <button
             type="button"
-            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100"
             title="Increase 3D opening angle"
             aria-label="Increase 3D opening angle"
             onClick={() => {
@@ -7843,6 +7881,13 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
               else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { openingAngleDeg: ((selectedWindow.openingAngleDeg ?? 0) + 15) % 135 });
             }}
           ><LuRotate3D className="size-4" /></button>
+        </div>
+      )}
+      {componentActionPosition && selectedLayoutElement && selectedLayoutElement.kind !== "wall" && !selectedDoor && !selectedWindow && (
+        <div className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5" style={{ left: componentActionPosition.left, top: componentActionPosition.top }} onPointerDown={event => event.stopPropagation()}>
+          <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Rotate selected component 90°" aria-label="Rotate selected component" onClick={() => { const layout = useLayoutDrawingStore.getState(); const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`]; const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id); if (row) void layout.rotateSelected({ xMm: row.xMm ?? (row.minXmm + row.maxXmm) / 2, yMm: row.yMm ?? (row.minYmm + row.maxYmm) / 2 }, 90); }}><LuRotate3D className="size-4" /></button>
+          <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Flip selected component horizontally" aria-label="Flip selected component" onClick={() => { const layout = useLayoutDrawingStore.getState(); const collection = selectedLayoutElement.kind === "equipment" ? layout.mepEquipment : selectedLayoutElement.kind === "cabletray" ? layout.cableTrays : (layout as any)[`${selectedLayoutElement.kind}s`]; const row: any = collection?.find((item: any) => item.id === selectedLayoutElement.id); if (row) void layout.rotateSelected({ xMm: row.xMm ?? (row.minXmm + row.maxXmm) / 2, yMm: row.yMm ?? (row.minYmm + row.maxYmm) / 2 }, 180); }}><LuFlipHorizontal2 className="size-4" /></button>
+          <button type="button" className="grid size-7 place-items-center rounded text-amber-300 transition-colors hover:bg-white/15 hover:text-amber-100" title="Auto-align to the nearest compatible connector" aria-label="Auto-align connector" onClick={() => useModifyStore.setState({ tool: "align", message: "Select a compatible connector or face to align this component." })}><LuLink2 className="size-4" /></button>
         </div>
       )}
       {marqueeBox && (

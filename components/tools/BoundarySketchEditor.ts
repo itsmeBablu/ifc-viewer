@@ -117,6 +117,13 @@ export function installBoundarySketchEditor({ canvas, camera, controls }: Option
         const stroke = active ? "#facc15" : isHovered ? "#22d3ee" : "#ec4899";
         const width = active ? 4 : isHovered ? 3 : 2;
         element("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke, "stroke-width": width });
+        if (ctx.slab.kind === "roof" && ring === 0) {
+          const slope = ctx.slab.edgeSlopes?.find(edge => edge.edgeIdx === index);
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          const pitch = slope?.isSloped === false ? "Flat" : `${slope?.pitchDeg ?? 30}°`;
+          const angleLabel = element("text", { x: mx + 5, y: my - 5, fill: active ? "#facc15" : "#fef08a", "font-size": 11, "font-weight": "bold", "paint-order": "stroke", stroke: "#18181b", "stroke-width": 3, "stroke-linejoin": "round" });
+          angleLabel.textContent = pitch;
+        }
         // Midpoint dot on hovered edge — makes it obviously interactive
         if (isHovered && !active) {
           const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;

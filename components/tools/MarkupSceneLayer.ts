@@ -335,12 +335,13 @@ export class MarkupSceneLayer {
       "pointer-events:auto",
       "border:none",
       "cursor:pointer",
-      "padding:4px 8px",
-      "border-radius:10px",
-      "background:linear-gradient(180deg,#fde68a,#fbbf24)",
-      "color:#78350f",
+      "padding:5px 9px",
+      "border-radius:7px",
+      "background:rgba(17,24,39,.82)",
+      "border-left:2px solid #facc15",
+      "color:#fef3c7",
       "font:600 10px/1.2 system-ui,sans-serif",
-      "box-shadow:0 4px 12px rgba(0,0,0,.18)",
+      "box-shadow:0 2px 8px rgba(0,0,0,.2)",
       "max-width:140px",
       "text-align:left",
       "white-space:pre-wrap",
@@ -367,7 +368,7 @@ export class MarkupSceneLayer {
   ) {
     const el = obj.element as HTMLButtonElement;
     el.textContent = note.text.slice(0, 80);
-    el.style.outline = selected ? "2px solid #78350f" : "none";
+    el.style.outline = selected ? "2px solid #facc15" : "none";
     el.dataset.noteId = note.id;
   }
 
