@@ -35,7 +35,14 @@ export default function ViewPropertiesPanel() {
   const update = (patch: Partial<NonNullable<typeof plan>>) => {
     if (level && plan) void layout.updateLevel(level.id, { planView: { ...plan, ...patch } });
   };
-  return <div className="compact-properties space-y-2 text-xs">
+  const categoryRows = (hidden: string[], toggle: (category: string) => void) => <fieldset className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/35 p-2">
+    {[...categories].sort().map((category, index) => <label key={category} className={`group flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-amber-500/10 ${index % 2 ? "border-l-2 border-amber-400/75 pl-3.5" : "border border-transparent"}`}>
+      <input type="checkbox" checked={!hidden.includes(category)} onChange={() => toggle(category)} className="size-3.5 accent-amber-500" />
+      <span className="truncate font-medium text-[var(--text-body)]">{category}</span>
+    </label>)}
+    {!categories.size && <p className="col-span-2 px-2 py-3 text-center text-[10px] text-[var(--text-muted)]">No model elements in this view.</p>}
+  </fieldset>;
+  return <div className="compact-properties space-y-3 rounded-xl bg-[var(--surface-base)]/20 p-1 text-xs">
     <p className="property-caption">{isPlan ? "Floor plan" : preset === "free" ? "3D view" : preset === "section" ? "Section" : `Elevation · ${preset}`}</p>
     {level && <label className="property-field"><span>Level</span><input aria-label="Level name" className={field} value={level.name} onChange={e => void layout.updateLevel(level.id, { name: e.target.value })}/></label>}
     <label className="property-field"><span>Visual style</span><select className={field} value={isPlan && plan ? plan.visualStyle ?? "inherit" : renderMode} onChange={e => {
@@ -45,7 +52,7 @@ export default function ViewPropertiesPanel() {
       if (isPlan && plan) update({ visualStyle: style === "inherit" ? undefined : style });
       else if (style !== "inherit") useAppStore.getState().setRenderMode(style);
     }}>{isPlan && plan && <option value="inherit">Use workspace style ({renderMode})</option>}{["realistic", "fullColor", "light", "wireframe", "render"].map(style => <option key={style} value={style}>{style}</option>)}</select></label>
-    <details open className="property-disclosure"><summary>Visibility in current view</summary><fieldset className="space-y-1">{[...categories].sort().map(category => <label key={category} className="flex gap-2 py-0.5"><input type="checkbox" checked={!visibility.hiddenCategories.includes(category)} onChange={() => display.toggleCategory(viewKey, category)} />{category}</label>)}</fieldset><button type="button" className="mt-2 rounded border border-[var(--panel-divider)] px-2 py-1" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
+    <details open className="property-disclosure rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card)]/60 p-2 shadow-sm"><summary className="mb-2 cursor-pointer font-semibold text-[var(--text-strong)]">Visibility in current view</summary>{categoryRows(visibility.hiddenCategories, category => display.toggleCategory(viewKey, category))}<button type="button" className="mt-2 rounded-lg border border-amber-400/50 px-3 py-1.5 text-[10px] font-semibold text-amber-500 transition-colors hover:bg-amber-500/10" onClick={() => display.reset(viewKey)}>Reset current view</button></details>
     {plan && level && <>
       {!isPlan && <p className="text-[var(--text-muted)]">These range and visibility settings apply to {level.name}’s plan view.</p>}
       <details className="property-disclosure"><summary>View range <span className="property-summary-value">mm</span></summary>
@@ -57,7 +64,7 @@ export default function ViewPropertiesPanel() {
       })}
       <p className="text-[10px] text-[var(--text-muted)]">Bottom ≤ Cut plane ≤ Top. View depth currently follows Bottom.</p>
       </details>
-      <details className="property-disclosure"><summary>Model visibility <span className="property-summary-value">{categories.size}</span></summary><fieldset className="space-y-1">{[...categories].sort().map(category => <label key={category} className="flex gap-2"><input type="checkbox" checked={!plan.hiddenCategories.includes(category)} onChange={e => update({ hiddenCategories: e.target.checked ? plan.hiddenCategories.filter(c => c !== category) : [...plan.hiddenCategories, category] })}/>{category}</label>)}{!categories.size && <p>No model elements yet.</p>}</fieldset></details>
+      <details className="property-disclosure rounded-xl border border-[var(--panel-divider)] bg-[var(--surface-card)]/60 p-2 shadow-sm"><summary className="mb-2 cursor-pointer font-semibold text-[var(--text-strong)]">Model visibility <span className="property-summary-value">{categories.size}</span></summary>{categoryRows(plan.hiddenCategories, category => update({ hiddenCategories: plan.hiddenCategories.includes(category) ? plan.hiddenCategories.filter(item => item !== category) : [...plan.hiddenCategories, category] }))}</details>
       <details className="property-disclosure"><summary>CAD / PDF references</summary><fieldset className="space-y-1">{layout.underlays.filter(u => u.levelId === level.id).map(u => <label key={u.id} className="flex gap-2"><input type="checkbox" checked={!plan.hiddenUnderlayIds.includes(u.id)} onChange={e => update({ hiddenUnderlayIds: e.target.checked ? plan.hiddenUnderlayIds.filter(id => id !== u.id) : [...plan.hiddenUnderlayIds, u.id] })}/>{u.sourceName}</label>)}{!layout.underlays.some(u => u.levelId === level.id) && <p>No references attached to this level. Attach them from Layout.</p>}</fieldset></details>
     </>}
     <RenderViewControls />
