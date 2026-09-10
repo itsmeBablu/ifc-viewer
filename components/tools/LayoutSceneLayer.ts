@@ -93,6 +93,7 @@ export default class LayoutSceneLayer {
   private workPlaneGroup = new THREE.Group();
   private previewLine: THREE.Group | null = null;
   private openingPreview: THREE.Group | null = null;
+  private openingPreviewPlacement: { wall: LayoutWall; positionMm: number; planMode: boolean } | null = null;
   private slabPreview: THREE.Group | null = null;
   private stairPreview: THREE.Group | null = null;
   private rampPreview: THREE.Group | null = null;
@@ -3907,6 +3908,7 @@ export default class LayoutSceneLayer {
     }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutSlabId = slab.id;
+    mesh.userData.renderCategory = slab.kind === "roof" ? "Roofs" : "Floors";
     mesh.userData.kind = "layout-slab";
     this.updateSlabMesh(mesh, slab, elevMm);
     return mesh;
@@ -3950,6 +3952,7 @@ export default class LayoutSceneLayer {
       mesh.position.y = baseY;
     }
     mesh.userData.layoutSlabId = slab.id;
+    mesh.userData.renderCategory = slab.kind === "roof" ? "Roofs" : "Floors";
   }
 
   setRenderMode(mode: RenderMode) {
@@ -4403,8 +4406,8 @@ export default class LayoutSceneLayer {
     }
 
     // 2. Realistic & Full Color modes: PBR materials with distinct roughness, metalness, textures, bump
-    let matKey = layer.material;
-    if (wall.material && (!matKey || matKey === "Plaster" || matKey === "Stucco Render") && (layer.function === "finish2" || layer.function === "finish1")) {
+    let matKey: string | undefined = layer.material;
+    if (wall.material && (!matKey || matKey === "Plaster" || matKey === "Stucco Render") && layer.function === "finish2") {
       matKey = wall.material;
     } else if (!matKey) {
       matKey = wall.material;
@@ -5380,7 +5383,7 @@ export default class LayoutSceneLayer {
         vMull.position.set(0, h / 2, 0);
         boxGroup.add(hMull, vMull);
       } else if (win?.operation || win?.typeId === "win-double-1200" || win?.typeId === "win-fixed-1000" || win?.typeId === "win-pano-2000") {
-        boxGroup.add(createOperableWindow(win.operation ?? (win.typeId === "win-double-1200" ? "double-hung" : "fixed"), innerW, innerH, frameMat, panelMat));
+        boxGroup.add(createOperableWindow(win.operation ?? (win.typeId === "win-double-1200" ? "double-hung" : "fixed"), innerW, innerH, frameMat, panelMat, win?.openingAngleDeg ?? 15));
       } else if (win?.sashCount === 2) {
         const mullionW = frameThick * 0.7;
         const paneW = (innerW - mullionW) / 2;
@@ -5447,6 +5450,38 @@ export default class LayoutSceneLayer {
         stem.position.set(latchX, handle.position.y, leafOffset + side * (panelThick / 2 + 0.0175));
         boxGroup.add(stem);
       }
+    }
+
+    if (door && style !== "sliding" && style !== "garage") {
+      const angle = THREE.MathUtils.degToRad(Math.max(0, Math.min(120, door.openingAngleDeg ?? 0)));
+      const moving = boxGroup.children.filter(c => c !== frameMesh && c.name !== "opening-casing");
+      const leafSides = new Map(moving.map(child => [child, Math.sign(child.position.x)]));
+      const hinges = style === "double" ? [-1, 1] : [door.hinge === "end" ? 1 : -1];
+      for (const side of hinges) {
+        const pivot = new THREE.Group();
+        pivot.name = "door-leaf-pivot";
+        pivot.position.set(side * (w / 2 - frameThick), 0, leafOffset);
+        for (const child of moving) {
+          if (style === "double" && leafSides.get(child) !== side) continue;
+          boxGroup.remove(child);
+          child.position.sub(pivot.position);
+          pivot.add(child);
+        }
+        pivot.rotation.y = side * (door.swing ?? 1) * angle;
+        boxGroup.add(pivot);
+      }
+    }
+    if (win) {
+      const infill = new THREE.Group();
+      infill.name = "window-infill";
+      for (const child of [...boxGroup.children]) {
+        if (child === frameMesh || child.name === "opening-casing") continue;
+        boxGroup.remove(child); infill.add(child);
+      }
+      infill.scale.x = win.hinge === "end" ? -1 : 1;
+      infill.scale.z = win.swing === -1 ? -1 : 1;
+      if (win.operation === "casement") infill.position.z = (win.swing ?? 1) * (d / 2 + 0.025);
+      boxGroup.add(infill);
     }
 
     boxGroup.traverse((c) => {
@@ -5653,7 +5688,13 @@ export default class LayoutSceneLayer {
     this.openingPreview = null;
   }
 
+  refreshOpeningPreview() {
+    const p = this.openingPreviewPlacement;
+    if (p && this.openingPreview) this.setOpeningPreview(p.wall, p.positionMm, p.planMode);
+  }
+
   setOpeningPreview(wall: LayoutWall, positionMm: number, planMode: boolean) {
+    this.openingPreviewPlacement = { wall, positionMm, planMode };
     this.clearOpeningPreview();
     const s = useLayoutDrawingStore.getState();
     const tool = s.armedLayoutTool;
@@ -5664,9 +5705,9 @@ export default class LayoutSceneLayer {
     g.name = "layout-opening-preview";
     const common = { id: "opening-preview", projectId: wall.projectId, wallId: wall.id, positionMm: Math.round(positionMm), createdAt: 0, typeId: type?.id, material: type?.material };
     if (tool === "door") {
-      this.syncDoorPlanSymbol(g, wall, { ...common, widthMm: s.draftDoorWidthMm, heightMm: s.draftDoorHeightMm, hinge: "start", swing: 1, style: type?.doorStyle ?? (type?.id.includes("double") ? "double" : "wood"), headShape: type?.headShape === "round" ? "arched" : type?.headShape }, elev, planMode);
+      this.syncDoorPlanSymbol(g, wall, { ...common, widthMm: s.draftDoorWidthMm, heightMm: s.draftDoorHeightMm, ...s.draftOpeningOrientation.door, style: type?.doorStyle ?? (type?.id.includes("double") ? "double" : "wood"), headShape: type?.headShape === "round" ? "arched" : type?.headShape }, elev, planMode);
     } else {
-      this.syncWindowPlanSymbol(g, wall, { ...common, widthMm: s.draftWindowWidthMm, heightMm: s.draftWindowHeightMm, sillHeightMm: s.draftWindowSillMm, headShape: type?.headShape, sashCount: type?.sashCount ?? 1, operation: type?.windowOperation, color: "#1e293b" }, elev, planMode);
+      this.syncWindowPlanSymbol(g, wall, { ...common, ...s.draftOpeningOrientation.window, widthMm: s.draftWindowWidthMm, heightMm: s.draftWindowHeightMm, sillHeightMm: s.draftWindowSillMm, headShape: type?.headShape, sashCount: type?.sashCount ?? 1, operation: type?.windowOperation, color: "#1e293b" }, elev, planMode);
     }
     g.traverse(obj => {
       obj.raycast = () => undefined;
@@ -5764,6 +5805,8 @@ export default class LayoutSceneLayer {
     const perpX = -dirZ * swing;
     const perpZ = dirX * swing;
 
+    // Floor plans always show the conventional swing arc, even with a closed 3D leaf.
+    const planAngle = Math.PI / 2;
     const halfW = door.widthMm / 2;
     const hingeAlong =
       door.hinge === "end"
@@ -5790,7 +5833,7 @@ export default class LayoutSceneLayer {
       const leaf1 = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(h1x, y, h1z),
-          new THREE.Vector3(h1x + perpX * halfLeaf, y, h1z + perpZ * halfLeaf),
+          new THREE.Vector3(h1x + (dirX * Math.cos(planAngle) + perpX * Math.sin(planAngle)) * halfLeaf, y, h1z + (dirZ * Math.cos(planAngle) + perpZ * Math.sin(planAngle)) * halfLeaf),
         ]),
         lineMat,
       );
@@ -5800,7 +5843,7 @@ export default class LayoutSceneLayer {
       const arcPts1: THREE.Vector3[] = [];
       for (let i = 0; i <= 16; i++) {
         const t = i / 16;
-        const c = Math.cos((Math.PI / 2) * t), s = Math.sin((Math.PI / 2) * t);
+        const c = Math.cos(planAngle * t), s = Math.sin(planAngle * t);
         arcPts1.push(new THREE.Vector3(h1x + (dirX * c + perpX * s) * halfLeaf, y, h1z + (dirZ * c + perpZ * s) * halfLeaf));
       }
       const arc1 = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts1), arcMat);
@@ -5813,7 +5856,7 @@ export default class LayoutSceneLayer {
       const leaf2 = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(h2x, y, h2z),
-          new THREE.Vector3(h2x + perpX * halfLeaf, y, h2z + perpZ * halfLeaf),
+          new THREE.Vector3(h2x + (-dirX * Math.cos(planAngle) + perpX * Math.sin(planAngle)) * halfLeaf, y, h2z + (-dirZ * Math.cos(planAngle) + perpZ * Math.sin(planAngle)) * halfLeaf),
         ]),
         lineMat,
       );
@@ -5823,7 +5866,7 @@ export default class LayoutSceneLayer {
       const arcPts2: THREE.Vector3[] = [];
       for (let i = 0; i <= 16; i++) {
         const t = i / 16;
-        const c = Math.cos((Math.PI / 2) * t), s = Math.sin((Math.PI / 2) * t);
+        const c = Math.cos(planAngle * t), s = Math.sin(planAngle * t);
         arcPts2.push(new THREE.Vector3(h2x + (-dirX * c + perpX * s) * halfLeaf, y, h2z + (-dirZ * c + perpZ * s) * halfLeaf));
       }
       const arc2 = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcPts2), arcMat);
@@ -5956,9 +5999,9 @@ export default class LayoutSceneLayer {
     } else {
       // Leaf in open position (90° into room).
       const leafEnd = new THREE.Vector3(
-        hx + perpX * leafLen,
+        hx + (dirX * (door.hinge === "end" ? -1 : 1) * Math.cos(planAngle) + perpX * Math.sin(planAngle)) * leafLen,
         y,
-        hz + perpZ * leafLen,
+        hz + (dirZ * (door.hinge === "end" ? -1 : 1) * Math.cos(planAngle) + perpZ * Math.sin(planAngle)) * leafLen,
       );
       const leafGeo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(hx, y, hz),
@@ -5976,8 +6019,8 @@ export default class LayoutSceneLayer {
       const steps = 16;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
-        const c = Math.cos((Math.PI / 2) * t);
-        const s = Math.sin((Math.PI / 2) * t);
+        const c = Math.cos(planAngle * t);
+        const s = Math.sin(planAngle * t);
         // Rotate closed → open
         const dx = closedX * c + perpX * s;
         const dz = closedZ * c + perpZ * s;
@@ -6147,6 +6190,23 @@ export default class LayoutSceneLayer {
       g.add(cLine);
     }
 
+
+    const hand = win.hinge === "end" ? -1 : 1;
+    const facing = win.swing === -1 ? -1 : 1;
+    const hx = hand === 1 ? ax : bx, hz = hand === 1 ? az : bz;
+    const openAngle = THREE.MathUtils.degToRad(win.operation === "casement" ? win.openingAngleDeg ?? 15 : 0);
+    const span = fromMm(win.widthMm);
+    const arrowBase = new THREE.Vector3((ax + bx) / 2, y, (az + bz) / 2);
+    const arrowTip = arrowBase.clone().add(new THREE.Vector3(perpX * facing * (halfT + 0.15), 0, perpZ * facing * (halfT + 0.15)));
+    const marker = new THREE.Line(new THREE.BufferGeometry().setFromPoints([arrowBase, arrowTip]), mat);
+    marker.renderOrder = 23;
+    g.add(marker);
+    if (win.operation === "casement") {
+      const points = [new THREE.Vector3(hx, y, hz)];
+      points.push(new THREE.Vector3(hx + (dirX * hand * Math.cos(openAngle) + perpX * facing * Math.sin(openAngle)) * span, y, hz + (dirZ * hand * Math.cos(openAngle) + perpZ * facing * Math.sin(openAngle)) * span));
+      const leaf = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), mat);
+      leaf.renderOrder = 23; g.add(leaf);
+    }
 
     const pick = new THREE.Mesh(
       new THREE.BoxGeometry(

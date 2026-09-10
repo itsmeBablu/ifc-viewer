@@ -5,6 +5,7 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
+import OpeningOrientationControls from "./OpeningOrientationControls";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import BoundarySketchOptions from "./BoundarySketchOptions";
 import ModifyTools from "./ModifyTools";
@@ -287,6 +288,7 @@ export default function ToolOptionsBar() {
         {armedLayoutTool === "door" && (
           <div className="flex items-center gap-3">
             <span className="font-bold text-amber-500">Door Properties:</span>
+            <OpeningOrientationControls kind="door" draft />
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)]">Width:</span>
               {[800, 900, 1000].map((w) => (
@@ -324,6 +326,7 @@ export default function ToolOptionsBar() {
         {armedLayoutTool === "window" && (
           <div className="flex items-center gap-3">
             <span className="font-bold text-amber-500">Window Properties:</span>
+            <OpeningOrientationControls kind="window" draft />
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-[var(--text-muted)]">Width:</span>
               <input

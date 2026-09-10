@@ -9,10 +9,45 @@ type GeometryHarness = {
   currentRenderMode: string;
   placeOpening(group: THREE.Group, wall: LayoutWall, position: number, width: number, height: number, elevation: number, sill: number, door?: LayoutDoor, window?: LayoutWindow): void;
   buildWallLayerGeometry(wall: LayoutWall, centerline: WallCenterlineMm, doors: LayoutDoor[], windows: LayoutWindow[], miter: undefined, offset: number, thickness: number, total: number): THREE.BufferGeometry;
+  buildDoorPlanSymbol(wall: LayoutWall, door: LayoutDoor, elevation: number): THREE.Group;
 };
 const harness = () => Object.assign(Object.create(LayoutSceneLayer.prototype), { currentRenderMode: "light" }) as GeometryHarness;
 
 describe("opening visibility", () => {
+  it("retains the full floor-plan swing arc when the 3D door is closed", () => {
+    const layer = harness();
+    const closed = layer.buildDoorPlanSymbol(wall, { ...door, openingAngleDeg: 0 }, 0);
+    const open = layer.buildDoorPlanSymbol(wall, { ...door, openingAngleDeg: 90 }, 0);
+    const lines = (group: THREE.Group) => group.children.filter((child): child is THREE.Line => child instanceof THREE.Line);
+    const closedLines = lines(closed), openLines = lines(open);
+    expect(closedLines.length).toBeGreaterThanOrEqual(2);
+    expect(closedLines[1].geometry.attributes.position.count).toBeGreaterThan(2);
+    closedLines.forEach((line, index) => {
+      expect(Array.from(line.geometry.attributes.position.array)).toEqual(Array.from(openLines[index].geometry.attributes.position.array));
+    });
+  });
+  it("rotates double-door leaves around separate jambs", () => {
+    const group = new THREE.Group();
+    harness().placeOpening(group, wall, 2000, 1800, 2100, 0, 0, { ...door, widthMm: 1800, style: "double", openingAngleDeg: 90 });
+    group.updateMatrixWorld(true);
+    const left = group.getObjectByName("opening-panel-left")!;
+    const right = group.getObjectByName("opening-panel-right")!;
+    expect(left.parent).not.toBe(right.parent);
+    expect(left.parent!.rotation.y).toBeLessThan(0);
+    expect(right.parent!.rotation.y).toBeGreaterThan(0);
+  });
+  it.each(["start", "end"] as const)("rotates the door around the %s jamb toward its facing side", hinge => {
+    for (const swing of [-1, 1] as const) {
+      const group = new THREE.Group();
+      harness().placeOpening(group, wall, 2000, 900, 2100, 0, 0, { ...door, hinge, swing, openingAngleDeg: 90 });
+      group.updateMatrixWorld(true);
+      const leaf = group.getObjectByName("opening-panel") as THREE.Mesh;
+      const center = new THREE.Box3().setFromObject(leaf).getCenter(new THREE.Vector3());
+      expect(center.x).toBeCloseTo(hinge === "start" ? 1.6 : 2.4, 3);
+      expect(Math.sign(center.z)).toBe(swing);
+      expect(Math.abs(center.z)).toBeGreaterThan(0.4);
+    }
+  });
   it("shows metal window frames and glass from both wall faces", () => {
     const group = new THREE.Group();
     const window: LayoutWindow = { id: "window", projectId: "p", wallId: "wall", positionMm: 2000, widthMm: 1200, heightMm: 1400, sillHeightMm: 900, operation: "fixed", createdAt: 0 };

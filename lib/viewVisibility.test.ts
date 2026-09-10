@@ -56,6 +56,20 @@ describe("view display isolation", () => {
     restore(); expect(grid.visible).toBe(true);
   });
 
+  it("hides roofs independently of floors during rendering and restores them afterward", () => {
+    const root = new Group(), roof = new Mesh(), floor = new Mesh();
+    roof.userData.layoutSlabId = "roof"; roof.userData.renderCategory = "Roofs";
+    floor.userData.layoutSlabId = "floor"; floor.userData.renderCategory = "Floors";
+    root.add(roof, floor);
+    const restore = applyRenderPresentation([root], true, ["Roofs"]);
+    expect(roof.visible).toBe(false); expect(floor.visible).toBe(true);
+    restore(); expect(roof.visible).toBe(true);
+    useViewDisplayStore.setState({ renderPreview: true, renderHiddenCategories: ["Roofs"] });
+    expect(isObjectVisibleInView(roof, undefined)).toBe(false);
+    expect(isObjectVisibleInView(floor, undefined)).toBe(true);
+    useViewDisplayStore.setState({ renderPreview: false, renderHiddenCategories: [] });
+  });
+
   it("preserves glass opacity across repeated wireframe transitions", () => {
     const material = new MeshStandardMaterial({ transparent: true, opacity: 0.38 });
     const mesh = new Mesh(new BoxGeometry(), material);

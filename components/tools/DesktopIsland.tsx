@@ -1,4 +1,5 @@
 "use client";
+import RenderElementsMenu from "./RenderElementsMenu";
 import WallAttachControl from "./WallAttachControl";
 import { activateModifyTool } from "./ModifyTools";
 import { useModifyStore } from "@/store/useModifyStore";
@@ -925,7 +926,13 @@ export default function DesktopIsland() {
                   key={tab.id}
                   ref={(el) => { tabRefs.current[tab.id] = el; }}
                   type="button"
-                  onClick={() => setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert" | "render")}
+                  onClick={() => {
+                    setArchCategory(tab.id as "build" | "structure" | "annotate" | "insert" | "render");
+                    if (tab.id === "render") {
+                      enterRenderView();
+                      useAppStore.getState().setRightPanelOpen(true);
+                    }
+                  }}
                   className={`desktop-clean-tab-btn ${archCategory === tab.id ? "is-active" : ""}`}
                 >
                   {tab.label}
@@ -986,6 +993,7 @@ export default function DesktopIsland() {
           ref={capsulesRowRef}
           className="flex items-center gap-1.5 overflow-x-auto thin-scroll desktop-capsule-row-inner py-0.5 px-2 max-w-full"
         >
+          {!mepModeActive && archCategory === "render" && <RenderElementsMenu />}
           {renderedCapsules.map((item) => {
             if (item.id === "attach") return <WallAttachControl key={item.id} className="desktop-capsule-btn" />;
             const active = isCapsuleActive(item.id);

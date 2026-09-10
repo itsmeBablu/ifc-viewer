@@ -1,5 +1,6 @@
 "use client";
 
+import RenderSceneControls from "./RenderSceneControls";
 import { useState } from "react";
 import {
   LuCamera,
@@ -125,6 +126,8 @@ export default function RenderViewControls() {
           {enabled ? <LuX className="text-sm" /> : <LuCamera className="text-sm text-zinc-950" />}
           {enabled ? "Exit Render Studio" : "Enter Render Studio"}
         </button>
+
+        <RenderSceneControls />
 
         {/* Atmosphere Presets */}
         <div className="space-y-1.5">

@@ -71,6 +71,7 @@ export type LayoutWall = {
 };
 
 export type LayoutDoor = {
+  openingAngleDeg?: number;
   id: string;
   projectId: string;
   wallId: string;
@@ -93,6 +94,9 @@ export type LayoutDoor = {
 };
 
 export type LayoutWindow = {
+  hinge?: "start" | "end";
+  swing?: 1 | -1;
+  openingAngleDeg?: number;
   operation?: "single-hung" | "double-hung" | "casement" | "fixed" | "sliding";
   id: string;
   projectId: string;

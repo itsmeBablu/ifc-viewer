@@ -22,6 +22,8 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useStudioSettingsStore, STUDIO_ACCENTS } from "@/store/useStudioSettingsStore";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
+import OpeningOrientationControls from "./OpeningOrientationControls";
+import RenderViewControls from "./RenderViewControls";
 import ElementInspector from "./ElementInspector";
 import { WallLayersSection } from "./LayoutPropertiesPanel";
 import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
@@ -32,6 +34,7 @@ import { useMaterialStore } from "@/store/materialStore";
 import { wallLengthMm } from "@/lib/layoutDrawing";
 
 export default function ToolPropertiesDock() {
+  const renderTab = useLayoutDrawingStore(s => s.desktopArchCategory === "render");
   const materials = useMaterialStore((s) => s.materials);
   const [collapsed, setCollapsed] = useState(false);
   const [dockTab, setDockTab] = useState<"properties" | "materials" | "settings">("properties");
@@ -313,6 +316,7 @@ export default function ToolPropertiesDock() {
               </div>
             ) : (
               <div ref={contentRef} className="flex flex-1 min-h-0 flex-col overflow-y-auto p-2 thin-scroll space-y-1.5 text-xs">
+                {renderTab && <RenderViewControls />}
                 {/* TYPE SELECTOR HEADER & EDIT TYPE BUTTON */}
                 {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
                   <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1.5 shadow-sm">
@@ -475,6 +479,8 @@ export default function ToolPropertiesDock() {
                       )}
                     </div>
 
+                    {selectedDoor && <OpeningOrientationControls kind="door" />}
+                    {selectedWindow && <OpeningOrientationControls kind="window" />}
                     {selectedWall && <WallLayersSection wall={selectedWall} updateWall={updateWall} />}
 
                     {(selectedDoor || selectedWindow) && (

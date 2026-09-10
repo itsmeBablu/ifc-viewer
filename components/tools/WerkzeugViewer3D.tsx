@@ -48,11 +48,15 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import * as THREE from "three";
+import { LuFlipHorizontal2, LuRotate3D, LuMove3D } from "react-icons/lu";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { openingOrientationLabel } from "@/lib/openingOrientation";
+import { RenderEnvironment } from "@/lib/renderEnvironment";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, legendStopsForMode } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
@@ -781,6 +785,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const hemiRef = useRef<THREE.HemisphereLight | null>(null);
+  const renderEnvironmentRef = useRef<RenderEnvironment | null>(null);
   const groundShadowRef = useRef<THREE.Mesh | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
 
@@ -888,6 +893,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const planStyleLevel = useLayoutDrawingStore(s => s.levels);
   const planStyleMarkup = useToolMarkupStore();
   const planStylePreset = planStyleMarkup.quadView ? planStyleMarkup.quadPresets[planStyleMarkup.quadActiveIndex] : planStyleMarkup.viewPreset;
+  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
+  const selectedDoor = useLayoutDrawingStore((s) => s.doors.find((door) => door.id === s.selectedDoorId) ?? null);
+  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const selectedWindow = useLayoutDrawingStore((s) => s.windows.find((window) => window.id === s.selectedWindowId) ?? null);
+  const [doorActionPosition, setDoorActionPosition] = useState<{ left: number; top: number } | null>(null);
   const renderMode = renderPreview ? "realistic" : (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
   const lighting = useAppStore((s) => s.lighting);
   const configuredSceneBackground = useAppStore((s) => s.sceneBackground);
@@ -900,6 +910,31 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      const canvas = rendererRef.current?.domElement;
+      const camera = cameraRef.current;
+      const opening = selectedDoor ?? selectedWindow;
+      if (!opening || !canvas || !camera) {
+        setDoorActionPosition(null);
+      } else {
+        const wallId = selectedDoor?.wallId ?? selectedWindow?.wallId;
+        const wall = useLayoutDrawingStore.getState().walls.find((item) => item.id === wallId);
+        if (!wall) setDoorActionPosition(null);
+        else {
+          const point = pointOnWallMm(wall, "positionMm" in opening ? opening.positionMm : wallLengthMm(wall) / 2);
+          const screen = projectPointToClient(new THREE.Vector3(fromMm(point.xMm), fromMm((useLayoutDrawingStore.getState().levels.find((level) => level.id === wall.levelId)?.elevationMm ?? 0) + 20), fromMm(point.yMm)), camera, canvas);
+          const nextPosition = { left: screen.x + 14, top: screen.y - 34 };
+          setDoorActionPosition((previous) => previous && Math.abs(previous.left - nextPosition.left) < 0.5 && Math.abs(previous.top - nextPosition.top) < 0.5 ? previous : nextPosition);
+        }
+      }
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [selectedDoor, selectedDoorId, selectedWindow, selectedWindowId, planStylePreset]);
   const selectedVentilationZoneKey = useAppStore(
     (s) => s.selectedVentilationZoneKey,
   );
@@ -1174,7 +1209,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const renderCapture = () => {
         const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], level);
         const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(markupState.quadView ? markupState.quadPresets[markupState.quadActiveIndex] : markupState.viewPreset, markupState.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
-        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
         try { renderer.render(scene, camera); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
       };
@@ -1344,6 +1379,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     groundShadowPlane.receiveShadow = true;
     scene.add(groundShadowPlane);
     groundShadowRef.current = groundShadowPlane;
+    renderEnvironmentRef.current = new RenderEnvironment(scene, renderer);
 
     const controls = new OrbitControls<
       THREE.PerspectiveCamera | THREE.OrthographicCamera
@@ -1532,7 +1568,7 @@ const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getStat
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
           const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(slots[index].preset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
           const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
-          const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+          const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
           try { renderer.render(scene, cam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         }
@@ -1609,7 +1645,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
           const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(useToolMarkupStore.getState().viewPreset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
         const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
-        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
         try { renderer.render(scene, activeCam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         markup?.render(activeCam);
@@ -1627,6 +1663,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       ro.disconnect();
       controls.dispose();
       renderer.dispose();
+      renderEnvironmentRef.current?.dispose();
+      renderEnvironmentRef.current = null;
       scene.environment?.dispose();
       materialCacheRef.current.clear();
       if (renderer.domElement.parentElement === container) {
@@ -2225,7 +2263,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         renderer.shadowMap.enabled = shadowsEnabled;
       }
       if (groundShadow) {
-        groundShadow.visible = shadowsEnabled;
+        groundShadow.visible = false;
       }
     } else {
       if (hemi) {
@@ -2317,6 +2355,33 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     skyColor,
     groundColor,
   ]);
+
+  useEffect(() => useLayoutDrawingStore.subscribe((state, previous) => {
+    if (state.draftOpeningOrientation !== previous.draftOpeningOrientation) layoutLayerRef.current?.refreshOpeningPreview();
+  }), []);
+
+  useEffect(() => {
+    const update = () => {
+      const settings = useViewDisplayStore.getState();
+      renderEnvironmentRef.current?.update(settings, useLayoutDrawingStore.getState().levels);
+      const camera = cameraRef.current;
+      if (camera instanceof THREE.PerspectiveCamera && settings.renderPreview) {
+        camera.fov = settings.cameraFov;
+        camera.updateProjectionMatrix();
+      }
+      const sun = sunRef.current;
+      if (sun) sun.shadow.radius = settings.shadowSoftness === "soft" ? 4 : 1;
+      if (rendererRef.current) {
+        rendererRef.current.shadowMap.type = settings.shadowSoftness === "soft" ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+        rendererRef.current.shadowMap.needsUpdate = true;
+      }
+    };
+    update();
+    const unsubscribe = useViewDisplayStore.subscribe(update);
+    const unsubscribeLevels = useLayoutDrawingStore.subscribe((s, p) => { if (s.levels !== p.levels) update(); });
+    const unsubscribeMaterials = useMaterialStore.subscribe(update);
+    return () => { unsubscribe(); unsubscribeLevels(); unsubscribeMaterials(); };
+  }, []);
 
   // Live 3D material update subscription
   useEffect(() => {
@@ -3280,6 +3345,11 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       }
       if (!typing && (e.code === "Space" || e.key === " ")) {
         const layout = useLayoutDrawingStore.getState();
+        if (layout.armedLayoutTool === "door" || layout.armedLayoutTool === "window" || layout.selectedDoorId || layout.selectedWindowId) {
+          e.preventDefault();
+          if (!e.repeat) layout.cycleOpeningOrientation();
+          return;
+        }
         const selectedEquip = layout.selectedEquipmentId
           ? layout.mepEquipment.find((eq) => eq.id === layout.selectedEquipmentId)
           : layout.selectedElements.find((el) => el.kind === "equipment")
@@ -5619,7 +5689,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             if (layoutStore.tracePreview) layoutStore.clearTracePreview();
             if (placement) {
               layoutLayer.setOpeningPreview(placement.wall, placement.positionMm, placement.planMode);
-              useToolMarkupStore.getState().setDragSnapHint({ text: (layoutStore.armedLayoutTool === "door" ? "Door: " : "Window: ") + placement.positionMm + " mm", clientX: e.clientX, clientY: e.clientY });
+              useToolMarkupStore.getState().setDragSnapHint({ text: (layoutStore.armedLayoutTool === "door" ? "Door: " : "Window: ") + placement.positionMm + " mm ? " + openingOrientationLabel(layoutStore.draftOpeningOrientation[layoutStore.armedLayoutTool]) + " ? Space: cycle", clientX: e.clientX, clientY: e.clientY });
               canvas.style.cursor = "crosshair";
             } else {
               layoutLayer.clearOpeningPreview();
@@ -7733,6 +7803,47 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   return (
     <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      {doorActionPosition && (selectedDoor || selectedWindow) && (
+        <div
+          className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
+          style={{ left: doorActionPosition.left, top: doorActionPosition.top }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Flip inside / outside"
+            aria-label="Flip inside or outside"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { swing: selectedDoor.swing === -1 ? 1 : -1 });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { swing: selectedWindow.swing === -1 ? 1 : -1 });
+            }}
+          ><LuMove3D className="size-4" /></button>
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Flip left / right"
+            aria-label="Flip left or right"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { hinge: selectedDoor.hinge === "end" ? "start" : "end" });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { hinge: selectedWindow.hinge === "end" ? "start" : "end" });
+            }}
+          ><LuFlipHorizontal2 className="size-4" /></button>
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Increase 3D opening angle"
+            aria-label="Increase 3D opening angle"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { openingAngleDeg: ((selectedDoor.openingAngleDeg ?? 0) + 15) % 135 });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { openingAngleDeg: ((selectedWindow.openingAngleDeg ?? 0) + 15) % 135 });
+            }}
+          ><LuRotate3D className="size-4" /></button>
+        </div>
+      )}
       {marqueeBox && (
         <div
           className="pointer-events-none fixed z-[999]"

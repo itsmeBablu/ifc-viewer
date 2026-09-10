@@ -1,6 +1,18 @@
 import type { Object3D } from "three";
 import { objectCategory } from "./planView";
-import type { ViewVisibility } from "../store/useViewDisplayStore";
+import { useViewDisplayStore, type ViewVisibility } from "../store/useViewDisplayStore";
+
+function renderCategory(data: Record<string, unknown>): string {
+  if (typeof data.renderCategory === "string") return data.renderCategory;
+  const category = objectCategory(data) ?? "";
+  const ifc = category.toUpperCase();
+  if (ifc.startsWith("IFCWALL")) return "Walls";
+  if (ifc === "IFCROOF") return "Roofs";
+  if (ifc === "IFCSLAB") return "Floors";
+  if (ifc === "IFCDOOR") return "Doors";
+  if (ifc === "IFCWINDOW") return "Windows";
+  return category;
+}
 
 export function objectElementId(data: Record<string, unknown>): string | null {
   for (const [key, value] of Object.entries(data)) {
@@ -30,8 +42,10 @@ export function applyViewVisibility(roots: (Object3D | null | undefined)[], visi
 }
 
 export function isObjectVisibleInView(object: Object3D, visibility: ViewVisibility | undefined): boolean {
+  const render = useViewDisplayStore.getState();
   for (let obj: Object3D | null = object; obj; obj = obj.parent) {
     if (!obj.visible) return false;
+    if (render.renderPreview && render.renderHiddenCategories.includes(renderCategory(obj.userData))) return false;
     if (!visibility) continue;
     const id = objectElementId(obj.userData);
     const category = objectCategory(obj.userData);
@@ -41,11 +55,11 @@ export function isObjectVisibleInView(object: Object3D, visibility: ViewVisibili
   return true;
 }
 
-export function applyRenderPresentation(roots: (Object3D | null | undefined)[], enabled: boolean) {
+export function applyRenderPresentation(roots: (Object3D | null | undefined)[], enabled: boolean, hiddenCategories: string[] = []) {
   if (!enabled) return () => {};
   const restore: Object3D[] = [];
   for (const root of roots) root?.traverse(obj => {
-    if (obj.visible && (obj.name === "3d-grid" || obj.name === "3d-axes" ||
+    if (obj.visible && (hiddenCategories.includes(renderCategory(obj.userData)) || obj.name === "3d-grid" || obj.name === "3d-axes" ||
       /^layout-(.*preview|sketch-lines|wall-endpoints|workplane-group|section-group|selection-outline)$/.test(obj.name) ||
       obj.userData.isLayoutGround || obj.userData.isLayoutLevelSlab || obj.userData.layoutGridLineId ||
       obj.userData.isSelectionOutline || obj.type === "TransformControlsRoot")) {
