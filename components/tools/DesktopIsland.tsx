@@ -1024,7 +1024,7 @@ export default function DesktopIsland() {
                 <span className="desktop-capsule-label leading-none">{displayLabel}</span>
                 {item.hasDropdown && (
                   <LuChevronDown
-                    className={`h-2.5 w-2.5 opacity-60 ml-0.5 transition-transform duration-200 ${
+                    className={`desktop-capsule-chevron h-2.5 w-2.5 opacity-60 ml-0.5 transition-transform duration-200 ${
                       (isShapes
                         ? shapesDropdownOpen
                         : isTypeSelector

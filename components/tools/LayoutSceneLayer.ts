@@ -91,6 +91,7 @@ export default class LayoutSceneLayer {
   private wireMeshes = new Map<string, THREE.Group>();
   private workPlaneGroup = new THREE.Group();
   private previewLine: THREE.Group | null = null;
+  private openingPreview: THREE.Group | null = null;
   private slabPreview: THREE.Group | null = null;
   private stairPreview: THREE.Group | null = null;
   private rampPreview: THREE.Group | null = null;
@@ -3547,6 +3548,7 @@ export default class LayoutSceneLayer {
   }
 
   dispose() {
+    this.clearOpeningPreview();
     for (const grp of this.wallMeshes.values()) this.disposeGroup(grp);
     for (const g of this.doorMeshes.values()) this.disposeGroup(g);
     for (const g of this.windowMeshes.values()) this.disposeGroup(g);
@@ -4038,16 +4040,16 @@ export default class LayoutSceneLayer {
       this.updateWireframeEdges(g, showEdges, isWireframe);
     }
     for (const grp of this.equipmentMeshes.values()) {
-      this.updateWireframeEdges(grp, isWireframe, isWireframe);
+      this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
     for (const mesh of this.ductMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const mesh of this.pipeMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const mesh of this.cableTrayMeshes.values()) {
-      this.updateWireframeEdges(mesh, isWireframe, isWireframe);
+      this.updateWireframeEdges(mesh, showEdges, isWireframe);
     }
     for (const grp of this.stairMeshes.values()) {
       this.updateWireframeEdges(grp, showEdges, isWireframe);
@@ -4317,24 +4319,26 @@ export default class LayoutSceneLayer {
       if (wt?.layers && wt.layers.length > 0) return wt.layers;
     }
     const t = wall.thicknessMm || 200;
+    const extMat = wall.material || "Plaster";
+    const extColor = wall.color || "#c4beb5";
     if (t >= 280) {
       return [
         { id: "l-int", name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
-        { id: "l-str", name: "Concrete Core", function: "structure", material: wall.material || "Concrete Core", thicknessMm: t - 130, color: "#525d6d" },
+        { id: "l-str", name: "Concrete Core", function: "structure", material: "Concrete Core", thicknessMm: t - 130, color: "#525d6d" },
         { id: "l-ins", name: "Mineral Wool Insulation", function: "insulation", material: "Mineral Wool", thicknessMm: 100, color: "#eab308" },
-        { id: "l-ext", name: "Exterior Render", function: "finish2", material: "Stucco Render", thicknessMm: 15, color: "#c4beb5" },
+        { id: "l-ext", name: "Exterior Render", function: "finish2", material: wall.material || "Stucco Render", thicknessMm: 15, color: extColor },
       ];
     } else if (t === 100 || t === 125) {
       return [
         { id: "l-g1", name: "Gypsum Board", function: "finish1", material: "Gypsum Board", thicknessMm: 12.5, color: "#cbd5e1" },
         { id: "l-cav", name: "Stud Cavity", function: "core", material: "Stud Cavity", thicknessMm: t - 25, color: "#475569" },
-        { id: "l-g2", name: "Gypsum Board", function: "finish2", material: "Gypsum Board", thicknessMm: 12.5, color: "#cbd5e1" },
+        { id: "l-g2", name: "Gypsum Board", function: "finish2", material: wall.material || "Gypsum Board", thicknessMm: 12.5, color: extColor },
       ];
     } else {
       return [
         { id: "l-int", name: "Interior Finish", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
-        { id: "l-str", name: "Structural Core", function: "structure", material: wall.material || "Concrete", thicknessMm: Math.max(10, t - 30), color: wall.color || "#525d6d" },
-        { id: "l-ext", name: "Exterior Finish", function: "finish2", material: "Plaster", thicknessMm: 15, color: "#c4beb5" },
+        { id: "l-str", name: "Structural Core", function: "structure", material: "Concrete", thicknessMm: Math.max(10, t - 30), color: "#525d6d" },
+        { id: "l-ext", name: "Exterior Finish", function: "finish2", material: extMat, thicknessMm: 15, color: extColor },
       ];
     }
   }
@@ -4385,7 +4389,7 @@ export default class LayoutSceneLayer {
         (layer.function === "insulation" ? "#fef08a" :
          layer.function === "structure" ? "#525d6d" :
          layer.function === "finish1" ? "#d6d3ce" :
-         layer.function === "finish2" ? "#c4beb5" :
+         layer.function === "finish2" ? (wall.color || "#c4beb5") :
          layer.function === "core" ? "#475569" :
          "#525d6d");
       mat.color.setStyle(lightCol);
@@ -4395,7 +4399,12 @@ export default class LayoutSceneLayer {
     }
 
     // 2. Realistic & Full Color modes: PBR materials with distinct roughness, metalness, textures, bump
-    const matKey = layer.material || wall.material;
+    let matKey = layer.material;
+    if (wall.material && (!matKey || matKey === "Plaster" || matKey === "Stucco Render") && (layer.function === "finish2" || layer.function === "finish1")) {
+      matKey = wall.material;
+    } else if (!matKey) {
+      matKey = wall.material;
+    }
     let customMat = useMaterialStore.getState().getMaterial(matKey);
 
     // Fallback keyword matching if not a direct ID
@@ -5154,11 +5163,10 @@ export default class LayoutSceneLayer {
     heightMm: number,
     elevMm: number,
     sillMm: number,
+    door?: LayoutDoor,
+    win?: LayoutWindow,
   ) {
     // Determine category and details
-    const state = useLayoutDrawingStore.getState();
-    const door = g.userData.layoutDoorId ? state.doors.find((d) => d.id === g.userData.layoutDoorId) : null;
-    const win = g.userData.layoutWindowId ? state.windows.find((w) => w.id === g.userData.layoutWindowId) : null;
     
     const category = door ? "door" : "window";
     const style = door?.style ?? "wood";
@@ -5522,6 +5530,7 @@ export default class LayoutSceneLayer {
    * Both geometries stay in the scene so switching views does not rebuild.
    */
   setOpeningsPlanMode(planMode: boolean) {
+    if (this.openingPreview) this.applyOpeningDisplay(this.openingPreview, planMode);
     for (const g of this.doorMeshes.values()) {
       this.applyOpeningDisplay(g, planMode);
     }
@@ -5531,6 +5540,43 @@ export default class LayoutSceneLayer {
   }
 
   /** Ensure solid box + CAD plan symbol both exist; visibility via planMode. */
+  clearOpeningPreview() {
+    if (!this.openingPreview) return;
+    this.disposeGroup(this.openingPreview);
+    this.openingPreview = null;
+  }
+
+  setOpeningPreview(wall: LayoutWall, positionMm: number, planMode: boolean) {
+    this.clearOpeningPreview();
+    const s = useLayoutDrawingStore.getState();
+    const tool = s.armedLayoutTool;
+    if (tool !== "door" && tool !== "window") return;
+    const type = s.draftElementTypes[tool];
+    const elev = (s.levels.find(l => l.id === wall.levelId)?.elevationMm ?? 0) + (wall.baseOffsetMm ?? 0);
+    const g = this.createOpeningGroup(tool, tool === "door" ? DOOR_COLOR : WINDOW_COLOR);
+    g.name = "layout-opening-preview";
+    const common = { id: "opening-preview", projectId: wall.projectId, wallId: wall.id, positionMm: Math.round(positionMm), createdAt: 0, typeId: type?.id, material: type?.material };
+    if (tool === "door") {
+      this.syncDoorPlanSymbol(g, wall, { ...common, widthMm: s.draftDoorWidthMm, heightMm: s.draftDoorHeightMm, hinge: "start", swing: 1, style: type?.doorStyle ?? (type?.id.includes("double") ? "double" : "wood"), headShape: type?.headShape === "round" ? "arched" : type?.headShape }, elev, planMode);
+    } else {
+      this.syncWindowPlanSymbol(g, wall, { ...common, widthMm: s.draftWindowWidthMm, heightMm: s.draftWindowHeightMm, sillHeightMm: s.draftWindowSillMm, headShape: type?.headShape, sashCount: type?.sashCount ?? 1, operation: type?.windowOperation, color: "#1e293b" }, elev, planMode);
+    }
+    g.traverse(obj => {
+      obj.raycast = () => undefined;
+      obj.renderOrder = 1001;
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+        for (const mat of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+          mat.transparent = true;
+          mat.opacity = 0.65;
+          mat.depthTest = false;
+          mat.depthWrite = false;
+        }
+      }
+    });
+    this.openingPreview = g;
+    this.group.add(g);
+  }
+
   private syncDoorPlanSymbol(
     g: THREE.Group,
     wall: LayoutWall,
@@ -5546,6 +5592,7 @@ export default class LayoutSceneLayer {
       door.heightMm,
       elevMm,
       0,
+      door,
     );
 
     let plan = g.children.find((c) => c.name === "plan-symbol") as
@@ -5577,6 +5624,8 @@ export default class LayoutSceneLayer {
       win.heightMm,
       elevMm,
       win.sillHeightMm,
+      undefined,
+      win,
     );
 
     let plan = g.children.find((c) => c.name === "plan-symbol") as
