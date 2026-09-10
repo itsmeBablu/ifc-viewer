@@ -1958,6 +1958,29 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     // Only react to focus requests — not every selectedRoomId change.
   }, [roomFocusToken]);
 
+  // Revit-style focus: F frames the current selection in any view.
+  useEffect(() => {
+    const onFocusSelection = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "f" || event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true]")) return;
+      const camera = perspectiveCameraRef.current, controls = controlsRef.current;
+      if (!camera || !controls) return;
+      const layout = useLayoutDrawingStore.getState(), markup = useToolMarkupStore.getState();
+      const keys = new Set(layout.selectedElements.map(item => `${item.kind}:${item.id}`));
+      for (const [kind, id] of [["wall", layout.selectedWallId], ["door", layout.selectedDoorId], ["window", layout.selectedWindowId], ["slab", layout.selectedSlabId], ["stair", layout.selectedStairId], ["ramp", layout.selectedRampId]] as const) if (id) keys.add(`${kind}:${id}`);
+      if (markup.selectedPlacementId) keys.add(`placement:${markup.selectedPlacementId}`);
+      for (const item of layout.selectedElements) if (item.kind === "equipment") keys.add(`mepequipment:${item.id}`);
+      const box = new THREE.Box3();
+      const visit = (object: THREE.Object3D) => { const direct = Object.entries(object.userData).find(([name, value]) => name.startsWith("layout") && name.endsWith("Id") && typeof value === "string"); const owner = direct ? `${direct[0].slice("layout".length, -2).toLowerCase()}:${direct[1]}` : object.userData.markupId ? `placement:${object.userData.markupId}` : null; if (owner && keys.has(owner)) box.expandByObject(object); object.children.forEach(visit); };
+      sceneRef.current?.children.forEach(visit);
+      if (box.isEmpty()) return;
+      event.preventDefault();
+      const pose = frameBoundingBox(box, camera, 1.55, { keepDirection: camera.position.clone().sub(controls.target) });
+      void flyTo(camera, controls, pose.position, pose.target, 650);
+    };
+    window.addEventListener("keydown", onFocusSelection, true);
+    return () => window.removeEventListener("keydown", onFocusSelection, true);
+  }, []);
+
   // Heizlast + Temperature compare: twin copy (temp colors) offset from primary (heizlast)
   useEffect(() => {
     const scene = sceneRef.current;
@@ -7339,10 +7362,6 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 (surface.object.userData.markupId as string | undefined) ??
                 null;
               const expressId = ids.expressId ?? null;
-              if (!markupId && expressId == null) {
-                markupStore.setNotePlaceHint("markupNoteMustAttach");
-                return;
-              }
               const elName =
                 useAppStore.getState().selectedElement?.name ??
                 (markupId
@@ -7363,10 +7382,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             return;
           }
 
-          if (armed === "note" && !surface) {
-            markupStore.setNotePlaceHint("markupNoteMustAttach");
-            return;
-          }
+          if (armed === "note" && !surface) return;
 
           const picked = layer.pickMarkup(raycaster.current);
           if (picked?.kind === "placement") {
