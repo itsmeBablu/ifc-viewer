@@ -67,6 +67,14 @@ const MEP_TOOL_ITEMS: Array<{ id: LayoutToolId; label: string; icon: React.React
   { id: "workplane", label: "Work Plane", icon: <LuGrid2X2 /> },
 ];
 
+const ARCH_CATEGORY_IDS: Record<"build" | "structure" | "annotate" | "insert" | "render", string[]> = {
+  build: ["select", "wall", "door", "window", "floor", "roof", "lines", "stair", "ramp"],
+  structure: ["select", "column", "beam", "floor", "grid"],
+  annotate: ["select", "lines", "dimension-distance", "dimension-angle", "dimension-arc"],
+  insert: ["select", "component", "shapes"],
+  render: [],
+};
+
 const RENDER_MODES: Array<{ id: RenderMode; label: string; icon: React.ReactNode }> = [
   { id: "realistic", label: "Realistic", icon: <LuSparkles /> },
   { id: "fullColor", label: "Shaded", icon: <LuBox /> },
@@ -555,7 +563,7 @@ export default function WerkzeugWorkspaceChrome({
             if (mepCategory === "electrical") return ["cabletray", "wire", "equipment"].includes(item.id);
             if (mepCategory === "components") return item.id === "equipment";
             return true;
-          }) : TOOL_ITEMS.filter((item) => item.id !== "levels")).map((item) => {
+          }) : TOOL_ITEMS.filter((item) => ARCH_CATEGORY_IDS[desktopCategory].includes(item.id))).map((item) => {
             const active = (!panelHidden && panelKey === item.id) || armed === item.id;
             return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
@@ -605,6 +613,9 @@ export default function WerkzeugWorkspaceChrome({
         </button>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+        <button type="button" onClick={(event) => toggleAux("views", event.currentTarget)} className="btn-yellow-border-hover werkzeug-icon-action" title="Views"><LuEye /><span>Views</span></button>
+        <button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className="btn-yellow-border-hover werkzeug-icon-action" title="Drawing scale"><LuScale /><span>{drawingScale}</span></button>
+        <button type="button" onClick={() => attachRef.current?.click()} className="btn-yellow-border-hover werkzeug-icon-action" title="Attach reference"><LuPaperclip /><span>Attach</span></button>
         <div className="relative shrink-0">
           <button type="button" onClick={() => { setAuxOpen(null); setRenderOpen((open) => !open); }} aria-expanded={renderOpen} aria-haspopup="menu" aria-label={`Render style: ${activeRenderMode.label}`} title={`Render style: ${activeRenderMode.label}`} className={`werkzeug-render-trigger btn-yellow-border-hover flex h-11 items-center gap-1 rounded-xl border-0 bg-transparent px-2 text-[10px] font-semibold ${renderOpen ? "btn-v-yellow" : "text-[var(--text-body)]"}`}><span className="text-base">{activeRenderMode.icon}</span><LuChevronDown className="h-3 w-3" /></button>
           <GsapPopMenu show={renderOpen} className="absolute left-0 top-[calc(100%+.4rem)] z-[125]"><div role="menu" className="flex max-h-64 w-40 flex-col gap-1 overflow-y-auto rounded-xl border-0 bg-transparent p-1.5 shadow-none backdrop-blur-none thin-scroll">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" role="menuitemradio" aria-checked={renderMode === mode.id} onClick={() => { useAppStore.getState().setRenderMode(mode.id); setRenderOpen(false); }} className={`flex min-h-10 items-center gap-2 rounded-lg border-0 px-2 py-1.5 text-[10px] font-semibold transition-all ${renderMode === mode.id ? "btn-v-yellow" : "btn-yellow-border-hover text-[var(--text-muted)]"}`}><span className="text-base">{mode.icon}</span><span>{mode.label}</span></button>)}</div></GsapPopMenu>
