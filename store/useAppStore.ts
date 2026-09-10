@@ -1192,12 +1192,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       // no compare — those all fight the structure-tree visibility rules.
       set({
         toolMode: true,
-        // Werkzeug shows the model itself, so use the shading mode that renders
-        // IFC materials at full fidelity. The analysis mode comes back on exit.
+        // Werkzeug shows the model itself, default to Shaded (fullColor) for lightweight performance.
         toolPrevRenderMode: get().renderMode,
         toolPrevSpaceTransparency: lighting.spaceTransparency,
         toolPrevElementTransparency: lighting.elementTransparency,
-        renderMode: "realistic",
+        renderMode: "fullColor",
         lighting: {
           ...lighting,
           // Rooms ghosted; building elements fully opaque for inspection.

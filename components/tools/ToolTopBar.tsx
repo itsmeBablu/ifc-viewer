@@ -7,11 +7,8 @@ import { TfiSave, TfiViewGrid } from "react-icons/tfi";
 import { LuSearch, LuX } from "react-icons/lu";
 import HoverTip from "@/components/common/HoverTip";
 import {
-  buildFragBlob,
-  buildMarkupOnlyIfc,
-  downloadBlob,
-  getCachedIfcBytes,
-  mergeMarkupIntoIfc,
+  exportAndDownloadFrag,
+  exportAndDownloadIfc,
 } from "@/lib/markupFragSave";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import { t } from "@/lib/i18n";
@@ -218,46 +215,16 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
   }, []);
 
   const saveAs = (kind: "frag" | "ifc") => {
-    if (!modelKey) return;
-    const base = (activeModelLabel ?? modelKey)
-      .replace(/\.ifc$/i, "")
-      .replace(/[^\w.-]+/g, "_");
     if (kind === "frag") {
-      const layout = useLayoutDrawingStore.getState();
-      downloadBlob(
-        buildFragBlob({
-          modelKey,
-          modelLabel: activeModelLabel,
-          placements,
-          notes,
-          ifcBytes: getCachedIfcBytes(modelKey),
-          layout: {
-            levels: layout.levels,
-            walls: layout.walls,
-            doors: layout.doors,
-            windows: layout.windows,
-            slabs: layout.slabs,
-            underlays: layout.underlays,
-          },
-        }),
-        `${base}.frag`,
-      );
+      exportAndDownloadFrag({
+        modelKey: modelKey ?? undefined,
+        modelLabel: activeModelLabel ?? undefined,
+      });
     } else {
-      const cached = getCachedIfcBytes(modelKey);
-      downloadBlob(
-        cached
-          ? mergeMarkupIntoIfc({
-              baseIfc: cached,
-              placements,
-              notes,
-            })
-          : buildMarkupOnlyIfc({
-              modelLabel: activeModelLabel,
-              placements,
-              notes,
-            }),
-        `${base}_marked.ifc`,
-      );
+      exportAndDownloadIfc({
+        modelKey: modelKey ?? undefined,
+        modelLabel: activeModelLabel ?? undefined,
+      });
     }
     markSaved();
     setSaveOpen(false);

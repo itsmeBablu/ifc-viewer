@@ -48,11 +48,15 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import * as THREE from "three";
+import { LuFlipHorizontal2, LuRotate3D, LuMove3D } from "react-icons/lu";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { openingOrientationLabel } from "@/lib/openingOrientation";
+import { RenderEnvironment } from "@/lib/renderEnvironment";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { heizlastToColor, kuhllastToColor, luftungToColor, temperatureToColor, legendStopsForMode } from "@/lib/colorMapping";
 import { roomTemperatureForView } from "@/lib/roomLoad";
@@ -105,6 +109,8 @@ import {
   distPointSeg,
   getEquipmentConnectors,
   nearestOffsetOnWallMm,
+  pointOnWallMm,
+  wallLengthMm,
   nearestParallelFaceGapMm,
   snapPlanPointToWalls,
   snapWallEndpointMm,
@@ -779,6 +785,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const hemiRef = useRef<THREE.HemisphereLight | null>(null);
+  const renderEnvironmentRef = useRef<RenderEnvironment | null>(null);
   const groundShadowRef = useRef<THREE.Mesh | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
 
@@ -886,6 +893,11 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const planStyleLevel = useLayoutDrawingStore(s => s.levels);
   const planStyleMarkup = useToolMarkupStore();
   const planStylePreset = planStyleMarkup.quadView ? planStyleMarkup.quadPresets[planStyleMarkup.quadActiveIndex] : planStyleMarkup.viewPreset;
+  const selectedDoorId = useLayoutDrawingStore((s) => s.selectedDoorId);
+  const selectedDoor = useLayoutDrawingStore((s) => s.doors.find((door) => door.id === s.selectedDoorId) ?? null);
+  const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
+  const selectedWindow = useLayoutDrawingStore((s) => s.windows.find((window) => window.id === s.selectedWindowId) ?? null);
+  const [doorActionPosition, setDoorActionPosition] = useState<{ left: number; top: number } | null>(null);
   const renderMode = renderPreview ? "realistic" : (planStylePreset === "top" ? planStyleLevel.find(l => l.id === planStyleMarkup.markupFloorId)?.planView?.visualStyle : undefined) ?? workspaceRenderMode;
   const lighting = useAppStore((s) => s.lighting);
   const configuredSceneBackground = useAppStore((s) => s.sceneBackground);
@@ -898,6 +910,31 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const presentationLayoutMode = useAppStore((s) => s.presentationLayoutMode);
   const presentationIsolate = useAppStore((s) => s.presentationIsolate);
   const presentationFloorId = useAppStore((s) => s.presentationFloorId);
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      const canvas = rendererRef.current?.domElement;
+      const camera = cameraRef.current;
+      const opening = selectedDoor ?? selectedWindow;
+      if (!opening || !canvas || !camera) {
+        setDoorActionPosition(null);
+      } else {
+        const wallId = selectedDoor?.wallId ?? selectedWindow?.wallId;
+        const wall = useLayoutDrawingStore.getState().walls.find((item) => item.id === wallId);
+        if (!wall) setDoorActionPosition(null);
+        else {
+          const point = pointOnWallMm(wall, "positionMm" in opening ? opening.positionMm : wallLengthMm(wall) / 2);
+          const screen = projectPointToClient(new THREE.Vector3(fromMm(point.xMm), fromMm((useLayoutDrawingStore.getState().levels.find((level) => level.id === wall.levelId)?.elevationMm ?? 0) + 20), fromMm(point.yMm)), camera, canvas);
+          const nextPosition = { left: screen.x + 14, top: screen.y - 34 };
+          setDoorActionPosition((previous) => previous && Math.abs(previous.left - nextPosition.left) < 0.5 && Math.abs(previous.top - nextPosition.top) < 0.5 ? previous : nextPosition);
+        }
+      }
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [selectedDoor, selectedDoorId, selectedWindow, selectedWindowId, planStylePreset]);
   const selectedVentilationZoneKey = useAppStore(
     (s) => s.selectedVentilationZoneKey,
   );
@@ -1172,7 +1209,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const renderCapture = () => {
         const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], level);
         const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(markupState.quadView ? markupState.quadPresets[markupState.quadActiveIndex] : markupState.viewPreset, markupState.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
-        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
         try { renderer.render(scene, camera); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
       };
@@ -1321,14 +1358,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     sun.position.set(40, 80, 30);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.radius = 6;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 300;
-    sun.shadow.camera.left = -60;
-    sun.shadow.camera.right = 60;
-    sun.shadow.camera.top = 60;
-    sun.shadow.camera.bottom = -60;
+    sun.shadow.camera.left = -50;
+    sun.shadow.camera.right = 50;
+    sun.shadow.camera.top = 50;
+    sun.shadow.camera.bottom = -50;
     sun.shadow.bias = -0.0001;
-    sun.shadow.normalBias = 0.02;
+    sun.shadow.normalBias = 0.05;
     scene.add(sun);
     sunRef.current = sun;
 
@@ -1341,6 +1379,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     groundShadowPlane.receiveShadow = true;
     scene.add(groundShadowPlane);
     groundShadowRef.current = groundShadowPlane;
+    renderEnvironmentRef.current = new RenderEnvironment(scene, renderer);
 
     const controls = new OrbitControls<
       THREE.PerspectiveCamera | THREE.OrthographicCamera
@@ -1529,7 +1568,7 @@ const rangeLevel = slots[index].preset === "top" ? useLayoutDrawingStore.getStat
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
           const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(slots[index].preset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
           const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
-          const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+          const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
           try { renderer.render(scene, cam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         }
@@ -1606,7 +1645,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           const restoreRange = applyPlanViewDisplay([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], rangeLevel);
           const restoreVisibility = applyViewVisibility([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current], useViewDisplayStore.getState().views[viewDisplayKey(useToolMarkupStore.getState().viewPreset, useToolMarkupStore.getState().markupFloorId, useLayoutDrawingStore.getState().activeSectionId)]);
         const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
-        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview);
+        const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
         try { renderer.render(scene, activeCam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         markup?.render(activeCam);
@@ -1624,6 +1663,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       ro.disconnect();
       controls.dispose();
       renderer.dispose();
+      renderEnvironmentRef.current?.dispose();
+      renderEnvironmentRef.current = null;
       scene.environment?.dispose();
       materialCacheRef.current.clear();
       if (renderer.domElement.parentElement === container) {
@@ -2222,7 +2263,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         renderer.shadowMap.enabled = shadowsEnabled;
       }
       if (groundShadow) {
-        groundShadow.visible = shadowsEnabled;
+        groundShadow.visible = false;
       }
     } else {
       if (hemi) {
@@ -2256,15 +2297,15 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             renderer.shadowMap.enabled = lighting.shadow > 0.05;
           }
         } else {
-          // fullColor / wireframe
+          // fullColor (Shaded) / wireframe: Lightweight CAD mode with crisp edges and minimal GPU load
           if (sun) {
-            sun.intensity = 0.45 + lighting.shadow * 1.25;
-            sun.castShadow = renderMode !== "wireframe" && lighting.shadow > 0.05;
+            sun.intensity = 0.85;
+            sun.castShadow = false;
           }
-          if (ambient) ambient.intensity = 0.45 + lighting.indirectLight * 0.85;
+          if (ambient) ambient.intensity = 0.65 + lighting.indirectLight * 0.35;
           if (renderer) {
-            renderer.toneMappingExposure = 1.15;
-            renderer.shadowMap.enabled = renderMode !== "wireframe";
+            renderer.toneMappingExposure = 1.1;
+            renderer.shadowMap.enabled = false;
           }
         }
       } else {
@@ -2314,6 +2355,33 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     skyColor,
     groundColor,
   ]);
+
+  useEffect(() => useLayoutDrawingStore.subscribe((state, previous) => {
+    if (state.draftOpeningOrientation !== previous.draftOpeningOrientation) layoutLayerRef.current?.refreshOpeningPreview();
+  }), []);
+
+  useEffect(() => {
+    const update = () => {
+      const settings = useViewDisplayStore.getState();
+      renderEnvironmentRef.current?.update(settings, useLayoutDrawingStore.getState().levels);
+      const camera = cameraRef.current;
+      if (camera instanceof THREE.PerspectiveCamera && settings.renderPreview) {
+        camera.fov = settings.cameraFov;
+        camera.updateProjectionMatrix();
+      }
+      const sun = sunRef.current;
+      if (sun) sun.shadow.radius = settings.shadowSoftness === "soft" ? 4 : 1;
+      if (rendererRef.current) {
+        rendererRef.current.shadowMap.type = settings.shadowSoftness === "soft" ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+        rendererRef.current.shadowMap.needsUpdate = true;
+      }
+    };
+    update();
+    const unsubscribe = useViewDisplayStore.subscribe(update);
+    const unsubscribeLevels = useLayoutDrawingStore.subscribe((s, p) => { if (s.levels !== p.levels) update(); });
+    const unsubscribeMaterials = useMaterialStore.subscribe(update);
+    return () => { unsubscribe(); unsubscribeLevels(); unsubscribeMaterials(); };
+  }, []);
 
   // Live 3D material update subscription
   useEffect(() => {
@@ -2740,6 +2808,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     let jointSources: unknown[] = [];
     const sync = () => {
       const s = useLayoutDrawingStore.getState();
+      layer.clearOpeningPreview();
       const markupFloor = useToolMarkupStore.getState().markupFloorId;
       const activeLevel =
         s.levels.find((l) => l.id === markupFloor) ?? s.levels[0] ?? null;
@@ -2797,6 +2866,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         selectedDoorId: s.selectedDoorId,
         selectedWindowId: s.selectedWindowId,
         selectedSlabId: s.selectedSlabId,
+        editingSlabId: s.slabBoundaryEdit?.slabId ?? null,
         selectedWallIds: selWallIds,
         selectedDoorIds: selDoorIds,
         selectedWindowIds: selWinIds,
@@ -2892,7 +2962,10 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             .floors.map((f) => [f.id, Math.round(f.elevation * 1000)]),
         ),
       });
-      layer.syncLevelSlabs(s.levels, s.walls, isPlanView);
+      // Level datum pads are plan-view only: visible in single top-view,
+      // hidden in quad (they bleed into the 3D/front/side quads).
+      const slabsVisible = !ms.quadView && ms.viewPreset === "top";
+      layer.syncLevelSlabs(s.levels, s.walls, slabsVisible);
       if (helpersRef.current) {
         helpersRef.current.visible = !isPlanView;
         const g = helpersRef.current.getObjectByName("3d-grid");
@@ -3273,6 +3346,11 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       }
       if (!typing && (e.code === "Space" || e.key === " ")) {
         const layout = useLayoutDrawingStore.getState();
+        if (layout.armedLayoutTool === "door" || layout.armedLayoutTool === "window" || layout.selectedDoorId || layout.selectedWindowId) {
+          e.preventDefault();
+          if (!e.repeat) layout.cycleOpeningOrientation();
+          return;
+        }
         const selectedEquip = layout.selectedEquipmentId
           ? layout.mepEquipment.find((eq) => eq.id === layout.selectedEquipmentId)
           : layout.selectedElements.find((el) => el.kind === "equipment")
@@ -4988,7 +5066,47 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       }
     };
 
+    // Hover and commit share wall picking, grid snap and end clearance.
+    const openingPlacement = (x: number, y: number) => {
+      const layer = layoutLayerRef.current;
+      const s = useLayoutDrawingStore.getState();
+      const ms = useToolMarkupStore.getState();
+      const camera = preparePointerRayRef.current(x, y);
+      if (!layer || !camera || (s.armedLayoutTool !== "door" && s.armedLayoutTool !== "window")) return null;
+      raycaster.current.setFromCamera(pointerNdc.current, camera);
+      const hit = layer.pickLayout(raycaster.current);
+      let wall = hit?.kind === "wall" || hit?.kind === "wall-endpoint" ? s.walls.find(w => w.id === hit.id) : undefined;
+      const roots: THREE.Object3D[] = [layer.group];
+      if (shellCloneRef.current) roots.push(shellCloneRef.current);
+      const surface = pickMarkupSurface(raycaster.current, roots);
+      let plan = surface ? { xMm: toMm(surface.point.x), yMm: toMm(surface.point.z) } : planMmFromPointer(x, y);
+      if (!plan) return null;
+      if (ms.gridSnap) {
+        const point = applyGridSnap(new THREE.Vector3(fromMm(plan.xMm), 0, fromMm(plan.yMm)), ms.gridSize, ["x", "z"]);
+        plan = { xMm: toMm(point.x), yMm: toMm(point.z) };
+      }
+      const planMode = (ms.quadView ? ms.quadPresets[ms.quadActiveIndex] : ms.viewPreset) === "top";
+      if (!wall && planMode) {
+        let closest = Infinity;
+        for (const candidate of s.walls) {
+          if (ms.markupFloorId && candidate.levelId !== ms.markupFloorId) continue;
+          if (s.hiddenElementIds.has(candidate.id) || s.hiddenCategories.has("walls")) continue;
+          if (s.isolatedElementIds && !s.isolatedElementIds.has(candidate.id)) continue;
+          const nearest = pointOnWallMm(candidate, nearestOffsetOnWallMm(candidate, plan.xMm, plan.yMm));
+          const distance = Math.hypot(plan.xMm - nearest.xMm, plan.yMm - nearest.yMm);
+          if (distance < Math.max(candidate.thicknessMm, 400) && distance < closest) { wall = candidate; closest = distance; }
+        }
+      }
+      if (!wall) return null;
+      const width = s.armedLayoutTool === "door" ? s.draftDoorWidthMm : s.draftWindowWidthMm;
+      const length = wallLengthMm(wall);
+      if (width > length) return null;
+      const positionMm = Math.round(Math.max(width / 2, Math.min(length - width / 2, nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm))));
+      return { wall, positionMm, planMode };
+    };
+
     const onMove = (e: PointerEvent) => {
+      layoutLayerRef.current?.clearOpeningPreview();
       if (e.buttons === 0) {
         const c = controlsRef.current as unknown as { state?: number; _pointers?: number[] } | null;
         if (c && c.state !== undefined && c.state !== -1) {
@@ -5558,6 +5676,33 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           return;
         }
 
+        // Door / window armed — show offset along wall under cursor
+        if (
+          (layoutStore.armedLayoutTool === "door" ||
+            layoutStore.armedLayoutTool === "window") &&
+          cam &&
+          layoutLayer
+        ) {
+          const placement = openingPlacement(e.clientX, e.clientY);
+          if (placement || !layoutStore.underlays.length) {
+            if (traceHoverTimerRef.current) clearTimeout(traceHoverTimerRef.current);
+            traceHoverSeqRef.current++;
+            if (layoutStore.tracePreview) layoutStore.clearTracePreview();
+            if (placement) {
+              layoutLayer.setOpeningPreview(placement.wall, placement.positionMm, placement.planMode);
+              useToolMarkupStore.getState().setDragSnapHint({ text: (layoutStore.armedLayoutTool === "door" ? "Door: " : "Window: ") + placement.positionMm + " mm ? " + openingOrientationLabel(layoutStore.draftOpeningOrientation[layoutStore.armedLayoutTool]) + " ? Space: cycle", clientX: e.clientX, clientY: e.clientY });
+              canvas.style.cursor = "crosshair";
+            } else {
+              layoutLayer.clearOpeningPreview();
+              useToolMarkupStore.getState().setDragSnapHint(null);
+              canvas.style.cursor = "not-allowed";
+            }
+            setHoveredRoom(null);
+            useToolMarkupStore.getState().setSceneHoverTip(null);
+            return;
+          }
+        }
+
         // Tier 2: hover auto-trace preview for wall / door / window
         if (
           (layoutStore.armedLayoutTool === "wall" ||
@@ -5841,59 +5986,6 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           return;
         }
 
-        // Door / window armed — show offset along wall under cursor
-        if (
-          (layoutStore.armedLayoutTool === "door" ||
-            layoutStore.armedLayoutTool === "window") &&
-          cam &&
-          layoutLayer
-        ) {
-          const camRay = preparePointerRayRef.current(e.clientX, e.clientY) ?? cam;
-          if (!camRay) return;
-          raycaster.current.setFromCamera(pointerNdc.current, camRay);
-          const layoutHit = layoutLayer.pickLayout(raycaster.current);
-          let wall = layoutHit?.kind === "wall" ? layoutStore.walls.find((w) => w.id === layoutHit.id) : null;
-          let plan: { xMm: number; yMm: number } | null = null;
-          const roots: THREE.Object3D[] = [layoutLayer.group];
-          if (shellCloneRef.current) roots.push(shellCloneRef.current);
-          const surface = pickMarkupSurface(raycaster.current, roots);
-          if (surface) {
-            let p = surface.point.clone();
-            const ms = useToolMarkupStore.getState();
-            if (ms.gridSnap) p = applyGridSnap(p, ms.gridSize, ["x", "z"]);
-            plan = { xMm: toMm(p.x), yMm: toMm(p.z) };
-          }
-          if (!plan) plan = planMmFromPointer(e.clientX, e.clientY);
-
-          if (!wall && plan) {
-            let closestDist = Infinity;
-            for (const w of layoutStore.walls) {
-              const seg = distPointSeg(plan.xMm, plan.yMm, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
-              const tol = Math.max(w.thicknessMm, 400);
-              if (seg.dist < tol && seg.dist < closestDist) {
-                closestDist = seg.dist;
-                wall = w;
-              }
-            }
-          }
-
-          if (wall && plan) {
-            const posMm = nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm);
-            const toolLabel = layoutStore.armedLayoutTool === "door" ? "Door" : "Window";
-            useToolMarkupStore.getState().setDragSnapHint({
-              text: `${toolLabel}: ${Math.round(posMm)} mm`,
-              clientX: e.clientX,
-              clientY: e.clientY,
-            });
-            canvas.style.cursor = "crosshair";
-          } else {
-            useToolMarkupStore.getState().setDragSnapHint(null);
-            canvas.style.cursor = "not-allowed";
-          }
-          setHoveredRoom(null);
-          useToolMarkupStore.getState().setSceneHoverTip(null);
-          return;
-        }
 
         if (
           layoutStore.armedLayoutTool ||
@@ -6145,6 +6237,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         layoutLayerRef.current?.clearMepPreview();
       }
       useToolMarkupStore.getState().setDragSnapHint(null);
+      layoutLayerRef.current?.clearOpeningPreview();
       onPointerLeave?.();
     };
 
@@ -6781,74 +6874,13 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 void layoutStore.confirmTraceCandidate();
                 return;
               }
-              let wallId: string | null =
-                layoutHit?.kind === "wall" || layoutHit?.kind === "wall-endpoint"
-                  ? layoutHit.id
-                  : null;
-
-              // Calculate click point in world mm
-              let plan: { xMm: number; yMm: number } | null = null;
-              const roots: THREE.Object3D[] = [layoutLayer.group];
-              if (shellCloneRef.current) roots.push(shellCloneRef.current);
-              const surface = pickMarkupSurface(raycaster.current, roots);
-              if (surface) {
-                plan = planPointFromHit(surface.point);
+              const placement = openingPlacement(e.clientX, e.clientY);
+              if (placement) {
+                if (layoutStore.armedLayoutTool === "door") void layoutStore.placeDoorOnWall(placement.wall.id, placement.positionMm);
+                else void layoutStore.placeWindowOnWall(placement.wall.id, placement.positionMm);
               }
-              if (!plan) {
-                plan = planMmFromPointer(e.clientX, e.clientY);
-              }
-              if (!plan) {
-                const activeLvl =
-                  layoutStore.levels.find((l) => l.id === markupStore.markupFloorId) ??
-                  layoutStore.levels[0];
-                const levelElevMm = activeLvl?.elevationMm ?? 0;
-                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(levelElevMm));
-                const targetPt = new THREE.Vector3();
-                if (raycaster.current.ray.intersectPlane(plane, targetPt)) {
-                  plan = planPointFromHit(targetPt);
-                }
-              }
-
-              // If ray missed wall mesh, find nearest wall to click point within tolerance
-              if (!wallId && plan) {
-                let closestDist = Infinity;
-                let closestWall: (typeof layoutStore.walls)[0] | null = null;
-                for (const w of layoutStore.walls) {
-                  const seg = distPointSeg(plan.xMm, plan.yMm, w.startXmm, w.startYmm, w.endXmm, w.endYmm);
-                  const tol = Math.max(w.thicknessMm, 400);
-                  if (seg.dist < tol && seg.dist < closestDist) {
-                    closestDist = seg.dist;
-                    closestWall = w;
-                  }
-                }
-                if (closestWall) wallId = closestWall.id;
-              }
-
-              if (wallId) {
-                const wall = layoutStore.walls.find((w) => w.id === wallId);
-                if (wall) {
-                  let posMm = 0;
-                  if (plan) {
-                    posMm = nearestOffsetOnWallMm(wall, plan.xMm, plan.yMm);
-                  } else {
-                    const wallLen = Math.hypot(wall.endXmm - wall.startXmm, wall.endYmm - wall.startYmm);
-                    posMm = wallLen / 2;
-                  }
-                  const halfW =
-                    (layoutStore.armedLayoutTool === "door"
-                      ? layoutStore.draftDoorWidthMm
-                      : layoutStore.draftWindowWidthMm) / 2;
-                  const wallLen = Math.hypot(wall.endXmm - wall.startXmm, wall.endYmm - wall.startYmm);
-                  posMm = Math.max(halfW, Math.min(wallLen - halfW, posMm));
-
-                  if (layoutStore.armedLayoutTool === "door") {
-                    void layoutStore.placeDoorOnWall(wallId, posMm);
-                  } else {
-                    void layoutStore.placeWindowOnWall(wallId, posMm);
-                  }
-                  return;
-                }
-              }
+              layoutLayer.clearOpeningPreview();
+              return;
             }
 
             if (layoutStore.armedLayoutTool === "trim") {
@@ -7770,8 +7802,49 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   const marqueeBox = useLayoutDrawingStore((s) => s.marqueeBox);
 
   return (
-    <div ref={containerRef} className={`relative ${className ?? ""}`} data-viewer-root>
+    <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      {doorActionPosition && (selectedDoor || selectedWindow) && (
+        <div
+          className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
+          style={{ left: doorActionPosition.left, top: doorActionPosition.top }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Flip inside / outside"
+            aria-label="Flip inside or outside"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { swing: selectedDoor.swing === -1 ? 1 : -1 });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { swing: selectedWindow.swing === -1 ? 1 : -1 });
+            }}
+          ><LuMove3D className="size-4" /></button>
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Flip left / right"
+            aria-label="Flip left or right"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { hinge: selectedDoor.hinge === "end" ? "start" : "end" });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { hinge: selectedWindow.hinge === "end" ? "start" : "end" });
+            }}
+          ><LuFlipHorizontal2 className="size-4" /></button>
+          <button
+            type="button"
+            className="grid size-7 place-items-center rounded text-amber-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] hover:text-amber-100"
+            title="Increase 3D opening angle"
+            aria-label="Increase 3D opening angle"
+            onClick={() => {
+              const layout = useLayoutDrawingStore.getState();
+              if (selectedDoor) void layout.updateDoor(selectedDoor.id, { openingAngleDeg: ((selectedDoor.openingAngleDeg ?? 0) + 15) % 135 });
+              else if (selectedWindow) void layout.updateWindow(selectedWindow.id, { openingAngleDeg: ((selectedWindow.openingAngleDeg ?? 0) + 15) % 135 });
+            }}
+          ><LuRotate3D className="size-4" /></button>
+        </div>
+      )}
       {marqueeBox && (
         <div
           className="pointer-events-none fixed z-[999]"

@@ -22,14 +22,20 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useStudioSettingsStore, STUDIO_ACCENTS } from "@/store/useStudioSettingsStore";
 import MarkupPropertiesPanel from "./MarkupPropertiesPanel";
+import OpeningOrientationControls from "./OpeningOrientationControls";
+import RenderViewControls from "./RenderViewControls";
 import ElementInspector from "./ElementInspector";
+import { WallLayersSection } from "./LayoutPropertiesPanel";
 import EditTypeEmbeddedPanel from "./EditTypeEmbeddedPanel";
 import MaterialEditorPanel from "./MaterialEditorPanel";
 import EmbeddedSettingsTab from "./EmbeddedSettingsTab";
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
+import { useMaterialStore } from "@/store/materialStore";
 import { wallLengthMm } from "@/lib/layoutDrawing";
 
 export default function ToolPropertiesDock() {
+  const renderTab = useLayoutDrawingStore(s => s.desktopArchCategory === "render");
+  const materials = useMaterialStore((s) => s.materials);
   const [collapsed, setCollapsed] = useState(false);
   const [dockTab, setDockTab] = useState<"properties" | "materials" | "settings">("properties");
   const [editTypeMode, setEditTypeMode] = useState(false);
@@ -310,6 +316,7 @@ export default function ToolPropertiesDock() {
               </div>
             ) : (
               <div ref={contentRef} className="flex flex-1 min-h-0 flex-col overflow-y-auto p-2 thin-scroll space-y-1.5 text-xs">
+                {renderTab && <RenderViewControls />}
                 {/* TYPE SELECTOR HEADER & EDIT TYPE BUTTON */}
                 {hasSelection && (selectedWall || selectedDoor || selectedWindow || selectedSlab) && (
                   <div className="rounded-lg border border-[var(--panel-divider)] p-2 bg-[var(--surface-overlay)]/40 space-y-1.5 shadow-sm">
@@ -472,6 +479,31 @@ export default function ToolPropertiesDock() {
                       )}
                     </div>
 
+                    {selectedDoor && <OpeningOrientationControls kind="door" />}
+                    {selectedWindow && <OpeningOrientationControls kind="window" />}
+                    {selectedWall && <WallLayersSection wall={selectedWall} updateWall={updateWall} />}
+
+                    {(selectedDoor || selectedWindow) && (
+                      <div className={cardStyle + " p-2 space-y-2"}>
+                        {(["material", "panelMaterial"] as const).map((field) => {
+                          const opening = selectedDoor || selectedWindow!;
+                          const value = opening[field] || "";
+                          return <label key={field} className="flex flex-col gap-1 text-[10px]">
+                            <span>{field === "material" ? "Frame material" : selectedDoor ? "Door leaf material" : "Glazing material"}</span>
+                            <select className="rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-1" value={value}
+                              onChange={(event) => {
+                                const patch = { [field]: event.target.value || undefined, ...(field === "material" ? { color: undefined } : {}) };
+                                if (selectedDoor) void updateDoor(selectedDoor.id, patch);
+                                else if (selectedWindow) void updateWindow(selectedWindow.id, patch);
+                              }}>
+                              <option value="">Default</option>
+                              {value && !materials.some((m) => m.id === value) && <option value={value}>{value}</option>}
+                              {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                          </label>;
+                        })}
+                      </div>
+                    )}
                     {/* 3. Materials & Finishes */}
                     <div className={cardStyle}>
                       <button

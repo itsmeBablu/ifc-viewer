@@ -196,6 +196,20 @@ export function installModifyController(options: {
     if (!previewing) {
       const refs = expandedSelection(currentModifySelection());
       const signature = `${state.tool}:${refs.map(selectionKey).join(",")}:${useLayoutDrawingStore.getState().lastMutatedAt}`;
+      // Keep the pivot in sync with live mesh geometry. A persisted move can
+      // arrive after the selection signature was computed, leaving the gizmo
+      // at its previous center until the next click.
+      if (refs.length && (state.tool === "move" || state.tool === "rotate")) {
+        const liveObjects = selectedObjects(), liveBounds = new THREE.Box3();
+        liveObjects.forEach(object => liveBounds.expandByObject(object));
+        if (!liveBounds.isEmpty()) {
+          const liveCenter = liveBounds.getCenter(new THREE.Vector3());
+          if (liveCenter.distanceToSquared(pivot.position) > 1e-10) {
+            pivot.position.copy(liveCenter);
+            pivot.updateMatrixWorld(true);
+          }
+        }
+      }
       if (signature !== selectionSignature) {
         selectionSignature = signature;
         const objects = selectedObjects(), bounds = new THREE.Box3();

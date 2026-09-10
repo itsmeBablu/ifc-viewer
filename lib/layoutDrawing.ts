@@ -71,6 +71,7 @@ export type LayoutWall = {
 };
 
 export type LayoutDoor = {
+  openingAngleDeg?: number;
   id: string;
   projectId: string;
   wallId: string;
@@ -89,9 +90,13 @@ export type LayoutDoor = {
   headShape?: "flat" | "arched" | "triangular";
   color?: string;
   material?: string;
+  panelMaterial?: string;
 };
 
 export type LayoutWindow = {
+  hinge?: "start" | "end";
+  swing?: 1 | -1;
+  openingAngleDeg?: number;
   operation?: "single-hung" | "double-hung" | "casement" | "fixed" | "sliding";
   id: string;
   projectId: string;
@@ -108,6 +113,7 @@ export type LayoutWindow = {
   typeId?: string;
   color?: string;
   material?: string;
+  panelMaterial?: string;
 };
 
 /** Horizontal slab — floor plate or roof plate. */
@@ -206,6 +212,46 @@ export type WallType = {
   layers: WallLayer[];
   totalThicknessMm: number;
 };
+
+export function resolveWallLayers(
+  wall: {
+    thicknessMm?: number;
+    material?: string;
+    color?: string;
+    layers?: WallLayer[];
+    wallTypeId?: string;
+  },
+  wallTypes?: { id: string; layers?: WallLayer[] }[],
+): WallLayer[] {
+  if (wall.layers && wall.layers.length > 0) return wall.layers;
+  if (wall.wallTypeId && wallTypes) {
+    const found = wallTypes.find((t) => t.id === wall.wallTypeId);
+    if (found?.layers && found.layers.length > 0) return found.layers;
+  }
+  const t = wall.thicknessMm || 200;
+  const extMat = wall.material || "Plaster";
+  const extColor = wall.color || "#c4beb5";
+  if (t >= 280) {
+    return [
+      { id: "l-int", name: "Interior Plaster", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
+      { id: "l-str", name: "Concrete Core", function: "structure", material: "Concrete Core", thicknessMm: t - 130, color: "#525d6d" },
+      { id: "l-ins", name: "Mineral Wool Insulation", function: "insulation", material: "Mineral Wool", thicknessMm: 100, color: "#eab308" },
+      { id: "l-ext", name: "Exterior Render", function: "finish2", material: wall.material || "Stucco Render", thicknessMm: 15, color: extColor },
+    ];
+  } else if (t === 100 || t === 125) {
+    return [
+      { id: "l-g1", name: "Gypsum Board", function: "finish1", material: "Gypsum Board", thicknessMm: 12.5, color: "#cbd5e1" },
+      { id: "l-cav", name: "Stud Cavity", function: "core", material: "Stud Cavity", thicknessMm: t - 25, color: "#475569" },
+      { id: "l-g2", name: "Gypsum Board", function: "finish2", material: wall.material || "Gypsum Board", thicknessMm: 12.5, color: extColor },
+    ];
+  } else {
+    return [
+      { id: "l-int", name: "Interior Finish", function: "finish1", material: "Plaster", thicknessMm: 15, color: "#d6d3ce" },
+      { id: "l-str", name: "Structural Core", function: "structure", material: "Concrete", thicknessMm: Math.max(10, t - 30), color: "#525d6d" },
+      { id: "l-ext", name: "Exterior Finish", function: "finish2", material: extMat, thicknessMm: 15, color: extColor },
+    ];
+  }
+}
 
 export type LayoutColumn = {
   baseOffsetMm?: number;

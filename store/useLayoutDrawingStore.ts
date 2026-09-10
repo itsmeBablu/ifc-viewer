@@ -1,11 +1,14 @@
 "use client";
+import { nextOpeningOrientation, type OpeningOrientation } from "@/lib/openingOrientation";
+import { isMepSelectionLocked } from "@/lib/mepSelectionLock";
 import { connectMepSegment, mepOffset, mepEndpoints, type MepSnapPoint } from "@/lib/mepConnections";
 
 import { reflowKitchenRun } from "@/lib/componentPlacement";
 import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
 
 import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
-import type { ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
+import { wallFaceFinishes, type RenderMaterialTarget } from "@/lib/wallFinishes";
+import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "@/components/tools/EditTypeDialog";
 import { useMaterialStore } from "./materialStore";
 
 import { create } from "zustand";
@@ -136,6 +139,7 @@ import {
   idbPutPipe,
   idbPutPresets,
   idbPutRamp,
+  idbPutRoom,
   idbPutSlab,
   idbPutStair,
   idbPutUnderlay,
@@ -356,6 +360,7 @@ type LayoutDrawingState = {
     originalRoofJoin?: LayoutSlab["roofJoin"];
     originalSketchLines: LayoutSketchLine[];
     tool: "modify" | "trim" | "insert" | "delete";
+    selectedEdge: { ring: number; index: number } | null;
     error: string | null;
   } | null;
   lockedElementKeys: string[];
@@ -370,6 +375,9 @@ type LayoutDrawingState = {
   draftWallHeightMm: number;
   draftWallBaseLevelId: string | null;
   draftWallTopLevelId: string | null;
+  draftOpeningOrientation: Record<"door" | "window", OpeningOrientation>;
+  setDraftOpeningOrientation: (kind: "door" | "window", patch: Partial<OpeningOrientation>) => void;
+  cycleOpeningOrientation: () => void;
   draftDoorWidthMm: number;
   draftDoorHeightMm: number;
   draftWindowWidthMm: number;
@@ -412,7 +420,7 @@ type LayoutDrawingState = {
   desktopArchCategory: "build" | "structure" | "annotate" | "insert" | "render";
   setDesktopArchCategory: (category: "build" | "structure" | "annotate" | "insert" | "render") => void;
   autoTextureArchitecture: () => Promise<void>;
-  applyCategoryTexture: (category: "walls" | "floors" | "roofs", materialId: string, colorHex?: string) => Promise<void>;
+  applyCategoryTexture: (category: RenderMaterialTarget, materialId: string, colorHex?: string) => Promise<void>;
   desktopMepCategory: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components";
   setDesktopMepCategory: (category: "all" | "hvac" | "piping" | "wiring" | "electrical" | "components") => void;
   ductDraw: DuctDrawState;
@@ -492,6 +500,10 @@ type LayoutDrawingState = {
   setElementsCategoryFilter: (val: string) => void;
 
   loadForProject: (projectId: string | null, isEmpty?: boolean) => Promise<void>;
+  restoreFromProjectPayload: (
+    layout?: import("@/lib/markupFragSave").FragSavePayload["layout"] | null,
+    fallbackProjectId?: string,
+  ) => Promise<void>;
   createEmptyProject: (name: string) => Promise<{
     projectId: string;
     level: LayoutLevel;
@@ -618,7 +630,7 @@ type LayoutDrawingState = {
       Pick<
         LayoutDoor,
         "positionMm" | "widthMm" | "heightMm" | "hinge" | "swing" | "typeId"
-        | "style" | "headShape" | "color" | "material"
+        | "style" | "headShape" | "color" | "material" | "panelMaterial" | "openingAngleDeg"
       >
     >,
   ) => Promise<void>;
@@ -640,6 +652,7 @@ type LayoutDrawingState = {
     patch: Partial<
       Pick<
         LayoutWindow,
+        | "hinge" | "swing" | "openingAngleDeg" | "panelMaterial"
         | "positionMm"
         | "widthMm"
         | "heightMm"
@@ -711,6 +724,7 @@ type LayoutDrawingState = {
   beginSlabBoundaryEdit: (id: string) => void;
   applySlabBoundaryLoops: (loops: BoundaryLoops) => boolean;
   setBoundaryEditTool: (tool: "modify" | "trim" | "insert" | "delete") => void;
+  setBoundarySelectedEdge: (edge: { ring: number; index: number } | null) => void;
   updateSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   insertSlabBoundaryVertex: (index: number, point: { xMm: number; yMm: number }) => void;
   deleteSlabBoundaryVertex: (index: number) => void;
@@ -971,17 +985,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     pushWerkzeugHistory();
     const materialStore = useMaterialStore.getState();
 
-    const wallMat = materialStore.getMaterial("concrete") || materialStore.getMaterial("concrete-smooth-architectural");
+    const wallMat = materialStore.getMaterial("stucco") || materialStore.getMaterial("plaster-stucco-mediterranean");
+    const interiorMat = materialStore.getMaterial("plaster-smooth-white") || materialStore.getMaterial("gypsum-board");
     const floorMat = materialStore.getMaterial("hardwood-herringbone-oak") || materialStore.getMaterial("hardwood-floor") || materialStore.getMaterial("ceramic-floor-tile");
     const roofMat = materialStore.getMaterial("facade-standing-seam-zinc") || materialStore.getMaterial("standing-seam-zinc") || materialStore.getMaterial("terracotta-roof-tile");
     const steelMat = materialStore.getMaterial("steel") || materialStore.getMaterial("metal");
     const glassMat = materialStore.getMaterial("glass") || materialStore.getMaterial("glass-fluted-reeded");
     const woodMat = materialStore.getMaterial("wood") || materialStore.getMaterial("hardwood-floor");
 
-    const wallPatch = {
-      material: wallMat?.id || "concrete",
-      color: wallMat?.color || "#94a3b8",
-    };
+    const insideFinish = { id: interiorMat?.id || "gypsum-board", color: interiorMat?.color || "#f1f5f9" };
+    const outsideFinish = { id: wallMat?.id || "stucco", color: wallMat?.color || "#c4beb5" };
     const floorPatch = {
       material: floorMat?.id || "hardwood-herringbone-oak",
       color: floorMat?.color || "#b45309",
@@ -995,15 +1008,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       color: steelMat?.color || "#475569",
     };
     const doorPatch = {
+      panelMaterial: woodMat?.id || "wood",
       material: woodMat?.id || "wood",
       color: woodMat?.color || "#78350f",
     };
     const winPatch = {
-      material: glassMat?.id || "glass",
-      color: glassMat?.color || "#38bdf8",
+      material: steelMat?.id || "metal",
+      panelMaterial: glassMat?.id || "glass",
+      color: steelMat?.color || "#475569",
     };
 
-    const nextWalls = s.walls.map((w) => ({ ...w, ...wallPatch }));
+    const types = [...s.wallTypes, ...Object.values(DEFAULT_ELEMENT_TYPES)];
+    const nextWalls = s.walls.map(w => {
+      const type = DEFAULT_ELEMENT_TYPES[w.wallTypeId ?? ""];
+      const storedType = s.wallTypes.find(t => t.id === w.wallTypeId);
+      const isInterior = type?.functionType === "Interior" || /interior|innen/i.test(storedType?.name ?? "") || (!type && !storedType && w.thicknessMm < 240);
+      return { ...w, ...wallFaceFinishes(w, types, insideFinish, isInterior ? insideFinish : outsideFinish) };
+    });
     const nextSlabs = s.slabs.map((slab) => ({
       ...slab,
       ...(slab.kind === "roof" ? roofPatch : floorPatch),
@@ -1034,7 +1055,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
 
     useMaterialStore.setState({ selectedMaterialId: wallMat?.id || "concrete" });
   },
-  applyCategoryTexture: async (category: "walls" | "floors" | "roofs", materialId: string, colorHex?: string) => {
+  applyCategoryTexture: async (category: RenderMaterialTarget, materialId: string, colorHex?: string) => {
     const s = get();
     pushWerkzeugHistory();
     const mat = useMaterialStore.getState().getMaterial(materialId);
@@ -1044,12 +1065,31 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       ...(effectiveColor ? { color: effectiveColor } : {}),
     };
 
-    if (category === "walls") {
+    if (category === "doors" || category === "window-frames" || category === "window-glass") {
+      if (category === "doors") {
+        const ids = s.selectedElements.filter(e => e.kind === "door").map(e => e.id);
+        if (s.selectedDoorId) ids.push(s.selectedDoorId);
+        const changed = s.doors.filter(d => !ids.length || ids.includes(d.id)).map(d => ({ ...d, panelMaterial: materialId }));
+        await Promise.all(changed.map(idbPutDoor));
+        const rows = new Map(changed.map(d => [d.id, d]));
+        set({ doors: s.doors.map(d => rows.get(d.id) ?? d), lastMutatedAt: Date.now() });
+      } else {
+        const ids = s.selectedElements.filter(e => e.kind === "window").map(e => e.id);
+        if (s.selectedWindowId) ids.push(s.selectedWindowId);
+        const changed = s.windows.filter(w => !ids.length || ids.includes(w.id)).map(w => ({ ...w, ...(category === "window-frames" ? patch : { panelMaterial: materialId }) }));
+        await Promise.all(changed.map(idbPutWindow));
+        const rows = new Map(changed.map(w => [w.id, w]));
+        set({ windows: s.windows.map(w => rows.get(w.id) ?? w), lastMutatedAt: Date.now() });
+      }
+      return;
+    }
+    if (category === "walls" || category === "walls-interior" || category === "walls-exterior") {
       const selectedWallIds = s.selectedWallId ? [s.selectedWallId] : s.selectedElements.filter((e) => e.kind === "wall").map((e) => e.id);
       const applyAll = selectedWallIds.length === 0;
       const nextWalls = s.walls.map((w) => {
         if (applyAll || selectedWallIds.includes(w.id)) {
-          return { ...w, ...patch };
+          const finish = { id: materialId, color: effectiveColor || "#c4beb5" };
+          return { ...w, ...wallFaceFinishes(w, [...s.wallTypes, ...Object.values(DEFAULT_ELEMENT_TYPES)], category === "walls-interior" ? finish : undefined, category !== "walls-interior" ? finish : undefined) };
         }
         return w;
       });
@@ -1195,11 +1235,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set({ revealHiddenMode: !get().revealHiddenMode });
   },
   setMepModeActive: (active) => set((state) => {
-    if (!active || !state.mepArchitectureLocked) return { mepModeActive: active };
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
+    if (!active) return { mepModeActive: active };
     return {
       mepModeActive: true,
-      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedEquipmentId: state.selectedEquipmentId && isMepSelectionLocked({ ...state, mepModeActive: true }, { kind: "equipment", id: state.selectedEquipmentId }) ? null : state.selectedEquipmentId,
+      selectedElements: state.selectedElements.filter((ref) => !isMepSelectionLocked({ ...state, mepModeActive: true }, ref)),
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -1210,10 +1250,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   }),
   setMepArchitectureLocked: (locked) => set((state) => {
     if (!locked || !state.mepModeActive) return { mepArchitectureLocked: locked };
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     return {
       mepArchitectureLocked: true,
-      selectedElements: state.selectedElements.filter((ref) => !architectureKinds.has(ref.kind)),
+      selectedElements: state.selectedElements.filter((ref) => !isMepSelectionLocked({ ...state, mepArchitectureLocked: true }, ref)),
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
@@ -1288,6 +1327,23 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftWallHeightMm: DEFAULT_LEVEL_HEIGHT_MM,
   draftWallBaseLevelId: null,
   draftWallTopLevelId: null,
+  draftOpeningOrientation: {
+    door: { hinge: "start", swing: 1, openingAngleDeg: 0 },
+    window: { hinge: "start", swing: 1, openingAngleDeg: 15 },
+  },
+  setDraftOpeningOrientation: (kind, patch) => set(s => ({ draftOpeningOrientation: { ...s.draftOpeningOrientation, [kind]: { ...s.draftOpeningOrientation[kind], ...patch } } })),
+  cycleOpeningOrientation: () => {
+    const s = get();
+    if (s.armedLayoutTool === "door" || s.armedLayoutTool === "window") {
+      s.setDraftOpeningOrientation(s.armedLayoutTool, nextOpeningOrientation(s.draftOpeningOrientation[s.armedLayoutTool]));
+    } else if (s.selectedDoorId) {
+      const door = s.doors.find(d => d.id === s.selectedDoorId);
+      if (door) void s.updateDoor(door.id, nextOpeningOrientation(door));
+    } else if (s.selectedWindowId) {
+      const win = s.windows.find(w => w.id === s.selectedWindowId);
+      if (win) void s.updateWindow(win.id, nextOpeningOrientation(win));
+    }
+  },
   draftDoorWidthMm: DEFAULT_DOOR_WIDTH_MM,
   draftDoorHeightMm: DEFAULT_DOOR_HEIGHT_MM,
   draftWindowWidthMm: DEFAULT_WINDOW_WIDTH_MM,
@@ -1404,6 +1460,97 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setBrowserSearch: (val) => set({ browserSearch: val }),
   elementsCategoryFilter: "all",
   setElementsCategoryFilter: (val) => set({ elementsCategoryFilter: val }),
+
+  restoreFromProjectPayload: async (layout, fallbackProjectId) => {
+    clearWerkzeugHistory();
+    const pid = layout?.projectId || fallbackProjectId || `project_${Date.now()}`;
+
+    const levels = (layout?.levels || []).map((r) => ({ ...r, projectId: pid }));
+    const walls = (layout?.walls || []).map((r) => ({ ...r, projectId: pid }));
+    const doors = (layout?.doors || []).map((r) => ({ ...r, projectId: pid }));
+    const windows = (layout?.windows || []).map((r) => ({ ...r, projectId: pid }));
+    const slabs = (layout?.slabs || []).map((r) => ({ ...r, projectId: pid }));
+    const columns = (layout?.columns || []).map((r) => ({ ...r, projectId: pid }));
+    const beams = (layout?.beams || []).map((r) => ({ ...r, projectId: pid }));
+    const stairs = (layout?.stairs || []).map((r) => ({ ...r, projectId: pid }));
+    const ramps = (layout?.ramps || []).map((r) => ({ ...r, projectId: pid }));
+    const ducts = (layout?.ducts || []).map((r) => ({ ...r, projectId: pid }));
+    const pipes = (layout?.pipes || []).map((r) => ({ ...r, projectId: pid }));
+    const cableTrays = (layout?.cableTrays || []).map((r) => ({ ...r, projectId: pid }));
+    const mepEquipment = (layout?.mepEquipment || []).map((r) => ({ ...r, projectId: pid }));
+    const wires = (layout?.wires || []).map((r) => ({ ...r, projectId: pid }));
+    const gridLines = (layout?.gridLines || []).map((r) => ({ ...r, projectId: pid }));
+    const groups = (layout?.groups || []).map((r) => ({ ...r, projectId: pid }));
+    const wallTypes = (layout?.wallTypes || []).map((r) => ({ ...r, projectId: pid }));
+    const sketchLines = (layout?.sketchLines || []).map((r) => ({ ...r, projectId: pid }));
+    const underlays = (layout?.underlays || []).map((r) => ({ ...r, projectId: pid }));
+    const layoutRooms = (layout?.layoutRooms || []).map((r) => ({ ...r, projectId: pid }));
+
+    try {
+      await Promise.all([
+        ...levels.map(idbPutLevel),
+        ...walls.map(idbPutWall),
+        ...doors.map(idbPutDoor),
+        ...windows.map(idbPutWindow),
+        ...slabs.map(idbPutSlab),
+        ...columns.map(idbPutColumn),
+        ...beams.map(idbPutBeam),
+        ...stairs.map(idbPutStair),
+        ...ramps.map(idbPutRamp),
+        ...ducts.map(idbPutDuct),
+        ...pipes.map(idbPutPipe),
+        ...cableTrays.map(idbPutCableTray),
+        ...mepEquipment.map(idbPutMepEquipment),
+        ...wires.map(idbPutWire),
+        ...gridLines.map(idbPutGridLine),
+        ...groups.map(idbPutGroup),
+        ...wallTypes.map(idbPutWallType),
+        ...sketchLines.map(idbPutSketchLine),
+        ...underlays.map(idbPutUnderlay),
+        ...layoutRooms.map(idbPutRoom),
+      ]);
+    } catch (e) {
+      console.warn("IndexedDB persist during restore had warnings:", e);
+    }
+
+    set({
+      projectId: pid,
+      isEmptyProject: false,
+      lastMutatedAt: Date.now(),
+      levels,
+      walls,
+      doors,
+      windows,
+      slabs,
+      columns,
+      beams,
+      stairs,
+      ramps,
+      ducts,
+      pipes,
+      cableTrays,
+      mepEquipment,
+      wires,
+      gridLines,
+      groups,
+      wallTypes,
+      sketchLines,
+      underlays,
+      layoutRooms,
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
+      selectedElements: [],
+      armedLayoutTool: null,
+    });
+  },
 
   loadForProject: async (projectId, isEmpty = false) => {
     clearWerkzeugHistory();
@@ -2921,13 +3068,16 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       editingSlabId: id,
       sketchLines: boundaryLines,
       sketchTargetKind: slab.kind,
-      armedLayoutTool: "lines",
+      // Boundary editing owns the pointer interaction. The generic line tool
+      // would swallow these events before the boundary editor can handle them.
+      armedLayoutTool: null,
       selectedSlabId: id,
       selectedElements: [],
       slabBoundaryEdit: {
         slabId: id,
         phase: "editing",
         tool: "modify",
+        selectedEdge: null,
         error: null,
         originalHoles: slab.holes?.map(loop => loop.map(p => ({ ...p }))),
         originalEdgeSlopes: slab.edgeSlopes?.map(edge => ({ ...edge })),
@@ -2942,6 +3092,11 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setBoundaryEditTool: (tool) => {
     const edit = get().slabBoundaryEdit;
     if (edit) set({ slabBoundaryEdit: { ...edit, tool, error: null } });
+  },
+
+  setBoundarySelectedEdge: (edge) => {
+    const edit = get().slabBoundaryEdit;
+    if (edit) set({ slabBoundaryEdit: { ...edit, selectedEdge: edge, error: null } });
   },
 
   applySlabBoundaryLoops: (loops) => {
@@ -3469,8 +3624,9 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       positionMm: Math.round(positionMm),
       widthMm,
       heightMm,
-      hinge: opts?.hinge === "end" ? "end" : "start",
-      swing: opts?.swing === -1 ? -1 : 1,
+      hinge: opts?.hinge ?? get().draftOpeningOrientation.door.hinge,
+      swing: opts?.swing ?? get().draftOpeningOrientation.door.swing,
+      openingAngleDeg: get().draftOpeningOrientation.door.openingAngleDeg,
       createdAt: Date.now(),
     };
     await idbPutDoor(door);
@@ -3607,6 +3763,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const sillHeightMm = opts?.sillHeightMm ?? get().draftWindowSillMm;
     const type = get().draftElementTypes.window;
     const win: LayoutWindow = {
+      ...get().draftOpeningOrientation.window,
       typeId: type?.id,
       headShape: type?.headShape,
       sashCount: type?.sashCount ?? 1,
@@ -4246,16 +4403,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       get().clearSelection();
       return;
     }
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
     const editingGroup = get().groups.find(group => group.id === get().activeGroupId);
     if (editingGroup && !editingGroup.elementRefs.some(member => member.kind === ref.kind && member.id === ref.id)) return;
-    if (get().mepModeActive && get().mepArchitectureLocked && architectureKinds.has(ref.kind)) return;
+    if (isMepSelectionLocked(get(), ref)) return;
     // If element belongs to a group and not currently editing inside that group:
     const group = get().groups.find((g) =>
       g.elementRefs.some((r) => r.kind === ref.kind && r.id === ref.id),
     );
     const refsToSelect: SelectedElementRef[] =
-      group && get().activeGroupId !== group.id ? group.elementRefs : [ref];
+      (group && get().activeGroupId !== group.id ? group.elementRefs : [ref]).filter((member) => !isMepSelectionLocked(get(), member));
 
     let next: SelectedElementRef[] = [];
     if (mode === "replace") {
@@ -4309,10 +4465,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       }
       refs = [...expanded.values()];
     }
-    const architectureKinds = new Set(["wall", "door", "window", "slab", "column", "beam", "stair", "ramp"]);
-    const selectableRefs = (get().mepModeActive && get().mepArchitectureLocked)
-      ? refs.filter((ref) => !architectureKinds.has(ref.kind))
-      : refs;
+    const selectableRefs = refs.filter((ref) => !isMepSelectionLocked(get(), ref));
     let next: SelectedElementRef[] = [];
     if (mode === "replace") {
       next = [...selectableRefs];
@@ -6032,14 +6185,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     set((state) => ({
       mepEquipment: [...state.mepEquipment, equip],
       groups: [...state.groups, ...parametricGroups],
-      selectedElements: [{ kind: "equipment", id: equip.id }],
-      selectedEquipmentId: equip.id,
+      selectedElements: state.armedLayoutTool === "component" || state.armedLayoutTool === "equipment" ? [] : [{ kind: "equipment", id: equip.id }],
+      selectedEquipmentId: state.armedLayoutTool === "component" || state.armedLayoutTool === "equipment" ? null : equip.id,
       lastMutatedAt: Date.now(),
     }));
     return equip;
   },
 
   updateEquipment: async (id, patch) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return;
     const prev = get().mepEquipment.find((e) => e.id === id);
     if (!prev) return;
     pushWerkzeugHistory();
@@ -6061,6 +6215,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   deleteEquipment: async (id) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return;
     pushWerkzeugHistory();
     await idbDeleteMepEquipment(id);
     set((s) => ({
@@ -6083,6 +6238,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   duplicateEquipment: async (id) => {
+    if (isMepSelectionLocked(get(), { kind: "equipment", id })) return null;
     const eq = get().mepEquipment.find((item) => item.id === id);
     if (!eq) return null;
     pushWerkzeugHistory();

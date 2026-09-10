@@ -1,5 +1,6 @@
 "use client";
 
+import RenderSceneControls from "./RenderSceneControls";
 import { useState } from "react";
 import {
   LuCamera,
@@ -111,9 +112,9 @@ export default function RenderViewControls() {
         {/* Toggle Mode Button */}
         <button
           type="button"
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 active:scale-[0.98] ${
+          className={`flex w-fit self-start items-center justify-start gap-2 rounded-xl px-3 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 active:scale-[0.98] ${
             enabled
-              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30"
+              ? "border border-rose-600 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:border-rose-400/40 dark:bg-rose-500/20 dark:text-rose-200 dark:hover:bg-rose-500/30"
               : "btn-v-yellow btn-liquid-hover !text-zinc-950 shadow-md shadow-yellow-400/25 border-transparent"
           }`}
           onClick={() =>
@@ -125,6 +126,8 @@ export default function RenderViewControls() {
           {enabled ? <LuX className="text-sm" /> : <LuCamera className="text-sm text-zinc-950" />}
           {enabled ? "Exit Render Studio" : "Enter Render Studio"}
         </button>
+
+        <RenderSceneControls />
 
         {/* Atmosphere Presets */}
         <div className="space-y-1.5">
@@ -312,4 +315,3 @@ export default function RenderViewControls() {
     </details>
   );
 }
-

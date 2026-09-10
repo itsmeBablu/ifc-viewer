@@ -53,10 +53,10 @@ export default function DrawingCommandBar() {
   };
 
   return (
-    <div className="drawing-command-bar flex items-center gap-2" role="toolbar" aria-label="Drawing actions">
-      <span className="text-xs font-semibold">{modeLabel}</span>
+    <div className="drawing-command-bar flex items-center gap-1.5" role="toolbar" aria-label="Drawing actions">
+      <span className="text-[11px] font-semibold leading-none">{modeLabel}</span>
       {isBoundaryMode && (
-        <span className="rounded bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-bold text-yellow-400">
+        <span className="rounded bg-yellow-500/20 px-1 py-0.5 text-[9px] font-bold text-yellow-400 leading-none">
           {sketchLines.length} {sketchLines.length === 1 ? "line" : "lines"}
         </span>
       )}

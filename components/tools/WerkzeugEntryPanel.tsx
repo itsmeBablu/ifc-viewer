@@ -84,7 +84,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       if (firstLevel) useAppStore.getState().setSelectedFloor(firstLevel.id);
       await useToolMarkupStore.getState().loadForModel(project.id);
       if (firstLevel) useToolMarkupStore.getState().setMarkupFloorId(firstLevel.id);
-      useToolMarkupStore.getState().setViewPreset("top");
+      useToolMarkupStore.getState().setViewPreset("free");
+      useToolMarkupStore.getState().setQuadView(false);
+      useToolMarkupStore.getState().setWalkthroughMode(false);
       useAppStore.getState().setToolMode(true);
     } finally {
       setBusy(false);
@@ -102,7 +104,9 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
       useAppStore.getState().setSelectedFloor(level.id);
       await useToolMarkupStore.getState().loadForModel(projectId);
       useToolMarkupStore.getState().setMarkupFloorId(level.id);
-      useToolMarkupStore.getState().setViewPreset("top");
+      useToolMarkupStore.getState().setViewPreset("free");
+      useToolMarkupStore.getState().setQuadView(false);
+      useToolMarkupStore.getState().setWalkthroughMode(false);
       useAppStore.getState().setToolMode(true);
     } finally {
       setBusy(false);
@@ -175,7 +179,7 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     const resizeObserver = new ResizeObserver(updateScrollCue);
     const mutationObserver = new MutationObserver(updateScrollCue);
     resizeObserver.observe(list);
-    mutationObserver.observe(list, { childList: true, subtree: true, attributes: true });
+    mutationObserver.observe(list, { childList: true });
     window.addEventListener("resize", updateScrollCue);
     return () => {
       window.cancelAnimationFrame(frame);

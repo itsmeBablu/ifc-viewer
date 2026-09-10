@@ -164,7 +164,7 @@ export function calibrateUnderlayFromWorldPoints(
 export async function ingestReferenceDrawingFile(
   file: File,
 ): Promise<
-  CompressedImage & { pageCount?: number; snapSegments?: UnderlaySnapSegment[] }
+  CompressedImage & { pageCount?: number; snapSegments?: UnderlaySnapSegment[]; mmPerPixel?: number }
 > {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") {
@@ -192,7 +192,7 @@ export async function ingestReferenceDrawingFile(
 export function createUnderlayRecord(opts: {
   projectId: string;
   levelId: string;
-  image: CompressedImage & { snapSegments?: UnderlaySnapSegment[] };
+  image: CompressedImage & { snapSegments?: UnderlaySnapSegment[]; mmPerPixel?: number };
   sourceName: string;
 }): ReferenceUnderlay {
   return {
@@ -202,7 +202,7 @@ export function createUnderlayRecord(opts: {
     imageDataUrl: opts.image.dataUrl,
     pixelWidth: opts.image.width,
     pixelHeight: opts.image.height,
-    mmPerPixel: 0,
+    mmPerPixel: opts.image.mmPerPixel && Number.isFinite(opts.image.mmPerPixel) && opts.image.mmPerPixel > 0 ? opts.image.mmPerPixel : 0,
     offsetXmm: 0,
     offsetYmm: 0,
     rotationDeg: 0,

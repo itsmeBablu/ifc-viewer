@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { LuPlus, LuRotateCcw, LuTrash2 } from "react-icons/lu";
 import { t } from "@/lib/i18n";
 import {
   beamAngleDeg,
@@ -15,6 +16,10 @@ import {
   deriveRiseMm,
   getEquipmentConnectors,
   nearestParallelFaceGapMm,
+  resolveWallLayers,
+  type LayoutWall,
+  type WallLayer,
+  type WallLayerFunction,
   wallAngleDeg,
   wallFlipped,
   wallLengthMm,
@@ -27,6 +32,8 @@ import {
 } from "@/lib/layoutDrawing";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useMaterialStore } from "@/store/materialStore";
+import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import MepConnectionProperties from "./MepConnectionProperties";
 import ViewPropertiesPanel from "./ViewPropertiesPanel";
 import ComponentProperties from "./ComponentProperties";
@@ -219,6 +226,9 @@ export default function LayoutPropertiesPanel({
               />
             </div>
           </Section>
+
+          {/* Wall Assembly & Multi-layer Materials */}
+          <WallLayersSection wall={wall} updateWall={updateWall} />
 
           {/* Endpoints — extend */}
           <Section title={t(uiLanguage, "layoutWallEndpoints")}>
@@ -1842,5 +1852,352 @@ function MmInput({
         className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none focus:border-sky-300"
       />
     </label>
+  );
+}
+
+const FUNCTION_CONFIG: Record<
+  WallLayerFunction,
+  { label: string; bg: string; text: string; defaultMat: string; defaultColor: string }
+> = {
+  finish1: {
+    label: "Interior (Finish 1)",
+    bg: "bg-blue-100 dark:bg-blue-950/60",
+    text: "text-blue-700 dark:text-blue-300",
+    defaultMat: "plaster",
+    defaultColor: "#d6d3ce",
+  },
+  substrate: {
+    label: "Substrate",
+    bg: "bg-purple-100 dark:bg-purple-950/60",
+    text: "text-purple-700 dark:text-purple-300",
+    defaultMat: "gypsum-board",
+    defaultColor: "#cbd5e1",
+  },
+  structure: {
+    label: "Core Structure",
+    bg: "bg-slate-200 dark:bg-slate-800",
+    text: "text-slate-800 dark:text-slate-200",
+    defaultMat: "concrete",
+    defaultColor: "#525d6d",
+  },
+  core: {
+    label: "Cavity / Core",
+    bg: "bg-zinc-200 dark:bg-zinc-800",
+    text: "text-zinc-800 dark:text-zinc-200",
+    defaultMat: "stud-cavity",
+    defaultColor: "#475569",
+  },
+  insulation: {
+    label: "Thermal Insulation",
+    bg: "bg-amber-100 dark:bg-amber-950/60",
+    text: "text-amber-700 dark:text-amber-300",
+    defaultMat: "thermal-insulation",
+    defaultColor: "#eab308",
+  },
+  finish2: {
+    label: "Exterior (Finish 2)",
+    bg: "bg-emerald-100 dark:bg-emerald-950/60",
+    text: "text-emerald-700 dark:text-emerald-300",
+    defaultMat: "stucco",
+    defaultColor: "#c4beb5",
+  },
+  membrane: {
+    label: "Vapor Membrane",
+    bg: "bg-rose-100 dark:bg-rose-950/60",
+    text: "text-rose-700 dark:text-rose-300",
+    defaultMat: "membrane",
+    defaultColor: "#64748b",
+  },
+};
+
+export function WallLayersSection({
+  wall,
+  updateWall,
+}: {
+  wall: LayoutWall;
+  updateWall: (id: string, patch: Partial<LayoutWall>) => Promise<void> | void;
+}) {
+  const materials = useMaterialStore((s) => s.materials);
+  const wallTypes = useLayoutDrawingStore((s) => s.wallTypes);
+  const layers = useMemo(() => resolveWallLayers(wall, [...wallTypes, ...Object.values(DEFAULT_ELEMENT_TYPES)]), [wall, wallTypes]);
+  const totalThickness = useMemo(
+    () => layers.reduce((acc, l) => acc + (l.thicknessMm || 0), 0),
+    [layers],
+  );
+
+  const activeExtMat = wall.material || layers.find((l) => l.function === "finish2")?.material || "plaster";
+
+  const handleOverallMaterialChange = (matId: string) => {
+    const chosenMat = materials.find((m) => m.id === matId);
+    const color = chosenMat?.color || "#c4beb5";
+    const nextLayers = layers.map((l) => {
+      if (l.function === "finish2" || layers.length === 1) {
+        return {
+          ...l,
+          material: matId,
+          color,
+        };
+      }
+      return l;
+    });
+    void updateWall(wall.id, {
+      material: matId,
+      color,
+      layers: nextLayers,
+    });
+  };
+
+  const handleLayerChange = (idx: number, patch: Partial<WallLayer>) => {
+    const nextLayers = layers.map((l, i) => (i === idx ? { ...l, ...patch } : { ...l }));
+    const newTotal = nextLayers.reduce((acc, l) => acc + (l.thicknessMm || 0), 0);
+    const extLayer = nextLayers.find((l) => l.function === "finish2") || nextLayers[nextLayers.length - 1];
+    void updateWall(wall.id, {
+      layers: nextLayers,
+      thicknessMm: newTotal,
+      material: extLayer?.material || wall.material,
+      color: extLayer?.color || wall.color,
+    });
+  };
+
+  const handleAddLayer = () => {
+    const newLayer: WallLayer = {
+      id: `l-${Date.now()}`,
+      name: "Insulation Layer",
+      function: "insulation",
+      material: "thermal-insulation",
+      thicknessMm: 50,
+      color: "#eab308",
+    };
+    const nextLayers = [...layers];
+    if (nextLayers.length > 1) {
+      nextLayers.splice(nextLayers.length - 1, 0, newLayer);
+    } else {
+      nextLayers.push(newLayer);
+    }
+    const newTotal = nextLayers.reduce((acc, l) => acc + l.thicknessMm, 0);
+    void updateWall(wall.id, {
+      layers: nextLayers,
+      thicknessMm: newTotal,
+    });
+  };
+
+  const handleRemoveLayer = (idx: number) => {
+    if (layers.length <= 1) return;
+    const nextLayers = layers.filter((_, i) => i !== idx);
+    const newTotal = nextLayers.reduce((acc, l) => acc + l.thicknessMm, 0);
+    const extLayer = nextLayers.find((l) => l.function === "finish2") || nextLayers[nextLayers.length - 1];
+    void updateWall(wall.id, {
+      layers: nextLayers,
+      thicknessMm: newTotal,
+      material: extLayer?.material || wall.material,
+      color: extLayer?.color || wall.color,
+    });
+  };
+
+  const handleResetToDefault = () => {
+    void updateWall(wall.id, {
+      layers: undefined,
+    });
+  };
+
+  return (
+    <Section defaultOpen title="Wall Assembly & Layers">
+      <div className="space-y-2.5">
+        {/* Quick Exterior Material Selector */}
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-muted)]/60 p-1.5">
+          <span className="text-[10px] font-semibold text-[var(--text-strong)]">
+            Exterior Finish Material
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="size-3.5 rounded border border-black/20 shadow-sm"
+              style={{
+                backgroundColor:
+                  materials.find((m) => m.id === activeExtMat)?.color || wall.color || "#c4beb5",
+              }}
+            />
+            <select
+              value={activeExtMat}
+              onChange={(e) => handleOverallMaterialChange(e.target.value)}
+              className="h-6 max-w-[140px] rounded border border-[var(--panel-divider)] bg-white/80 px-1.5 text-[10px] font-medium outline-none focus:border-amber-400 dark:bg-slate-800"
+            >
+              {!materials.some((m) => m.id === activeExtMat) && <option value={activeExtMat}>{activeExtMat}</option>}
+              {materials.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Visual Layer Stack Bar */}
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[9px] text-[var(--text-muted)]">
+            <span>Interior Face</span>
+            <span className="font-semibold text-[var(--text-strong)]">{totalThickness} mm total</span>
+            <span>Exterior Face</span>
+          </div>
+          <div className="flex h-5 w-full overflow-hidden rounded-md border border-[var(--panel-divider)] bg-zinc-200 shadow-inner">
+            {layers.map((l, i) => {
+              const widthPct = Math.max(8, (l.thicknessMm / (totalThickness || 1)) * 100);
+              const swatchColor =
+                materials.find((m) => m.id === l.material)?.color ||
+                l.color ||
+                FUNCTION_CONFIG[l.function]?.defaultColor ||
+                "#94a3b8";
+              return (
+                <div
+                  key={l.id || i}
+                  style={{
+                    width: `${widthPct}%`,
+                    backgroundColor: swatchColor,
+                  }}
+                  title={`${l.name} (${l.function}): ${l.thicknessMm}mm · ${l.material}`}
+                  className="flex items-center justify-center border-r border-black/15 text-[8px] font-bold text-slate-800 transition-all hover:brightness-110"
+                >
+                  {l.thicknessMm >= 20 ? `${l.thicknessMm}` : ""}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Layer Breakdown List */}
+        <div className="space-y-1.5">
+          {layers.map((layer, idx) => {
+            const config = FUNCTION_CONFIG[layer.function] || FUNCTION_CONFIG.structure;
+            const currentMat = materials.find((m) => m.id === layer.material);
+            const swatchColor = currentMat?.color || layer.color || config.defaultColor;
+
+            return (
+              <div
+                key={layer.id || idx}
+                className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)]/70 p-2 space-y-1.5 transition-shadow hover:shadow-xs"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                      #{idx + 1}
+                    </span>
+                    <select
+                      value={layer.function}
+                      onChange={(e) => {
+                        const fn = e.target.value as WallLayerFunction;
+                        const fnDef = FUNCTION_CONFIG[fn];
+                        handleLayerChange(idx, {
+                          function: fn,
+                          color: fnDef.defaultColor,
+                          material: layer.material || fnDef.defaultMat,
+                        });
+                      }}
+                      className={`h-5 rounded px-1 text-[9px] font-bold border-0 outline-none ${config.bg} ${config.text}`}
+                    >
+                      <option value="finish1">Interior (Finish 1)</option>
+                      <option value="substrate">Substrate</option>
+                      <option value="structure">Core Structure</option>
+                      <option value="core">Cavity / Core</option>
+                      <option value="insulation">Thermal Insulation</option>
+                      <option value="finish2">Exterior (Finish 2)</option>
+                      <option value="membrane">Membrane</option>
+                    </select>
+                  </div>
+                  {layers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLayer(idx)}
+                      className="grid size-5 place-items-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-500"
+                      title="Remove layer"
+                    >
+                      <LuTrash2 className="size-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-[1fr_80px] gap-1.5">
+                  {/* Material Selector */}
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[8px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                      Material
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="size-3.5 shrink-0 rounded border border-black/20"
+                        style={{ backgroundColor: swatchColor }}
+                      />
+                      <select
+                        value={layer.material}
+                        onChange={(e) => {
+                          const chosen = materials.find((m) => m.id === e.target.value);
+                          handleLayerChange(idx, {
+                            material: e.target.value,
+                            color: chosen?.color || layer.color,
+                          });
+                        }}
+                        className="h-7 w-full rounded-md border border-[var(--panel-divider)] bg-white/70 px-1.5 text-[10px] outline-none focus:border-amber-400 dark:bg-slate-800"
+                      >
+                        {!currentMat && <option value={layer.material}>{layer.material}</option>}
+                        {materials.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+
+                  {/* Thickness Input */}
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[8px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                      Thick (mm)
+                    </span>
+                    <input
+                      type="number"
+                      step={1}
+                      min={1}
+                      max={1000}
+                      defaultValue={layer.thicknessMm}
+                      key={`l-thick-${idx}-${layer.thicknessMm}`}
+                      onBlur={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n > 0 && n !== layer.thicknessMm) {
+                          handleLayerChange(idx, { thicknessMm: Math.round(n) });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      className="h-7 w-full rounded-md border border-[var(--panel-divider)] bg-white/70 px-1.5 text-[11px] font-semibold outline-none focus:border-amber-400 dark:bg-slate-800"
+                    />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-between gap-1.5 pt-1">
+          <button
+            type="button"
+            onClick={handleAddLayer}
+            className="inline-flex h-6 items-center gap-1 rounded-md bg-[var(--surface-muted)] px-2 text-[9px] font-bold text-[var(--text-strong)] hover:bg-amber-100"
+          >
+            <LuPlus className="size-3" />
+            Add Layer
+          </button>
+          {Boolean(wall.layers) && (
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-[9px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+            >
+              <LuRotateCcw className="size-2.5" />
+              Reset Assembly
+            </button>
+          )}
+        </div>
+      </div>
+    </Section>
   );
 }

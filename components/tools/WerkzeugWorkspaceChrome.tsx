@@ -14,8 +14,8 @@ import GsapPopMenu from "@/components/common/GsapPopMenu";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { exportAndDownloadFrag } from "@/lib/markupFragSave";
 import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
-import { buildFragBlob, downloadBlob, getCachedIfcBytes } from "@/lib/markupFragSave";
 import { detectLoopsFromSegments } from "@/lib/linesLoopDetector";
 import type { LayoutToolId, SelectedElementRef } from "@/lib/layoutDrawing";
 import type { RenderMode } from "@/lib/types";
@@ -485,11 +485,12 @@ export default function WerkzeugWorkspaceChrome({
     useToolMarkupStore.getState().setMeasureMode(false);
     useToolMarkupStore.getState().setArmedTool(null);
   };
-  const save = async () => {
-    const markup = useToolMarkupStore.getState();
+  const save = () => {
     const key = activeModelLabel || "model";
-    const blob = await buildFragBlob({ modelKey: key, modelLabel: activeModelLabel, placements: markup.placements, notes: markup.notes, ifcBytes: getCachedIfcBytes(key) });
-    downloadBlob(blob, `${activeModelLabel || "vstudio-model"}.frag`);
+    exportAndDownloadFrag({
+      modelKey: key,
+      modelLabel: activeModelLabel ?? undefined,
+    });
   };
   const viewItems: Array<{ label: string; value: MarkupViewPreset }> = [
     { label: "3D", value: "free" }, { label: "2D / Top", value: "top" },

@@ -30,6 +30,7 @@ export function installDrawingInteractionController(options: Options) {
   let points: DrawingPoint[] = [], generation = 0;
   let pointer: { id: number; x: number; y: number; touch: boolean } | null = null;
   let multiple = false, lastX = 0, lastY = 0, savedControls = true;
+  let typedLength: number | null = null, typedAngle: number | null = null;
   const activePointers = new Set<number>();
   const enabled = () => {
     const s = useLayoutDrawingStore.getState();
@@ -37,7 +38,7 @@ export function installDrawingInteractionController(options: Options) {
   };
   const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
   const clear = () => { svg.replaceChildren(); hud.style.display = "none"; };
-  const reset = () => { generation++; points = []; clear(); useDrawingInteractionStore.setState({ hasPoints: false, message: null, lengthMm: null, angleDeg: null }); };
+  const reset = () => { generation++; points = []; typedLength = null; typedAngle = null; clear(); useDrawingInteractionStore.setState({ hasPoints: false, message: null, lengthMm: null, angleDeg: null }); };
   const restore = () => {
     const controls = options.controls();
     if (controls) {
@@ -141,13 +142,36 @@ export function installDrawingInteractionController(options: Options) {
     let text = result.label || "Tap the first point";
     if (from && to) {
       const dx = to.xMm - from.xMm, dy = to.yMm - from.yMm;
-      const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+      let length = Math.hypot(dx, dy);
+      let angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+      if (typedLength != null || typedAngle != null) {
+        length = typedLength ?? length;
+        angle = typedAngle ?? angle;
+        const radians = angle * Math.PI / 180;
+        result.point = { xMm: from.xMm + length * Math.cos(radians), yMm: from.yMm + length * Math.sin(radians) };
+        segments.length = 0;
+        segments.push(...drawingSegments(shape, [...points, result.point]));
+      }
       useDrawingInteractionStore.setState({ lengthMm: Math.round(Math.hypot(dx, dy)), angleDeg: Math.round(angle * 10) / 10 });
-      text = `${shape === "circle" ? "Radius " : "Length "}${Math.hypot(dx, dy).toFixed(0)} mm · ${angle.toFixed(1)}°${result.label ? ` · ${result.label}` : ""}`;
+      if (!hud.querySelector("input")) hud.replaceChildren();
+      const makeInput = (label: string, value: number, onChange: (n: number) => void) => {
+        const wrap = document.createElement("label"); wrap.style.marginRight = "8px"; wrap.textContent = `${label} `;
+        const input = document.createElement("input"); input.type = "number"; input.value = String(Math.round(value)); input.setAttribute("aria-label", label); input.style.cssText = "width:72px;background:transparent;border:0;border-bottom:1px solid currentColor;color:inherit;outline:none;font:inherit;text-shadow:inherit;pointer-events:auto";
+        input.addEventListener("input", () => { const n = Number(input.value); if (Number.isFinite(n) && n > 0) onChange(n); });
+        input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); void place(lastX, lastY, false); } });
+        wrap.appendChild(input); hud.appendChild(wrap); return input;
+      };
+      const lengthInput = hud.querySelector("input") as HTMLInputElement | null;
+      if (!lengthInput) {
+        const first = makeInput("Length", length, n => { typedLength = n; });
+        makeInput("Angle", angle, n => { typedAngle = n; });
+        first.focus(); first.select();
+      }
       if (shape === "rectangle") text = `${Math.abs(dx).toFixed(0)} × ${Math.abs(dy).toFixed(0)} mm · ${angle.toFixed(1)}°${result.label ? ` · ${result.label}` : ""}`;
       if (shape === "arc" && points.length === 2) text = segments[0]?.arcRadiusMm ? `Radius ${segments[0].arcRadiusMm.toFixed(0)} mm · tap to finish arc` : "Move away from the straight chord";
     }
-    hud.textContent = text; hud.style.display = "block";
+    if (!from || !to) hud.textContent = text;
+    hud.style.display = "block";
     hud.style.left = `${Math.max(8, Math.min(window.innerWidth - 310, x + 18))}px`;
     hud.style.top = `${Math.max(8, Math.min(window.innerHeight - 60, y - (pointer?.touch ? 84 : 48)))}px`;
     return result;
@@ -170,6 +194,7 @@ export function installDrawingInteractionController(options: Options) {
       if (generation !== token) return;
       const closed = shape === "line" && next.length > 2 && Math.hypot(next[0].xMm - next.at(-1)!.xMm, next[0].yMm - next.at(-1)!.yMm) < 1;
       points = shape === "line" && !closed ? next : [];
+      typedLength = null; typedAngle = null;
       useDrawingInteractionStore.setState({ hasPoints: points.length > 0 });
       preview(x, y, bypass);
     } catch (error) { useDrawingInteractionStore.setState({ message: error instanceof Error ? error.message : "Could not save drawing." }); }

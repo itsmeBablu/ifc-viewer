@@ -1,4 +1,5 @@
 import type { ReferenceUnderlay } from "./referenceUnderlay";
+import { idbListPlacements, idbListNotes, idbDeletePlacement, idbDeleteNote } from "./toolMarkupDb";
 import type {
   LayoutBeam,
   LayoutCableTray,
@@ -135,17 +136,48 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
+export const MIN_SAVED_PROJECT_ELEMENTS = 8;
+
+export async function idbGetProjectElementCount(projectId: string): Promise<number> {
+  const db = await openDb();
+  try {
+    const elementStores = [
+      WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS,
+      GRID_LINES, GROUPS, STAIRS, RAMPS, DUCTS, PIPES,
+      CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, SKETCH_LINES, WIRES,
+    ];
+    const tx = db.transaction(elementStores, "readonly");
+    const counts = await Promise.all(
+      elementStores.map((storeName) =>
+        reqToPromise(tx.objectStore(storeName).index("byProject").count(projectId)).catch(() => 0)
+      )
+    );
+    const placements = await idbListPlacements(projectId).catch(() => []);
+    return counts.reduce((sum, c) => sum + c, 0) + (placements?.length ?? 0);
+  } catch {
+    return 0;
+  } finally {
+    db.close();
+  }
+}
+
 async function touchProject(projectId: string, name?: string): Promise<void> {
+  const elementCount = await idbGetProjectElementCount(projectId);
   const db = await openDb();
   try {
     const tx = db.transaction(PROJECTS, "readwrite");
     const store = tx.objectStore(PROJECTS);
-    const current = await reqToPromise(store.get(projectId)) as StoredLayoutProject | undefined;
-    store.put({
-      id: projectId,
-      name: name?.trim() || current?.name || projectNameFromId(projectId),
-      lastModified: Date.now(),
-    } satisfies StoredLayoutProject);
+    if (elementCount < MIN_SAVED_PROJECT_ELEMENTS) {
+      // Projects with fewer than 8 elements are not saved
+      await reqToPromise(store.delete(projectId)).catch(() => {});
+    } else {
+      const current = await reqToPromise(store.get(projectId)) as StoredLayoutProject | undefined;
+      store.put({
+        id: projectId,
+        name: name?.trim() || current?.name || projectNameFromId(projectId),
+        lastModified: Date.now(),
+      } satisfies StoredLayoutProject);
+    }
     await transactionDone(tx);
   } finally {
     db.close();
@@ -349,8 +381,9 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
       reqToPromise(tx.objectStore(PROJECTS).getAll()),
       ...detailStores.map((storeName) => reqToPromise(tx.objectStore(storeName).getAll())),
     ]) as [StoredLayoutProject[], ...unknown[][]];
-    return rows
-      .map((row) => {
+
+    const projectsWithDetails = await Promise.all(
+      rows.map(async (row) => {
         const projectRows = storeRows.map((items, index) => items.filter((item) => {
           const record = item as { projectId?: string };
           return record.projectId === row.id || (detailStores[index] === PRESETS && record.projectId === row.id);
@@ -362,11 +395,17 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
           return { name: underlay.sourceName, type } as const;
         });
         const serialized = JSON.stringify([row, ...projectRows.flat()]);
-        const elementStores = [WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS];
-        const elementCount = elementStores.reduce(
+        const elementStores = [
+          WALLS, DOORS, WINDOWS, SLABS, COLUMNS, BEAMS, GRID_LINES, GROUPS,
+          STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, SKETCH_LINES, WIRES,
+        ];
+        const storeElementCount = elementStores.reduce(
           (total, storeName) => total + projectRows[detailStores.indexOf(storeName)].length,
           0,
         );
+        const placements = await idbListPlacements(row.id).catch(() => []);
+        const elementCount = storeElementCount + (placements?.length ?? 0);
+
         return {
           id: row.id,
           name: row.name || projectNameFromId(row.id),
@@ -377,7 +416,19 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
           referenceFiles: references,
         };
       })
-      .sort((a, b) => b.lastModified - a.lastModified);
+    );
+
+    // If a project has less than 8 elements, do not save or return it (prune from IndexedDB)
+    const validProjects: StoredLayoutProject[] = [];
+    for (const project of projectsWithDetails) {
+      if (project.elementCount < MIN_SAVED_PROJECT_ELEMENTS) {
+        void idbDeleteProject(project.id);
+      } else {
+        validProjects.push(project);
+      }
+    }
+
+    return validProjects.sort((a, b) => b.lastModified - a.lastModified);
   } finally {
     db.close();
   }
@@ -415,6 +466,8 @@ export async function idbExportProject(projectId: string): Promise<Record<string
 }
 
 export async function idbDeleteProject(projectId: string): Promise<void> {
+  const [placements, notes] = await Promise.all([idbListPlacements(projectId), idbListNotes(projectId)]);
+  await Promise.all([...placements.map((row) => idbDeletePlacement(row.id)), ...notes.map((row) => idbDeleteNote(row.id))]);
   const db = await openDb();
   try {
     const stores = [

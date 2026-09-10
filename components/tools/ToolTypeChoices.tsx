@@ -18,7 +18,7 @@ export default function ToolTypeChoices({ tool, onChoose, selectedElement }: Too
   const [search, setSearch] = useState("");
 
   if (tool === "equipment" || tool === "component" || selectedElement?.kind === "equipment") {
-    const item = selectedElement
+    const item = selectedElement && store.armedLayoutTool !== "component" && store.armedLayoutTool !== "equipment"
       ? store.mepEquipment.find((eq) => eq.id === selectedElement.id)
       : undefined;
     return <ComponentLibrary item={item} onChoose={onChoose} />;

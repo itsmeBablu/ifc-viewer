@@ -11,7 +11,23 @@ export const EMPTY_VIEW_VISIBILITY: ViewVisibility = { hiddenCategories: [], hid
 
 export type RenderPreset = "architectural" | "golden" | "overcast" | "dusk" | "interior";
 
-export interface RenderSettings {
+export interface RenderSceneSettings {
+  renderSceneMode: "exterior" | "interior";
+  skyEnabled: boolean;
+  groundEnabled: boolean;
+  groundLevelId: string | null;
+  groundOffsetMm: number;
+  groundSizeM: number;
+  groundMaterialId: string;
+  renderHiddenCategories: string[];
+  cameraFov: number;
+}
+export const DEFAULT_RENDER_SCENE: RenderSceneSettings = {
+  renderSceneMode: "exterior", skyEnabled: true, groundEnabled: true,
+  groundLevelId: null, groundOffsetMm: -10, groundSizeM: 200,
+  groundMaterialId: "", renderHiddenCategories: [], cameraFov: 45,
+};
+export interface RenderSettings extends RenderSceneSettings {
   sunAzimuth: number; // 0–360 deg
   sunElevation: number; // 10–85 deg
   sunIntensity: number; // 0.2–3.0
@@ -25,7 +41,7 @@ export interface RenderSettings {
   renderPreset: RenderPreset;
 }
 
-export const RENDER_PRESET_CONFIGS: Record<RenderPreset, Omit<RenderSettings, "renderPreset">> = {
+export const RENDER_PRESET_CONFIGS: Record<RenderPreset, Omit<RenderSettings, "renderPreset" | keyof RenderSceneSettings>> = {
   architectural: {
     sunAzimuth: 45,
     sunElevation: 48,
@@ -89,7 +105,7 @@ export const RENDER_PRESET_CONFIGS: Record<RenderPreset, Omit<RenderSettings, "r
 };
 
 /** View filters are separate from the model and never delete building elements. */
-export const useViewDisplayStore = create<{
+export const useViewDisplayStore = create<RenderSceneSettings & {
   views: Record<string, ViewVisibility>;
   renderPreview: boolean;
   setRenderPreview: (on: boolean) => void;
@@ -112,6 +128,7 @@ export const useViewDisplayStore = create<{
   isolate: (view: string, ids: string[]) => void;
   reset: (view: string) => void;
 }>((set) => ({
+  ...DEFAULT_RENDER_SCENE,
   views: {},
   renderPreview: false,
   setRenderPreview: (renderPreview) => set({ renderPreview }),
@@ -127,7 +144,7 @@ export const useViewDisplayStore = create<{
   skyColor: "#e0f2fe",
   groundColor: "#334155",
   renderPreset: "architectural",
-  setRenderSetting: (key, value) => set({ [key]: value, renderPreset: "architectural" as any }),
+  setRenderSetting: (key, value) => set({ [key]: value }),
   applyRenderPreset: (preset) => {
     const config = RENDER_PRESET_CONFIGS[preset];
     if (config) {

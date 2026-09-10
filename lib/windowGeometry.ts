@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { LayoutWindow } from "./layoutDrawing";
 
 /** Local X spans the opening, Y starts at the sill, Z distinguishes sash tracks. */
-export function createOperableWindow(operation: NonNullable<LayoutWindow["operation"]>, width: number, height: number, frame: THREE.Material, glass: THREE.Material) {
+export function createOperableWindow(operation: NonNullable<LayoutWindow["operation"]>, width: number, height: number, frame: THREE.Material, glass: THREE.Material, openingAngleDeg = 15) {
   const group = new THREE.Group(); group.name = `window-${operation}`;
   const rail = Math.min(0.045, width / 10, height / 10);
   const box = (parent: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, d: number, material = frame) => {
@@ -38,7 +38,7 @@ export function createOperableWindow(operation: NonNullable<LayoutWindow["operat
     const leaf = sash(0, height / 2, 0, width, height);
     // A slightly open hinged sash makes its depth/hinge operation readable in 3D.
     const pivot = new THREE.Group(); pivot.position.set(-width / 2, height / 2, 0);
-    group.remove(leaf); leaf.position.set(width / 2, 0, 0); pivot.add(leaf); group.add(pivot); pivot.rotation.y = -Math.PI / 12;
+    group.remove(leaf); leaf.position.set(width / 2, 0, 0); pivot.add(leaf); group.add(pivot); pivot.rotation.y = -THREE.MathUtils.degToRad(Math.max(0, Math.min(120, openingAngleDeg)));
     box(leaf, width / 2 - rail * 1.4, 0, 0.04, rail / 2, 0.12, 0.025);
     for (const y of [-height * 0.3, height * 0.3]) box(pivot, 0, y, 0, rail, 0.08, 0.055);
   }
