@@ -531,9 +531,11 @@ export default function WerkzeugWorkspaceChrome({
         style={{ "--werkzeug-ipad-panel-width": `${landscapePanelWidth}px` } as CSSProperties}
       >
         <input ref={fileRef} type="file" accept=".ifc,.frag,.IFC,.FRAG" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }} />
-        {!mepModeActive && <div className="flex max-h-24 shrink-0 flex-col gap-1 overflow-y-auto px-1 py-1 thin-scroll" aria-label="Architecture categories">
-          {(["build", "structure", "annotate", "insert", "render"] as const).map(category => <button key={category} type="button" onClick={() => { setDesktopCategory(category); if (category === "render") enterRenderView(); else { const first = category === "build" ? "wall" : category === "structure" ? "column" : category === "annotate" ? "lines" : "component"; setPanelKey(first); setPanelHidden(false); } }} className={`flex w-full shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-left text-[10px] font-semibold capitalize ${desktopCategory === category ? "btn-v-yellow !text-zinc-950" : "btn-yellow-border-hover border-[var(--panel-divider)] text-[var(--text-muted)]"}`}><span aria-hidden="true" className="text-xs">{category === "build" ? "▦" : category === "structure" ? "▥" : category === "annotate" ? "✎" : category === "insert" ? "＋" : "◉"}</span><span>{category}</span></button>)}
-        </div>}
+        {!mepModeActive && <label className="flex shrink-0 items-center px-1 py-1" aria-label="Architecture category">
+          <select value={desktopCategory} onChange={event => { const category = event.target.value as typeof desktopCategory; setDesktopCategory(category); if (category === "render") enterRenderView(); else { const first = category === "build" ? "wall" : category === "structure" ? "column" : category === "annotate" ? "lines" : "component"; setPanelKey(first); setPanelHidden(false); } }} className="btn-v-yellow h-8 w-full rounded-full border-0 px-3 text-[10px] font-bold capitalize text-zinc-950 outline-none">
+            {(["build", "structure", "annotate", "insert", "render"] as const).map(category => <option key={category} value={category}>{category}</option>)}
+          </select>
+        </label>}
         <input ref={attachRef} type="file" accept=".dwg,.dxf,.pdf" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onAttachDwgPdf?.(file); }} />
         <div className="werkzeug-ipad-snap-left"><ObjectSnapStrip compact iconOnly showCount={false} /></div>
         <div className="werkzeug-ipad-tool-ribbon">
@@ -551,9 +553,6 @@ export default function WerkzeugWorkspaceChrome({
             <LuMousePointer2 />
             <span className="werkzeug-tool-label">Select</span>
           </button>
-          <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("views", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "views" ? "is-active btn-v-yellow" : ""}`}><LuEye /><span className="werkzeug-tool-label">Views</span><LuChevronDown /></button></div>
-          <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("scale", event.currentTarget)} className={`werkzeug-tool-button ${auxOpen === "scale" ? "is-active btn-v-yellow" : ""}`}><LuScale /><span className="werkzeug-tool-label">{drawingScale}</span><LuChevronDown /></button></div>
-          <button type="button" onClick={() => attachRef.current?.click()} className="werkzeug-tool-button"><LuPaperclip /><span className="werkzeug-tool-label">Attach</span></button>
           <div className="relative shrink-0"><button type="button" onClick={(event) => toggleAux("elements", event.currentTarget)} className={`werkzeug-tool-button ${armed === "column" || armed === "beam" ? "is-active btn-v-yellow" : ""}`}><LuBox /><span className="werkzeug-tool-label">Elements</span><LuChevronDown /></button></div>
           {mepModeActive && <select aria-label="MEP category" className="werkzeug-tool-button shrink-0" value={mepCategory} onChange={(event) => useLayoutDrawingStore.getState().setDesktopMepCategory(event.target.value as typeof mepCategory)}>{MEP_TABS.map((tab) => <option key={tab.id} value={tab.id}>{tab.label}</option>)}</select>}
           {(mepModeActive ? MEP_TOOL_ITEMS.filter((item) => {
