@@ -51,7 +51,7 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2 } from "react-icons/lu";
+import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2, LuCompass } from "react-icons/lu";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -118,6 +118,24 @@ import {
   wallWithFaceGapTo,
   type SelectedElementRef,
 } from "@/lib/layoutDrawing";
+
+function ViewCompass() {
+  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
+  const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
+  if (viewPreset === "top") return null;
+  const button = (label: string, preset: "north" | "south" | "east" | "west", className: string) => (
+    <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => setViewPreset(preset)} className={`absolute grid place-items-center rounded-md text-[9px] font-bold transition ${viewPreset === preset ? "bg-amber-400 text-slate-950" : "bg-slate-900/65 text-white/85 hover:bg-amber-300 hover:text-slate-950"} ${className}`}>{label[0]}</button>
+  );
+  return <div className="pointer-events-auto absolute right-4 top-[143px] z-20 h-[72px] w-[72px] select-none rounded-full border border-white/30 bg-slate-950/35 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md" aria-label="View compass">
+    <div className="relative h-full w-full rounded-full border border-white/20 bg-slate-900/35">
+      {button("North", "north", "left-1/2 top-0 h-6 w-6 -translate-x-1/2")}
+      {button("East", "east", "right-0 top-1/2 h-6 w-6 -translate-y-1/2")}
+      {button("South", "south", "bottom-0 left-1/2 h-6 w-6 -translate-x-1/2")}
+      {button("West", "west", "left-0 top-1/2 h-6 w-6 -translate-y-1/2")}
+      <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={15} /></span>
+    </div>
+  </div>;
+}
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
   ClipSliceController,
@@ -828,7 +846,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const skyTextureRef = useRef<THREE.CanvasTexture | null>(null);
   const applySelectionHighlightRef = useRef<() => void>(() => {});
   const ventilationMarkersRef = useRef<VentilationMarkerLayer | null>(null);
-  const lastTickRef = useRef(performance.now());
+  const lastTickRef = useRef(0);
   const markupLayerRef = useRef<MarkupSceneLayer | null>(null);
   const layoutLayerRef = useRef<LayoutSceneLayer | null>(null);
   const traceHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -7855,6 +7873,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   return (
     <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
+      <ViewCompass />
       {doorActionPosition && (selectedDoor || selectedWindow) && (
         <div
           className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
