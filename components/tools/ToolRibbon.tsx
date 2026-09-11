@@ -50,7 +50,10 @@ import {
   LuShieldAlert,
   LuLock,
   LuLockOpen,
+  LuFileText,
 } from "react-icons/lu";
+import { SiAutodesk } from "react-icons/si";
+import { useExportModalStore } from "@/store/useExportModalStore";
 import {
   MdZoomInMap,
   MdOutlineFlip,
@@ -1689,13 +1692,55 @@ export default function ToolRibbon({
                         <div className="text-xs text-[var(--text-muted)]">Full BIM export with IFC schema structures</div>
                       </div>
                     </button>
+
+                    <div className="border-t border-[var(--panel-divider)]/60 my-1" />
+                    <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      Export Floor Plans
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        useExportModalStore.getState().open("cad");
+                        setSaveMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-sky-400/20 active:border-sky-400 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400">
+                        <SiAutodesk className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[var(--text-strong)]">Export DWG / DXF</div>
+                        <div className="text-xs text-[var(--text-muted)]">AutoCAD architectural format</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        useExportModalStore.getState().open("pdf");
+                        setSaveMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl p-3 text-left border border-[var(--panel-divider)] bg-[var(--surface-overlay)] active:bg-amber-400/20 active:border-amber-400 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
+                        <LuFileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[var(--text-strong)]">Export PDF</div>
+                        <div className="text-xs text-[var(--text-muted)]">Printable architectural drawing sheets</div>
+                      </div>
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div
-                  className="absolute left-0 top-full mt-1 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100"
+                  className="absolute left-0 top-full mt-1 w-56 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
                   onClick={() => setSaveMenuOpen(false)}
                 >
+                  <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--panel-divider)]/40 mb-1">
+                    BIM Project File
+                  </div>
                   <button
                     type="button"
                     onClick={handleSaveFrag}
@@ -1710,13 +1755,54 @@ export default function ToolRibbon({
                   <button
                     type="button"
                     onClick={handleSaveIfc}
-                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
+                    className="mt-0.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors"
                   >
                     <LuSave className="h-3.5 w-3.5 text-emerald-400" />
                     <div>
                       <div className="font-semibold text-[var(--text-strong)]">Save as .ifc</div>
                       <div className="text-[10px] text-[var(--text-muted)]">Export with IFC structure & geometry</div>
                     </div>
+                  </button>
+
+                  <div className="border-t border-[var(--panel-divider)]/40 my-1" />
+                  <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    Export Floor Plans
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useExportModalStore.getState().open("cad");
+                      setSaveMenuOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <SiAutodesk className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-[var(--text-strong)]">Export DWG / DXF</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">AutoCAD architectural CAD</div>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-bold text-sky-400 bg-sky-500/15 px-1 py-0.5 rounded shrink-0">CAD</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useExportModalStore.getState().open("pdf");
+                      setSaveMenuOpen(false);
+                    }}
+                    className="mt-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-[var(--text-body)] hover:bg-[var(--glass-inset-bg)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <LuFileText className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-[var(--text-strong)]">Export PDF</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">Printable architectural sheets</div>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-bold text-amber-400 bg-amber-500/15 px-1 py-0.5 rounded shrink-0">PDF</span>
                   </button>
                 </div>
               )

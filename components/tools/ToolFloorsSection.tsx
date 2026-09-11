@@ -65,6 +65,7 @@ export default function ToolFloorsSection({
   const calibrateUnderlayId = useLayoutDrawingStore((s) => s.calibrateUnderlayId);
   const calibratePoints = useLayoutDrawingStore((s) => s.calibratePoints);
   const selectedUnderlayId = useLayoutDrawingStore((s) => s.selectedUnderlayId);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -199,7 +200,11 @@ export default function ToolFloorsSection({
             type="button"
             onClick={() => useExportModalStore.getState().open("cad")}
             title="Export Floor Plans (AutoCAD DWG / DXF / PDF)"
-            className="rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-sky-400 flex items-center gap-1 transition-colors cursor-pointer"
+            className={`rounded-md px-2 py-0.5 text-[9px] font-bold tracking-wide flex items-center gap-1 transition-all cursor-pointer shadow-sm ${
+              mepModeActive
+                ? "btn-v-blue btn-liquid-hover !text-[#082f49]"
+                : "btn-v-yellow btn-liquid-hover !text-zinc-950"
+            }`}
           >
             <LuDownload className="h-2.5 w-2.5" />
             <span>Export</span>

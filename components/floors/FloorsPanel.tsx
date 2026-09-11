@@ -27,6 +27,9 @@ import {
 import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
+import { LuDownload } from "react-icons/lu";
+import { useExportModalStore } from "@/store/useExportModalStore";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import {
   captureAllPagesAssets,
@@ -151,6 +154,7 @@ export default function FloorsPanel({
   const savedViews = useAppStore((s) => s.savedViews);
   const selectedElement = useAppStore((s) => s.selectedElement);
   const scenePickToken = useAppStore((s) => s.scenePickToken);
+  const mepModeActive = useLayoutDrawingStore((s) => s.mepModeActive);
 
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const setSelectedRoomId = useAppStore((s) => s.setSelectedRoomId);
@@ -851,19 +855,34 @@ export default function FloorsPanel({
           ref={tabRowRef}
           className="relative flex shrink-0 items-center justify-between gap-2"
         >
-          <button
-            ref={floorsTabRef}
-            type="button"
-            onClick={() => setLeftPanelMode("floors")}
-            aria-pressed={leftPanelMode === "floors"}
-            className={`relative rounded-lg px-2.5 py-1.5 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
-              leftPanelMode === "floors"
-                ? "text-zinc-900"
-                : "text-zinc-500"
-            } hover:bg-white/75 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.1)]`}
-          >
-            {t(uiLanguage, "floorsAndRooms")}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              ref={floorsTabRef}
+              type="button"
+              onClick={() => setLeftPanelMode("floors")}
+              aria-pressed={leftPanelMode === "floors"}
+              className={`relative rounded-lg px-2.5 py-1.5 text-[11px] font-semibold leading-tight tracking-wide transition-colors ${
+                leftPanelMode === "floors"
+                  ? "text-zinc-900"
+                  : "text-zinc-500"
+              } hover:bg-white/75 hover:text-zinc-900 hover:shadow-[inset_0_0_0_1px_rgba(24,24,27,0.1)]`}
+            >
+              {t(uiLanguage, "floorsAndRooms")}
+            </button>
+            <button
+              type="button"
+              onClick={() => useExportModalStore.getState().open("cad")}
+              title="Export Floor Plans (AutoCAD DWG / DXF / PDF)"
+              className={`rounded-md px-2 py-0.5 text-[9px] font-bold tracking-wide flex items-center gap-1 transition-all cursor-pointer shadow-sm ${
+                mepModeActive
+                  ? "btn-v-blue btn-liquid-hover !text-[#082f49]"
+                  : "btn-v-yellow btn-liquid-hover !text-zinc-950"
+              }`}
+            >
+              <LuDownload className="h-2.5 w-2.5" />
+              <span>Export</span>
+            </button>
+          </div>
           <div className="flex items-center gap-1.5">
             <button
               ref={attributesTabRef}
