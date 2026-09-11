@@ -17,6 +17,18 @@ const _vA = new THREE.Vector3();
 const _vB = new THREE.Vector3();
 const _vC = new THREE.Vector3();
 
+function isSafeRaycastMesh(mesh: THREE.Mesh): boolean {
+  const geo = mesh.geometry;
+  if (!geo) return false;
+  const pos = geo.getAttribute("position");
+  if (!pos || pos.count === 0) return false;
+  const arr = pos.array as ArrayLike<number>;
+  for (let i = 0; i < arr.length; i++) {
+    if (!Number.isFinite(arr[i])) return false;
+  }
+  return true;
+}
+
 /** Raycast shell + placed markup meshes for a true surface hit. */
 export function pickMarkupSurface(
   raycaster: THREE.Raycaster,
@@ -31,6 +43,7 @@ export function pickMarkupSurface(
       if (o.userData.isClipStencil || o.userData.isClipCap) return;
       if (o.userData.isSelectionOutline) return;
       if (o.userData.isMarkupPreview) return;
+      if (!isSafeRaycastMesh(o)) return;
       targets.push(o);
     });
   }

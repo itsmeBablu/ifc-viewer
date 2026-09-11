@@ -28,9 +28,35 @@ export function ownerOf(object: THREE.Object3D): SelectedElementRef | null {
   return null;
 }
 export function selectionKey(ref: SelectedElementRef) { return `${ref.kind}:${ref.id}`; }
+function isSafeRaycastObject(obj: THREE.Object3D): boolean {
+  if (obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points) {
+    const geo = (obj as THREE.Mesh).geometry;
+    if (!geo) return false;
+    const pos = geo.getAttribute("position");
+    if (!pos || pos.count === 0) return false;
+    const arr = pos.array as ArrayLike<number>;
+    for (let i = 0; i < arr.length; i++) {
+      if (!Number.isFinite(arr[i])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function collectRaycastCandidates(roots: THREE.Object3D[]): THREE.Object3D[] {
+  const safe: THREE.Object3D[] = [];
+  for (const root of roots) {
+    root.traverse((obj) => {
+      if (isSafeRaycastObject(obj)) safe.push(obj);
+    });
+  }
+  return safe;
+}
+
 const cache = new WeakMap<THREE.BufferGeometry, Float32Array>();
 export function pickGeometry(ray: THREE.Raycaster, roots: THREE.Object3D[], camera: THREE.Camera, rect: { left: number; top: number; width: number; height: number }, x: number, y: number, mode: SelectionLevel, allowed: (object: THREE.Object3D) => boolean = () => true): GeometrySelection | null {
-  const hits = ray.intersectObjects(roots, true).filter(hit => {
+  const safeCandidates = collectRaycastCandidates(roots);
+  const hits = ray.intersectObjects(safeCandidates, false).filter(hit => {
     for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) if (!o.visible) return false;
     return allowed(hit.object) && ownerOf(hit.object) && !hit.object.userData.isLayoutGround &&
       (mode !== "face" || hit.object instanceof THREE.Mesh || ownerOf(hit.object)?.kind === "line");

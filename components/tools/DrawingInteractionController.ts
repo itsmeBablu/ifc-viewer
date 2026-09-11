@@ -13,6 +13,7 @@ import { findGlobalSnap, worldMmToScreen } from "@/lib/globalSnapping";
 import { meshDrawingEdges, nearestDrawingEdge, projectDrawingEdges } from "@/lib/drawingReferences";
 import { underlaySnapSegmentsWorld } from "@/lib/underlaySnap";
 import { snapMeshMeasurement } from "@/lib/measurementSnap";
+import { collectRaycastCandidates } from "@/lib/modifySelection";
 
 type Options = {
   canvas: HTMLCanvasElement;
@@ -71,7 +72,8 @@ export function installDrawingInteractionController(options: Options) {
     const rect = markup.quadView ? { left: bounds.left + (x >= bounds.left + bounds.width / 2 ? bounds.width / 2 : 0), top: bounds.top + (y >= bounds.top + bounds.height / 2 ? bounds.height / 2 : 0), width: bounds.width / 2, height: bounds.height / 2 } : bounds;
     const snapCanvas = { getBoundingClientRect: () => rect } as HTMLCanvasElement;
     ray.setFromCamera(new THREE.Vector2((x - rect.left) / rect.width * 2 - 1, -(y - rect.top) / rect.height * 2 + 1), camera);
-    const hit = ray.intersectObjects(options.roots(), true).find(h => h.object instanceof THREE.Mesh && !h.object.userData.isLayoutGround && !h.object.userData.layoutUnderlayId && h.object.visible && visibleParents(h.object));
+    const safeRoots = collectRaycastCandidates(options.roots());
+    const hit = ray.intersectObjects(safeRoots, false).find(h => h.object instanceof THREE.Mesh && !h.object.userData.isLayoutGround && !h.object.userData.layoutUnderlayId && h.object.visible && visibleParents(h.object));
     const elevation = level.elevationMm + (mep.kind ? mep.offset : 0);
     const raw = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -elevation / 1000), new THREE.Vector3());
     return { camera, layout, markup, level, elevation, rect, snapCanvas, hit, raw };

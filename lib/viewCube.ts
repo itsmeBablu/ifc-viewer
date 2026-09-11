@@ -16,7 +16,7 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  */
 export const VIEW_CUBE_LAYOUT = {
   /** Bump whenever size/margins change so Viewer3D remounts the instance. */
-  revision: 25,
+  revision: 26,
   /** Desktop default size (CSS px) — 25% larger than baseline (150px vs 120px). */
   sizeDesktop: 150,
   /** iPad / tablet size — scaled down for comfortable touch & screen estate. */
@@ -30,7 +30,8 @@ export const VIEW_CUBE_LAYOUT = {
   marginRight: 16,
   /** On iPad/tablet, place below the contextual capsules row (which sits at top:63px..105px). */
   marginTopTablet: 118,
-  marginRightTablet: 14,
+  /** On iPad/tablet, moved further left from right edge for comfortable clearance. */
+  marginRightTablet: 38,
   marginTopMobile: 12,
   marginRightMobile: 12,
 } as const;

@@ -263,8 +263,17 @@ export class MarkupSceneLayer {
   pickMarkup(
     raycaster: THREE.Raycaster,
   ): { kind: "placement" | "note"; id: string } | null {
+    const safeMeshes = [...this.meshes.values()].filter((m) => {
+      const pos = m.geometry?.getAttribute("position");
+      if (!pos || pos.count === 0) return false;
+      const arr = pos.array as ArrayLike<number>;
+      for (let i = 0; i < arr.length; i++) {
+        if (!Number.isFinite(arr[i])) return false;
+      }
+      return true;
+    });
     const meshHits = raycaster.intersectObjects(
-      [...this.meshes.values()],
+      safeMeshes,
       false,
     );
     if (meshHits[0]?.object.userData.markupId) {

@@ -6,7 +6,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { useModifyStore } from "@/store/useModifyStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { alignmentTransform, ownerOf, pickGeometry, selectionKey, type GeometrySelection } from "@/lib/modifySelection";
+import { alignmentTransform, collectRaycastCandidates, ownerOf, pickGeometry, selectionKey, type GeometrySelection } from "@/lib/modifySelection";
 import { currentModifySelection, expandedSelection, mirrorMatrix, placeGroup, splitElement, transformElements } from "@/lib/modifyOperations";
 import { findGlobalSnap } from "@/lib/globalSnapping";
 import { snapMeshMeasurement, screenSegmentPoint } from "@/lib/measurementSnap";
@@ -162,7 +162,8 @@ export function installModifyController(options: {
         });
         let point = result.snapped ? new THREE.Vector3(result.worldMm.xMm / 1000, pivot.position.y, result.worldMm.yMm / 1000) : null;
         if (!point) {
-          const hit = ray.intersectObjects(options.roots(), true).find(h => { const owner = ownerOf(h.object); return owner && !excluded.has(selectionKey(owner)); });
+          const safeRoots = collectRaycastCandidates(options.roots());
+          const hit = ray.intersectObjects(safeRoots, false).find(h => { const owner = ownerOf(h.object); return owner && !excluded.has(selectionKey(owner)); });
           if (hit) point = snapMeshMeasurement(hit.object, ctx.cam, ctx.snapCanvas, mouse.x, mouse.y, layout.planSnapModes, originalPivot, hit.instanceId)?.point ?? null;
         }
         if (point) {
