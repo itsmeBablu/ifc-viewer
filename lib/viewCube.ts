@@ -16,13 +16,42 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  */
 export const VIEW_CUBE_LAYOUT = {
   /** Bump whenever size/margins change so Viewer3D remounts the instance. */
-  revision: 21,
-  /** 155px fits cube + surrounding compass ring + N/S/E/W labels. */
-  size: 155,
-  /** Equal top / right inset (CSS px). */
+  revision: 23,
+  /** Desktop default size (CSS px) — compact cube + snug compass circle. */
+  sizeDesktop: 120,
+  /** iPad / tablet size — scaled down for comfortable touch & screen estate. */
+  sizeTablet: 92,
+  /** Mobile phone size. */
+  sizeMobile: 76,
+  /** Default fallback size. */
+  size: 120,
+  /** Top / right inset (CSS px). */
   marginTop: 16,
   marginRight: 16,
+  marginTopMobile: 12,
+  marginRightMobile: 12,
 } as const;
+
+function isIpadOrTablet(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent;
+  const isIpad = /iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+  return isIpad || isAndroidTablet;
+}
+
+export function getViewCubeWidgetSize(canvasWidth?: number, canvasHeight?: number): number {
+  const w = canvasWidth ?? (typeof window !== "undefined" ? window.innerWidth : 1280);
+  const h = canvasHeight ?? (typeof window !== "undefined" ? window.innerHeight : 800);
+  const tablet = isIpadOrTablet() || (w <= 1024 && w > 640) || (h <= 768 && h > 500 && w <= 1180);
+  if (w <= 640 || h <= 500) {
+    return VIEW_CUBE_LAYOUT.sizeMobile;
+  }
+  if (tablet) {
+    return VIEW_CUBE_LAYOUT.sizeTablet;
+  }
+  return VIEW_CUBE_LAYOUT.sizeDesktop;
+}
 
 type ZoneKind = "face" | "edge" | "corner";
 
@@ -41,8 +70,8 @@ export type CompassHit =
 type HitMesh = THREE.Mesh;
 
 const FACE_PX = 512;
-const HALF = 0.36;   // cube half-size — smaller cube nests clearly inside ring
-const BAND = 0.34;
+const HALF = 0.36;   // cube half-size — nests clearly inside compass ring
+const BAND = 0.22;   // threshold for edge/corner click zones (outer 39% is edge/corner)
 
 /** Hover overlay gray (slate-400). */
 const HOVER_GRAY = 0x94a3b8;
@@ -167,7 +196,7 @@ function paintFace(
     ctx.strokeRect(6, 6, s - 12, s - 12);
   }
 
-  const inset = Math.round(s * 0.18);
+  const inset = Math.round(s * 0.195);
   ctx.strokeStyle = hover
     ? "rgba(71,85,105,0.28)"
     : "rgba(148,163,184,0.28)";
@@ -227,11 +256,11 @@ function makeFaceTexture(label: string, hover = false) {
   return tex;
 }
 
-/** Compass ring constants. */
-const RING_R = 0.92;      // torus centerline radius — ring wraps cube (HALF=0.5)
-const RING_TUBE = 0.034;  // visible tube radius (thin outline style)
-const RING_HIT_TUBE = 0.14; // invisible hit tube — generous 44pt touch target
-const CARDINAL_R = 1.10;  // distance from center for N/S/E/W sprite labels
+/** Compass ring constants — reduced diameter for a tight, elegant fit around the cube. */
+const RING_R = 0.65;        // torus centerline radius — cleanly wraps cube (corner radius ~0.51)
+const RING_TUBE = 0.022;    // visible tube radius (thin crisp outline style)
+const RING_HIT_TUBE = 0.11; // invisible hit tube for ring drag
+const CARDINAL_R = 0.80;    // distance from center for N/S/E/W sprite labels
 const CARDINAL_LABELS: { label: string; dir: THREE.Vector3 }[] = [
   { label: "N", dir: new THREE.Vector3(0, 0,  1) },
   { label: "S", dir: new THREE.Vector3(0, 0, -1) },
@@ -273,7 +302,10 @@ function makeCardinalTexture(label: string, hover = false): THREE.Texture {
  * White liquid-glass ViewCube — frosted idle, soft gray hover (instant, no sticky anim).
  */
 export class ViewCube {
-  readonly size = VIEW_CUBE_LAYOUT.size;
+  private currentSize: number = VIEW_CUBE_LAYOUT.sizeDesktop;
+  get size(): number {
+    return this.currentSize;
+  }
   private marginTop: number = VIEW_CUBE_LAYOUT.marginTop;
   private marginRight: number = VIEW_CUBE_LAYOUT.marginRight;
   private scene = new THREE.Scene();
@@ -299,22 +331,26 @@ export class ViewCube {
   private hoveredCardinalIdx: number = -1;
   private ringDragActive = false;
   private ringDragStartAngle = 0;
+  private ringDragMoved = false;
   private viewport = {
     x: 0,
     y: 0,
-    w: VIEW_CUBE_LAYOUT.size,
-    h: VIEW_CUBE_LAYOUT.size,
+    w: VIEW_CUBE_LAYOUT.sizeDesktop,
+    h: VIEW_CUBE_LAYOUT.sizeDesktop,
   };
   private canvasCss = { w: 1, h: 1 };
   private disposed = false;
 
   constructor() {
+    this.currentSize = getViewCubeWidgetSize();
+    this.viewport.w = this.currentSize;
+    this.viewport.h = this.currentSize;
     this.camera.position.set(0, 0, 4.6);
     this.camera.lookAt(0, 0, 0);
     this.scene.background = null;
     this.scene.add(this.root);
     this.root.add(this.compassGroup);
-    this.compassGroup.position.y = -0.18; // shift ring slightly below cube centre
+    this.compassGroup.position.y = -0.16; // shift ring slightly below cube centre
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.15));
     const key = new THREE.DirectionalLight(0xffffff, 0.4);
@@ -360,7 +396,7 @@ export class ViewCube {
     // ── Tick marks at 90° intervals ──
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
-      const tickGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.055, 6);
+      const tickGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.038, 6);
       const tickMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
       const tick = new THREE.Mesh(tickGeo, tickMat);
       tick.position.set(Math.sin(angle) * RING_R, 0, Math.cos(angle) * RING_R);
@@ -380,14 +416,14 @@ export class ViewCube {
         sizeAttenuation: true,
       });
       const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.setScalar(0.24);
+      sprite.scale.setScalar(0.19);
       sprite.position.copy(dir.clone().multiplyScalar(CARDINAL_R));
       sprite.name = `compass-label-${label}`;
       this.compassGroup.add(sprite);
       this.cardinalSprites.push({ sprite, restTex, hoverTex });
 
-      // Invisible hit zone — generous 0.30×0.30 plane (≈44pt at 155px)
-      const hitGeo = new THREE.PlaneGeometry(0.30, 0.30);
+      // Invisible hit zone for cardinal clicks
+      const hitGeo = new THREE.PlaneGeometry(0.24, 0.24);
       const hitMat = new THREE.MeshBasicMaterial({
         transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
       });
@@ -477,9 +513,9 @@ export class ViewCube {
     this.root.add(cubeMesh);
     this.cubeMeshRef = cubeMesh;
 
-    // Invisible pick volume — same size as cube, used by pickZone hit-classification
+    // Invisible pick volume — slightly expanded for effortless edge/corner hits
     const pick = new THREE.Mesh(
-      new THREE.BoxGeometry(HALF * 2, HALF * 2, HALF * 2),
+      new THREE.BoxGeometry(HALF * 2 + 0.03, HALF * 2 + 0.03, HALF * 2 + 0.03),
       new THREE.MeshBasicMaterial({
         transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
       }),
@@ -512,10 +548,11 @@ export class ViewCube {
       ),
     );
 
-
-    // Edge / corner overlays — solid yellow when active (no glass fade)
-    const edgeLen = 0.64;
-    const edgeW = 0.16;
+    // Edge / corner overlays — highlight on hover matching the click regions
+    const edgeMid = 0.29; // centered in the [0.22, 0.36] edge/corner band
+    const edgeLen = 0.42;
+    const edgeW = 0.15;
+    const cornerSize = 0.15;
     const edgeMids = [
       [1, 1, 0],
       [1, -1, 0],
@@ -547,8 +584,11 @@ export class ViewCube {
         ),
         mat,
       ) as HitMesh;
-      const o = HALF - 0.02;
-      mesh.position.set(x * o, y * o, z * o);
+      mesh.position.set(
+        x === 0 ? 0 : x * edgeMid,
+        y === 0 ? 0 : y * edgeMid,
+        z === 0 ? 0 : z * edgeMid,
+      );
       mesh.renderOrder = 3;
       mesh.userData = { kind: "edge", dir, zoneKey: key };
       this.overlayMeshes.set(key, mesh);
@@ -567,11 +607,10 @@ export class ViewCube {
             depthWrite: false,
           });
           const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.18, 0.18),
+            new THREE.BoxGeometry(cornerSize, cornerSize, cornerSize),
             mat,
           ) as HitMesh;
-          const o = HALF - 0.02;
-          mesh.position.set(x * o, y * o, z * o);
+          mesh.position.set(x * edgeMid, y * edgeMid, z * edgeMid);
           mesh.renderOrder = 3;
           mesh.userData = { kind: "corner", dir, zoneKey: key };
           this.overlayMeshes.set(key, mesh);
@@ -679,7 +718,7 @@ export class ViewCube {
     dir: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
     controls: import("three/examples/jsm/controls/OrbitControls.js").OrbitControls,
-    duration = 600,
+    duration = 320,
   ): Promise<void> {
     const target = controls.target.clone();
     const offset = camera.position.clone().sub(target);
@@ -709,6 +748,7 @@ export class ViewCube {
     const cy = box.top + box.height / 2 + box.rect.top;
     this.ringDragStartAngle = Math.atan2(clientY - cy, clientX - cx);
     this.ringDragActive = true;
+    this.ringDragMoved = false;
   }
 
   updateRingDrag(
@@ -723,6 +763,9 @@ export class ViewCube {
     const cy = box.top + box.height / 2 + box.rect.top;
     const angle = Math.atan2(clientY - cy, clientX - cx);
     const delta = angle - this.ringDragStartAngle;
+    if (Math.abs(delta) > 0.005) {
+      this.ringDragMoved = true;
+    }
     this.ringDragStartAngle = angle;
     // Rotate camera position around world-Y by delta radians
     const camera = controls.object as THREE.PerspectiveCamera;
@@ -734,17 +777,24 @@ export class ViewCube {
     controls.update();
   }
 
-  endRingDrag() {
+  endRingDrag(): boolean {
+    const moved = this.ringDragMoved;
     this.ringDragActive = false;
+    this.ringDragMoved = false;
+    return moved;
   }
 
   updateViewport(canvasWidth: number, canvasHeight: number) {
     this.canvasCss = { w: canvasWidth, h: canvasHeight };
+    this.currentSize = getViewCubeWidgetSize(canvasWidth, canvasHeight);
+    const isSmall = this.currentSize <= VIEW_CUBE_LAYOUT.sizeTablet;
+    const mTop = isSmall ? Math.min(this.marginTop, VIEW_CUBE_LAYOUT.marginTopMobile) : this.marginTop;
+    const mRight = isSmall ? Math.min(this.marginRight, VIEW_CUBE_LAYOUT.marginRightMobile) : this.marginRight;
     this.viewport = {
-      x: canvasWidth - this.size - this.marginRight,
-      y: canvasHeight - this.size - this.marginTop,
-      w: this.size,
-      h: this.size,
+      x: canvasWidth - this.currentSize - mRight,
+      y: canvasHeight - this.currentSize - mTop,
+      w: this.currentSize,
+      h: this.currentSize,
     };
   }
 
@@ -906,7 +956,7 @@ export class ViewCube {
     zone: ZoneUserData,
     camera: THREE.PerspectiveCamera,
     controls: OrbitControls,
-    duration = 600,
+    duration = 320,
   ): Promise<void> {
     const target = controls.target.clone();
     const dist = Math.max(camera.position.distanceTo(target), 1);

@@ -6347,7 +6347,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             controls.object = camera;
             controls.enableRotate = true;
           }
-          void cube.snapToCardinal(compassHit.dir, camera, controls, 600);
+          void cube.snapToCardinal(compassHit.dir, camera, controls, 320);
           return;
         }
         // Then check cube face/edge/corner
@@ -6360,7 +6360,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             controls.object = camera;
             controls.enableRotate = true;
           }
-          void cube.snapMainCamera(zone, camera, controls, 600);
+          void cube.snapMainCamera(zone, camera, controls, 320);
         }
         return;
       }
@@ -7763,7 +7763,9 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
 
       const controls = controlsRef.current;
       // End ring drag if active
-      viewCubeRef.current?.endRingDrag();
+      if (viewCubeRef.current?.endRingDrag()) {
+        suppressNextClick = true;
+      }
       if (controls && !useAppStore.getState().viewerContextMenuOpen) {
         controls.enabled = true;
       }

@@ -2802,11 +2802,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const cube = viewCubeRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
         cube.updateHover(e.clientX, e.clientY, canvas);
+        cube.updateCompassHover(e.clientX, e.clientY, canvas);
         canvas.style.cursor = "pointer";
         setHoveredRoom(null);
         return;
       }
       cube?.clearHover();
+      cube?.clearCompassHover();
       const hit = pickHit(e.clientX, e.clientY);
       if (!hit) {
         setHoveredRoom(null);
@@ -2832,6 +2834,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
 
     const onLeave = () => {
       viewCubeRef.current?.clearHover();
+      viewCubeRef.current?.clearCompassHover();
       setHoveredRoom(null);
       canvas.style.cursor = "default";
       onPointerLeave?.();
@@ -2847,11 +2850,18 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const camera = cameraRef.current;
       const controls = controlsRef.current;
       if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
+        const compassHit = cube.pickCompass(e.clientX, e.clientY, canvas);
+        if (compassHit?.kind === "compass-cardinal") {
+          e.preventDefault();
+          e.stopPropagation();
+          void cube.snapToCardinal(compassHit.dir, camera, controls, 320);
+          return;
+        }
         const zone = cube.pick(e.clientX, e.clientY, canvas);
         if (zone) {
           e.preventDefault();
           e.stopPropagation();
-          void cube.snapMainCamera(zone, camera, controls, 600);
+          void cube.snapMainCamera(zone, camera, controls, 320);
         }
         return;
       }
@@ -2929,11 +2939,18 @@ const Viewer3D = forwardRef<Viewer3DHandle, Props>(function Viewer3D(
       const cube = viewCubeRef.current;
       const controls = controlsRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas) && controls) {
+        const compassHit = cube.pickCompass(e.clientX, e.clientY, canvas);
+        if (compassHit?.kind === "compass-ring-drag") {
+          cube.startRingDrag(e.clientX, e.clientY, canvas);
+        }
         controls.enabled = false;
       }
     };
     const onPointerUp = () => {
       const controls = controlsRef.current;
+      if (viewCubeRef.current?.endRingDrag()) {
+        suppressNextClick = true;
+      }
       if (controls && !useAppStore.getState().viewerContextMenuOpen) {
         controls.enabled = true;
       }
