@@ -53,6 +53,7 @@ export type MarkupNote = {
   posY: number;
   posZ: number;
   text: string;
+  heading?: string;
   author: string | null;
   /** IFC express id the note is pinned to. */
   expressId: number | null;
@@ -269,6 +270,7 @@ export function normalizeNote(
     posY: raw.posY ?? 0,
     posZ: raw.posZ ?? 0,
     text: raw.text,
+    heading: raw.heading ?? "Note",
     author: raw.author ?? null,
     expressId: raw.expressId ?? null,
     placementId: raw.placementId ?? null,

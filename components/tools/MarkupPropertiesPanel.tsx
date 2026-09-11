@@ -198,6 +198,14 @@ export default function MarkupPropertiesPanel({
           rows={3}
           className="mb-2 w-full resize-none rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] text-[var(--text-body)] outline-none focus:border-amber-300"
         />
+        <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Heading
+          <input
+            defaultValue={note.heading ?? "Note"}
+            onBlur={(e) => { if (e.target.value.trim() !== (note.heading ?? "Note")) void updateNote(note.id, { heading: e.target.value.trim() || "Note" }); }}
+            className="mt-1 w-full rounded-xl border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] font-semibold text-[var(--text-body)] outline-none focus:border-amber-300"
+            aria-label="Note heading"
+          />
+        </label>
         <div className="mt-3 border-t border-[var(--panel-divider)] pt-2">
           <button
             type="button"

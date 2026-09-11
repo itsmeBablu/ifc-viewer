@@ -141,6 +141,34 @@ function hideInvalidGeometry(root: THREE.Object3D): THREE.Object3D[] {
   return hidden;
 }
 
+function safeExpandByObject(box: THREE.Box3, object: THREE.Object3D | null | undefined): void {
+  if (!object) return;
+  const tempBox = new THREE.Box3();
+  object.traverse((node) => {
+    if (node instanceof THREE.Mesh || node instanceof THREE.Line || node instanceof THREE.Points) {
+      const geo = node.geometry;
+      if (!geo) return;
+      const pos = geo.getAttribute?.("position");
+      if (!pos || pos.count === 0) return;
+      if (geo.boundingBox === null) {
+        const arr = pos.array as ArrayLike<number>;
+        for (let i = 0; i < arr.length; i++) {
+          if (!Number.isFinite(arr[i])) return;
+        }
+        geo.computeBoundingBox();
+      }
+      if (
+        geo.boundingBox &&
+        Number.isFinite(geo.boundingBox.min.x) &&
+        Number.isFinite(geo.boundingBox.max.x)
+      ) {
+        tempBox.copy(geo.boundingBox).applyMatrix4(node.matrixWorld);
+        box.union(tempBox);
+      }
+    }
+  });
+}
+
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
   ClipSliceController,
@@ -2161,11 +2189,11 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const measure = new THREE.Box3();
     if (overlays) {
       overlays.updateWorldMatrix(true, true);
-      measure.expandByObject(overlays);
+      safeExpandByObject(measure, overlays);
     }
     if (shellCloneRef.current) {
       shellCloneRef.current.updateWorldMatrix(true, true);
-      measure.expandByObject(shellCloneRef.current);
+      safeExpandByObject(measure, shellCloneRef.current);
     }
     const size = measure.isEmpty()
       ? new THREE.Vector3(10, 4, 10)
@@ -2295,8 +2323,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
 
       // Fit shadow camera frustum to active scene elements
       const box = new THREE.Box3();
-      if (layoutLayerRef.current?.group) box.expandByObject(layoutLayerRef.current.group);
-      if (shellCloneRef.current) box.expandByObject(shellCloneRef.current);
+      safeExpandByObject(box, layoutLayerRef.current?.group);
+      safeExpandByObject(box, shellCloneRef.current);
       if (!box.isEmpty()) {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z, 20);
@@ -7257,6 +7285,14 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           }
 
           const armed = markupStore.armedTool;
+          if (armed === "note" && !surface) {
+            const level = layoutStore.levels.find((item) => item.id === markupStore.markupFloorId) ?? layoutStore.levels[0];
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fromMm(level?.elevationMm ?? 0));
+            const point = new THREE.Vector3();
+            if (raycaster.current.ray.intersectPlane(plane, point)) {
+              surface = { point, normal: new THREE.Vector3(0, 1, 0), object: layoutLyr?.group ?? layer.group, distance: raycaster.current.ray.origin.distanceTo(point), snappedVertex: null };
+            }
+          }
           if (armed && surface) {
             if (armed === "note") {
               surface = enhanceHitWithVertexSnap(

@@ -703,6 +703,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       posY: pending.posY,
       posZ: pending.posZ,
       text: trimmed,
+      heading: "Note",
       author,
       expressId: pending.expressId,
       placementId: pending.placementId,

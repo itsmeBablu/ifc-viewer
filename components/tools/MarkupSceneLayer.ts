@@ -356,9 +356,16 @@ export class MarkupSceneLayer {
       "white-space:pre-wrap",
       "transform:translate(-50%,-100%)",
     ].join(";");
-    el.textContent = note.text.slice(0, 80);
+    el.textContent = `${note.heading ?? "Note"}: ${note.text.slice(0, 80)}`;
+    el.title = note.text;
     el.dataset.noteId = note.id;
     el.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const id = el.dataset.noteId;
+      if (id) this.onNoteClick?.(id);
+    });
+    el.addEventListener("dblclick", (e) => {
+      e.preventDefault();
       e.stopPropagation();
       const id = el.dataset.noteId;
       if (id) this.onNoteClick?.(id);
@@ -376,7 +383,8 @@ export class MarkupSceneLayer {
     selected: boolean,
   ) {
     const el = obj.element as HTMLButtonElement;
-    el.textContent = note.text.slice(0, 80);
+    el.textContent = `${note.heading ?? "Note"}: ${note.text.slice(0, 80)}`;
+    el.title = note.text;
     el.style.outline = selected ? "2px solid #facc15" : "none";
     el.dataset.noteId = note.id;
   }
