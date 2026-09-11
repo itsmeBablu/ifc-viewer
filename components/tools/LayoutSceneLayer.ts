@@ -6349,57 +6349,8 @@ export default class LayoutSceneLayer {
     this.workPlaneGroup.add(planeMesh);
   }
 
-  syncMepEquipment(
-    equipment: LayoutMepEquipment[],
-    levels: LayoutLevel[],
-    opts: {
-      hiddenElementIds?: Set<string>;
-      hiddenCategories?: Set<string>;
-      isolatedElementIds?: Set<string> | null;
-      revealHiddenMode?: boolean;
-      activeLevelId: string | null;
-      selectedEquipmentIds: Set<string>;
-      showAllLevels: boolean;
-      fallbackElevMm: number;
-    },
-  ) {
-    const keep = new Set(equipment.map((e) => e.id));
-    for (const [id, grp] of this.equipmentMeshes) {
-      if (!keep.has(id)) {
-        this.disposeGroup(grp);
-        this.group.remove(grp);
-        this.equipmentMeshes.delete(id);
-      }
-    }
-
-    for (const item of equipment) {
-      const isSelected = opts.selectedEquipmentIds.has(item.id);
-      const level = levels.find((l) => l.id === item.levelId);
-      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
-      const centerY = fromMm(baseElev + (item.elevationMm ?? item.elevationOffsetMm ?? 0));
-
-      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
-      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400));
-      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
-
-      const geoKey = `${JSON.stringify(item.furnitureParameters)}:${item.category}:${item.familyId}:${item.moduleWidthMm}:${item.color}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
-
-      let grp = this.equipmentMeshes.get(item.id);
-      const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
-
-      if (!grp) {
-        grp = new THREE.Group();
-        grp.name = `equip-${item.id}`;
-        grp.userData.layoutEquipmentId = item.id;
-        grp.userData.kind = "equipment";
-        this.equipmentMeshes.set(item.id, grp);
-        this.group.add(grp);
-      }
-
-      if (needsRebuild) {
-        this.clearGroupContents(grp);
-        grp.userData.geometryKey = geoKey;
-
+  private buildEquipmentModel(item: LayoutMepEquipment, w: number, h: number, d: number): THREE.Group {
+    const grp = new THREE.Group();
         // Build procedural 3D model per category
         if (item.category === "furniture" || isArchitecturalComponent(item.familyId)) {
           grp.add(createFurniture(item));
@@ -6816,6 +6767,63 @@ export default class LayoutSceneLayer {
           grp.add(gen);
         }
 
+
+    return grp;
+  }
+
+  syncMepEquipment(
+    equipment: LayoutMepEquipment[],
+    levels: LayoutLevel[],
+    opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+      activeLevelId: string | null;
+      selectedEquipmentIds: Set<string>;
+      showAllLevels: boolean;
+      fallbackElevMm: number;
+    },
+  ) {
+    const keep = new Set(equipment.map((e) => e.id));
+    for (const [id, grp] of this.equipmentMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.equipmentMeshes.delete(id);
+      }
+    }
+
+    for (const item of equipment) {
+      const isSelected = opts.selectedEquipmentIds.has(item.id);
+      const level = levels.find((l) => l.id === item.levelId);
+      const baseElev = level ? level.elevationMm : opts.fallbackElevMm;
+      const centerY = fromMm(baseElev + (item.elevationMm ?? item.elevationOffsetMm ?? 0));
+
+      const w = fromMm(item.widthMm ?? (item.category === "radiator" ? 1000 : item.category === "fan_coil" ? 900 : item.category === "ac_unit" ? 850 : item.category === "chiller" ? 1600 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
+      const h = fromMm(item.heightMm ?? (item.category === "radiator" ? 600 : item.category === "fan_coil" ? 250 : item.category === "ac_unit" ? 290 : item.category === "chiller" ? 1200 : item.category === "air_terminal" ? 120 : item.category === "lighting_fixture" ? 80 : item.category === "sprinkler" ? 100 : 400));
+      const d = fromMm(item.depthMm ?? (item.category === "radiator" ? 100 : item.category === "fan_coil" ? 600 : item.category === "ac_unit" ? 210 : item.category === "chiller" ? 800 : item.category === "air_terminal" ? 600 : item.category === "lighting_fixture" ? 600 : item.category === "sprinkler" ? 80 : 400));
+
+      const geoKey = `${JSON.stringify(item.furnitureParameters)}:${item.category}:${item.familyId}:${item.moduleWidthMm}:${item.color}:${w}:${h}:${d}:${isSelected ? "sel" : "idle"}`;
+
+      let grp = this.equipmentMeshes.get(item.id);
+      const needsRebuild = !grp || grp.userData.geometryKey !== geoKey;
+
+      if (!grp) {
+        grp = new THREE.Group();
+        grp.name = `equip-${item.id}`;
+        grp.userData.layoutEquipmentId = item.id;
+        grp.userData.kind = "equipment";
+        this.equipmentMeshes.set(item.id, grp);
+        this.group.add(grp);
+      }
+
+      if (needsRebuild) {
+        this.clearGroupContents(grp);
+        grp.userData.geometryKey = geoKey;
+
+        grp.add(this.buildEquipmentModel(item, w, h, d));
+
         grp.traverse((object) => { if (object instanceof THREE.Mesh) object.userData.layoutEquipmentId = item.id; });
 
         // Add visual connector markers if selected
@@ -6904,8 +6912,25 @@ export default class LayoutSceneLayer {
     cursor: { xMm: number; yMm: number } | null,
     params?: any,
   ) {
+    if (!tool || !cursor) { this.clearMepPreview(); return; }
+    const previewKey = JSON.stringify([tool, params?.category, params?.familyId, params?.furnitureParameters, params?.widthMm, params?.heightMm, params?.depthMm, params?.shape, params?.diameterMm]);
+    const existing = this.mepPreview.children[0];
+    if (existing && this.mepPreview.userData.previewKey === previewKey) {
+      if (tool === "equipment" || tool === "component" || tool === "workplane") {
+        existing.position.set(fromMm(cursor.xMm), fromMm((params?.baseElevMm ?? 0) + (params?.elevationMm ?? 0)), fromMm(cursor.yMm));
+        existing.rotation.y = -THREE.MathUtils.degToRad(params?.rotationDeg ?? 0);
+        return;
+      }
+      if (start) {
+        const dx = fromMm(cursor.xMm - start.xMm), dz = fromMm(cursor.yMm - start.yMm);
+        existing.scale.x = Math.hypot(dx, dz);
+        existing.position.set(fromMm((start.xMm + cursor.xMm) / 2), fromMm((params?.baseElevMm ?? 0) + (params?.elevationMm ?? 2600)), fromMm((start.yMm + cursor.yMm) / 2));
+        existing.rotation.y = -Math.atan2(dz, dx);
+        return;
+      }
+    }
     this.clearGroupContents(this.mepPreview);
-    if (!tool || !cursor) return;
+    this.mepPreview.userData.previewKey = previewKey;
 
     const baseElevMm = params?.baseElevMm ?? 0;
 
@@ -6913,12 +6938,7 @@ export default class LayoutSceneLayer {
       const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
       const cat = params?.category ?? "generic_component";
       const isArch = cat === "furniture" || isArchitecturalComponent(params?.familyId);
-      const model = isArch ? createFurniture(params) : new THREE.Group();
-      if (!isArch) {
-        const w = fromMm(params?.widthMm ?? 600), h = fromMm(params?.heightMm ?? 600), d = fromMm(params?.depthMm ?? 400);
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 }));
-        mesh.position.y = h / 2; model.add(mesh);
-      }
+      const model = isArch ? createFurniture(params) : this.buildEquipmentModel({ ...params, id: "preview", projectId: "preview", levelId: "preview", category: cat, xMm: 0, yMm: 0, createdAt: 0 }, fromMm(params?.widthMm ?? 600), fromMm(params?.heightMm ?? 600), fromMm(params?.depthMm ?? 400));
       model.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
       model.rotation.y = -THREE.MathUtils.degToRad(params?.rotationDeg ?? 0);
       model.traverse((o) => { o.userData.isMarkupPreview = true; o.raycast = () => undefined; if (o instanceof THREE.Mesh && o.material instanceof THREE.Material) { o.material.transparent = true; o.material.opacity = 0.55; } });
@@ -6955,10 +6975,10 @@ export default class LayoutSceneLayer {
       const r = isPlaceholder ? 0.015 : fromMm((params?.diameterMm ?? 200) / 2);
 
       const geo = isPlaceholder
-        ? new THREE.CylinderGeometry(r, r, len, 8)
+        ? new THREE.CylinderGeometry(r, r, 1, 8)
         : isRound
-        ? new THREE.CylinderGeometry(r, r, len, 16)
-        : new THREE.BoxGeometry(len, h, w);
+        ? new THREE.CylinderGeometry(r, r, 1, 16)
+        : new THREE.BoxGeometry(1, h, w);
       if (isPlaceholder || isRound) geo.rotateZ(Math.PI / 2);
 
       const mat = new THREE.MeshStandardMaterial({
@@ -6968,12 +6988,14 @@ export default class LayoutSceneLayer {
         wireframe: false,
       });
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.x = len;
+      mesh.raycast = () => undefined;
       mesh.position.set(midX, elev, midZ);
       mesh.rotation.y = -angle;
       this.mepPreview.add(mesh);
     } else if (tool === "pipe") {
       const r = fromMm((params?.diameterMm ?? 28) / 2);
-      const geo = new THREE.CylinderGeometry(r, r, len, 12);
+      const geo = new THREE.CylinderGeometry(r, r, 1, 12);
       geo.rotateZ(Math.PI / 2);
 
       const mat = new THREE.MeshStandardMaterial({
@@ -6982,11 +7004,13 @@ export default class LayoutSceneLayer {
         opacity: 0.65,
       });
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.x = len;
+      mesh.raycast = () => undefined;
       mesh.position.set(midX, elev, midZ);
       mesh.rotation.y = -angle;
       this.mepPreview.add(mesh);
     } else if (tool === "wire") {
-      const geo = new THREE.CylinderGeometry(0.008, 0.008, len, 8);
+      const geo = new THREE.CylinderGeometry(0.008, 0.008, 1, 8);
       geo.rotateZ(Math.PI / 2);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xfacc15,
@@ -6994,13 +7018,15 @@ export default class LayoutSceneLayer {
         opacity: 0.75,
       });
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.x = len;
+      mesh.raycast = () => undefined;
       mesh.position.set(midX, elev, midZ);
       mesh.rotation.y = -angle;
       this.mepPreview.add(mesh);
     } else if (tool === "cabletray") {
       const w = fromMm(params?.widthMm ?? 200);
       const h = fromMm(params?.heightMm ?? 60);
-      const geo = new THREE.BoxGeometry(len, h, w);
+      const geo = new THREE.BoxGeometry(1, h, w);
 
       const mat = new THREE.MeshStandardMaterial({
         color: 0x94a3b8,
@@ -7008,6 +7034,8 @@ export default class LayoutSceneLayer {
         opacity: 0.65,
       });
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.x = len;
+      mesh.raycast = () => undefined;
       mesh.position.set(midX, elev, midZ);
       mesh.rotation.y = -angle;
       this.mepPreview.add(mesh);

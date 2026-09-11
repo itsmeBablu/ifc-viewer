@@ -8,6 +8,7 @@ import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
 import OpeningOrientationControls from "./OpeningOrientationControls";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import BoundarySketchOptions from "./BoundarySketchOptions";
+import MepPlacementControls from "./MepPlacementControls";
 import ModifyTools from "./ModifyTools";
 import { DrawingModeSelect } from "./DrawingShapeOptions";
 import {
@@ -158,6 +159,7 @@ export default function ToolOptionsBar() {
     <div className="werkzeug-options-bar relative flex h-10 w-full items-center justify-between border-b border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]/80 px-4 text-xs select-none backdrop-blur-md">
       {/* Active Tool Options */}
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
+        <MepPlacementControls />
         {!armedLayoutTool && !slabBoundaryEdit && <ModifyTools />}
         {/* WALL TOOL OPTIONS */}
         {armedLayoutTool === "wall" && (

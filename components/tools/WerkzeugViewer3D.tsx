@@ -7755,6 +7755,19 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
 
     const disposeDrawingInteraction = installDrawingInteractionController({
       canvas,
+      mepPreview: (start, cursor, elevation) => {
+        const s = useLayoutDrawingStore.getState(), layer = layoutLayerRef.current;
+        if (!layer) return;
+        if (!cursor) { layer.clearMepPreview(); return; }
+        const tool = s.armedLayoutTool;
+        if (tool !== "duct" && tool !== "flex_duct" && tool !== "mep_placeholder" && tool !== "pipe" && tool !== "cabletray" && tool !== "wire") return;
+        layer.setMepPreview(tool, start, cursor, {
+          baseElevMm: 0, elevationMm: elevation, shape: s.draftDuctShape,
+          widthMm: tool === "cabletray" ? s.draftCableTrayWidthMm : s.draftDuctWidthMm,
+          heightMm: tool === "cabletray" ? s.draftCableTrayHeightMm : s.draftDuctHeightMm,
+          diameterMm: tool === "pipe" ? s.draftPipeDiameterMm : s.draftDuctDiameterMm,
+        });
+      },
       camera: (x, y) => preparePointerRayRef.current(x, y),
       roots: () => [layoutLayerRef.current?.group, shellCloneRef.current, markupLayerRef.current?.group].filter((root): root is THREE.Group => Boolean(root)),
       controls: () => controlsRef.current,

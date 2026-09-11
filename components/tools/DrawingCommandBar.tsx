@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useDrawingInteractionStore } from "@/store/useDrawingInteractionStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { LuCheck, LuX } from "react-icons/lu";
+import { mepRunKind } from "@/lib/drawingInteraction";
+import MepPlacementControls from "./MepPlacementControls";
 
 export default function DrawingCommandBar() {
   const tool = useLayoutDrawingStore((s) => s.armedLayoutTool);
@@ -12,7 +14,8 @@ export default function DrawingCommandBar() {
   const state = useDrawingInteractionStore();
   const [error, setError] = useState<string | null>(null);
 
-  if (tool !== "wall" && tool !== "lines") return null;
+  const mep = mepRunKind(tool);
+  if (tool !== "wall" && tool !== "lines" && !mep && tool !== "door" && tool !== "window" && tool !== "equipment") return null;
 
   const isBoundaryMode = Boolean(editingSlabId || sketchTargetKind);
   const modeLabel = state.busy
@@ -25,7 +28,7 @@ export default function DrawingCommandBar() {
     ? `Draw ${sketchTargetKind === "roof" ? "Roof" : "Floor"}`
     : tool === "wall"
     ? "Draw walls"
-    : "Draw lines";
+    : mep ? `Draw ${tool}` : tool === "lines" ? "Draw lines" : `Place ${tool}`;
 
   const handleFinish = async () => {
     setError(null);
@@ -54,12 +57,18 @@ export default function DrawingCommandBar() {
 
   return (
     <div className="drawing-command-bar flex items-center gap-1.5" role="toolbar" aria-label="Drawing actions">
+      {mep && <MepPlacementControls />}
       <span className="text-[11px] font-semibold leading-none">{modeLabel}</span>
       {isBoundaryMode && (
         <span className="rounded bg-yellow-500/20 px-1 py-0.5 text-[9px] font-bold text-yellow-400 leading-none">
           {sketchLines.length} {sketchLines.length === 1 ? "line" : "lines"}
         </span>
       )}
+      <button
+        type="button"
+        disabled={!state.hasPoints || state.busy}
+        onClick={() => window.dispatchEvent(new CustomEvent("werkzeug-drawing-undo"))}
+      >Undo point</button>
       <button
         type="button"
         disabled={state.busy}
@@ -86,9 +95,9 @@ export default function DrawingCommandBar() {
         <LuX className="inline h-3.5 w-3.5 mr-1" />
         Cancel (✕)
       </button>
-      {error && (
-        <span className="text-[10px] font-semibold text-rose-400 max-w-xs truncate" title={error}>
-          {error}
+      {(error || state.message) && (
+        <span className="text-[10px] font-semibold text-rose-400 max-w-xs truncate" title={error || state.message || undefined}>
+          {error || state.message}
         </span>
       )}
     </div>

@@ -450,6 +450,7 @@ type LayoutDrawingState = {
   draftCableTrayHeightMm: number;
   draftCableTrayType: CableTrayType;
   draftCableTrayElevationMm: number;
+  draftWireElevationMm: number;
   draftElementTypes: Partial<Record<LayoutToolId, ElementTypeDefinition>>;
   applyElementType: (tool: LayoutToolId, typeDef: ElementTypeDefinition) => void;
   draftComponentId: string;
@@ -485,6 +486,7 @@ type LayoutDrawingState = {
   setDraftCableTrayHeightMm: (h: number) => void;
   setDraftCableTrayType: (type: CableTrayType) => void;
   setDraftCableTrayElevationMm: (elevationMm: number) => void;
+  setDraftWireElevationMm: (elevationMm: number) => void;
   setDraftEquipmentCategory: (cat: MepEquipmentCategory) => void;
   setDraftEquipmentElevationMm: (elevationMm: number) => void;
   setDraftEquipmentRotationDeg: (deg: number) => void;
@@ -1386,6 +1388,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   draftCableTrayHeightMm: DEFAULT_CABLE_TRAY_HEIGHT_MM,
   draftCableTrayType: "ladder",
   draftCableTrayElevationMm: DEFAULT_CABLE_TRAY_ELEVATION_MM,
+  draftWireElevationMm: 2800,
   draftElementTypes: {},
   draftComponentId: "mep-air_terminal",
   componentPlacementLevelId: null,
@@ -1433,16 +1436,17 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   setDraftDuctHeightMm: (h) => set({ draftDuctHeightMm: Math.max(20, h) }),
   setDraftDuctDiameterMm: (d) => set({ draftDuctDiameterMm: Math.max(20, d) }),
   setDraftDuctSystem: (sys) => set({ draftDuctSystem: sys }),
-  setDraftDuctElevationMm: (elev) => set({ draftDuctElevationMm: elev }),
+  setDraftDuctElevationMm: (elev) => set(s => ({ draftDuctElevationMm: elev, ductDraw: s.ductDraw?.start ? { ...s.ductDraw, elevationOffsetMm: elev, cursor: null } : s.ductDraw })),
   setDraftDuctFlowM3h: (flow) => set({ draftDuctFlowM3h: flow }),
   setDraftPipeDiameterMm: (d) => set({ draftPipeDiameterMm: Math.max(10, d) }),
   setDraftPipeSystem: (sys) => set({ draftPipeSystem: sys }),
-  setDraftPipeElevationMm: (elev) => set({ draftPipeElevationMm: elev }),
+  setDraftPipeElevationMm: (elev) => set(s => ({ draftPipeElevationMm: elev, pipeDraw: s.pipeDraw?.start ? { ...s.pipeDraw, elevationOffsetMm: elev, cursor: null } : s.pipeDraw })),
   setDraftCableTraySize: (widthMm, heightMm) => set({ draftCableTrayWidthMm: widthMm, draftCableTrayHeightMm: heightMm }),
   setDraftCableTrayWidthMm: (w) => set({ draftCableTrayWidthMm: Math.max(20, w) }),
   setDraftCableTrayHeightMm: (h) => set({ draftCableTrayHeightMm: Math.max(20, h) }),
   setDraftCableTrayType: (type) => set({ draftCableTrayType: type }),
-  setDraftCableTrayElevationMm: (elev) => set({ draftCableTrayElevationMm: Math.round(elev) }),
+  setDraftCableTrayElevationMm: (elev) => set(s => ({ draftCableTrayElevationMm: Math.round(elev), cableTrayDraw: s.cableTrayDraw?.start ? { ...s.cableTrayDraw, elevationOffsetMm: Math.round(elev), cursor: null } : s.cableTrayDraw })),
+  setDraftWireElevationMm: (elev) => set(s => ({ draftWireElevationMm: Math.round(elev), wireDraw: s.wireDraw?.start ? { ...s.wireDraw, elevationOffsetMm: Math.round(elev), cursor: null } : s.wireDraw })),
   setDraftEquipmentCategory: (cat) => {
     const preset = COMPONENT_CATALOG.find((p) => p.category === cat && p.id.startsWith("mep-"));
     if (preset) get().chooseComponent(preset.id);
@@ -6268,7 +6272,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         cursor: null,
         wireGauge: s.draftWireGauge,
         systemType: s.draftWireSystem,
-        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? 2800,
+        elevationOffsetMm: (start as MepSnapPoint).elevationMm ?? s.draftWireElevationMm,
       },
     });
   },

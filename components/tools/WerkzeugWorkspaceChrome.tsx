@@ -362,6 +362,9 @@ export default function WerkzeugWorkspaceChrome({
       if (slab) reveal(slab.kind);
     }
     else if (state.selectedWireId !== previous.selectedWireId && state.selectedWireId) reveal("wire");
+    else if (state.selectedDuctId !== previous.selectedDuctId && state.selectedDuctId) reveal("duct");
+    else if (state.selectedPipeId !== previous.selectedPipeId && state.selectedPipeId) reveal("pipe");
+    else if (state.selectedCableTrayId !== previous.selectedCableTrayId && state.selectedCableTrayId) reveal("cabletray");
     else if (state.selectedEquipmentId !== previous.selectedEquipmentId && state.selectedEquipmentId) reveal("equipment");
     else if (state.selectedStairId !== previous.selectedStairId && state.selectedStairId) reveal("stair");
     else if (state.selectedRampId !== previous.selectedRampId && state.selectedRampId) reveal("ramp");
@@ -691,6 +694,7 @@ function ToolContent({ panelKey, locked, tab }: { panelKey: LayoutToolId; locked
   const field = "h-8 w-full rounded-md border border-[var(--panel-divider)] bg-transparent px-2 text-[11px] text-[var(--text-strong)] disabled:opacity-50";
   if (!store.armedLayoutTool && !store.selectedElements.length && !store.selectedWallId && !store.selectedSlabId && !store.selectedDoorId && !store.selectedWindowId && !markup.selectedPlacementId) return <ViewPropertiesPanel />;
   if (store.selectedWireId || store.selectedElements.some(e => e.kind === "wire")) return <LayoutPropertiesPanel />;
+  if (!store.armedLayoutTool && (store.selectedDuctId || store.selectedPipeId || store.selectedCableTrayId || store.selectedElements.some(e => e.kind === "duct" || e.kind === "pipe" || e.kind === "cabletray"))) return <LayoutPropertiesPanel />;
   if (store.selectedEquipmentId || store.selectedElements.some(e => e.kind === "equipment")) return <LayoutPropertiesPanel />;
   if (store.armedLayoutTool && !store.sketchTargetKind && panelKey !== "lines" && panelKey !== "column" && panelKey !== "beam" && panelKey !== "grid" && panelKey !== "section" && panelKey !== "trim") {
     return <div className="werkzeug-touch-options space-y-3"><DrawingShapeOptions /><ToolOptionsBar /></div>;
