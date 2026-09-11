@@ -49,6 +49,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as THREE from "three";
 import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2, LuCompass } from "react-icons/lu";
@@ -119,25 +120,6 @@ import {
   type SelectedElementRef,
 } from "@/lib/layoutDrawing";
 
-function ViewCompass({ rotation }: { rotation: number }) {
-  const viewPreset = useToolMarkupStore((s) => s.viewPreset);
-  const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
-  const button = (label: string, preset: "north" | "south" | "east" | "west", className: string) => (
-    <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => setViewPreset(preset)} className={`absolute grid place-items-center rounded-md text-[9px] font-bold transition ${viewPreset === preset ? "bg-amber-400 text-slate-950" : "bg-slate-900/65 text-white/85 hover:bg-amber-300 hover:text-slate-950"} ${className}`}>{label[0]}</button>
-  );
-  return <div className="pointer-events-auto absolute right-4 top-[139px] z-20 h-[84px] w-[84px] select-none rounded-full border border-white/35 bg-slate-950/45 p-1.5 shadow-lg shadow-black/25 backdrop-blur-md" aria-label="View compass">
-    <div className="relative h-full w-full rounded-full border border-white/25 bg-slate-900/45 shadow-[inset_0_1px_2px_rgba(255,255,255,.25)]" style={{ transform: `rotate(${rotation}deg)` }}>
-      <span className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-px -translate-x-1/2 -translate-y-1/2 bg-white/15" />
-      <span className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white/15" />
-      {button("North", "north", "left-1/2 top-0 h-7 w-7 -translate-x-1/2 text-[10px]")}
-      {button("East", "east", "right-0 top-1/2 h-7 w-7 -translate-y-1/2 text-[10px]")}
-      {button("South", "south", "bottom-0 left-1/2 h-7 w-7 -translate-x-1/2 text-[10px]")}
-      {button("West", "west", "left-0 top-1/2 h-7 w-7 -translate-y-1/2 text-[10px]")}
-      <span className="pointer-events-none absolute left-1/2 top-[26%] h-0 w-0 -translate-x-1/2 border-x-[5px] border-b-[11px] border-x-transparent border-b-rose-500 drop-shadow" />
-      <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={14} /></span>
-    </div>
-  </div>;
-}
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
   ClipSliceController,
@@ -781,6 +763,23 @@ function applyRenderMode(
       mat.needsUpdate = true;
     });
   }
+}
+
+function CompassRing({ rotation, onCardinal, onYaw }: { rotation: number; onCardinal: (direction: "north" | "east" | "south" | "west") => void; onYaw: (delta: number) => void }) {
+  const dragRef = useRef<{ x: number } | null>(null);
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX }; };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { if (!dragRef.current) return; const dx = event.clientX - dragRef.current.x; dragRef.current.x = event.clientX; onYaw(dx * 0.012); };
+  const onPointerUp = () => { dragRef.current = null; };
+  const mark = (label: string, direction: "north" | "east" | "south" | "west", pos: string) => <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => onCardinal(direction)} className={`absolute z-10 grid h-8 w-8 place-items-center rounded-full border border-transparent bg-transparent text-[10px] font-extrabold text-slate-700 transition hover:border-white/60 hover:bg-white/40 dark:text-slate-100 ${pos}`}>{label[0]}</button>;
+  return <div className="pointer-events-auto absolute right-4 top-[112px] z-20 h-[96px] w-[96px] touch-none select-none" aria-label="North east south west compass" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+    <div className="relative h-full w-full" style={{ perspective: "180px" }}>
+      <div className="relative h-full w-full rounded-full border-2 border-white/75 bg-transparent shadow-[0_8px_10px_rgba(0,0,0,.18)]" style={{ transform: `rotateX(62deg) rotateZ(${rotation}deg)`, transformStyle: "preserve-3d" }}>
+        <span className="pointer-events-none absolute inset-2 rounded-full border border-white/20" />
+        {mark("North", "north", "left-1/2 top-0 -translate-x-1/2")}{mark("East", "east", "right-0 top-1/2 -translate-y-1/2")}{mark("South", "south", "bottom-0 left-1/2 -translate-x-1/2")}{mark("West", "west", "left-0 top-1/2 -translate-y-1/2")}
+        <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={17} /></span>
+      </div>
+    </div>
+  </div>;
 }
 
 const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function WerkzeugViewer3D(
@@ -1562,7 +1561,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     ro.observe(container);
     resize();
 
-    const tick = () => {
+      const tick = () => {
       const now = performance.now();
       lastTickRef.current = now;
       const sz = new THREE.Vector2();
@@ -1572,6 +1571,16 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const quadOn =
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView;
+      const compassCamera = cameraRef.current;
+      if (compassCamera) {
+        const dx = compassCamera.position.x - controls.target.x;
+        const dz = compassCamera.position.z - controls.target.z;
+        const heading = (-Math.atan2(dx, dz) * 180) / Math.PI;
+        if (Math.abs(heading - compassRotationRef.current) > 0.75) {
+          compassRotationRef.current = heading;
+          setCompassRotation(heading);
+        }
+      }
 
       if (quadOn) {
         const activeIdx = useToolMarkupStore.getState()
@@ -1580,15 +1589,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         // Update controls first, then capture — keeps each quadrant independent.
         controls.update();
         const liveCam = cameraRef.current;
-        if (liveCam) {
-          const dx = liveCam.position.x - controls.target.x;
-          const dz = liveCam.position.z - controls.target.z;
-          const nextCompassRotation = (-Math.atan2(dx, dz) * 180) / Math.PI;
-          if (Math.abs(nextCompassRotation - compassRotationRef.current) > 0.75) {
-            compassRotationRef.current = nextCompassRotation;
-            setCompassRotation(nextCompassRotation);
-          }
-        }
         if (liveCam && slots[activeIdx]) {
           captureSlotFromCamera(slots[activeIdx], liveCam, controls.target);
           if (liveCam instanceof THREE.OrthographicCamera) {
@@ -7886,7 +7886,21 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   return (
     <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
-      <ViewCompass rotation={compassRotation} />
+      <CompassRing
+        rotation={compassRotation}
+        onYaw={(delta) => { const orbit = controlsRef.current; if (orbit) { orbit.rotateLeft(delta); orbit.update(); } }}
+        onCardinal={(direction) => {
+          const orbit = controlsRef.current;
+          const camera = perspectiveCameraRef.current;
+          if (!orbit || !camera) return;
+          const distance = Math.max(camera.position.distanceTo(orbit.target), 1);
+          const angles = { north: 0, east: Math.PI / 2, south: Math.PI, west: -Math.PI / 2 };
+          const angle = angles[direction];
+          const target = orbit.target.clone();
+          const position = new THREE.Vector3(Math.sin(angle) * distance, camera.position.y, Math.cos(angle) * distance).add(target);
+          void flyTo(camera, orbit, position, target, 450);
+        }}
+      />
       {doorActionPosition && (selectedDoor || selectedWindow) && (
         <div
           className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
