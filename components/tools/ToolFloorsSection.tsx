@@ -10,12 +10,14 @@ import {
   LuRefreshCw,
   LuX,
   LuPlus,
+  LuDownload,
 } from "react-icons/lu";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useExportModalStore } from "@/store/useExportModalStore";
 import GlassPanel from "../common/GlassPanel";
 import { UnifiedButton } from "../common/UnifiedButton";
 import { useModelScene } from "./WerkzeugModelSceneContext";
@@ -70,8 +72,6 @@ export default function ToolFloorsSection({
   const [calibMm, setCalibMm] = useState("1000");
   const [popupLevelId, setPopupLevelId] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
-  const popupRef = useRef<HTMLDivElement>(null);
-
   const [allFloorsExpanded, setAllFloorsExpanded] = useState(true);
   const [editingLevelId, setEditingLevelId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -192,19 +192,30 @@ export default function ToolFloorsSection({
         <p className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "floors")}
         </p>
-        {projectId && (
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => {
-              void addLevel().then((lvl) => {
-                if (lvl) select(lvl.id, true);
-              });
-            }}
-            className="rounded-md bg-yellow-400/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-zinc-900 hover:bg-yellow-400/30"
+            onClick={() => useExportModalStore.getState().open("cad")}
+            title="Export Floor Plans (AutoCAD DWG / DXF / PDF)"
+            className="rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-sky-400 flex items-center gap-1 transition-colors cursor-pointer"
           >
-            + {t(uiLanguage, "layoutAddLevel")}
+            <LuDownload className="h-2.5 w-2.5" />
+            <span>Export</span>
           </button>
-        )}
+          {projectId && (
+            <button
+              type="button"
+              onClick={() => {
+                void addLevel().then((lvl) => {
+                  if (lvl) select(lvl.id, true);
+                });
+              }}
+              className="rounded-md bg-yellow-400/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-zinc-900 hover:bg-yellow-400/30"
+            >
+              + {t(uiLanguage, "layoutAddLevel")}
+            </button>
+          )}
+        </div>
       </div>
 
       <input
@@ -589,6 +600,37 @@ export default function ToolFloorsSection({
           >
             Attach DWG/PDF
           </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadFloorCad(contextMenu.levelId, contextMenu.levelName, "dwg");
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors flex items-center justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuDownload className="h-3 w-3 text-sky-600" />
+              <span>Download Floor (DWG)</span>
+            </span>
+            <span className="text-[9px] font-bold text-sky-600 bg-sky-100 px-1 py-0.5 rounded">.DWG</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadFloorCad(contextMenu.levelId, contextMenu.levelName, "dxf");
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors flex items-center justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuDownload className="h-3 w-3 text-amber-600" />
+              <span>Download Floor (DXF)</span>
+            </span>
+            <span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded">.DXF</span>
+          </button>
+          <div className="border-t border-zinc-200 my-1" />
           <button
             type="button"
             onClick={(e) => {

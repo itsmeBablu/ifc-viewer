@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CiGrid32 } from "react-icons/ci";
 import { TbRulerMeasure2, TbTarget } from "react-icons/tb";
 import { TfiSave, TfiViewGrid } from "react-icons/tfi";
-import { LuSearch, LuX } from "react-icons/lu";
+import { LuSearch, LuX, LuFileText } from "react-icons/lu";
+import { SiAutodesk } from "react-icons/si";
 import HoverTip from "@/components/common/HoverTip";
 import {
   exportAndDownloadFrag,
@@ -15,6 +16,7 @@ import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useExportModalStore } from "@/store/useExportModalStore";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 
 const STORAGE_KEY = "ibv-tool-smart-bar-pos";
@@ -105,6 +107,9 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
+  const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
+  const layoutWalls = useLayoutDrawingStore((s) => s.walls);
+  const layoutLevels = useLayoutDrawingStore((s) => s.levels);
 
   const browserSearch = useLayoutDrawingStore((s) => s.browserSearch);
   const setBrowserSearch = useLayoutDrawingStore((s) => s.setBrowserSearch);
@@ -272,7 +277,7 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
             <button
               type="button"
               aria-expanded={saveOpen}
-              disabled={!modelKey}
+              disabled={!modelKey && layoutWalls.length === 0 && layoutLevels.length === 0}
               onClick={() => setSaveOpen((v) => !v)}
               className={saveGloss}
             >
@@ -357,20 +362,55 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
             />
           </HoverTip>
           {saveOpen && (
-            <div className="absolute top-[calc(100%+0.35rem)] left-0 z-40 w-44 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] py-1 shadow-lg">
+            <div className="absolute top-[calc(100%+0.35rem)] left-0 z-40 w-52 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--panel-divider)]/40 mb-1">
+                BIM Project File
+              </div>
               <button
                 type="button"
                 onClick={() => saveAs("frag")}
-                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-amber-50"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] transition-colors"
               >
                 {t(uiLanguage, "markupSaveFrag")}
               </button>
               <button
                 type="button"
                 onClick={() => saveAs("ifc")}
-                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-amber-50"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] transition-colors"
               >
                 {t(uiLanguage, "markupSaveIfc")}
+              </button>
+              <div className="border-t border-[var(--panel-divider)]/40 my-1" />
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                Export Floor Plans
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  useExportModalStore.getState().open("cad");
+                  setSaveOpen(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <SiAutodesk className="h-3.5 w-3.5 text-sky-400" />
+                  <span>Export DWG / DXF</span>
+                </div>
+                <span className="text-[9px] font-bold text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">CAD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  useExportModalStore.getState().open("pdf");
+                  setSaveOpen(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5">
+                  <LuFileText className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Export PDF</span>
+                </div>
+                <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">PDF</span>
               </button>
             </div>
           )}

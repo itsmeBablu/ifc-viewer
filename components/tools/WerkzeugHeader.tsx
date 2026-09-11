@@ -62,6 +62,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
+  const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const isDark = colorTheme === "dark";
   const { highlight: menuRowHighlight, surfaceHighlight: menuRowSurfaceHighlight } =
@@ -95,10 +96,14 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   }, [isLoadingModel]);
 
   useEffect(() => {
-    const save = () => exportAndDownloadFrag(activeModelLabel || "model");
+    const save = () =>
+      exportAndDownloadFrag({
+        modelKey: activeModelId ?? undefined,
+        modelLabel: activeModelLabel || "model",
+      });
     window.addEventListener(SAVE_PROJECT_EVENT, save);
     return () => window.removeEventListener(SAVE_PROJECT_EVENT, save);
-  }, [activeModelLabel]);
+  }, [activeModelId, activeModelLabel]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {

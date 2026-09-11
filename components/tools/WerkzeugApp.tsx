@@ -47,6 +47,7 @@ import ToolStatusBar from "./ToolStatusBar";
 import NavigationBar from "./NavigationBar";
 import RoomScheduleDialog from "./RoomScheduleDialog";
 import SheetViewDialog from "./SheetViewDialog";
+import FloorExportModal from "./FloorExportModal";
 import WerkzeugContextMenu from "./WerkzeugContextMenu";
 import ToolModeCursorHud from "./ToolModeCursorHud";
 import WerkzeugEntryPanel from "./WerkzeugEntryPanel";
@@ -773,6 +774,9 @@ export default function WerkzeugApp() {
 
         {/* Sheet Composition & Title Block Modal (Section 7) */}
         <SheetViewDialog isOpen={sheetViewOpen} onClose={() => setSheetViewOpen(false)} />
+
+        {/* Floor Export Modal (DWG / DXF / PDF) */}
+        <FloorExportModal />
 
         {/* Bottom CAD Status Bar */}
         {isDesktop && <ToolStatusBar

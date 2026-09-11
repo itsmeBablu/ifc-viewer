@@ -24,7 +24,6 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";

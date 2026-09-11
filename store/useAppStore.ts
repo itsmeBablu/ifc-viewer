@@ -68,6 +68,7 @@ const COOL_TEMP_RANGE_KEY = "ifc-viewer:coolingTemperatureRange";
 const CUSTOM_LEGEND_COLORS_KEY = "ifc-viewer:customLegendColors:v3";
 const LEGEND_SWATCH_PRESET_KEY = "ifc-viewer:legendSwatchPresetId:v2";
 const savedViewsKey = (modelId: string) => `ifc-viewer:savedViews:${modelId}`;
+const modelLabelKey = (modelId: string) => `ifc-viewer:modelLabel:${modelId}`;
 
 export { SCENE_BACKGROUND_PRESETS } from "@/lib/sceneSky";
 
@@ -96,6 +97,24 @@ function persistSavedViews(modelId: string, views: SavedView[]): void {
     localStorage.setItem(savedViewsKey(modelId), JSON.stringify(views));
   } catch {
     // ignore quota / private mode
+  }
+}
+
+function loadPersistedModelLabel(modelId: string | null): string | null {
+  if (typeof window === "undefined" || !modelId) return null;
+  try {
+    return localStorage.getItem(modelLabelKey(modelId));
+  } catch {
+    return null;
+  }
+}
+
+function persistModelLabel(modelId: string | null, label: string): void {
+  if (typeof window === "undefined" || !modelId) return;
+  try {
+    localStorage.setItem(modelLabelKey(modelId), label);
+  } catch {
+    // Ignore private mode and storage quota failures.
   }
 }
 
@@ -259,6 +278,7 @@ type AppState = {
     label?: string | null,
     fileSizeBytes?: number | null,
   ) => void;
+  renameActiveModel: (label: string) => void;
   setFloors: (floors: Floor[]) => void;
   setRooms: (rooms: Room[]) => void;
   setSelectedFloor: (floorId: string | null) => void;
@@ -572,9 +592,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   toolRevealToken: 0,
 
   setActiveModelId: (id, label, fileSizeBytes) => {
+    const persistedLabel = loadPersistedModelLabel(id);
     set({
       activeModelId: id,
-      activeModelLabel: label ?? null,
+      activeModelLabel: persistedLabel || label || null,
       activeModelFileSizeBytes: fileSizeBytes ?? null,
       hiddenElementIds: new Set<number>(),
       isolatedElementIds: null,
@@ -586,6 +607,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       savedViews: id ? loadSavedViews(id) : [],
       loadError: null,
     });
+  },
+  renameActiveModel: (label) => {
+    const state = get();
+    const nextLabel = label.trim() || state.activeModelLabel || "Architecture Project";
+    persistModelLabel(state.activeModelId, nextLabel);
+    set({ activeModelLabel: nextLabel });
   },
 
   setFloors: (floors) => set({ floors }),

@@ -41,6 +41,7 @@ import GlassPanel from "../common/GlassPanel";
 import { GlassButton, IconAlert } from "../common/ui";
 import ViewerToolbar from "./ViewerToolbar";
 import ViewerContextMenu from "./ViewerContextMenu";
+import FloorExportModal from "../tools/FloorExportModal";
 import { t } from "@/lib/i18n";
 import { gsapDuration, gsapEase, animateSidebarPanel, animateSidebarContent } from "@/lib/gsapMotion";
 import { LEGEND_SWATCH_PRESETS } from "@/lib/legendSwatchPresets";
@@ -869,6 +870,7 @@ export default function ViewerApp() {
             )}
           </>
         )}
+        <FloorExportModal />
       </div>
     </ModelSceneContext.Provider>
   );
