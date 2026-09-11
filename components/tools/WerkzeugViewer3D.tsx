@@ -122,7 +122,6 @@ import {
 function ViewCompass() {
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
-  if (viewPreset === "top") return null;
   const button = (label: string, preset: "north" | "south" | "east" | "west", className: string) => (
     <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => setViewPreset(preset)} className={`absolute grid place-items-center rounded-md text-[9px] font-bold transition ${viewPreset === preset ? "bg-amber-400 text-slate-950" : "bg-slate-900/65 text-white/85 hover:bg-amber-300 hover:text-slate-950"} ${className}`}>{label[0]}</button>
   );
