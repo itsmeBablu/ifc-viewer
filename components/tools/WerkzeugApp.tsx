@@ -58,6 +58,9 @@ import { redoWerkzeug, undoWerkzeug } from "@/lib/werkzeugHistory";
 import { gsapDuration, gsapEase } from "@/lib/gsapMotion";
 import { isTypingTarget } from "@/lib/viewerHotkeys";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useModifyStore } from "@/store/useModifyStore";
+import { normalizedShortcut, shortcutForByCombo } from "@/lib/shortcuts";
+import { SAVE_PROJECT_EVENT, OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
 import { formatLength } from "@/lib/unitFormat";
 import GsapOverlay from "@/components/common/GsapOverlay";
 import SceneBusyOverlay from "@/components/common/SceneBusyOverlay";
@@ -284,8 +287,45 @@ export default function WerkzeugApp() {
 
   // Keyboard Shortcuts (W = Wall, D = Door, Esc = Cancel Selection, Ctrl+Z = Undo, Ctrl+Y = Redo)
   useEffect(() => {
+    const handleMappedShortcut = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const shortcut = shortcutForByCombo(normalizedShortcut(event));
+      if (!shortcut) return;
+      event.preventDefault();
+      const layout = useLayoutDrawingStore.getState();
+      const markup = useToolMarkupStore.getState();
+      const modify = useModifyStore.getState();
+      if (shortcut.id === "cancel") {
+        layout.setArmedLayoutTool(null); layout.cancelSlabDraw(); layout.cancelDuctDraw(); layout.cancelPipeDraw(); layout.cancelCableTrayDraw(); layout.cancelWireDraw();
+        layout.clearSelection(); markup.setArmedTool(null); markup.setMeasureMode(false); markup.clearSelection(); modify.activate("select"); return;
+      }
+      if (shortcut.id === "undo") { void undoWerkzeug(); return; }
+      if (shortcut.id === "redo") { void redoWerkzeug(); return; }
+      if (shortcut.id === "open") { window.dispatchEvent(new Event(OPEN_IFC_FILE_EVENT)); return; }
+      if (shortcut.id === "save") { window.dispatchEvent(new Event(SAVE_PROJECT_EVENT)); return; }
+      if (shortcut.id === "delete") { void layout.deleteSelected(); return; }
+      if (shortcut.id === "copy" || shortcut.id === "paste") { void layout.copySelected(100, 100).catch(error => useModifyStore.setState({ message: String(error) })); return; }
+      if (shortcut.id === "group") { modify.activate("select"); useModifyStore.setState({ requestGroupName: true }); return; }
+      if (["move", "rotate", "align", "mirror", "split", "trim", "joinRoof", "attachTop", "attachBase"].includes(shortcut.id)) { modify.activate(shortcut.id as Parameters<typeof modify.activate>[0]); return; }
+      if (shortcut.id === "view-top") { markup.setViewPreset("top"); return; }
+      if (shortcut.id === "view-free") { markup.setViewPreset("free"); return; }
+      if (shortcut.id === "render-realistic") { useAppStore.getState().setRenderMode("realistic"); return; }
+      if (shortcut.id === "render-light") { useAppStore.getState().setRenderMode("light"); return; }
+      if (shortcut.id === "render-wireframe") { useAppStore.getState().setRenderMode("wireframe"); return; }
+      if (shortcut.id === "select") { layout.setArmedLayoutTool(null); markup.setArmedTool(null); modify.activate("select"); return; }
+      if (shortcut.id === "shapes") { layout.setArmedLayoutTool(null); markup.setArmedTool("cube"); return; }
+      if (shortcut.id === "component") { layout.setArmedLayoutTool("component"); markup.setArmedTool(null); return; }
+      layout.setArmedLayoutTool(shortcut.id as Parameters<typeof layout.setArmedLayoutTool>[0]);
+      markup.setArmedTool(null);
+    };
+    window.addEventListener("keydown", handleMappedShortcut, true);
+    return () => window.removeEventListener("keydown", handleMappedShortcut, true);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target && isTypingTarget(e.target)) return;
+      if (shortcutForByCombo(normalizedShortcut(e))) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();

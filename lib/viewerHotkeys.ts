@@ -6,6 +6,7 @@
 
 /** Dispatched by Ctrl+O / Ctrl+N — HeaderActions opens the IFC file picker. */
 export const OPEN_IFC_FILE_EVENT = "ifc-viewer:open-ifc-file";
+export const SAVE_PROJECT_EVENT = "ifc-viewer:save-project";
 
 /** True when keyboard input should stay in the focused field. */
 export function isTypingTarget(target: EventTarget | null): boolean {

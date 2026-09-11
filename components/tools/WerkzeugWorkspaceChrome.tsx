@@ -33,6 +33,7 @@ import RenderViewControls, { enterRenderView } from "./RenderViewControls";
 import { RoofEdgeSlopeEditor } from "./ToolRightPanel";
 import MarkupToolsSection from "./MarkupToolsSection";
 import { MEP_TABS } from "./DesktopIsland";
+import { shortcutText } from "@/lib/shortcuts";
 
 type PanelKey = "levels" | "materials" | "shapes" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
@@ -567,7 +568,8 @@ export default function WerkzeugWorkspaceChrome({
             return true;
           }) : TOOL_ITEMS.filter((item) => ARCH_CATEGORY_IDS[desktopCategory].includes(item.id))).map((item) => {
             const active = (!panelHidden && panelKey === item.id) || armed === item.id;
-            return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={item.label}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
+            const shortcut = shortcutText(item.id);
+            return <div key={item.id} className="contents"><button type="button" onClick={() => activate(item.id)} className={`werkzeug-tool-button ${active ? "is-active btn-v-yellow" : ""}`} aria-pressed={active} title={`${item.label}${shortcut ? ` (${shortcut})` : ""}`}><span>{item.icon}</span><span className="werkzeug-tool-label">{item.label}</span></button></div>;
           })}
           {!mepModeActive && <button type="button" aria-pressed={measureMode} onClick={() => {
             useLayoutDrawingStore.getState().setArmedLayoutTool(null);

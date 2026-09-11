@@ -3,6 +3,7 @@ import RenderElementsMenu from "./RenderElementsMenu";
 import WallAttachControl from "./WallAttachControl";
 import { activateModifyTool } from "./ModifyTools";
 import { useModifyStore } from "@/store/useModifyStore";
+import { shortcutText } from "@/lib/shortcuts";
 
 /**
  * DesktopIsland — unified central fixed workspace header & contextual capsule row for desktop /werkzeug.
@@ -1027,7 +1028,7 @@ export default function DesktopIsland() {
                     ? textureMenu?.category === item.id.replace("-texture", "")
                     : undefined
                 }
-                title={item.label}
+                title={`${item.label}${shortcutText(item.id) ? ` (${shortcutText(item.id)})` : ""}`}
               >
                 {displayIcon}
                 <span className="desktop-capsule-label leading-none">{displayLabel}</span>

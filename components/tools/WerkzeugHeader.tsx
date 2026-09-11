@@ -14,7 +14,8 @@ import GsapHeightAccordion from "@/components/common/GsapHeightAccordion";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import SeasonalBgToggle from "@/components/common/SeasonalBgToggle";
 import { t } from "@/lib/i18n";
-import { OPEN_IFC_FILE_EVENT } from "@/lib/viewerHotkeys";
+import { OPEN_IFC_FILE_EVENT, SAVE_PROJECT_EVENT } from "@/lib/viewerHotkeys";
+import { exportAndDownloadFrag } from "@/lib/markupFragSave";
 import { useAppStore } from "@/store/useAppStore";
 
 type ProfileHoverId = "language" | "theme" | "seasonalBg" | "en" | "de" | "es";
@@ -61,6 +62,7 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const setUiLanguage = useAppStore((s) => s.setUiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
+  const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const isDark = colorTheme === "dark";
   const { highlight: menuRowHighlight, surfaceHighlight: menuRowSurfaceHighlight } =
     menuRowStyles(isDark);
@@ -91,6 +93,12 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
     window.addEventListener(OPEN_IFC_FILE_EVENT, openPicker);
     return () => window.removeEventListener(OPEN_IFC_FILE_EVENT, openPicker);
   }, [isLoadingModel]);
+
+  useEffect(() => {
+    const save = () => exportAndDownloadFrag(activeModelLabel || "model");
+    window.addEventListener(SAVE_PROJECT_EVENT, save);
+    return () => window.removeEventListener(SAVE_PROJECT_EVENT, save);
+  }, [activeModelLabel]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -251,6 +259,10 @@ export default function WerkzeugHeader({ onFile, isLoadingModel }: Props) {
             >
               <UploadIcon />
             </button>
+
+            <a href="/help" aria-label="Open documentation" title="Documentation" className={sideIdle}>
+              <span className="text-xs font-bold">?</span>
+            </a>
 
             <button
               type="button"

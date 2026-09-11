@@ -4,6 +4,7 @@ import gsap from "gsap";
 import React, { useState, useRef, useEffect, useCallback, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { shortcutTextForLabel } from "@/lib/shortcuts";
 import {
   LuChevronDown,
   LuFolderOpen,
@@ -274,7 +275,7 @@ function RibbonBtn({
       ref={btnRef}
       type="button"
       onClick={onClick}
-      title={title}
+      title={`${title ?? ""}${title && shortcutTextForLabel(title) ? ` (${shortcutTextForLabel(title)})` : ""}`}
       onPointerEnter={animateIn}
       onPointerLeave={animateOut}
       onPointerDown={handlePointerDown}
