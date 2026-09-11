@@ -10,12 +10,15 @@ import {
   LuRefreshCw,
   LuX,
   LuPlus,
+  LuDownload,
+  LuChevronDown,
 } from "react-icons/lu";
 import { listVisibleFloors } from "@/lib/floorFilter";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { downloadFloorCad, downloadAllFloorsCad } from "@/lib/cadFloorExport";
 import GlassPanel from "../common/GlassPanel";
 import { UnifiedButton } from "../common/UnifiedButton";
 import { useModelScene } from "./WerkzeugModelSceneContext";
@@ -71,6 +74,7 @@ export default function ToolFloorsSection({
   const [popupLevelId, setPopupLevelId] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const popupRef = useRef<HTMLDivElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   const [allFloorsExpanded, setAllFloorsExpanded] = useState(true);
   const [editingLevelId, setEditingLevelId] = useState<string | null>(null);
@@ -192,19 +196,68 @@ export default function ToolFloorsSection({
         <p className="text-[9px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
           {t(uiLanguage, "floors")}
         </p>
-        {projectId && (
-          <button
-            type="button"
-            onClick={() => {
-              void addLevel().then((lvl) => {
-                if (lvl) select(lvl.id, true);
-              });
-            }}
-            className="rounded-md bg-yellow-400/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-zinc-900 hover:bg-yellow-400/30"
-          >
-            + {t(uiLanguage, "layoutAddLevel")}
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen(!exportMenuOpen)}
+              title="Download Floor Plan as CAD (DWG / DXF)"
+              className="rounded-md bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-sky-400 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <LuDownload className="h-2.5 w-2.5" />
+              <span>DWG</span>
+              <LuChevronDown className="h-2 w-2 opacity-60" />
+            </button>
+            {exportMenuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95"
+                onClick={() => setExportMenuOpen(false)}
+              >
+                <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--panel-divider)]/40 mb-1">
+                  Export Floor CAD
+                </div>
+                <button
+                  type="button"
+                  onClick={() => downloadFloorCad(activeId, undefined, "dwg")}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--glass-inset-bg)] rounded-lg text-xs font-medium text-[var(--text-body)] flex items-center justify-between transition-colors"
+                >
+                  <span>Download Active Floor</span>
+                  <span className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">.DWG</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadFloorCad(activeId, undefined, "dxf")}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--glass-inset-bg)] rounded-lg text-xs font-medium text-[var(--text-body)] flex items-center justify-between transition-colors"
+                >
+                  <span>Download Active Floor</span>
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">.DXF</span>
+                </button>
+                <div className="border-t border-[var(--panel-divider)]/40 my-1" />
+                <button
+                  type="button"
+                  onClick={() => void downloadAllFloorsCad("dwg")}
+                  className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--glass-inset-bg)] rounded-lg text-xs font-medium text-[var(--text-body)] flex items-center justify-between transition-colors"
+                >
+                  <span>Download All Floors</span>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">.ZIP</span>
+                </button>
+              </div>
+            )}
+          </div>
+          {projectId && (
+            <button
+              type="button"
+              onClick={() => {
+                void addLevel().then((lvl) => {
+                  if (lvl) select(lvl.id, true);
+                });
+              }}
+              className="rounded-md bg-yellow-400/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-zinc-900 hover:bg-yellow-400/30"
+            >
+              + {t(uiLanguage, "layoutAddLevel")}
+            </button>
+          )}
+        </div>
       </div>
 
       <input
@@ -343,6 +396,20 @@ export default function ToolFloorsSection({
                       : "+"}
                   </button>
                 )}
+
+                {/* Direct DWG Download chip */}
+                <button
+                  type="button"
+                  title={`Download ${row.name} as DWG CAD format`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadFloorCad(row.id, row.name, "dwg");
+                  }}
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 flex items-center gap-0.5 transition-colors cursor-pointer"
+                >
+                  <LuDownload className="h-2.5 w-2.5" />
+                  <span>DWG</span>
+                </button>
 
                 {layoutLevel && (
                   <>
@@ -589,6 +656,37 @@ export default function ToolFloorsSection({
           >
             Attach DWG/PDF
           </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadFloorCad(contextMenu.levelId, contextMenu.levelName, "dwg");
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors flex items-center justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuDownload className="h-3 w-3 text-sky-600" />
+              <span>Download Floor (DWG)</span>
+            </span>
+            <span className="text-[9px] font-bold text-sky-600 bg-sky-100 px-1 py-0.5 rounded">.DWG</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadFloorCad(contextMenu.levelId, contextMenu.levelName, "dxf");
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-2.5 py-1.5 hover:bg-sky-100 text-sky-950 font-medium rounded transition-colors flex items-center justify-between"
+          >
+            <span className="flex items-center gap-1.5">
+              <LuDownload className="h-3 w-3 text-amber-600" />
+              <span>Download Floor (DXF)</span>
+            </span>
+            <span className="text-[9px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded">.DXF</span>
+          </button>
+          <div className="border-t border-zinc-200 my-1" />
           <button
             type="button"
             onClick={(e) => {

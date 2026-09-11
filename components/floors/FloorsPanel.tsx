@@ -26,6 +26,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PiFilePdfThin } from "react-icons/pi";
+import { LuDownload } from "react-icons/lu";
+import { downloadFloorCad, downloadAllFloorsCad } from "@/lib/cadFloorExport";
 import { IoChevronDownSharp, IoChevronUp } from "react-icons/io5";
 import { clearFloorSnapshots, renderFloorSnapshot } from "@/lib/floorSnapshot";
 import {
@@ -974,8 +976,28 @@ export default function FloorsPanel({
                     }`}
                   >
                     <ModelText className="min-w-0 truncate">{f.name}</ModelText>
-                    <span className="tabular-nums text-[10px] text-zinc-400 font-medium shrink-0 pl-1">
-                      {f.elevation >= 0 ? "+" : ""}{f.elevation.toFixed(2)} m
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className="tabular-nums text-[10px] text-zinc-400 font-medium pl-1">
+                        {f.elevation >= 0 ? "+" : ""}{f.elevation.toFixed(2)} m
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title={`Download ${f.name} as DWG`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadFloorCad(f.id, f.name, "dwg");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.stopPropagation();
+                            downloadFloorCad(f.id, f.name, "dwg");
+                          }
+                        }}
+                        className="rounded px-1.5 py-0.5 text-[9px] font-bold text-sky-700 bg-sky-100/90 hover:bg-sky-200 border border-sky-300/40 transition-colors cursor-pointer"
+                      >
+                        DWG
+                      </span>
                     </span>
                   </button>
                 );
@@ -1066,18 +1088,30 @@ export default function FloorsPanel({
       <section className="shrink-0 space-y-2 px-4 py-2">
         <div className="flex items-center justify-between gap-2">
           <p className={heading.panel}>{t(uiLanguage, "savedViews")}</p>
-          <button
-            type="button"
-            disabled={rooms.length === 0}
-            onClick={openPdfPopup}
-            title={t(uiLanguage, "savePdf")}
-            aria-label={t(uiLanguage, "savePdf")}
-            aria-expanded={pdfOpen}
-            className={yellowGlossBtn}
-          >
-            <PiFilePdfThin className="h-4 w-4" />
-            {t(uiLanguage, "savePdf")}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={deduplicatedFloors.length === 0}
+              onClick={() => downloadFloorCad(selectedFloor, selectedFloorObj?.name, "dwg")}
+              title="Download active floor plan as AutoCAD DWG"
+              className={yellowGlossBtn}
+            >
+              <LuDownload className="h-4 w-4" />
+              DWG
+            </button>
+            <button
+              type="button"
+              disabled={rooms.length === 0}
+              onClick={openPdfPopup}
+              title={t(uiLanguage, "savePdf")}
+              aria-label={t(uiLanguage, "savePdf")}
+              aria-expanded={pdfOpen}
+              className={yellowGlossBtn}
+            >
+              <PiFilePdfThin className="h-4 w-4" />
+              {t(uiLanguage, "savePdf")}
+            </button>
+          </div>
         </div>
         {savedViews.length === 0 ? (
           <p className="text-xs text-zinc-400">

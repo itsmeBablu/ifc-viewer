@@ -10,6 +10,7 @@ import {
   exportAndDownloadFrag,
   exportAndDownloadIfc,
 } from "@/lib/markupFragSave";
+import { downloadFloorCad, downloadAllFloorsCad } from "@/lib/cadFloorExport";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
@@ -105,6 +106,9 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
   const clearMeasurements = useToolMarkupStore((s) => s.clearMeasurements);
   const quadView = useToolMarkupStore((s) => s.quadView);
   const setQuadView = useToolMarkupStore((s) => s.setQuadView);
+  const markupFloorId = useToolMarkupStore((s) => s.markupFloorId);
+  const layoutWalls = useLayoutDrawingStore((s) => s.walls);
+  const layoutLevels = useLayoutDrawingStore((s) => s.levels);
 
   const browserSearch = useLayoutDrawingStore((s) => s.browserSearch);
   const setBrowserSearch = useLayoutDrawingStore((s) => s.setBrowserSearch);
@@ -272,7 +276,7 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
             <button
               type="button"
               aria-expanded={saveOpen}
-              disabled={!modelKey}
+              disabled={!modelKey && layoutWalls.length === 0 && layoutLevels.length === 0}
               onClick={() => setSaveOpen((v) => !v)}
               className={saveGloss}
             >
@@ -357,20 +361,60 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
             />
           </HoverTip>
           {saveOpen && (
-            <div className="absolute top-[calc(100%+0.35rem)] left-0 z-40 w-44 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] py-1 shadow-lg">
+            <div className="absolute top-[calc(100%+0.35rem)] left-0 z-40 w-52 overflow-hidden rounded-xl border border-[var(--panel-divider)] bg-[var(--popover-bg)] p-1 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--panel-divider)]/40 mb-1">
+                BIM Project File
+              </div>
               <button
                 type="button"
                 onClick={() => saveAs("frag")}
-                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-amber-50"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] transition-colors"
               >
                 {t(uiLanguage, "markupSaveFrag")}
               </button>
               <button
                 type="button"
                 onClick={() => saveAs("ifc")}
-                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-amber-50"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] transition-colors"
               >
                 {t(uiLanguage, "markupSaveIfc")}
+              </button>
+              <div className="border-t border-[var(--panel-divider)]/40 my-1" />
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                Download CAD Floors
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadFloorCad(markupFloorId, undefined, "dwg");
+                  setSaveOpen(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
+              >
+                <span>Floor Plan (DWG)</span>
+                <span className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">.DWG</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadFloorCad(markupFloorId, undefined, "dxf");
+                  setSaveOpen(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
+              >
+                <span>Floor Plan (DXF)</span>
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">.DXF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void downloadAllFloorsCad("dwg");
+                  setSaveOpen(false);
+                }}
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
+              >
+                <span>All Floors (.ZIP)</span>
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">ZIP</span>
               </button>
             </div>
           )}
