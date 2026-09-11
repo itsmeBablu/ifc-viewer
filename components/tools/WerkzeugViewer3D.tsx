@@ -119,19 +119,24 @@ import {
   type SelectedElementRef,
 } from "@/lib/layoutDrawing";
 
+const validGeometryCache = new WeakSet<THREE.BufferGeometry>();
 function hideInvalidGeometry(root: THREE.Object3D): THREE.Object3D[] {
   const hidden: THREE.Object3D[] = [];
   root.traverse((object) => {
     const geometry = (object as THREE.Mesh).geometry;
     const position = geometry?.getAttribute?.("position");
     if (!position) return;
+    if (validGeometryCache.has(geometry)) return;
     const values = position.array as ArrayLike<number>;
+    let valid = true;
     for (let index = 0; index < values.length; index += 1) {
       if (!Number.isFinite(values[index])) {
+        valid = false;
         if (object.visible) { object.visible = false; hidden.push(object); }
         break;
       }
     }
+    if (valid) validGeometryCache.add(geometry);
   });
   return hidden;
 }
