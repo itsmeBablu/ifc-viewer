@@ -349,6 +349,7 @@ export default function ToolRibbon({
   const uiLanguage = useAppStore((s) => s.uiLanguage);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const setColorTheme = useAppStore((s) => s.setColorTheme);
+  const activeModelId = useAppStore((s) => s.activeModelId);
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
   const renderMode = useAppStore((s) => s.renderMode);
   const setRenderMode = useAppStore((s) => s.setRenderMode);
@@ -615,7 +616,10 @@ export default function ToolRibbon({
   const handleSaveFrag = async () => {
     setSaveMenuOpen(false);
     try {
-      exportAndDownloadFrag(activeModelLabel);
+      exportAndDownloadFrag({
+        modelKey: activeModelId ?? undefined,
+        modelLabel: activeModelLabel ?? undefined,
+      });
     } catch (err) {
       console.error(err);
     }
@@ -624,7 +628,10 @@ export default function ToolRibbon({
   const handleSaveIfc = async () => {
     setSaveMenuOpen(false);
     try {
-      exportAndDownloadIfc(activeModelLabel);
+      exportAndDownloadIfc({
+        modelKey: activeModelId ?? undefined,
+        modelLabel: activeModelLabel ?? undefined,
+      });
     } catch (err) {
       console.error(err);
     }
