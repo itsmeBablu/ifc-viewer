@@ -41,7 +41,7 @@ export type CompassHit =
 type HitMesh = THREE.Mesh;
 
 const FACE_PX = 512;
-const HALF = 0.5;
+const HALF = 0.36;   // cube half-size — smaller cube nests clearly inside ring
 const BAND = 0.34;
 
 /** Idle frosted glass opacity; hover is solid soft gray. */
@@ -313,6 +313,7 @@ export class ViewCube {
     this.scene.background = null;
     this.scene.add(this.root);
     this.root.add(this.compassGroup);
+    this.compassGroup.position.y = -0.18; // shift ring slightly below cube centre
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.15));
     const key = new THREE.DirectionalLight(0xffffff, 0.4);
