@@ -4,18 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CiGrid32 } from "react-icons/ci";
 import { TbRulerMeasure2, TbTarget } from "react-icons/tb";
 import { TfiSave, TfiViewGrid } from "react-icons/tfi";
-import { LuSearch, LuX } from "react-icons/lu";
+import { LuSearch, LuX, LuFileText } from "react-icons/lu";
+import { SiAutodesk } from "react-icons/si";
 import HoverTip from "@/components/common/HoverTip";
 import {
   exportAndDownloadFrag,
   exportAndDownloadIfc,
 } from "@/lib/markupFragSave";
-import { downloadFloorCad, downloadAllFloorsCad } from "@/lib/cadFloorExport";
 import type { MarkupViewPreset } from "@/lib/toolMarkup";
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useExportModalStore } from "@/store/useExportModalStore";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 
 const STORAGE_KEY = "ibv-tool-smart-bar-pos";
@@ -381,40 +382,35 @@ export default function ToolTopBar({ className = "" }: { className?: string }) {
               </button>
               <div className="border-t border-[var(--panel-divider)]/40 my-1" />
               <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                Download CAD Floors
+                Export Floor Plans
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  downloadFloorCad(markupFloorId, undefined, "dwg");
+                  useExportModalStore.getState().open("cad");
                   setSaveOpen(false);
                 }}
-                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors cursor-pointer"
               >
-                <span>Floor Plan (DWG)</span>
-                <span className="text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">.DWG</span>
+                <div className="flex items-center gap-1.5">
+                  <SiAutodesk className="h-3.5 w-3.5 text-sky-400" />
+                  <span>Export DWG / DXF</span>
+                </div>
+                <span className="text-[9px] font-bold text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">CAD</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  downloadFloorCad(markupFloorId, undefined, "dxf");
+                  useExportModalStore.getState().open("pdf");
                   setSaveOpen(false);
                 }}
-                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
+                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors cursor-pointer"
               >
-                <span>Floor Plan (DXF)</span>
-                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">.DXF</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void downloadAllFloorsCad("dwg");
-                  setSaveOpen(false);
-                }}
-                className="w-full px-2.5 py-1.5 text-left text-xs font-medium hover:bg-[var(--glass-inset-bg)] rounded-lg text-[var(--text-body)] flex items-center justify-between transition-colors"
-              >
-                <span>All Floors (.ZIP)</span>
-                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded">ZIP</span>
+                <div className="flex items-center gap-1.5">
+                  <LuFileText className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Export PDF</span>
+                </div>
+                <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded">PDF</span>
               </button>
             </div>
           )}
