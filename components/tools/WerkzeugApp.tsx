@@ -70,6 +70,7 @@ import ThemeTransition from "@/components/common/ThemeTransition";
 import ThemeHydration from "@/components/common/ThemeHydration";
 import { MATERIAL_DRAG_MIME } from "@/store/materialStore";
 import DrawingCommandBar from "./DrawingCommandBar";
+import PendingNoteCard from "./PendingNoteCard";
 
 type LoadSource =
   | { kind: "registry"; modelId: string }
@@ -760,6 +761,7 @@ export default function WerkzeugApp() {
         />
         <SceneBusyOverlay />
         <DrawingCommandBar />
+        <PendingNoteCard />
         <SceneBusyCursor
           x={pointer.x}
           y={pointer.y}

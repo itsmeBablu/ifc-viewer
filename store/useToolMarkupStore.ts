@@ -694,9 +694,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   cancelPendingNote: () => set({ pendingNote: null }),
 
   commitPendingNote: async (text, author = null) => {
-    const modelKey = get().modelKey;
+    const modelKey = get().modelKey ?? useLayoutDrawingStore.getState().projectId ?? "default-model";
     const pending = get().pendingNote;
-    if (!modelKey || !pending) return;
+    if (!pending) return;
     const trimmed = text.trim();
     if (!trimmed) {
       set({ pendingNote: null });
@@ -724,11 +724,16 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    await idbPutNote(note);
+    try {
+      await idbPutNote(note);
+    } catch (err) {
+      console.warn("Failed to persist note to IndexedDB:", err);
+    }
     set((s) => ({
       notes: [...s.notes, note],
       pendingNote: null,
       selectedNoteId: note.id,
+      contentTouchedAt: now,
     }));
   },
 

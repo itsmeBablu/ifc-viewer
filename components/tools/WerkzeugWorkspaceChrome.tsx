@@ -71,7 +71,7 @@ const MEP_TOOL_ITEMS: Array<{ id: LayoutToolId; label: string; icon: React.React
 const ARCH_CATEGORY_IDS: Record<"build" | "structure" | "annotate" | "insert" | "render", string[]> = {
   build: ["select", "wall", "door", "window", "floor", "roof", "lines", "stair", "ramp"],
   structure: ["select", "column", "beam", "floor", "grid"],
-  annotate: ["select", "lines", "dimension-distance", "dimension-angle", "dimension-arc"],
+  annotate: ["select", "lines", "dimension-distance", "dimension-angle", "dimension-arc", "note"],
   insert: ["select", "component", "shapes"],
   render: [],
 };

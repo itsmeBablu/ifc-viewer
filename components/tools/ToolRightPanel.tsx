@@ -216,6 +216,9 @@ export default function ToolRightPanel({
 
   const placements = useToolMarkupStore((s) => s.placements);
   const selectedPlacementId = useToolMarkupStore((s) => s.selectedPlacementId);
+  const selectedNoteId = useToolMarkupStore((s) => s.selectedNoteId);
+  const pendingNote = useToolMarkupStore((s) => s.pendingNote);
+  const notes = useToolMarkupStore((s) => s.notes);
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
 
   const browserSearch = useLayoutDrawingStore((s) => s.browserSearch);
@@ -289,11 +292,12 @@ export default function ToolRightPanel({
   const selectedBeam = beams.find((item) => selectedElements.some((ref) => ref.kind === "beam" && ref.id === item.id));
   const selectedSketchLine = sketchLines.find((l) => l.id === selectedSketchLineId);
   const selectedPlacement = placements.find((p) => p.id === selectedPlacementId);
+  const selectedNote = notes.find((n) => n.id === selectedNoteId);
 
   const hasWireSelection = selectedElements.some(e => e.kind === "wire");
   const hasLineSelection = Boolean(selectedSketchLine);
   const hasSelection = Boolean(
-    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasWireSelection || hasLineSelection || selectedPlacement
+    selectedWall || selectedDoor || selectedWindow || selectedSlab || selectedStair || selectedRamp || selectedColumn || selectedBeam || selectedDuct || selectedPipe || selectedCableTray || selectedEquipment || hasWireSelection || hasLineSelection || selectedPlacement || selectedNote || pendingNote
   );
 
   const propertiesTitle = selectedWall
@@ -326,6 +330,10 @@ export default function ToolRightPanel({
     ? "Line Properties"
     : sketchLines.length > 0
     ? "Sketch Lines"
+    : pendingNote
+    ? "New Note"
+    : selectedNote
+    ? "Note Properties"
     : selectedPlacement
     ? "Markup Properties"
     : armedLayoutTool
@@ -767,7 +775,9 @@ export default function ToolRightPanel({
                   !selectedDoor &&
                   !selectedWindow &&
                   !selectedSlab &&
-                  !selectedPlacement ? (
+                  !selectedPlacement &&
+                  !selectedNote &&
+                  !pendingNote ? (
                   <div className="space-y-2">
                     <div className="pb-2.5 border-b border-[var(--panel-divider)]/40">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
@@ -855,6 +865,22 @@ export default function ToolRightPanel({
                         Clear All Lines
                       </UnifiedButton>
                     </div>
+                  </div>
+                ) : (selectedPlacement || selectedNote || pendingNote) ? (
+                  <div className="space-y-3">
+                    <div className="pb-2 border-b border-[var(--panel-divider)]/40">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+                        {pendingNote ? "New Note" : selectedNote ? "Note" : "Markup"}
+                      </div>
+                      <div className="font-semibold text-xs text-[var(--text-strong)] mt-0.5">
+                        {pendingNote
+                          ? (pendingNote.elementName ? `Note on ${pendingNote.elementName}` : "Create Note")
+                          : selectedNote
+                          ? (selectedNote.heading || "Note")
+                          : (selectedPlacement?.label || selectedPlacement?.type || "Shape")}
+                      </div>
+                    </div>
+                    <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
                   </div>
                 ) : (
                   <>
@@ -1049,9 +1075,6 @@ export default function ToolRightPanel({
                               </button>
                             </div>
                           </>
-                        )}
-                        {selectedPlacement && (
-                          <MarkupPropertiesPanel className="!border-0 !bg-transparent !p-0 !shadow-none" />
                         )}
                       </PropSection>
 

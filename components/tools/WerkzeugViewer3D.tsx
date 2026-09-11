@@ -1548,6 +1548,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     markup.attach(scene, container);
     markup.onNoteClick = (id) => {
       useToolMarkupStore.getState().selectNote(id);
+      useAppStore.getState().setRightPanelOpen(true);
     };
     markupLayerRef.current = markup;
 
@@ -7044,6 +7045,112 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 }
                 return;
               }
+            }
+
+            // Place note on any surface or element when armedTool === "note"
+            if (markupStore.armedTool === "note") {
+              const roots: THREE.Object3D[] = [];
+              if (shellCloneRef.current) roots.push(shellCloneRef.current);
+              if (layer?.group) roots.push(layer.group);
+              if (layoutLayerRef.current?.group) roots.push(layoutLayerRef.current.group);
+              let surface = pickMarkupSurface(raycaster.current, roots);
+              if (!surface) {
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const groundPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(groundPlane, groundPt)) {
+                  surface = {
+                    point: groundPt,
+                    normal: new THREE.Vector3(0, 1, 0),
+                    object: layoutLayerRef.current?.group ?? layer.group,
+                    distance: raycaster.current.ray.origin.distanceTo(groundPt),
+                    snappedVertex: null,
+                  };
+                }
+              }
+
+              const p = surface?.point ?? (layoutHit ? layoutHit.point : new THREE.Vector3());
+              let elementName: string | null = null;
+              let wallId: string | null = null;
+              let doorId: string | null = null;
+              let windowId: string | null = null;
+              let underlayId: string | null = null;
+              let floorId: string | null = null;
+
+              if (layoutHit) {
+                if (layoutHit.kind === "wall") {
+                  wallId = layoutHit.id;
+                  elementName = "Wall";
+                  const wall = layoutStore.walls.find((w) => w.id === layoutHit.id);
+                  floorId = wall?.levelId ?? null;
+                } else if (layoutHit.kind === "door") {
+                  doorId = layoutHit.id;
+                  elementName = "Door";
+                  const door = layoutStore.doors.find((d) => d.id === layoutHit.id);
+                  wallId = door?.wallId ?? null;
+                } else if (layoutHit.kind === "window") {
+                  windowId = layoutHit.id;
+                  elementName = "Window";
+                  const win = layoutStore.windows.find((w) => w.id === layoutHit.id);
+                  wallId = win?.wallId ?? null;
+                } else if (layoutHit.kind === "underlay") {
+                  underlayId = layoutHit.id;
+                  const u = layoutStore.underlays.find((x) => x.id === layoutHit.id);
+                  elementName = u?.sourceName ?? "Reference";
+                  floorId = u?.levelId ?? null;
+                } else if (layoutHit.kind === "slab") {
+                  const slab = layoutStore.slabs.find((s) => s.id === layoutHit.id);
+                  elementName = slab?.kind === "roof" ? "Roof" : "Floor";
+                  floorId = slab?.levelId ?? null;
+                } else if (layoutHit.kind === "column") {
+                  elementName = "Column";
+                  const col = layoutStore.columns.find((c) => c.id === layoutHit.id);
+                  floorId = col?.levelId ?? null;
+                } else if (layoutHit.kind === "beam") {
+                  elementName = "Beam";
+                  const beam = layoutStore.beams.find((b) => b.id === layoutHit.id);
+                  floorId = beam?.levelId ?? null;
+                } else if (layoutHit.kind === "stair") {
+                  elementName = "Stair";
+                } else if (layoutHit.kind === "ramp") {
+                  elementName = "Ramp";
+                } else if (layoutHit.kind === "duct") {
+                  elementName = "Duct";
+                } else if (layoutHit.kind === "pipe") {
+                  elementName = "Pipe";
+                } else if (layoutHit.kind === "cabletray") {
+                  elementName = "Cable Tray";
+                } else if (layoutHit.kind === "equipment") {
+                  const eq = layoutStore.mepEquipment.find((m) => m.id === layoutHit.id);
+                  elementName = eq?.name || "Equipment";
+                }
+              }
+
+              if (!elementName && surface?.object) {
+                const ids = pickIdsFromObject(surface.object);
+                const markupId = (surface.object.userData?.markupId as string | undefined) ?? null;
+                const expressId = ids?.expressId ?? null;
+                elementName =
+                  useAppStore.getState().selectedElement?.name ??
+                  (markupId
+                    ? `Shape ${markupId.slice(0, 8)}`
+                    : expressId != null
+                    ? `Element #${expressId}`
+                    : null);
+              }
+
+              markupStore.beginNoteAt(
+                { x: p.x, y: p.y, z: p.z },
+                {
+                  wallId,
+                  doorId,
+                  windowId,
+                  underlayId,
+                  elementName,
+                  floorId: floorId ?? markupStore.markupFloorId,
+                },
+              );
+              useAppStore.getState().setRightPanelOpen(true);
+              return;
             }
 
             // Select / pin note on layout elements

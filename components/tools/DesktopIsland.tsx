@@ -186,7 +186,6 @@ const ARCH_INSERT_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
   { id: "shapes", label: "Shapes", hint: "Pick and place 3D shape (Box, Sphere, Cylinder, etc.)", icon: <LuShapes className="h-3.5 w-3.5 text-pink-400 shrink-0" />, hasDropdown: true },
-  { id: "note", label: "Note", hint: "Insert 3D text note or callout", icon: <LuFileText className="h-3 w-3 text-teal-400 shrink-0" /> },
 ];
 
 export type RenderTextureOption = {
