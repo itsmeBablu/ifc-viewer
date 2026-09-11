@@ -49,10 +49,9 @@ import {
   useImperativeHandle,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import * as THREE from "three";
-import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2, LuCompass } from "react-icons/lu";
+import { LuFlipHorizontal2, LuRotate3D, LuMove3D, LuLink2 } from "react-icons/lu";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -119,6 +118,23 @@ import {
   wallWithFaceGapTo,
   type SelectedElementRef,
 } from "@/lib/layoutDrawing";
+
+function hideInvalidGeometry(root: THREE.Object3D): THREE.Object3D[] {
+  const hidden: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    const geometry = (object as THREE.Mesh).geometry;
+    const position = geometry?.getAttribute?.("position");
+    if (!position) return;
+    const values = position.array as ArrayLike<number>;
+    for (let index = 0; index < values.length; index += 1) {
+      if (!Number.isFinite(values[index])) {
+        if (object.visible) { object.visible = false; hidden.push(object); }
+        break;
+      }
+    }
+  });
+  return hidden;
+}
 
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
@@ -765,23 +781,6 @@ function applyRenderMode(
   }
 }
 
-function CompassRing({ rotation, onCardinal, onYaw }: { rotation: number; onCardinal: (direction: "north" | "east" | "south" | "west") => void; onYaw: (delta: number) => void }) {
-  const dragRef = useRef<{ x: number } | null>(null);
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX }; };
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => { if (!dragRef.current) return; const dx = event.clientX - dragRef.current.x; dragRef.current.x = event.clientX; onYaw(dx * 0.012); };
-  const onPointerUp = () => { dragRef.current = null; };
-  const mark = (label: string, direction: "north" | "east" | "south" | "west", pos: string) => <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => onCardinal(direction)} className={`absolute z-10 grid h-8 w-8 place-items-center rounded-full border border-transparent bg-transparent text-[10px] font-extrabold text-slate-700 transition hover:border-white/60 hover:bg-white/40 dark:text-slate-100 ${pos}`}>{label[0]}</button>;
-  return <div className="pointer-events-auto absolute right-[35px] top-[-4px] z-20 h-[150px] w-[150px] touch-none select-none" aria-label="North east south west compass" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-    <div className="relative h-full w-full" style={{ perspective: "180px" }}>
-      <div className="relative h-full w-full rounded-full border-2 border-white/75 bg-transparent shadow-[0_8px_10px_rgba(0,0,0,.18)]" style={{ transform: `rotateX(62deg) rotateZ(${rotation}deg)`, transformStyle: "preserve-3d" }}>
-        <span className="pointer-events-none absolute inset-2 rounded-full border border-white/20" />
-        {mark("North", "north", "left-1/2 top-0 -translate-x-1/2")}{mark("East", "east", "right-0 top-1/2 -translate-y-1/2")}{mark("South", "south", "bottom-0 left-1/2 -translate-x-1/2")}{mark("West", "west", "left-0 top-1/2 -translate-y-1/2")}
-        <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={17} /></span>
-      </div>
-    </div>
-  </div>;
-}
-
 const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function WerkzeugViewer3D(
   { onPointerMove, onPointerLeave, className },
   ref,
@@ -807,8 +806,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const renderEnvironmentRef = useRef<RenderEnvironment | null>(null);
   const groundShadowRef = useRef<THREE.Mesh | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
-  const [compassRotation, setCompassRotation] = useState(0);
-  const compassRotationRef = useRef(0);
 
   useEffect(() => {
     const reposition = (event: Event) => {
@@ -1571,16 +1568,6 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const quadOn =
         useAppStore.getState().toolMode &&
         useToolMarkupStore.getState().quadView;
-      const compassCamera = cameraRef.current;
-      if (compassCamera) {
-        const dx = compassCamera.position.x - controls.target.x;
-        const dz = compassCamera.position.z - controls.target.z;
-        const heading = (-Math.atan2(dx, dz) * 180) / Math.PI;
-        if (Math.abs(heading - compassRotationRef.current) > 0.75) {
-          compassRotationRef.current = heading;
-          setCompassRotation(heading);
-        }
-      }
 
       if (quadOn) {
         const activeIdx = useToolMarkupStore.getState()
@@ -1700,7 +1687,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         const wireMode = (rangeLevel?.planView?.visualStyle ?? useAppStore.getState().renderMode) === "wireframe";
         const restorePresentation = applyRenderPresentation([scene], useViewDisplayStore.getState().renderPreview, useViewDisplayStore.getState().renderHiddenCategories);
         const restoreWire = applyFeatureWireframe([layoutLayerRef.current?.group, markupLayerRef.current?.group, shellCloneRef.current, overlaysRef.current], wireMode);
-        try { renderer.render(scene, activeCam); } finally { restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
+        const invalidGeometry = hideInvalidGeometry(scene);
+        try { renderer.render(scene, activeCam); } finally { for (const object of invalidGeometry) object.visible = true; restoreWire(); restorePresentation(); restoreVisibility(); restoreRange(); }
         markup?.render(activeCam);
         viewCube.updateViewport(sz.x, sz.y);
         if (activeCam instanceof THREE.PerspectiveCamera) {
@@ -7886,21 +7874,6 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   return (
     <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
-      <CompassRing
-        rotation={compassRotation}
-        onYaw={(delta) => { const orbit = controlsRef.current; if (orbit) { orbit.rotateLeft(delta); orbit.update(); } }}
-        onCardinal={(direction) => {
-          const orbit = controlsRef.current;
-          const camera = perspectiveCameraRef.current;
-          if (!orbit || !camera) return;
-          const distance = Math.max(camera.position.distanceTo(orbit.target), 1);
-          const angles = { north: 0, east: Math.PI / 2, south: Math.PI, west: -Math.PI / 2 };
-          const angle = angles[direction];
-          const target = orbit.target.clone();
-          const position = new THREE.Vector3(Math.sin(angle) * distance, camera.position.y, Math.cos(angle) * distance).add(target);
-          void flyTo(camera, orbit, position, target, 450);
-        }}
-      />
       {doorActionPosition && (selectedDoor || selectedWindow) && (
         <div
           className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
