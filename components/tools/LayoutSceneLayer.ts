@@ -3227,10 +3227,19 @@ export default class LayoutSceneLayer {
     const ignoreArchitecture = !isArchTool && (isMepTool || (layoutState.mepModeActive && layoutState.mepArchitectureLocked));
 
     if (!ignoreArchitecture && this.endpointGroup.visible) {
-      const epHits = raycaster.intersectObjects(
-        this.endpointGroup.children,
-        false,
-      );
+      const safeEndpoints = this.endpointGroup.children.filter((child) => {
+        if (!(child instanceof THREE.Mesh)) return false;
+        const geo = child.geometry;
+        if (!geo) return false;
+        const pos = geo.getAttribute("position");
+        if (!pos || pos.count === 0) return false;
+        const arr = pos.array as ArrayLike<number>;
+        for (let i = 0; i < arr.length; i++) {
+          if (!Number.isFinite(arr[i])) return false;
+        }
+        return true;
+      });
+      const epHits = raycaster.intersectObjects(safeEndpoints, false);
       for (const h of epHits) {
         const end = h.object.userData.layoutWallEndpoint as
           | "start"
