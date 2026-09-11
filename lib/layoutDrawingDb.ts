@@ -434,6 +434,23 @@ export async function idbListProjects(): Promise<StoredLayoutProject[]> {
   }
 }
 
+/** Update a saved project's display name without touching its drawing contents. */
+export async function idbRenameProject(projectId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!projectId || !trimmed) return;
+  const db = await openDb();
+  try {
+    const tx = db.transaction(PROJECTS, "readwrite");
+    const store = tx.objectStore(PROJECTS);
+    const current = await reqToPromise(store.get(projectId)) as StoredLayoutProject | undefined;
+    if (!current) return;
+    store.put({ ...current, name: trimmed, lastModified: Date.now() } satisfies StoredLayoutProject);
+    await transactionDone(tx);
+  } finally {
+    db.close();
+  }
+}
+
 export async function idbExportProject(projectId: string): Promise<Record<string, unknown>> {
   const db = await openDb();
   try {

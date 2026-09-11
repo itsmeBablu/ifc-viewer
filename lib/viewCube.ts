@@ -306,7 +306,7 @@ function makeCardinalTexture(label: string, hover = false): THREE.Texture {
  * White liquid-glass ViewCube — frosted idle, soft gray hover (instant, no sticky anim).
  */
 export class ViewCube {
-  private currentSize: number = VIEW_CUBE_LAYOUT.sizeDesktop;
+  private currentSize: number = Number(VIEW_CUBE_LAYOUT.sizeDesktop);
   get size(): number {
     return this.currentSize;
   }
@@ -336,7 +336,7 @@ export class ViewCube {
   private ringDragActive = false;
   private ringDragStartAngle = 0;
   private ringDragMoved = false;
-  private viewport = {
+  private viewport: { x: number; y: number; w: number; h: number } = {
     x: 0,
     y: 0,
     w: VIEW_CUBE_LAYOUT.sizeDesktop,

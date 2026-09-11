@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { measurementGeometry, type MeasurementKind, type MeasurePoint } from "@/lib/measurementGeometry";
 import {
   DEFAULT_MARKUP_COLOR,
@@ -46,6 +47,10 @@ type CubeDrawState = {
 export type MarkupMeasurement = {
   kind?: MeasurementKind;
   third?: MeasurePoint;
+  /** Compatibility fields used by CAD/PDF exporters. */
+  mode?: MeasurementKind;
+  points?: MeasurePoint[];
+  floorId?: string | null;
   id: string;
   ax: number;
   ay: number;
@@ -248,6 +253,7 @@ type ToolMarkupState = {
         | "underlayId"
         | "elementName"
         | "floorId"
+        | "heading"
       >
     >,
   ) => Promise<void>;
@@ -370,6 +376,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     const end = measureSecond ?? pos;
     const m: MarkupMeasurement = {
       kind,
+      mode: kind,
+      points: points.map((point) => ({ ...point })),
+      floorId: get().markupFloorId,
       ...(measureSecond ? { third: { ...pos } } : {}),
       id: newMarkupId("meas"),
       ax: draft.x,

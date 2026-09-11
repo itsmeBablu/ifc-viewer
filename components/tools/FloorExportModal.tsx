@@ -33,9 +33,10 @@ export default function FloorExportModal() {
   const doors = useLayoutDrawingStore((s) => s.doors);
   const windows = useLayoutDrawingStore((s) => s.windows);
   const appFloors = useAppStore((s) => s.floors);
+  const colorTheme = useAppStore((s) => s.colorTheme);
   const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
 
-  // Cad format: dxf (recommended for native AutoCAD opening) or dwg
+  // Cad format: dxf (recommended for AutoCAD 0-error import) or dwg
   const [cadFormat, setCadFormat] = useState<CadExportFormat>("dxf");
   // PDF format: multipage or zip
   const [pdfAsZip, setPdfAsZip] = useState(false);
@@ -143,21 +144,46 @@ export default function FloorExportModal() {
     }
   };
 
+  const isDark = colorTheme === "dark";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-150 ${
+        isDark ? "bg-black/65" : "bg-zinc-900/35"
+      }`}
+      onClick={close}
+    >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-700/60 bg-zinc-900 text-zinc-100 shadow-2xl shadow-black/80 flex flex-col max-h-[90vh]"
+        className={`relative w-full max-w-lg overflow-hidden rounded-2xl border flex flex-col max-h-[90vh] shadow-2xl transition-all duration-150 ${
+          isDark
+            ? "border-zinc-700/60 bg-zinc-900 text-zinc-100 shadow-black/80"
+            : "border-zinc-200/90 bg-white text-zinc-900 shadow-zinc-950/20"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4 bg-zinc-950/50">
+        <div
+          className={`flex items-center justify-between border-b px-6 py-4 ${
+            isDark ? "border-zinc-800 bg-zinc-950/50" : "border-zinc-200 bg-zinc-50/90"
+          }`}
+        >
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/20">
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
+                isDark
+                  ? "bg-amber-400/15 text-amber-400 border-amber-400/20"
+                  : "bg-amber-500/15 text-amber-600 border-amber-500/30"
+              }`}
+            >
               <LuLayers className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">Export Floor Plans</h3>
-              <p className="text-[11px] text-zinc-400">Download architectural floor drawings</p>
+              <h3 className={`text-base font-bold tracking-tight ${isDark ? "text-white" : "text-zinc-900"}`}>
+                Export Floor Plans
+              </h3>
+              <p className={`text-[11px] ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+                Download architectural floor drawings (DWG, DXF, PDF)
+              </p>
             </div>
           </div>
           <button
@@ -165,24 +191,36 @@ export default function FloorExportModal() {
             onClick={close}
             disabled={isExporting}
             aria-label="Close export dialog"
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors cursor-pointer"
+            className={`rounded-lg p-1.5 transition-colors cursor-pointer ${
+              isDark
+                ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                : "text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-900"
+            }`}
           >
             <LuX className="h-5 w-5" />
           </button>
         </div>
 
         {/* Format Selector Tabs */}
-        <div className="flex border-b border-zinc-800 bg-zinc-950/30 p-2 gap-2">
+        <div
+          className={`flex border-b p-2 gap-2 ${
+            isDark ? "border-zinc-800 bg-zinc-950/30" : "border-zinc-200 bg-zinc-100/70"
+          }`}
+        >
           <button
             type="button"
             onClick={() => setFormat("cad")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeFormat === "cad"
-                ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+                ? isDark
+                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
+                  : "bg-sky-50 text-sky-800 border border-sky-300 shadow-sm font-bold ring-1 ring-sky-200"
+                : isDark
+                ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/80 border border-transparent"
             }`}
           >
-            <SiAutodesk className="h-4 w-4 text-sky-400" />
+            <SiAutodesk className={`h-4 w-4 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
             <span>AutoCAD CAD (DWG / DXF)</span>
           </button>
           <button
@@ -190,11 +228,15 @@ export default function FloorExportModal() {
             onClick={() => setFormat("pdf")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeFormat === "pdf"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+                ? isDark
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                  : "bg-amber-50 text-amber-800 border border-amber-300 shadow-sm font-bold ring-1 ring-amber-200"
+                : isDark
+                ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/80 border border-transparent"
             }`}
           >
-            <LuFileText className="h-4 w-4 text-amber-400" />
+            <LuFileText className={`h-4 w-4 ${isDark ? "text-amber-400" : "text-amber-600"}`} />
             <span>Printable PDF</span>
           </button>
         </div>
@@ -203,30 +245,50 @@ export default function FloorExportModal() {
         <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
           {/* Floor Selection Section */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between pb-1 border-b border-zinc-800/60">
+            <div
+              className={`flex items-center justify-between pb-1 border-b ${
+                isDark ? "border-zinc-800/60" : "border-zinc-200"
+              }`}
+            >
               <button
                 type="button"
                 onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-xs font-bold text-zinc-200 hover:text-white transition-colors cursor-pointer"
+                className={`flex items-center gap-2 text-xs font-bold transition-colors cursor-pointer ${
+                  isDark ? "text-zinc-200 hover:text-white" : "text-zinc-800 hover:text-zinc-950"
+                }`}
               >
                 {allSelected ? (
-                  <LuSquareCheck className="h-4 w-4 text-amber-400" />
+                  <LuSquareCheck className={`h-4 w-4 ${isDark ? "text-amber-400" : "text-amber-600"}`} />
                 ) : isIndeterminate ? (
-                  <div className="h-4 w-4 rounded border border-amber-400 bg-amber-400/20 flex items-center justify-center">
-                    <span className="h-1.5 w-2 bg-amber-400 rounded-sm" />
+                  <div
+                    className={`h-4 w-4 rounded border flex items-center justify-center ${
+                      isDark ? "border-amber-400 bg-amber-400/20" : "border-amber-600 bg-amber-500/20"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-2 rounded-sm ${isDark ? "bg-amber-400" : "bg-amber-600"}`} />
                   </div>
                 ) : (
-                  <LuSquare className="h-4 w-4 text-zinc-500" />
+                  <LuSquare className={`h-4 w-4 ${isDark ? "text-zinc-500" : "text-zinc-400"}`} />
                 )}
                 <span>Select All Floors (All sides tick)</span>
               </button>
-              <span className="text-[11px] font-semibold text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded-full">
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  isDark ? "text-zinc-400 bg-zinc-800/80" : "text-zinc-600 bg-zinc-200/80"
+                }`}
+              >
                 {selectedIds.size} of {floorRows.length} selected
               </span>
             </div>
 
             {/* Floor Checklist */}
-            <div className="divide-y divide-zinc-800/40 rounded-xl border border-zinc-800 bg-zinc-950/40 max-h-52 overflow-y-auto">
+            <div
+              className={`divide-y rounded-xl border max-h-52 overflow-y-auto ${
+                isDark
+                  ? "divide-zinc-800/40 border-zinc-800 bg-zinc-950/40"
+                  : "divide-zinc-200/80 border-zinc-200 bg-zinc-50/60"
+              }`}
+            >
               {floorRows.map((row) => {
                 const checked = selectedIds.has(row.id);
                 const wallCount = walls.filter((w) => w.levelId === row.id).length;
@@ -245,28 +307,50 @@ export default function FloorExportModal() {
                     onClick={() => toggleFloor(row.id)}
                     className={`flex items-center justify-between px-3.5 py-2.5 text-xs transition-colors cursor-pointer select-none ${
                       checked
-                        ? "bg-amber-400/10 hover:bg-amber-400/15"
-                        : "hover:bg-zinc-800/40 text-zinc-400"
+                        ? isDark
+                          ? "bg-amber-400/10 hover:bg-amber-400/15"
+                          : "bg-amber-500/10 hover:bg-amber-500/15"
+                        : isDark
+                        ? "hover:bg-zinc-800/40 text-zinc-400"
+                        : "hover:bg-zinc-200/50 text-zinc-600"
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {checked ? (
-                        <LuSquareCheck className="h-4 w-4 text-amber-400 shrink-0" />
+                        <LuSquareCheck
+                          className={`h-4 w-4 shrink-0 ${isDark ? "text-amber-400" : "text-amber-600"}`}
+                        />
                       ) : (
-                        <LuSquare className="h-4 w-4 text-zinc-500 shrink-0" />
+                        <LuSquare
+                          className={`h-4 w-4 shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`}
+                        />
                       )}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`font-semibold truncate ${checked ? "text-zinc-100" : "text-zinc-400"}`}>
+                          <span
+                            className={`font-semibold truncate ${
+                              checked
+                                ? isDark
+                                  ? "text-zinc-100"
+                                  : "text-zinc-900 font-bold"
+                                : isDark
+                                ? "text-zinc-400"
+                                : "text-zinc-600"
+                            }`}
+                          >
                             {row.name}
                           </span>
                           {row.id === activeLevelId && (
-                            <span className="text-[9px] uppercase font-bold text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded">
+                            <span
+                              className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                                isDark ? "text-sky-400 bg-sky-500/15" : "text-sky-700 bg-sky-100"
+                              }`}
+                            >
                               Active
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-zinc-500">
+                        <div className={`text-[10px] ${isDark ? "text-zinc-500" : "text-zinc-500"}`}>
                           {wallCount > 0 ? `${wallCount} walls` : "Empty floor"}
                           {doorCount > 0 && ` · ${doorCount} doors`}
                           {winCount > 0 && ` · ${winCount} windows`}
@@ -274,7 +358,13 @@ export default function FloorExportModal() {
                       </div>
                     </div>
 
-                    <span className="text-[11px] font-mono text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded shrink-0">
+                    <span
+                      className={`text-[11px] font-mono px-2 py-0.5 rounded shrink-0 border ${
+                        isDark
+                          ? "text-zinc-400 bg-zinc-800/60 border-zinc-700/50"
+                          : "text-zinc-700 bg-white border-zinc-200 shadow-2xs"
+                      }`}
+                    >
                       {row.elevationMm >= 0 ? "+" : ""}
                       {(row.elevationMm / 1000).toFixed(2)} m
                     </span>
@@ -286,25 +376,41 @@ export default function FloorExportModal() {
 
           {/* Format Settings */}
           {activeFormat === "cad" ? (
-            <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+            <div
+              className={`space-y-3 rounded-xl border p-3.5 ${
+                isDark ? "border-zinc-800 bg-zinc-950/40" : "border-zinc-200 bg-zinc-50/70"
+              }`}
+            >
+              <p
+                className={`text-[11px] font-bold uppercase tracking-wider ${
+                  isDark ? "text-zinc-400" : "text-zinc-600"
+                }`}
+              >
                 AutoCAD CAD Format
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <label
                   className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                     cadFormat === "dxf"
-                      ? "border-sky-500/60 bg-sky-500/10 text-white"
-                      : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      ? isDark
+                        ? "border-sky-500/60 bg-sky-500/10 text-white"
+                        : "border-sky-400 bg-sky-50/80 text-sky-950 ring-1 ring-sky-300"
+                      : isDark
+                      ? "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 shadow-2xs"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold">AutoCAD DXF (.dxf)</span>
-                    <span className="text-[9px] font-bold text-sky-400 bg-sky-400/20 px-1.5 py-0.5 rounded">
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        isDark ? "text-sky-400 bg-sky-400/20" : "text-sky-700 bg-sky-100 border border-sky-200"
+                      }`}
+                    >
                       Recommended
                     </span>
                   </div>
-                  <span className="text-[10px] text-zinc-400 leading-tight">
+                  <span className={`text-[10px] leading-tight ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
                     Opens natively in AutoCAD, Revit, Civil 3D & BricsCAD without errors.
                   </span>
                   <input
@@ -320,14 +426,18 @@ export default function FloorExportModal() {
                 <label
                   className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                     cadFormat === "dwg"
-                      ? "border-sky-500/60 bg-sky-500/10 text-white"
-                      : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      ? isDark
+                        ? "border-sky-500/60 bg-sky-500/10 text-white"
+                        : "border-sky-400 bg-sky-50/80 text-sky-950 ring-1 ring-sky-300"
+                      : isDark
+                      ? "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 shadow-2xs"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold">AutoCAD DWG (.dwg)</span>
                   </div>
-                  <span className="text-[10px] text-zinc-400 leading-tight">
+                  <span className={`text-[10px] leading-tight ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
                     Saves with .dwg extension for workflows that require the .dwg filename.
                   </span>
                   <input
@@ -342,31 +452,51 @@ export default function FloorExportModal() {
               </div>
 
               {/* Notice regarding AutoCAD "Drawing file is invalid" */}
-              <div className="flex items-start gap-2 rounded-lg bg-sky-950/40 border border-sky-800/40 p-2.5 text-[11px] text-sky-300">
-                <LuInfo className="h-4 w-4 shrink-0 text-sky-400 mt-0.5" />
+              <div
+                className={`flex items-start gap-2 rounded-lg border p-2.5 text-[11px] ${
+                  isDark
+                    ? "bg-sky-950/40 border-sky-800/40 text-sky-300"
+                    : "bg-sky-50/90 border-sky-200 text-sky-900 shadow-2xs"
+                }`}
+              >
+                <LuInfo className={`h-4 w-4 shrink-0 mt-0.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
                 <div className="space-y-1 leading-relaxed">
-                  <p className="font-semibold text-sky-200">Tip for AutoCAD users:</p>
-                  <p className="text-zinc-300">
-                    AutoCAD opens <strong className="text-white">.dxf</strong> natively on double-click with complete architectural layers (walls, doors, windows, slabs, gridlines, dimensions), and you can save it directly as <strong className="text-white">.dwg</strong> in AutoCAD. Renaming exchange files to .dwg triggers AutoCAD&apos;s <em>&apos;Drawing file is invalid&apos;</em> check because Autodesk requires proprietary binary headers for .dwg.
+                  <p className={`font-semibold ${isDark ? "text-sky-200" : "text-sky-950 font-bold"}`}>
+                    AutoCAD Compatibility Guide:
+                  </p>
+                  <p className={isDark ? "text-zinc-300" : "text-sky-900/90"}>
+                    Use <strong className={isDark ? "text-white" : "text-sky-950 font-bold"}>AutoCAD DXF (.dxf)</strong> for 100% reliable opening in AutoCAD, Revit, Civil 3D, and BricsCAD with 0 errors. Double-clicking the .dxf file opens AutoCAD immediately with all architectural layers intact (walls, doors, windows, slabs, gridlines, dimensions), and you can save directly as a native <strong className={isDark ? "text-white" : "text-sky-950 font-bold"}>.dwg</strong> (Ctrl+S). Direct third-party binary .dwg files often trigger AutoCAD&apos;s <em>&apos;Drawing file is invalid&apos;</em> alert due to Autodesk proprietary checksums.
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+            <div
+              className={`space-y-3 rounded-xl border p-3.5 ${
+                isDark ? "border-zinc-800 bg-zinc-950/40" : "border-zinc-200 bg-zinc-50/70"
+              }`}
+            >
+              <p
+                className={`text-[11px] font-bold uppercase tracking-wider ${
+                  isDark ? "text-zinc-400" : "text-zinc-600"
+                }`}
+              >
                 PDF Layout Options
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <label
                   className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                     !pdfAsZip
-                      ? "border-amber-500/60 bg-amber-500/10 text-white"
-                      : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      ? isDark
+                        ? "border-amber-500/60 bg-amber-500/10 text-white"
+                        : "border-amber-400 bg-amber-50/80 text-amber-950 ring-1 ring-amber-300"
+                      : isDark
+                      ? "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 shadow-2xs"
                   }`}
                 >
                   <span className="font-bold mb-1">Single Multi-Page PDF</span>
-                  <span className="text-[10px] text-zinc-400 leading-tight">
+                  <span className={`text-[10px] leading-tight ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
                     All selected floors combined into one clean architectural sheet set.
                   </span>
                   <input
@@ -381,12 +511,16 @@ export default function FloorExportModal() {
                 <label
                   className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                     pdfAsZip
-                      ? "border-amber-500/60 bg-amber-500/10 text-white"
-                      : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      ? isDark
+                        ? "border-amber-500/60 bg-amber-500/10 text-white"
+                        : "border-amber-400 bg-amber-50/80 text-amber-950 ring-1 ring-amber-300"
+                      : isDark
+                      ? "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 shadow-2xs"
                   }`}
                 >
                   <span className="font-bold mb-1">Separate PDFs in .ZIP</span>
-                  <span className="text-[10px] text-zinc-400 leading-tight">
+                  <span className={`text-[10px] leading-tight ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
                     Each floor exported as an individual PDF file bundled into a ZIP archive.
                   </span>
                   <input
@@ -403,12 +537,20 @@ export default function FloorExportModal() {
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-zinc-800 px-6 py-4 bg-zinc-950/50">
+        <div
+          className={`flex items-center justify-between border-t px-6 py-4 ${
+            isDark ? "border-zinc-800 bg-zinc-950/50" : "border-zinc-200 bg-zinc-50/90"
+          }`}
+        >
           <button
             type="button"
             onClick={close}
             disabled={isExporting}
-            className="rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-colors cursor-pointer"
+            className={`rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+              isDark
+                ? "text-zinc-400 hover:text-white hover:bg-zinc-800/80"
+                : "text-zinc-600 hover:text-zinc-950 hover:bg-zinc-200/80"
+            }`}
           >
             Cancel
           </button>
@@ -419,10 +561,12 @@ export default function FloorExportModal() {
             onClick={handleDownload}
             className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold transition-all shadow-lg cursor-pointer ${
               selectedIds.size === 0
-                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                ? isDark
+                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                  : "bg-zinc-200 text-zinc-400 cursor-not-allowed"
                 : activeFormat === "cad"
-                ? "bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-sky-500/20 active:scale-95"
-                : "bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-400/20 active:scale-95"
+                ? "btn-v-blue btn-liquid-hover !text-[#082f49] shadow-sky-500/20 active:scale-95"
+                : "btn-v-yellow btn-liquid-hover !text-zinc-950 shadow-amber-400/20 active:scale-95"
             }`}
           >
             {isExporting ? (
