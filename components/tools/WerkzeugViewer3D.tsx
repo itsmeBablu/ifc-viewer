@@ -125,13 +125,16 @@ function ViewCompass() {
   const button = (label: string, preset: "north" | "south" | "east" | "west", className: string) => (
     <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => setViewPreset(preset)} className={`absolute grid place-items-center rounded-md text-[9px] font-bold transition ${viewPreset === preset ? "bg-amber-400 text-slate-950" : "bg-slate-900/65 text-white/85 hover:bg-amber-300 hover:text-slate-950"} ${className}`}>{label[0]}</button>
   );
-  return <div className="pointer-events-auto absolute right-4 top-[143px] z-20 h-[72px] w-[72px] select-none rounded-full border border-white/30 bg-slate-950/35 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md" aria-label="View compass">
-    <div className="relative h-full w-full rounded-full border border-white/20 bg-slate-900/35">
-      {button("North", "north", "left-1/2 top-0 h-6 w-6 -translate-x-1/2")}
-      {button("East", "east", "right-0 top-1/2 h-6 w-6 -translate-y-1/2")}
-      {button("South", "south", "bottom-0 left-1/2 h-6 w-6 -translate-x-1/2")}
-      {button("West", "west", "left-0 top-1/2 h-6 w-6 -translate-y-1/2")}
-      <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={15} /></span>
+  return <div className="pointer-events-auto absolute right-4 top-[139px] z-20 h-[84px] w-[84px] select-none rounded-full border border-white/35 bg-slate-950/45 p-1.5 shadow-lg shadow-black/25 backdrop-blur-md" aria-label="View compass">
+    <div className="relative h-full w-full rounded-full border border-white/25 bg-slate-900/45 shadow-[inset_0_1px_2px_rgba(255,255,255,.25)]">
+      <span className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-px -translate-x-1/2 -translate-y-1/2 bg-white/15" />
+      <span className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white/15" />
+      {button("North", "north", "left-1/2 top-0 h-7 w-7 -translate-x-1/2 text-[10px]")}
+      {button("East", "east", "right-0 top-1/2 h-7 w-7 -translate-y-1/2 text-[10px]")}
+      {button("South", "south", "bottom-0 left-1/2 h-7 w-7 -translate-x-1/2 text-[10px]")}
+      {button("West", "west", "left-0 top-1/2 h-7 w-7 -translate-y-1/2 text-[10px]")}
+      <span className="pointer-events-none absolute left-1/2 top-[26%] h-0 w-0 -translate-x-1/2 border-x-[5px] border-b-[11px] border-x-transparent border-b-rose-500 drop-shadow" />
+      <span className="pointer-events-none absolute inset-0 grid place-items-center text-amber-300"><LuCompass size={14} /></span>
     </div>
   </div>;
 }
