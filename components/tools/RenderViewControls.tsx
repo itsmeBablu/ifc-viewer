@@ -39,6 +39,12 @@ export function enterRenderView() {
   useViewDisplayStore.getState().setRenderPreview(true);
 }
 
+/** Leave Render Studio and return to the normal shaded workspace display. */
+export function exitRenderView() {
+  useViewDisplayStore.getState().setRenderPreview(false);
+  useAppStore.getState().setRenderMode("fullColor");
+}
+
 function getCompassHeading(deg: number): string {
   const normalized = ((deg % 360) + 360) % 360;
   if (normalized >= 337.5 || normalized < 22.5) return "N";
@@ -119,7 +125,7 @@ export default function RenderViewControls() {
           }`}
           onClick={() =>
             enabled
-              ? useViewDisplayStore.getState().setRenderPreview(false)
+              ? exitRenderView()
               : enterRenderView()
           }
         >

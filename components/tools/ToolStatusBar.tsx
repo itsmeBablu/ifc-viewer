@@ -23,6 +23,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
+import { exitRenderView } from "./RenderViewControls";
 import ObjectSnapStrip from "./ObjectSnapStrip";
 import HoverTip from "@/components/common/HoverTip";
 
@@ -140,7 +141,7 @@ export default function ToolStatusBar({ onAttachDwgPdf }: {
       <div className="relative">
         <DockButton icon={renderIcon} label={activeRenderMode.label} dropdown hint="Choose Realistic, Shaded, Light, or Wireframe rendering." active={popup === "render"} onClick={() => toggle("render")} />
         {popup === "render" && <Popover title="Visual style" wide>
-          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"}`} onClick={() => { useViewDisplayStore.getState().setRenderPreview(false); setRenderMode(mode.id); }}><span className="text-sm">{renderModeIcon(mode.id)}</span><span>{mode.label}</span></button>)}</div>
+          <div className="werkzeug-segmented-control grid grid-cols-4 gap-1">{RENDER_MODES.map((mode) => <button key={mode.id} type="button" aria-pressed={renderMode === mode.id} className={`werkzeug-control-button flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[9px] font-semibold ${renderMode === mode.id ? "is-active btn-v-yellow btn-liquid-hover border-transparent" : "border-[var(--panel-divider)] bg-[var(--glass-inset-bg)]"}`} onClick={() => { exitRenderView(); setRenderMode(mode.id); }}><span className="text-sm">{renderModeIcon(mode.id)}</span><span>{mode.label}</span></button>)}</div>
           <DockSlider label="Mesh opacity" value={lighting.elementTransparency} onChange={(value) => setLighting({ elementTransparency: value })} />
           <DockSlider label="Space opacity" value={lighting.spaceTransparency} onChange={(value) => setLighting({ spaceTransparency: value })} />
           <DockSlider label="Color" value={lighting.color} onChange={(value) => setLighting({ color: value })} />

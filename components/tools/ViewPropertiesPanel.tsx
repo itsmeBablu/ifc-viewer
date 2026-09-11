@@ -1,6 +1,6 @@
 "use client";
 
-import RenderViewControls, { enterRenderView } from "./RenderViewControls";
+import RenderViewControls, { enterRenderView, exitRenderView } from "./RenderViewControls";
 import { useViewDisplayStore, viewDisplayKey, EMPTY_VIEW_VISIBILITY } from "@/store/useViewDisplayStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -50,7 +50,7 @@ export default function ViewPropertiesPanel() {
     {level && <label className="property-field"><span>Level</span><input aria-label="Level name" className={field} value={level.name} onChange={e => void layout.updateLevel(level.id, { name: e.target.value })}/></label>}
     <label className="property-field"><span>Visual style</span><select className={field} value={isPlan && plan ? plan.visualStyle ?? "inherit" : renderMode} onChange={e => {
       if (e.target.value === "render") { enterRenderView(); return; }
-      display.setRenderPreview(false);
+      exitRenderView();
       const style = e.target.value as "realistic" | "fullColor" | "light" | "wireframe" | "inherit";
       if (isPlan && plan) update({ visualStyle: style === "inherit" ? undefined : style });
       else if (style !== "inherit") useAppStore.getState().setRenderMode(style);

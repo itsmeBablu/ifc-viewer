@@ -87,7 +87,7 @@ import type { MarkupShapeType } from "@/lib/toolMarkup";
 
 import { DEFAULT_ELEMENT_TYPES, type ElementTypeDefinition } from "./EditTypeDialog";
 import { useViewDisplayStore, type RenderPreset } from "@/store/useViewDisplayStore";
-import { enterRenderView } from "./RenderViewControls";
+import { enterRenderView, exitRenderView } from "./RenderViewControls";
 import { useModelScene } from "./WerkzeugModelSceneContext";
 
 
@@ -814,7 +814,7 @@ export default function DesktopIsland() {
     }
     if (id === "render-studio") {
       if (renderPreview) {
-        useViewDisplayStore.getState().setRenderPreview(false);
+        exitRenderView();
       } else {
         enterRenderView();
       }
@@ -973,7 +973,7 @@ export default function DesktopIsland() {
           <div className="h-3 w-px bg-slate-700" />
           <button
             type="button"
-            onClick={() => useViewDisplayStore.getState().setRenderPreview(false)}
+            onClick={exitRenderView}
             className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition-all hover:scale-105 active:scale-95 shadow-sm"
             title="Exit Render View"
           >
