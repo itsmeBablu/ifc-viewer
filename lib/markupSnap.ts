@@ -106,6 +106,7 @@ export function findNearestVertex(
     const geom = o.geometry as THREE.BufferGeometry;
     const pos = geom?.attributes?.position;
     if (!pos) return;
+    if (!isSafeRaycastMesh(o)) return;
     o.updateWorldMatrix(true, false);
     for (let i = 0; i < pos.count; i++) {
       _vA.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
@@ -150,7 +151,11 @@ export function enhanceHitWithVertexSnap(
   noteSnapRadius = 0.3,
 ): MarkupSurfaceHit {
   // Re-intersect this object alone to get face indices for center snap.
-  const hits = raycaster.intersectObject(surface.object, true);
+  const safeMeshes: THREE.Object3D[] = [];
+  surface.object.traverse((object) => {
+    if (object instanceof THREE.Mesh && isSafeRaycastMesh(object)) safeMeshes.push(object);
+  });
+  const hits = safeMeshes.length ? raycaster.intersectObjects(safeMeshes, false) : [];
   const hit = hits[0];
   let snapped: THREE.Vector3 | null = null;
   if (hit) {
