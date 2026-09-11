@@ -5352,12 +5352,28 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       onPointerMove?.(e.clientX, e.clientY);
       const cube = viewCubeRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas)) {
+        // Ring drag takes priority when active
+        if (cube.isRingDragging) {
+          const controls = controlsRef.current;
+          if (controls) cube.updateRingDrag(e.clientX, e.clientY, canvas, controls);
+          canvas.style.cursor = "ew-resize";
+          setHoveredRoom(null);
+          return;
+        }
         cube.updateHover(e.clientX, e.clientY, canvas);
+        cube.updateCompassHover(e.clientX, e.clientY, canvas);
         canvas.style.cursor = "pointer";
         setHoveredRoom(null);
         return;
       }
+      // End ring drag if pointer leaves the cube area
+      if (cube?.isRingDragging) {
+        const controls = controlsRef.current;
+        if (controls) cube.updateRingDrag(e.clientX, e.clientY, canvas, controls);
+        return;
+      }
       cube?.clearHover();
+      cube?.clearCompassHover();
 
       // Live cube footprint / note snap indicator while a tool is armed.
       if (useAppStore.getState().toolMode) {
@@ -6321,6 +6337,20 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       const camera = perspectiveCameraRef.current;
       const controls = controlsRef.current;
       if (cube && camera && controls && cube.containsClientPoint(e.clientX, e.clientY, canvas)) {
+        // Check compass cardinals first
+        const compassHit = cube.pickCompass(e.clientX, e.clientY, canvas);
+        if (compassHit?.kind === "compass-cardinal") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (cameraRef.current !== camera) {
+            cameraRef.current = camera;
+            controls.object = camera;
+            controls.enableRotate = true;
+          }
+          void cube.snapToCardinal(compassHit.dir, camera, controls, 600);
+          return;
+        }
+        // Then check cube face/edge/corner
         const zone = cube.pick(e.clientX, e.clientY, canvas);
         if (zone) {
           e.preventDefault();
@@ -7615,6 +7645,11 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       const cube = viewCubeRef.current;
       const controls = controlsRef.current;
       if (cube?.containsClientPoint(e.clientX, e.clientY, canvas) && controls) {
+        // Check if the pointer went down on the compass ring → start yaw drag
+        const compassHit = cube.pickCompass(e.clientX, e.clientY, canvas);
+        if (compassHit?.kind === "compass-ring-drag") {
+          cube.startRingDrag(e.clientX, e.clientY, canvas);
+        }
         controls.enabled = false;
       }
     };
@@ -7727,6 +7762,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       }
 
       const controls = controlsRef.current;
+      // End ring drag if active
+      viewCubeRef.current?.endRingDrag();
       if (controls && !useAppStore.getState().viewerContextMenuOpen) {
         controls.enabled = true;
       }

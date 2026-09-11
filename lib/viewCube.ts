@@ -15,9 +15,10 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  * Bump `revision` whenever size/margins change so Viewer3D remounts the instance.
  */
 export const VIEW_CUBE_LAYOUT = {
-  revision: 20,
-  /** 10% larger than 101px. */
-  size: 111,
+  /** Bump whenever size/margins change so Viewer3D remounts the instance. */
+  revision: 21,
+  /** 155px fits cube + surrounding compass ring + N/S/E/W labels. */
+  size: 155,
   /** Equal top / right inset (CSS px). */
   marginTop: 16,
   marginRight: 16,
@@ -31,6 +32,11 @@ type ZoneUserData = {
   label?: string;
   zoneKey?: string;
 };
+
+/** Result from pickCompass — either a cardinal snap target or a ring-drag handle. */
+export type CompassHit =
+  | { kind: "compass-cardinal"; dir: THREE.Vector3; label: string }
+  | { kind: "compass-ring-drag" };
 
 type HitMesh = THREE.Mesh;
 
@@ -222,6 +228,48 @@ function makeFaceTexture(label: string, hover = false) {
   return tex;
 }
 
+/** Compass ring constants. */
+const RING_R = 0.92;      // torus centerline radius — ring wraps cube (HALF=0.5)
+const RING_TUBE = 0.034;  // visible tube radius (thin outline style)
+const RING_HIT_TUBE = 0.14; // invisible hit tube — generous 44pt touch target
+const CARDINAL_R = 1.10;  // distance from center for N/S/E/W sprite labels
+const CARDINAL_LABELS: { label: string; dir: THREE.Vector3 }[] = [
+  { label: "N", dir: new THREE.Vector3(0, 0,  1) },
+  { label: "S", dir: new THREE.Vector3(0, 0, -1) },
+  { label: "E", dir: new THREE.Vector3( 1, 0, 0) },
+  { label: "W", dir: new THREE.Vector3(-1, 0, 0) },
+];
+
+/** Paint a compass label sprite onto a square canvas (text centred). */
+function makeCardinalTexture(label: string, hover = false): THREE.Texture {
+  const S = 128;
+  const c = document.createElement("canvas");
+  c.width = S; c.height = S;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, S, S);
+  if (hover) {
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S * 0.44, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.fill();
+  }
+  const fontSize = Math.round(S * 0.46);
+  ctx.font = `700 ${fontSize}px "Segoe UI",system-ui,-apple-system,sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // Halo
+  ctx.lineJoin = "round";
+  ctx.lineWidth = fontSize * 0.18;
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.strokeText(label, S / 2, S / 2);
+  ctx.fillStyle = hover ? "#0f172a" : "#1e293b";
+  ctx.fillText(label, S / 2, S / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /**
  * White liquid-glass ViewCube — frosted idle, soft gray hover (instant, no sticky anim).
  */
@@ -232,6 +280,8 @@ export class ViewCube {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
   private root = new THREE.Group();
+  /** Compass ring + cardinals — child of root, shares cube's orientation. */
+  private compassGroup = new THREE.Group();
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private zoneMeshes = new Map<string, HitMesh>();
@@ -242,6 +292,12 @@ export class ViewCube {
   private hovered: HitMesh | null = null;
   private hoveredOverlay: HitMesh | null = null;
   private lastZone: ZoneUserData | null = null;
+  // Compass state
+  private compassRingMat: THREE.MeshStandardMaterial | null = null;
+  private cardinalSprites: Array<{ sprite: THREE.Sprite; restTex: THREE.Texture; hoverTex: THREE.Texture }> = [];
+  private hoveredCardinalIdx: number = -1;
+  private ringDragActive = false;
+  private ringDragStartAngle = 0;
   private viewport = {
     x: 0,
     y: 0,
@@ -256,6 +312,7 @@ export class ViewCube {
     this.camera.lookAt(0, 0, 0);
     this.scene.background = null;
     this.scene.add(this.root);
+    this.root.add(this.compassGroup);
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.15));
     const key = new THREE.DirectionalLight(0xffffff, 0.4);
@@ -266,6 +323,81 @@ export class ViewCube {
     this.scene.add(fill);
 
     this.buildCube();
+    this.buildCompass();
+  }
+
+  /** Builds the flat compass ring + N/S/E/W sprites + hit zones. */
+  private buildCompass() {
+    // ── Visual ring (thin torus in XZ plane at cube mid-height) ──
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.18,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.52,
+      depthWrite: false,
+    });
+    this.compassRingMat = ringMat;
+    const ringGeo = new THREE.TorusGeometry(RING_R, RING_TUBE, 16, 80);
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI / 2; // flat in XZ plane
+    ringMesh.name = "compass-ring";
+    this.compassGroup.add(ringMesh);
+
+    // ── Invisible wider torus for ring drag hit zone ──
+    const hitRingGeo = new THREE.TorusGeometry(RING_R, RING_HIT_TUBE, 8, 48);
+    const hitRingMat = new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
+    });
+    const hitRingMesh = new THREE.Mesh(hitRingGeo, hitRingMat);
+    hitRingMesh.rotation.x = Math.PI / 2;
+    hitRingMesh.name = "compass-ring-hit";
+    hitRingMesh.userData.isCompassRingDrag = true;
+    this.compassGroup.add(hitRingMesh);
+
+    // ── Tick marks at 90° intervals ──
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2;
+      const tickGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.055, 6);
+      const tickMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
+      const tick = new THREE.Mesh(tickGeo, tickMat);
+      tick.position.set(Math.sin(angle) * RING_R, 0, Math.cos(angle) * RING_R);
+      tick.name = "compass-tick";
+      this.compassGroup.add(tick);
+    }
+
+    // ── N/S/E/W sprites + invisible PlaneGeometry hit zones ──
+    for (let i = 0; i < CARDINAL_LABELS.length; i++) {
+      const { label, dir } = CARDINAL_LABELS[i];
+      const restTex = makeCardinalTexture(label, false);
+      const hoverTex = makeCardinalTexture(label, true);
+      const spriteMat = new THREE.SpriteMaterial({
+        map: restTex,
+        transparent: true,
+        depthWrite: false,
+        sizeAttenuation: true,
+      });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.setScalar(0.24);
+      sprite.position.copy(dir.clone().multiplyScalar(CARDINAL_R));
+      sprite.name = `compass-label-${label}`;
+      this.compassGroup.add(sprite);
+      this.cardinalSprites.push({ sprite, restTex, hoverTex });
+
+      // Invisible hit zone — generous 0.30×0.30 plane (≈44pt at 155px)
+      const hitGeo = new THREE.PlaneGeometry(0.30, 0.30);
+      const hitMat = new THREE.MeshBasicMaterial({
+        transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
+      });
+      const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+      hitMesh.position.copy(dir.clone().multiplyScalar(CARDINAL_R));
+      hitMesh.userData.isCompassCardinal = true;
+      hitMesh.userData.compassCardinalIdx = i;
+      hitMesh.name = `compass-hit-${label}`;
+      // Face the camera (Y-up, ring is in XZ plane so cardinal planes face up)
+      hitMesh.rotation.x = -Math.PI / 2;
+      this.compassGroup.add(hitMesh);
+    }
   }
 
   private registerZone(mesh: HitMesh, data: ZoneUserData) {
@@ -472,6 +604,141 @@ export class ViewCube {
     this.camera.updateMatrixWorld();
   }
 
+  // ─────────────────────────────────────────────
+  //  Compass public API
+  // ─────────────────────────────────────────────
+
+  /** Raycast against compass group to find a compass hit (cardinal or ring-drag). */
+  pickCompass(clientX: number, clientY: number, canvas: HTMLCanvasElement): CompassHit | null {
+    if (!this.setPointer(clientX, clientY, canvas)) return null;
+    const hits = this.raycaster.intersectObjects(this.compassGroup.children, false);
+    for (const h of hits) {
+      if (h.object.userData.isCompassCardinal === true) {
+        const idx = h.object.userData.compassCardinalIdx as number;
+        const { label, dir } = CARDINAL_LABELS[idx];
+        return { kind: "compass-cardinal", dir: dir.clone(), label };
+      }
+      if (h.object.userData.isCompassRingDrag === true) {
+        return { kind: "compass-ring-drag" };
+      }
+    }
+    return null;
+  }
+
+  /** Update compass hover highlighting (call from onPointerMove). */
+  updateCompassHover(clientX: number, clientY: number, canvas: HTMLCanvasElement): boolean {
+    if (!this.containsClientPoint(clientX, clientY, canvas)) {
+      this.clearCompassHover();
+      return false;
+    }
+    const hit = this.pickCompass(clientX, clientY, canvas);
+    if (hit?.kind === "compass-cardinal") {
+      const idx = (hit as { kind: "compass-cardinal"; dir: THREE.Vector3; label: string } & { _idx?: number }).dir
+        ? CARDINAL_LABELS.findIndex(c => c.label === (hit as { label: string }).label)
+        : -1;
+      this._setCardinalHover(idx);
+      this._setRingHover(false);
+      return true;
+    }
+    if (hit?.kind === "compass-ring-drag") {
+      this._setCardinalHover(-1);
+      this._setRingHover(true);
+      return true;
+    }
+    this.clearCompassHover();
+    return false;
+  }
+
+  clearCompassHover() {
+    this._setCardinalHover(-1);
+    this._setRingHover(false);
+  }
+
+  private _setCardinalHover(idx: number) {
+    if (this.hoveredCardinalIdx === idx) return;
+    // Restore previous
+    if (this.hoveredCardinalIdx >= 0) {
+      const prev = this.cardinalSprites[this.hoveredCardinalIdx];
+      if (prev) (prev.sprite.material as THREE.SpriteMaterial).map = prev.restTex;
+    }
+    this.hoveredCardinalIdx = idx;
+    if (idx >= 0) {
+      const cur = this.cardinalSprites[idx];
+      if (cur) (cur.sprite.material as THREE.SpriteMaterial).map = cur.hoverTex;
+    }
+  }
+
+  private _setRingHover(on: boolean) {
+    if (this.compassRingMat) {
+      this.compassRingMat.opacity = on ? 0.82 : 0.52;
+      this.compassRingMat.needsUpdate = true;
+    }
+  }
+
+  /** Snap camera to a horizontal cardinal direction (preserving elevation). */
+  async snapToCardinal(
+    dir: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+    controls: import("three/examples/jsm/controls/OrbitControls.js").OrbitControls,
+    duration = 600,
+  ): Promise<void> {
+    const target = controls.target.clone();
+    const offset = camera.position.clone().sub(target);
+    const elevation = offset.y;                      // preserve current elevation
+    const horizontal = Math.sqrt(offset.x ** 2 + offset.z ** 2);
+    // Build new position: same elevation, same total distance, new horizontal direction
+    const flat = dir.clone().normalize();
+    const dist = Math.max(offset.length(), 1);
+    const newOffset = new THREE.Vector3(
+      flat.x * horizontal,
+      elevation,
+      flat.z * horizontal,
+    ).normalize().multiplyScalar(dist);
+    const position = target.clone().add(newOffset);
+    camera.up.set(0, 1, 0);
+    await flyTo(camera, controls, position, target, duration);
+    controls.update();
+  }
+
+  // ── Ring drag (yaw-only orbit) ──
+
+  get isRingDragging(): boolean { return this.ringDragActive; }
+
+  startRingDrag(clientX: number, clientY: number, canvas: HTMLCanvasElement) {
+    const box = this.screenRect(canvas);
+    const cx = box.left + box.width / 2 + box.rect.left;
+    const cy = box.top + box.height / 2 + box.rect.top;
+    this.ringDragStartAngle = Math.atan2(clientY - cy, clientX - cx);
+    this.ringDragActive = true;
+  }
+
+  updateRingDrag(
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+    controls: import("three/examples/jsm/controls/OrbitControls.js").OrbitControls,
+  ) {
+    if (!this.ringDragActive) return;
+    const box = this.screenRect(canvas);
+    const cx = box.left + box.width / 2 + box.rect.left;
+    const cy = box.top + box.height / 2 + box.rect.top;
+    const angle = Math.atan2(clientY - cy, clientX - cx);
+    const delta = angle - this.ringDragStartAngle;
+    this.ringDragStartAngle = angle;
+    // Rotate camera position around world-Y by delta radians
+    const camera = controls.object as THREE.PerspectiveCamera;
+    const target = controls.target.clone();
+    const offset = camera.position.clone().sub(target);
+    offset.applyEuler(new THREE.Euler(0, -delta, 0));
+    camera.position.copy(target.clone().add(offset));
+    camera.lookAt(target);
+    controls.update();
+  }
+
+  endRingDrag() {
+    this.ringDragActive = false;
+  }
+
   updateViewport(canvasWidth: number, canvasHeight: number) {
     this.canvasCss = { w: canvasWidth, h: canvasHeight };
     this.viewport = {
@@ -661,11 +928,12 @@ export class ViewCube {
   dispose() {
     this.disposed = true;
     this.clearHover();
+    this.clearCompassHover();
     this.root.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.dispose();
-        const m = obj.material;
-        if (Array.isArray(m)) m.forEach((x) => x.dispose());
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite) {
+        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+        const m = obj.material as THREE.Material & { map?: THREE.Texture; userData?: { hoverMap?: THREE.Texture; restMap?: THREE.Texture } };
+        if (Array.isArray(m)) (m as THREE.Material[]).forEach((x) => x.dispose());
         else {
           const hoverMap = m.userData?.hoverMap as THREE.Texture | undefined;
           const restMap = m.userData?.restMap as THREE.Texture | undefined;
@@ -676,6 +944,12 @@ export class ViewCube {
         }
       }
     });
+    for (const { restTex, hoverTex } of this.cardinalSprites) {
+      restTex.dispose();
+      hoverTex.dispose();
+    }
+    this.cardinalSprites = [];
+    this.compassRingMat = null;
     this.zoneMeshes.clear();
     this.overlayMeshes.clear();
     this.faceMats = [];
