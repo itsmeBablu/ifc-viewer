@@ -973,6 +973,37 @@ export default function ToolRightPanel({
                                 {selectedDoor.positionMm} mm
                               </span>
                             </PropRow>
+                            <div className="mt-2 space-y-1.5 border-t border-[var(--panel-divider)] pt-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[var(--text-muted)]">Opening Angle</span>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={90}
+                                    step={1}
+                                    value={Math.max(0, Math.min(90, Math.round(selectedDoor.openingAngleDeg ?? 0)))}
+                                    onChange={(event) => {
+                                      const value = Number(event.target.value);
+                                      if (Number.isFinite(value)) void updateDoor(selectedDoor.id, { openingAngleDeg: Math.max(0, Math.min(90, value)) });
+                                    }}
+                                    className="h-7 w-16 rounded border border-[var(--panel-divider)] bg-[var(--surface-card)] px-1.5 text-right font-mono text-xs text-[var(--text-strong)] outline-none focus:border-amber-400"
+                                    aria-label="Door opening angle in degrees"
+                                  />
+                                  <span className="text-[var(--text-muted)]">°</span>
+                                </div>
+                              </div>
+                              <input
+                                type="range"
+                                min={0}
+                                max={90}
+                                step={1}
+                                value={Math.max(0, Math.min(90, selectedDoor.openingAngleDeg ?? 0))}
+                                onChange={(event) => void updateDoor(selectedDoor.id, { openingAngleDeg: Math.max(0, Math.min(90, Number(event.target.value))) })}
+                                className="v-yellow-slider w-full"
+                                aria-label="Door opening angle slider"
+                              />
+                            </div>
                           </>
                         )}
                         {selectedWindow && (
