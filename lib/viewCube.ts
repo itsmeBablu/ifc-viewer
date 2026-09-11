@@ -44,9 +44,8 @@ const FACE_PX = 512;
 const HALF = 0.36;   // cube half-size — smaller cube nests clearly inside ring
 const BAND = 0.34;
 
-/** Idle frosted glass opacity; hover is solid soft gray. */
-const GLASS_OPACITY = 0.58;
-const HOVER_GRAY = 0x94a3b8; // slate-400
+/** Hover overlay gray (slate-400). */
+const HOVER_GRAY = 0x94a3b8;
 
 function zoneKey(kind: ZoneKind, dir: THREE.Vector3): string {
   const qx = Math.round(dir.x * 100) / 100;
@@ -286,6 +285,8 @@ export class ViewCube {
   private pointer = new THREE.Vector2();
   private zoneMeshes = new Map<string, HitMesh>();
   private pickBox: THREE.Mesh | null = null;
+  /** Reference to the single multi-material cube mesh for face hover. */
+  private cubeMeshRef: THREE.Mesh | null = null;
   private overlayMeshes = new Map<string, HitMesh>();
   private faceMats: THREE.MeshStandardMaterial[] = [];
   private bodyMat: THREE.MeshStandardMaterial | null = null;
@@ -435,85 +436,82 @@ export class ViewCube {
       this.root.add(shadow);
     }
 
-    // Frosted white liquid-glass body
-    {
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.2,
-        metalness: 0.0,
-        transparent: true,
-        opacity: 0.38,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      });
-      this.bodyMat = bodyMat;
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(HALF * 2 - 0.02, HALF * 2 - 0.02, HALF * 2 - 0.02),
-        bodyMat,
-      );
-      this.root.add(body);
-    }
-
-    // Pick volume
-    {
-      const pick = new THREE.Mesh(
-        new THREE.BoxGeometry(HALF * 2, HALF * 2, HALF * 2),
-        new THREE.MeshBasicMaterial({
-          transparent: true,
-          opacity: 0,
-          depthWrite: false,
-          colorWrite: false,
-          side: THREE.DoubleSide,
-        }),
-      );
-      pick.name = "viewcube-pick";
-      pick.renderOrder = -1;
-      this.pickBox = pick;
-      this.root.add(pick);
-    }
-
-    const faceSize = 0.998;
-    const faces: { label: string; dir: THREE.Vector3; rot: THREE.Euler }[] = [
-      { label: "FRONT", dir: new THREE.Vector3(0, 0, 1), rot: new THREE.Euler(0, 0, 0) },
-      { label: "BACK", dir: new THREE.Vector3(0, 0, -1), rot: new THREE.Euler(0, Math.PI, 0) },
-      { label: "RIGHT", dir: new THREE.Vector3(1, 0, 0), rot: new THREE.Euler(0, Math.PI / 2, 0) },
-      { label: "LEFT", dir: new THREE.Vector3(-1, 0, 0), rot: new THREE.Euler(0, -Math.PI / 2, 0) },
-      { label: "TOP", dir: new THREE.Vector3(0, 1, 0), rot: new THREE.Euler(-Math.PI / 2, 0, 0) },
-      { label: "BOTTOM", dir: new THREE.Vector3(0, -1, 0), rot: new THREE.Euler(Math.PI / 2, 0, 0) },
+    // ── Single BoxGeometry cube with 6-material array ──────────────────────
+    // This avoids ALL transparency sorting / z-fighting: backface culling
+    // handles occlusion naturally, no depthWrite tricks needed.
+    //
+    // BoxGeometry material slot order: 0=+X(Right) 1=-X(Left) 2=+Y(Top)
+    //                                  3=-Y(Bottom) 4=+Z(Front) 5=-Z(Back)
+    const faceOrder: { label: string; dir: THREE.Vector3 }[] = [
+      { label: "RIGHT",  dir: new THREE.Vector3( 1,  0,  0) },
+      { label: "LEFT",   dir: new THREE.Vector3(-1,  0,  0) },
+      { label: "TOP",    dir: new THREE.Vector3( 0,  1,  0) },
+      { label: "BOTTOM", dir: new THREE.Vector3( 0, -1,  0) },
+      { label: "FRONT",  dir: new THREE.Vector3( 0,  0,  1) },
+      { label: "BACK",   dir: new THREE.Vector3( 0,  0, -1) },
     ];
 
-    for (const f of faces) {
-      const restMap = makeFaceTexture(f.label, false);
-      const hoverMap = makeFaceTexture(f.label, true);
+    const cubeMats: THREE.MeshStandardMaterial[] = faceOrder.map(({ label }) => {
+      const restMap  = makeFaceTexture(label, false);
+      const hoverMap = makeFaceTexture(label, true);
       const mat = new THREE.MeshStandardMaterial({
         map: restMap,
         color: 0xffffff,
-        roughness: 0.22,
+        roughness: 0.18,
         metalness: 0.0,
-        transparent: true,
-        opacity: GLASS_OPACITY,
-        depthWrite: false,
+        transparent: false,   // opaque — no sorting issues
         emissive: new THREE.Color(0x000000),
         emissiveIntensity: 0,
       });
-      mat.userData.restMap = restMap;
+      mat.userData.restMap  = restMap;
       mat.userData.hoverMap = hoverMap;
+      mat.userData.faceLabel = label;
       this.faceMats.push(mat);
+      return mat;
+    });
 
-      const mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(faceSize, faceSize),
-        mat,
+    const cubeGeo = new THREE.BoxGeometry(HALF * 2, HALF * 2, HALF * 2);
+    const cubeMesh = new THREE.Mesh(cubeGeo, cubeMats);
+    cubeMesh.name = "viewcube-body";
+    cubeMesh.renderOrder = 1;
+    this.root.add(cubeMesh);
+    this.cubeMeshRef = cubeMesh;
+
+    // Invisible pick volume — same size as cube, used by pickZone hit-classification
+    const pick = new THREE.Mesh(
+      new THREE.BoxGeometry(HALF * 2, HALF * 2, HALF * 2),
+      new THREE.MeshBasicMaterial({
+        transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
+      }),
+    );
+    pick.name = "viewcube-pick";
+    pick.renderOrder = -1;
+    this.pickBox = pick;
+    this.root.add(pick);
+
+    // Register face zones using the same BoxGeometry pick approach:
+    // we reuse the existing pickBox for face/edge/corner classification,
+    // so we only need zone entries — no separate per-face mesh needed.
+    for (const { label, dir } of faceOrder) {
+      const key = zoneKey("face", dir);
+      const dummy = new THREE.Mesh(
+        new THREE.PlaneGeometry(HALF * 2, HALF * 2),
+        new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
       ) as HitMesh;
-      mesh.rotation.copy(f.rot);
-      mesh.position.copy(f.dir.clone().multiplyScalar(HALF + 0.002));
-      mesh.renderOrder = 2;
-      this.registerZone(mesh, {
-        kind: "face",
-        dir: f.dir.clone(),
-        label: f.label,
-      });
-      this.root.add(mesh);
+      dummy.visible = false;
+      dummy.userData = { kind: "face", dir, label, zoneKey: key };
+      this.zoneMeshes.set(key, dummy);
     }
+    this.bodyMat = cubeMats[0]; // keep ref for legacy callers
+
+    // White edge lines on top of the cube faces
+    this.root.add(
+      new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(HALF * 2 + 0.001, HALF * 2 + 0.001, HALF * 2 + 0.001)),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }),
+      ),
+    );
+
 
     // Edge / corner overlays — solid yellow when active (no glass fade)
     const edgeLen = 0.64;
@@ -840,26 +838,24 @@ export class ViewCube {
     return classifyHitPoint(hits[0].point);
   }
 
-  /** Instant soft-gray face highlight — no rAF so it never sticks mid-fade. */
+  /** Instant face highlight on the multi-material cube — no rAF so it never sticks. */
   private applyFaceHover(mesh: HitMesh, on: boolean) {
-    const mat = mesh.material as THREE.MeshStandardMaterial;
-    if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+    // `mesh` is the dummy zone entry — look up the face label to find the real material slot.
+    const label = mesh.userData.faceLabel as string | undefined
+      ?? mesh.userData.label as string | undefined;
+    if (!label) return;
+    const mat = this.faceMats.find(m => m.userData.faceLabel === label);
+    if (!mat) return;
 
     const hoverMap = mat.userData.hoverMap as THREE.Texture | undefined;
-    const restMap = mat.userData.restMap as THREE.Texture | undefined;
+    const restMap  = mat.userData.restMap  as THREE.Texture | undefined;
 
     if (on && hoverMap) {
       mat.map = hoverMap;
-      mat.opacity = 1;
-      mat.transparent = false;
-      mat.depthWrite = true;
       mat.emissive.setHex(0x64748b);
-      mat.emissiveIntensity = 0.12;
+      mat.emissiveIntensity = 0.14;
     } else if (restMap) {
       mat.map = restMap;
-      mat.opacity = GLASS_OPACITY;
-      mat.transparent = true;
-      mat.depthWrite = false;
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0;
     }
@@ -956,5 +952,6 @@ export class ViewCube {
     this.faceMats = [];
     this.bodyMat = null;
     this.pickBox = null;
+    this.cubeMeshRef = null;
   }
 }
