@@ -62,7 +62,10 @@ export default function WerkzeugEntryPanel({ onFile }: { onFile: (file: File) =>
     let cancelled = false;
     void idbListProjects()
       .then((savedProjects) => {
-        if (!cancelled) setProjects(savedProjects);
+        // Do NOT auto-expand the first project — mounting SavedProjectPreview runs heavy
+        // synchronous Three.js geometry ops (layer.sync etc.) that freeze the main thread.
+        // Let the user click to expand a project they actually want to open.
+        if (!cancelled) { setProjects(savedProjects); }
       })
       .catch(() => {
         if (!cancelled) setProjectsError("Saved projects could not be read on this device.");
