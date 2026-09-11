@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   LuX,
   LuDownload,
-  LuCheckSquare,
+  LuSquareCheck,
   LuSquare,
   LuLayers,
   LuFileText,
@@ -210,7 +210,7 @@ export default function FloorExportModal() {
                 className="flex items-center gap-2 text-xs font-bold text-zinc-200 hover:text-white transition-colors cursor-pointer"
               >
                 {allSelected ? (
-                  <LuCheckSquare className="h-4 w-4 text-amber-400" />
+                  <LuSquareCheck className="h-4 w-4 text-amber-400" />
                 ) : isIndeterminate ? (
                   <div className="h-4 w-4 rounded border border-amber-400 bg-amber-400/20 flex items-center justify-center">
                     <span className="h-1.5 w-2 bg-amber-400 rounded-sm" />
@@ -251,7 +251,7 @@ export default function FloorExportModal() {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {checked ? (
-                        <LuCheckSquare className="h-4 w-4 text-amber-400 shrink-0" />
+                        <LuSquareCheck className="h-4 w-4 text-amber-400 shrink-0" />
                       ) : (
                         <LuSquare className="h-4 w-4 text-zinc-500 shrink-0" />
                       )}
