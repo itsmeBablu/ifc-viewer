@@ -18,6 +18,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useExportModalStore } from "@/store/useExportModalStore";
+import { downloadFloorCad } from "@/lib/cadFloorExport";
 import GlassPanel from "../common/GlassPanel";
 import { UnifiedButton } from "../common/UnifiedButton";
 import { useModelScene } from "./WerkzeugModelSceneContext";
@@ -66,6 +67,7 @@ export default function ToolFloorsSection({
   const selectedUnderlayId = useLayoutDrawingStore((s) => s.selectedUnderlayId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const [uploadLevelId, setUploadLevelId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);

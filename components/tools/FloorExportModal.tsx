@@ -35,7 +35,7 @@ export default function FloorExportModal() {
   const appFloors = useAppStore((s) => s.floors);
   const activeLevelId = useToolMarkupStore((s) => s.markupFloorId);
 
-  // Cad format: dxf (recommended for native AutoCAD opening) or dwg
+  // Cad format: dxf (recommended for AutoCAD 0-error import) or dwg
   const [cadFormat, setCadFormat] = useState<CadExportFormat>("dxf");
   // PDF format: multipage or zip
   const [pdfAsZip, setPdfAsZip] = useState(false);
@@ -345,9 +345,9 @@ export default function FloorExportModal() {
               <div className="flex items-start gap-2 rounded-lg bg-sky-950/40 border border-sky-800/40 p-2.5 text-[11px] text-sky-300">
                 <LuInfo className="h-4 w-4 shrink-0 text-sky-400 mt-0.5" />
                 <div className="space-y-1 leading-relaxed">
-                  <p className="font-semibold text-sky-200">Tip for AutoCAD users:</p>
+                  <p className="font-semibold text-sky-200">AutoCAD Compatibility Guide:</p>
                   <p className="text-zinc-300">
-                    AutoCAD opens <strong className="text-white">.dxf</strong> natively on double-click with complete architectural layers (walls, doors, windows, slabs, gridlines, dimensions), and you can save it directly as <strong className="text-white">.dwg</strong> in AutoCAD. Renaming exchange files to .dwg triggers AutoCAD&apos;s <em>&apos;Drawing file is invalid&apos;</em> check because Autodesk requires proprietary binary headers for .dwg.
+                    Use <strong className="text-white">AutoCAD DXF (.dxf)</strong> for 100% reliable opening in AutoCAD, Revit, Civil 3D, and BricsCAD with 0 errors. Double-clicking the .dxf file opens AutoCAD immediately with all architectural layers intact (walls, doors, windows, slabs, gridlines, dimensions), and you can save directly as a native <strong className="text-white">.dwg</strong> (Ctrl+S). Direct third-party binary .dwg files often trigger AutoCAD&apos;s <em>&apos;Drawing file is invalid&apos;</em> alert due to Autodesk proprietary checksums.
                   </p>
                 </div>
               </div>

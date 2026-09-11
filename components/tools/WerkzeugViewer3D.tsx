@@ -7068,7 +7068,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 }
               }
 
-              const p = surface?.point ?? (layoutHit ? layoutHit.point : new THREE.Vector3());
+              const p = surface?.point ?? ((layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") ? layoutHit.point : new THREE.Vector3());
               let elementName: string | null = null;
               let wallId: string | null = null;
               let doorId: string | null = null;
@@ -7177,7 +7177,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 return;
               }
               if (layoutHit.kind === "underlay") {
-                if (markupStore.armedTool === "note") {
+                if ((markupStore.armedTool as string) === "note") {
                   const u = layoutStore.underlays.find(
                     (x) => x.id === layoutHit.id,
                   );
@@ -7219,7 +7219,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 return;
               }
               if (layoutHit.kind === "wall") {
-                if (markupStore.armedTool === "note") {
+                if ((markupStore.armedTool as string) === "note") {
                   const wall = layoutStore.walls.find(
                     (w) => w.id === layoutHit.id,
                   );
@@ -7243,7 +7243,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 return;
               }
               if (layoutHit.kind === "door") {
-                if (markupStore.armedTool === "note") {
+                if ((markupStore.armedTool as string) === "note") {
                   const door = layoutStore.doors.find(
                     (d) => d.id === layoutHit.id,
                   );
@@ -7268,7 +7268,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 return;
               }
               if (layoutHit.kind === "window") {
-                if (markupStore.armedTool === "note") {
+                if ((markupStore.armedTool as string) === "note") {
                   const win = layoutStore.windows.find(
                     (w) => w.id === layoutHit.id,
                   );
