@@ -6,7 +6,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { useModifyStore } from "@/store/useModifyStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { alignmentTransform, collectRaycastCandidates, ownerOf, pickGeometry, selectionKey, type GeometrySelection } from "@/lib/modifySelection";
+import { alignmentTransform, collectRaycastCandidates, ownerOf, pickGeometry, safeExpandByObject, selectionKey, type GeometrySelection } from "@/lib/modifySelection";
 import { currentModifySelection, expandedSelection, mirrorMatrix, placeGroup, splitElement, transformElements } from "@/lib/modifyOperations";
 import { findGlobalSnap } from "@/lib/globalSnapping";
 import { snapMeshMeasurement, screenSegmentPoint } from "@/lib/measurementSnap";
@@ -202,7 +202,7 @@ export function installModifyController(options: {
       // at its previous center until the next click.
       if (refs.length && (state.tool === "move" || state.tool === "rotate")) {
         const liveObjects = selectedObjects(), liveBounds = new THREE.Box3();
-        liveObjects.forEach(object => liveBounds.expandByObject(object));
+        liveObjects.forEach(object => safeExpandByObject(liveBounds, object));
         if (!liveBounds.isEmpty()) {
           const liveCenter = liveBounds.getCenter(new THREE.Vector3());
           if (liveCenter.distanceToSquared(pivot.position) > 1e-10) {
@@ -214,7 +214,7 @@ export function installModifyController(options: {
       if (signature !== selectionSignature) {
         selectionSignature = signature;
         const objects = selectedObjects(), bounds = new THREE.Box3();
-        objects.forEach(o => bounds.expandByObject(o));
+        objects.forEach(o => safeExpandByObject(bounds, o));
         if (!bounds.isEmpty() && (state.tool === "move" || state.tool === "rotate")) {
           bounds.getCenter(pivot.position); pivot.quaternion.identity();
           tc.attach(pivot); tc.setMode(state.tool === "move" ? "translate" : "rotate");

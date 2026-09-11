@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { debugLog } from "./debugLog";
 import type { Floor } from "./types";
 import { useAppStore } from "@/store/useAppStore";
+import { safeExpandByObject } from "./modifySelection";
 
 export type ClipOrientation = "horizontal" | "verticalZ";
 
@@ -280,7 +281,8 @@ export class ClipSliceController {
     let bestArea = Infinity;
     for (const mesh of roomMeshes) {
       if (!mesh.visible) continue;
-      this._pickBox.setFromObject(mesh);
+      this._pickBox.makeEmpty();
+      safeExpandByObject(this._pickBox, mesh);
       if (this._pickBox.isEmpty()) continue;
       const { min, max } = this._pickBox;
       // Quick reject
@@ -354,7 +356,8 @@ export class ClipSliceController {
     }
 
     mesh.updateWorldMatrix(true, false);
-    this._box.setFromObject(mesh);
+    this._box.makeEmpty();
+    safeExpandByObject(this._box, mesh);
     if (this._box.isEmpty()) return;
     this._box.getSize(this._size);
     this._box.getCenter(this._center);
@@ -436,7 +439,8 @@ export class ClipSliceController {
       if (this.orientation === "horizontal" && !isRoom) continue;
 
       mesh.updateWorldMatrix(true, false);
-      this._box.setFromObject(mesh);
+      this._box.makeEmpty();
+      safeExpandByObject(this._box, mesh);
       if (this._box.isEmpty()) continue;
       this._box.getSize(this._size);
       this._box.getCenter(this._center);
@@ -651,11 +655,11 @@ export function floorWorldYBounds(
       if (o.userData.isClipStencil || o.userData.isSelectionOutline) return;
       if (o.userData.isClipCap) return;
       if (o.userData.floorId !== floorId) return;
-      box.expandByObject(o);
+      safeExpandByObject(box, o);
       any = true;
     });
   }
-  if (!any || box.isEmpty()) return null;
+  if (!any || box.isEmpty() || !Number.isFinite(box.min.y)) return null;
   return { yMin: box.min.y, yMax: box.max.y };
 }
 
@@ -690,10 +694,10 @@ export function sceneWorldZMid(
       if (!(o instanceof THREE.Mesh)) return;
       if (o.userData.isClipStencil || o.userData.isSelectionOutline) return;
       if (o.userData.isClipCap) return;
-      box.expandByObject(o);
+      safeExpandByObject(box, o);
       any = true;
     });
   }
-  if (!any || box.isEmpty()) return null;
+  if (!any || box.isEmpty() || !Number.isFinite(box.min.z)) return null;
   return (box.min.z + box.max.z) / 2;
 }

@@ -141,33 +141,7 @@ function hideInvalidGeometry(root: THREE.Object3D): THREE.Object3D[] {
   return hidden;
 }
 
-function safeExpandByObject(box: THREE.Box3, object: THREE.Object3D | null | undefined): void {
-  if (!object) return;
-  const tempBox = new THREE.Box3();
-  object.traverse((node) => {
-    if (node instanceof THREE.Mesh || node instanceof THREE.Line || node instanceof THREE.Points) {
-      const geo = node.geometry;
-      if (!geo) return;
-      const pos = geo.getAttribute?.("position");
-      if (!pos || pos.count === 0) return;
-      if (geo.boundingBox === null) {
-        const arr = pos.array as ArrayLike<number>;
-        for (let i = 0; i < arr.length; i++) {
-          if (!Number.isFinite(arr[i])) return;
-        }
-        geo.computeBoundingBox();
-      }
-      if (
-        geo.boundingBox &&
-        Number.isFinite(geo.boundingBox.min.x) &&
-        Number.isFinite(geo.boundingBox.max.x)
-      ) {
-        tempBox.copy(geo.boundingBox).applyMatrix4(node.matrixWorld);
-        box.union(tempBox);
-      }
-    }
-  });
-}
+import { safeBoxFromObject, safeExpandByObject } from "@/lib/modifySelection";
 
 import { isShapeTool } from "@/components/tools/MarkupIcons";
 import {
@@ -407,9 +381,18 @@ function attachAlignedOutline(
 ) {
   if (clearFirst) clearSelectionOutlines(mesh);
   const geom = mesh.geometry;
-  if (!geom.boundingBox) geom.computeBoundingBox();
+  if (!geom) return;
+  const pos = geom.getAttribute?.("position");
+  if (!pos || pos.count === 0 || !pos.array) return;
+  if (!geom.boundingBox) {
+    const arr = pos.array as ArrayLike<number>;
+    for (let i = 0; i < arr.length; i++) {
+      if (!Number.isFinite(arr[i])) return;
+    }
+    geom.computeBoundingBox();
+  }
   const box = geom.boundingBox;
-  if (!box || box.isEmpty()) return;
+  if (!box || box.isEmpty() || !Number.isFinite(box.min.x)) return;
 
   const center = box.getCenter(new THREE.Vector3());
   const mat = new THREE.MeshBasicMaterial({
@@ -442,9 +425,18 @@ function attachColorOutline(mesh: THREE.Mesh, hex: string) {
 function attachThermalSelectionOutline(mesh: THREE.Mesh, colors: THREE.Color[]) {
   clearSelectionOutlines(mesh);
   const geom = mesh.geometry;
-  if (!geom.boundingBox) geom.computeBoundingBox();
+  if (!geom) return;
+  const pos = geom.getAttribute?.("position");
+  if (!pos || pos.count === 0 || !pos.array) return;
+  if (!geom.boundingBox) {
+    const arr = pos.array as ArrayLike<number>;
+    for (let i = 0; i < arr.length; i++) {
+      if (!Number.isFinite(arr[i])) return;
+    }
+    geom.computeBoundingBox();
+  }
   const box = geom.boundingBox;
-  if (!box || box.isEmpty()) return;
+  if (!box || box.isEmpty() || !Number.isFinite(box.min.x)) return;
 
   const center = box.getCenter(new THREE.Vector3());
 
@@ -1117,8 +1109,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     const consider = (obj: THREE.Object3D | null | undefined) => {
       if (!obj?.visible) return;
-      const b = new THREE.Box3().setFromObject(obj);
-      if (!b.isEmpty()) {
+      const b = safeBoxFromObject(obj);
+      if (!b.isEmpty() && Number.isFinite(b.min.x)) {
         box.union(b);
         has = true;
       }
@@ -1140,7 +1132,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
           o.userData?.layoutSketchLineId
         ) {
           if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
-            const b = new THREE.Box3().setFromObject(o);
+            const b = safeBoxFromObject(o);
             if (!b.isEmpty() && Number.isFinite(b.min.x)) {
               box.union(b);
               has = true;
@@ -1152,7 +1144,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
     if (markupLayerRef.current?.group) {
       markupLayerRef.current.group.traverse((o) => {
         if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
-          const b = new THREE.Box3().setFromObject(o);
+          const b = safeBoxFromObject(o);
           if (!b.isEmpty() && Number.isFinite(b.min.x)) {
             box.union(b);
             has = true;
@@ -1255,7 +1247,7 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
       const mesh = roomMeshById.current.get(roomId);
       if (!camera || !controls || !mesh) return;
       mesh.visible = true;
-      const box = new THREE.Box3().setFromObject(mesh);
+      const box = safeBoxFromObject(mesh);
       if (box.isEmpty()) return;
       const { position, target } = frameBoundingBox(box, camera, 1.55);
       await flyTo(camera, controls, position, target, 900);
@@ -1589,6 +1581,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
 
     const ro = new ResizeObserver(resize);
     ro.observe(container);
+    window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", resize);
     resize();
 
       const tick = () => {
@@ -1735,6 +1729,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
       controls.dispose();
       renderer.dispose();
       renderEnvironmentRef.current?.dispose();
@@ -1980,7 +1976,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const box = new THREE.Box3();
     for (const room of zoneRooms) {
       const mesh = roomMeshById.current.get(room.id);
-      if (mesh) box.expandByObject(mesh);
+      if (mesh) safeExpandByObject(box, mesh);
     }
     if (box.isEmpty()) return;
     const { position, target } = frameBoundingBox(box, camera, 1.32);
@@ -2003,7 +1999,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const mesh = roomMeshById.current.get(roomId);
     if (!camera || !controls || !mesh) return;
     mesh.visible = true;
-    const box = new THREE.Box3().setFromObject(mesh);
+    const box = safeBoxFromObject(mesh);
     if (box.isEmpty()) return;
     const { position, target } = frameBoundingBox(box, camera, 1.55);
     void flyTo(camera, controls, position, target, 900);
@@ -2022,7 +2018,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       if (markup.selectedPlacementId) keys.add(`placement:${markup.selectedPlacementId}`);
       for (const item of layout.selectedElements) if (item.kind === "equipment") keys.add(`mepequipment:${item.id}`);
       const box = new THREE.Box3();
-      const visit = (object: THREE.Object3D) => { const direct = Object.entries(object.userData).find(([name, value]) => name.startsWith("layout") && name.endsWith("Id") && typeof value === "string"); const owner = direct ? `${direct[0].slice("layout".length, -2).toLowerCase()}:${direct[1]}` : object.userData.markupId ? `placement:${object.userData.markupId}` : null; if (owner && keys.has(owner)) box.expandByObject(object); object.children.forEach(visit); };
+      const visit = (object: THREE.Object3D) => { const direct = Object.entries(object.userData).find(([name, value]) => name.startsWith("layout") && name.endsWith("Id") && typeof value === "string"); const owner = direct ? `${direct[0].slice("layout".length, -2).toLowerCase()}:${direct[1]}` : object.userData.markupId ? `placement:${object.userData.markupId}` : null; if (owner && keys.has(owner)) safeExpandByObject(box, object); object.children.forEach(visit); };
       sceneRef.current?.children.forEach(visit);
       if (box.isEmpty()) return;
       event.preventDefault();
@@ -3619,17 +3615,19 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       }
 
       if (store.transformMode === "translate") {
-        const moving = new THREE.Box3().setFromObject(obj);
+        const moving = safeBoxFromObject(obj);
         const targets: THREE.Box3[] = [];
         shellCloneRef.current?.traverse((o) => {
           if (!(o instanceof THREE.Mesh) || !o.visible) return;
           if (o.userData.isClipCap || o.userData.isClipStencil) return;
-          targets.push(new THREE.Box3().setFromObject(o));
+          const b = safeBoxFromObject(o);
+          if (!b.isEmpty() && Number.isFinite(b.min.x)) targets.push(b);
         });
         markupLayerRef.current?.group.traverse((o) => {
           if (!(o instanceof THREE.Mesh) || o === obj) return;
           if (!o.userData.isMarkupPlacement) return;
-          targets.push(new THREE.Box3().setFromObject(o));
+          const b = safeBoxFromObject(o);
+          if (!b.isEmpty() && Number.isFinite(b.min.x)) targets.push(b);
         });
         const snapped = snapToNearbyAabb(moving, targets, 0.12);
         if (snapped) {
@@ -3662,7 +3660,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const sceneBox = () => {
       const box = new THREE.Box3();
       const shell = shellCloneRef.current;
-      if (shell) box.setFromObject(shell);
+      if (shell) safeExpandByObject(box, shell);
 
       const layoutLayer = layoutLayerRef.current;
       if (layoutLayer) {
@@ -3678,7 +3676,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
             o.userData?.layoutSketchLineId
           ) {
             if (o instanceof THREE.Mesh || o instanceof THREE.Group) {
-              box.expandByObject(o);
+              safeExpandByObject(box, o);
             }
           }
         });
@@ -3688,7 +3686,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       if (markupLayer) {
         markupLayer.group.traverse((o) => {
           if (o.userData?.isMarkupPlacement && o instanceof THREE.Mesh) {
-            box.expandByObject(o);
+            safeExpandByObject(box, o);
           }
         });
       }
@@ -3982,18 +3980,20 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       const obj = tc.object as THREE.Object3D | undefined;
       if (!obj?.userData.markupId) return;
 
-      const moving = new THREE.Box3().setFromObject(obj);
+      const moving = safeBoxFromObject(obj);
       const targets: THREE.Box3[] = [];
       shellCloneRef.current?.traverse((o) => {
         if (!(o instanceof THREE.Mesh) || !o.visible) return;
         if (o.userData.isClipCap || o.userData.isClipStencil) return;
-        targets.push(new THREE.Box3().setFromObject(o));
+        const b = safeBoxFromObject(o);
+        if (!b.isEmpty() && Number.isFinite(b.min.x)) targets.push(b);
       });
       markupLayerRef.current?.group.traverse((o) => {
         if (!(o instanceof THREE.Mesh) || !o.visible) return;
         if (o === obj || o.userData.isMarkupPreview) return;
         if (!o.userData.isMarkupPlacement) return;
-        targets.push(new THREE.Box3().setFromObject(o));
+        const b = safeBoxFromObject(o);
+        if (!b.isEmpty() && Number.isFinite(b.min.x)) targets.push(b);
       });
 
       const snapped = snapToNearbyAabb(moving, targets, 0.1);
@@ -4062,8 +4062,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const consider = (obj: THREE.Object3D) => {
       if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
       if (obj.userData.expressId !== toolSelectedExpressId) return;
-      const b = new THREE.Box3().setFromObject(obj);
-      if (b.isEmpty()) return;
+      const b = safeBoxFromObject(obj);
+      if (b.isEmpty() || !Number.isFinite(b.min.x)) return;
       box.union(b);
       found = true;
     };
@@ -4120,8 +4120,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const consider = (obj: THREE.Object3D) => {
       if (!(obj instanceof THREE.Mesh) || !obj.visible) return;
       if (obj.userData.expressId !== expressId) return;
-      const b = new THREE.Box3().setFromObject(obj);
-      if (b.isEmpty()) return;
+      const b = safeBoxFromObject(obj);
+      if (b.isEmpty() || !Number.isFinite(b.min.x)) return;
       box.union(b);
       found = true;
     };
@@ -4241,7 +4241,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           if (offX) mesh.position.x -= offX;
         }
         const box = new THREE.Box3();
-        for (const mesh of meshes) box.expandByObject(mesh);
+        for (const mesh of meshes) safeExpandByObject(box, mesh);
         for (const mesh of meshes) {
           const offY = (mesh.userData.presentationOffsetY as number) ?? 0;
           const offX = (mesh.userData.presentationOffsetX as number) ?? 0;

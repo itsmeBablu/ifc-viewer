@@ -3916,8 +3916,10 @@ export default class LayoutSceneLayer {
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
-    geo.computeBoundingBox();
-    geo.computeBoundingSphere();
+    if (positions.length > 0 && positions.every(Number.isFinite)) {
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+    }
     geo.userData.isComplexRoof = true;
     return geo;
   }

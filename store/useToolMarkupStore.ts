@@ -93,6 +93,7 @@ type ToolMarkupState = {
   notes: MarkupNote[];
   selectedPlacementId: string | null;
   selectedNoteId: string | null;
+  selectedMeasurementId: string | null;
   pendingNote: {
     posX: number;
     posY: number;
@@ -130,6 +131,7 @@ type ToolMarkupState = {
   measureSecond: MeasurePoint | null;
   setMeasurementKind: (kind: MeasurementKind) => void;
   removeMeasurement: (id: string) => void;
+  selectMeasurement: (id: string | null) => void;
   measureDraft: { x: number; y: number; z: number } | null;
   measurements: MarkupMeasurement[];
 
@@ -285,6 +287,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   notes: [],
   selectedPlacementId: null,
   selectedNoteId: null,
+  selectedMeasurementId: null,
   pendingNote: null,
   defaultColor: DEFAULT_MARKUP_COLOR,
   lastSavedAt: null,
@@ -327,8 +330,9 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   setMeasurementKind: (kind) => set({ measurementKind: kind, measureDraft: null, measureSecond: null }),
   removeMeasurement: (id) => {
     pushWerkzeugHistory();
-    set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id), contentTouchedAt: Date.now() }));
+    set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id), selectedMeasurementId: s.selectedMeasurementId === id ? null : s.selectedMeasurementId, contentTouchedAt: Date.now() }));
   },
+  selectMeasurement: (id) => set({ selectedMeasurementId: id, selectedNoteId: null, selectedPlacementId: null, measureMode: false }),
   setMeasureMode: (on) => {
     if (on) {
       set({

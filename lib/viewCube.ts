@@ -16,7 +16,7 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  */
 export const VIEW_CUBE_LAYOUT = {
   /** Bump whenever size/margins change so Viewer3D remounts the instance. */
-  revision: 26,
+  revision: 27,
   /** Desktop default size (CSS px) — 25% larger than baseline (150px vs 120px). */
   sizeDesktop: 150,
   /** iPad / tablet size — scaled down for comfortable touch & screen estate. */

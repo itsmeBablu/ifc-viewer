@@ -33,7 +33,7 @@ function isSafeRaycastObject(obj: THREE.Object3D): boolean {
     const geo = (obj as THREE.Mesh).geometry;
     if (!geo) return false;
     const pos = geo.getAttribute("position");
-    if (!pos || pos.count === 0) return false;
+    if (!pos || pos.count === 0 || !pos.array) return false;
     const arr = pos.array as ArrayLike<number>;
     for (let i = 0; i < arr.length; i++) {
       if (!Number.isFinite(arr[i])) return false;
@@ -41,6 +41,53 @@ function isSafeRaycastObject(obj: THREE.Object3D): boolean {
     return true;
   }
   return false;
+}
+
+export function safeExpandByObject(box: THREE.Box3, object: THREE.Object3D | null | undefined): THREE.Box3 {
+  if (!object) return box;
+  const tempBox = new THREE.Box3();
+  object.traverse((node) => {
+    if (node instanceof THREE.Mesh || node instanceof THREE.Line || node instanceof THREE.Points) {
+      const geo = node.geometry;
+      if (!geo) return;
+      const pos = geo.getAttribute?.("position");
+      if (!pos || pos.count === 0 || !pos.array) return;
+      if (geo.boundingBox === null) {
+        const arr = pos.array as ArrayLike<number>;
+        for (let i = 0; i < arr.length; i++) {
+          if (!Number.isFinite(arr[i])) return;
+        }
+        geo.computeBoundingBox();
+      }
+      if (
+        geo.boundingBox &&
+        Number.isFinite(geo.boundingBox.min.x) &&
+        Number.isFinite(geo.boundingBox.min.y) &&
+        Number.isFinite(geo.boundingBox.min.z) &&
+        Number.isFinite(geo.boundingBox.max.x) &&
+        Number.isFinite(geo.boundingBox.max.y) &&
+        Number.isFinite(geo.boundingBox.max.z)
+      ) {
+        tempBox.copy(geo.boundingBox).applyMatrix4(node.matrixWorld);
+        if (
+          Number.isFinite(tempBox.min.x) &&
+          Number.isFinite(tempBox.min.y) &&
+          Number.isFinite(tempBox.min.z) &&
+          Number.isFinite(tempBox.max.x) &&
+          Number.isFinite(tempBox.max.y) &&
+          Number.isFinite(tempBox.max.z)
+        ) {
+          box.union(tempBox);
+        }
+      }
+    }
+  });
+  return box;
+}
+
+export function safeBoxFromObject(object: THREE.Object3D | null | undefined): THREE.Box3 {
+  const box = new THREE.Box3();
+  return safeExpandByObject(box, object);
 }
 
 export function collectRaycastCandidates(roots: THREE.Object3D[]): THREE.Object3D[] {
