@@ -179,6 +179,7 @@ export default function ToolRightPanel({
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const selectElement = useLayoutDrawingStore((s) => s.selectElement);
   const measureMode = useToolMarkupStore((s) => s.measureMode);
+  const selectedMeasurementId = useToolMarkupStore((s) => s.selectedMeasurementId);
   const armedLayoutTool = useLayoutDrawingStore((s) => s.armedLayoutTool);
   const levels = useLayoutDrawingStore((s) => s.levels);
 
@@ -645,7 +646,7 @@ export default function ToolRightPanel({
 
                 <div className="tool-properties-content compact-properties flex-1 overflow-y-auto p-2 thin-scroll space-y-1.5 text-[11px]">
                   <DrawingShapeOptions />
-                  {measureMode ? <MeasurementProperties /> : hasSelection ? (
+                    {measureMode || selectedMeasurementId ? <MeasurementProperties /> : hasSelection ? (
                     <>
                 {selectedElements.length > 1 ? (
                   <BulkSelectionProperties />

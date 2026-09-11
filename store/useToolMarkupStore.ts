@@ -134,6 +134,8 @@ type ToolMarkupState = {
   selectMeasurement: (id: string | null) => void;
   measureDraft: { x: number; y: number; z: number } | null;
   measurements: MarkupMeasurement[];
+  measurementsVisible: boolean;
+  setMeasurementsVisible: (visible: boolean) => void;
 
   setArmedTool: (tool: MarkupToolId | null) => void;
   /** Bump so Viewer pins a notice on the current IFC/shape selection. */
@@ -300,6 +302,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
   measurementKind: "distance",
   measureDraft: null, measureSecond: null,
   measurements: [],
+  measurementsVisible: true,
 
   setNotePlaceHint: (msg) => set({ notePlaceHint: msg }),
   setDragSnapHint: (msg) => set({ dragSnapHint: msg }),
@@ -328,6 +331,7 @@ export const useToolMarkupStore = create<ToolMarkupState>((set, get) => ({
     }),
 
   setMeasurementKind: (kind) => set({ measurementKind: kind, measureDraft: null, measureSecond: null }),
+  setMeasurementsVisible: (visible) => set({ measurementsVisible: visible }),
   removeMeasurement: (id) => {
     pushWerkzeugHistory();
     set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id), selectedMeasurementId: s.selectedMeasurementId === id ? null : s.selectedMeasurementId, contentTouchedAt: Date.now() }));

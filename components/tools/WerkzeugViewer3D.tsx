@@ -2876,7 +2876,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       layer.syncPlacements(s.placements, s.selectedPlacementId);
       layer.syncNotes(s.notes, s.selectedNoteId);
       if (!s.measureMode && prev.measureMode) layer.setSnapIndicator(null);
-      if (s.measurements !== prev.measurements || s.measureDraft !== prev.measureDraft || s.measureSecond !== prev.measureSecond) layer.syncMeasurements(s.measurements, s.measureDraft, null);
+      if (s.measurements !== prev.measurements || s.measureDraft !== prev.measureDraft || s.measureSecond !== prev.measureSecond || s.selectedMeasurementId !== prev.selectedMeasurementId) layer.syncMeasurements(s.measurements, s.measureDraft, null, s.selectedMeasurementId);
+      if (s.measurementsVisible !== prev.measurementsVisible) layer.setMeasurementsVisible(s.measurementsVisible);
       for (const p of s.placements) {
         const mesh = layer.getMesh(p.id);
         if (!mesh) continue;
@@ -2889,7 +2890,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
     const s = useToolMarkupStore.getState();
     layer.syncPlacements(s.placements, s.selectedPlacementId);
     layer.syncNotes(s.notes, s.selectedNoteId);
-    layer.syncMeasurements(s.measurements, s.measureDraft, null);
+    layer.syncMeasurements(s.measurements, s.measureDraft, null, s.selectedMeasurementId);
+    layer.setMeasurementsVisible(s.measurementsVisible);
     return unsub;
   }, [toolMode, activeModelId, activeModelLabel]);
 
@@ -7477,6 +7479,10 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           const picked = layer.pickMarkup(raycaster.current);
           if (picked?.kind === "placement") {
             markupStore.selectPlacement(picked.id);
+            return;
+          }
+          if (picked?.kind === "measurement") {
+            markupStore.selectMeasurement(picked.id);
             return;
           }
           const noteId = layer.noteIdNearRay(

@@ -303,7 +303,7 @@ export default function WerkzeugApp() {
       if (shortcut.id === "redo") { void redoWerkzeug(); return; }
       if (shortcut.id === "open") { window.dispatchEvent(new Event(OPEN_IFC_FILE_EVENT)); return; }
       if (shortcut.id === "save") { window.dispatchEvent(new Event(SAVE_PROJECT_EVENT)); return; }
-      if (shortcut.id === "delete") { void layout.deleteSelected(); return; }
+      if (shortcut.id === "delete") { const selectedMeasurementId = useToolMarkupStore.getState().selectedMeasurementId; if (selectedMeasurementId) { useToolMarkupStore.getState().removeMeasurement(selectedMeasurementId); return; } void layout.deleteSelected(); return; }
       if (shortcut.id === "copy" || shortcut.id === "paste") { void layout.copySelected(100, 100).catch(error => useModifyStore.setState({ message: String(error) })); return; }
       if (shortcut.id === "group") { modify.activate("select"); useModifyStore.setState({ requestGroupName: true }); return; }
       if (["move", "rotate", "align", "mirror", "split", "trim", "joinRoof", "attachTop", "attachBase"].includes(shortcut.id)) { modify.activate(shortcut.id as Parameters<typeof modify.activate>[0]); return; }

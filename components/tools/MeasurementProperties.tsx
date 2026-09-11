@@ -18,6 +18,7 @@ export default function MeasurementProperties() {
     <p className="text-[11px] text-[var(--text-muted)]">{modes.find((m) => m.id === state.measurementKind)?.help}</p>
     <p className="text-[10px] text-[var(--text-muted)]">{state.measureSecond ? "2 points picked" : state.measureDraft ? "1 point picked" : "Ready"} · Alt bypasses snaps · Esc cancels</p>
     <ObjectSnapStrip compact />
+    <label className="flex items-center justify-between border-t border-[var(--panel-divider)] pt-2 text-[10px] text-[var(--text-muted)]"><span>Show dimensions</span><input type="checkbox" checked={state.measurementsVisible} onChange={(event) => state.setMeasurementsVisible(event.target.checked)} className="accent-sky-500" /></label>
     {state.measureDraft && <button type="button" onClick={state.clearMeasureDraft} className="text-[10px] underline">Cancel current measurement</button>}
     <div className="space-y-1 border-t border-[var(--panel-divider)] pt-2">
       {state.measurements.map((m) => {

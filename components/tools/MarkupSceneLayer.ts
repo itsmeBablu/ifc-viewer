@@ -13,6 +13,7 @@ import {
 } from "@/lib/toolMarkup";
 import { measurementGeometry, measurementLabel } from "@/lib/measurementGeometry";
 import { useToolMarkupStore, type MarkupMeasurement } from "@/store/useToolMarkupStore";
+import { collectRaycastCandidates } from "@/lib/modifySelection";
 
 /**
  * Imperative Three.js layer for Werkzeug markup meshes + CSS2D notes.
@@ -262,7 +263,7 @@ export class MarkupSceneLayer {
 
   pickMarkup(
     raycaster: THREE.Raycaster,
-  ): { kind: "placement" | "note"; id: string } | null {
+  ): { kind: "placement" | "note" | "measurement"; id: string } | null {
     const safeMeshes = [...this.meshes.values()].filter((m) => {
       const pos = m.geometry?.getAttribute("position");
       if (!pos || pos.count === 0) return false;
@@ -282,6 +283,9 @@ export class MarkupSceneLayer {
         id: meshHits[0].object.userData.markupId as string,
       };
     }
+    const measureCandidates = collectRaycastCandidates([...this.measureGroups.values()]);
+    const measureHit = raycaster.intersectObjects(measureCandidates, false).find((hit) => hit.object.userData.measurementId);
+    if (measureHit?.object.userData.measurementId) return { kind: "measurement", id: measureHit.object.userData.measurementId as string };
     // Notes: approximate via distance to camera ray vs note positions
     // (CSS2D isn't in the raycaster). Prefer mesh hits first.
     return null;
@@ -393,6 +397,7 @@ export class MarkupSceneLayer {
     measurements: MarkupMeasurement[],
     draft: { x: number; y: number; z: number } | null,
     cursor: { x: number; y: number; z: number } | null,
+    selectedId: string | null = null,
   ) {
     const keep = new Set(measurements.map((m) => m.id));
     for (const [id, g] of this.measureGroups) {
@@ -401,6 +406,7 @@ export class MarkupSceneLayer {
     for (const m of measurements) {
       if (this.measureGroups.has(m.id)) continue;
       const group = this.buildMeasureGroup(m);
+      group.userData.selected = m.id === selectedId;
       this.measureGroups.set(m.id, group);
       this.group.add(group);
     }
@@ -415,6 +421,10 @@ export class MarkupSceneLayer {
       });
       this.group.add(this.measurePreview);
     }
+  }
+
+  setMeasurementsVisible(visible: boolean) {
+    for (const group of this.measureGroups.values()) group.visible = visible;
   }
 
   private buildMeasureGroup(m: MarkupMeasurement): THREE.Group {
@@ -439,11 +449,11 @@ export class MarkupSceneLayer {
     for (const path of paths) {
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(path), new THREE.LineBasicMaterial({ color: 0x38bdf8, depthTest: false, depthWrite: false }));
       line.renderOrder = 997;
-      line.userData.isMarkupPreview = true;
-      line.raycast = () => undefined;
+      line.userData.measurementId = m.id;
       group.add(line);
     }
     const el = document.createElement("div");
+    el.dataset.measurementId = m.id;
     el.style.cssText = "pointer-events:none;padding:3px 6px;border-radius:3px;background:var(--surface-card, #18181b);border:1px solid #38bdf8;color:var(--text-strong, #fff);font:600 11px/1.3 system-ui,sans-serif;white-space:nowrap";
     el.textContent = measurementLabel(geometry);
     const label = new CSS2DObject(el);
