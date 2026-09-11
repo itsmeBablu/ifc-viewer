@@ -16,7 +16,7 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  */
 export const VIEW_CUBE_LAYOUT = {
   /** Bump whenever size/margins change so Viewer3D remounts the instance. */
-  revision: 27,
+  revision: 28,
   /** Desktop default size (CSS px) — 25% larger than baseline (150px vs 120px). */
   sizeDesktop: 150,
   /** iPad / tablet size — scaled down for comfortable touch & screen estate. */
@@ -285,14 +285,14 @@ function makeCardinalTexture(label: string, hover = false): THREE.Texture {
     ctx.fillStyle = "rgba(255,255,255,0.72)";
     ctx.fill();
   }
-  const fontSize = Math.round(S * 0.46);
-  ctx.font = `700 ${fontSize}px "Segoe UI",system-ui,-apple-system,sans-serif`;
+  const fontSize = Math.round(S * 0.58);
+  ctx.font = `800 ${fontSize}px "Segoe UI",system-ui,-apple-system,sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   // Halo
   ctx.lineJoin = "round";
   ctx.lineWidth = fontSize * 0.18;
-  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.strokeStyle = "rgba(255,255,255,0.88)";
   ctx.strokeText(label, S / 2, S / 2);
   ctx.fillStyle = hover ? "#0f172a" : "#1e293b";
   ctx.fillText(label, S / 2, S / 2);
@@ -420,14 +420,14 @@ export class ViewCube {
         sizeAttenuation: true,
       });
       const sprite = new THREE.Sprite(spriteMat);
-      sprite.scale.setScalar(0.19);
+      sprite.scale.setScalar(0.24);
       sprite.position.copy(dir.clone().multiplyScalar(CARDINAL_R));
       sprite.name = `compass-label-${label}`;
       this.compassGroup.add(sprite);
       this.cardinalSprites.push({ sprite, restTex, hoverTex });
 
       // Invisible hit zone for cardinal clicks
-      const hitGeo = new THREE.PlaneGeometry(0.24, 0.24);
+      const hitGeo = new THREE.PlaneGeometry(0.28, 0.28);
       const hitMat = new THREE.MeshBasicMaterial({
         transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide,
       });
