@@ -119,14 +119,14 @@ import {
   type SelectedElementRef,
 } from "@/lib/layoutDrawing";
 
-function ViewCompass() {
+function ViewCompass({ rotation }: { rotation: number }) {
   const viewPreset = useToolMarkupStore((s) => s.viewPreset);
   const setViewPreset = useToolMarkupStore((s) => s.setViewPreset);
   const button = (label: string, preset: "north" | "south" | "east" | "west", className: string) => (
     <button type="button" aria-label={`View ${label}`} title={`View ${label}`} onClick={() => setViewPreset(preset)} className={`absolute grid place-items-center rounded-md text-[9px] font-bold transition ${viewPreset === preset ? "bg-amber-400 text-slate-950" : "bg-slate-900/65 text-white/85 hover:bg-amber-300 hover:text-slate-950"} ${className}`}>{label[0]}</button>
   );
   return <div className="pointer-events-auto absolute right-4 top-[139px] z-20 h-[84px] w-[84px] select-none rounded-full border border-white/35 bg-slate-950/45 p-1.5 shadow-lg shadow-black/25 backdrop-blur-md" aria-label="View compass">
-    <div className="relative h-full w-full rounded-full border border-white/25 bg-slate-900/45 shadow-[inset_0_1px_2px_rgba(255,255,255,.25)]">
+    <div className="relative h-full w-full rounded-full border border-white/25 bg-slate-900/45 shadow-[inset_0_1px_2px_rgba(255,255,255,.25)]" style={{ transform: `rotate(${rotation}deg)` }}>
       <span className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-px -translate-x-1/2 -translate-y-1/2 bg-white/15" />
       <span className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[70%] -translate-x-1/2 -translate-y-1/2 bg-white/15" />
       {button("North", "north", "left-1/2 top-0 h-7 w-7 -translate-x-1/2 text-[10px]")}
@@ -808,6 +808,8 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
   const renderEnvironmentRef = useRef<RenderEnvironment | null>(null);
   const groundShadowRef = useRef<THREE.Mesh | null>(null);
   const viewCubeRef = useRef<ViewCube | null>(null);
+  const [compassRotation, setCompassRotation] = useState(0);
+  const compassRotationRef = useRef(0);
 
   useEffect(() => {
     const reposition = (event: Event) => {
@@ -1578,6 +1580,15 @@ const WerkzeugViewer3D = forwardRef<WerkzeugViewer3DHandle, Props>(function Werk
         // Update controls first, then capture — keeps each quadrant independent.
         controls.update();
         const liveCam = cameraRef.current;
+        if (liveCam) {
+          const dx = liveCam.position.x - controls.target.x;
+          const dz = liveCam.position.z - controls.target.z;
+          const nextCompassRotation = (-Math.atan2(dx, dz) * 180) / Math.PI;
+          if (Math.abs(nextCompassRotation - compassRotationRef.current) > 0.75) {
+            compassRotationRef.current = nextCompassRotation;
+            setCompassRotation(nextCompassRotation);
+          }
+        }
         if (liveCam && slots[activeIdx]) {
           captureSlotFromCamera(slots[activeIdx], liveCam, controls.target);
           if (liveCam instanceof THREE.OrthographicCamera) {
@@ -7875,7 +7886,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   return (
     <div ref={containerRef} className={`relative ${renderPreview ? "ring-2 ring-inset ring-yellow-400/90 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55)]" : ""} ${className ?? ""}`} data-viewer-root>
       <QuadViewOverlays />
-      <ViewCompass />
+      <ViewCompass rotation={compassRotation} />
       {doorActionPosition && (selectedDoor || selectedWindow) && (
         <div
           className="pointer-events-auto fixed z-[1200] flex items-center gap-1 p-0.5"
