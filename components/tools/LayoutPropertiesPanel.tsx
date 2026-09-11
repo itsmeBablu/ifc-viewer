@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { LuPlus, LuRotateCcw, LuTrash2 } from "react-icons/lu";
+import { LuPlus, LuRotateCcw, LuTrash2, LuLink, LuUnlink } from "react-icons/lu";
 import { t } from "@/lib/i18n";
 import {
   beamAngleDeg,
@@ -32,6 +32,8 @@ import {
 } from "@/lib/layoutDrawing";
 import { useAppStore } from "@/store/useAppStore";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useModifyStore } from "@/store/useModifyStore";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { useMaterialStore } from "@/store/materialStore";
 import { DEFAULT_ELEMENT_TYPES } from "./EditTypeDialog";
 import MepConnectionProperties from "./MepConnectionProperties";
@@ -593,6 +595,28 @@ export default function LayoutPropertiesPanel({
               />
             </div>
           </Section>
+          {slab.kind === "roof" && (() => {
+            const boundary = slab.boundary ?? [];
+            const slopes = boundary.map((_, edgeIdx) => slab.edgeSlopes?.find((edge) => edge.edgeIdx === edgeIdx) ?? { edgeIdx, isSloped: true, pitchDeg: 30 });
+            const setEdge = (edgeIdx: number, patch: { isSloped?: boolean; pitchDeg?: number }) => {
+              const next = slopes.map((edge) => edge.edgeIdx === edgeIdx ? { ...edge, ...patch } : edge);
+              void updateSlab(slab.id, { edgeSlopes: next });
+            };
+            return <Section defaultOpen title="Roof footprint & slopes">
+              <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">Choose which footprint edges define slope. This matches Revit’s roof-by-footprint workflow: one edge creates a shed, two opposite edges a gable, and three or four edges a hip roof.</p>
+              <div className="space-y-1.5">
+                {slopes.map((edge, edgeIdx) => <div key={edgeIdx} className="grid grid-cols-[3.5rem_1fr_4.5rem] items-center gap-1.5 rounded-lg border border-[var(--panel-divider)] p-1.5">
+                  <span className="text-[10px] font-semibold">Edge {edgeIdx + 1}</span>
+                  <label className="flex items-center gap-1 text-[10px]"><input aria-label={`Edge ${edgeIdx + 1} defines roof slope`} type="checkbox" checked={edge.isSloped !== false} onChange={e => setEdge(edgeIdx, { isSloped: e.target.checked, pitchDeg: e.target.checked ? (edge.pitchDeg || 30) : 0 })} /> Defines slope</label>
+                  <label className="flex items-center gap-1 text-[10px]">{edge.isSloped !== false && <><input aria-label={`Edge ${edgeIdx + 1} pitch`} className="w-12 rounded border border-[var(--panel-divider)] bg-transparent px-1 py-0.5 text-right font-mono" type="number" min={0} max={85} value={edge.pitchDeg} onChange={e => setEdge(edgeIdx, { pitchDeg: Math.max(0, Math.min(85, Number(e.target.value))) })} />°</>}</label>
+                </div>)}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <button type="button" className="flex items-center justify-center gap-1 rounded-lg border border-[var(--panel-divider)] px-2 py-1.5 text-[10px]" onClick={() => { useLayoutDrawingStore.setState({ armedLayoutTool: null }); useToolMarkupStore.getState().setArmedTool(null); useModifyStore.getState().activate("joinRoof"); }}><LuLink className="h-3 w-3" /> Join to roof</button>
+                <button type="button" className="flex items-center justify-center gap-1 rounded-lg border border-[var(--panel-divider)] px-2 py-1.5 text-[10px]" onClick={() => { useLayoutDrawingStore.setState({ armedLayoutTool: null }); useToolMarkupStore.getState().setArmedTool(null); useModifyStore.getState().activate("attachTop"); }}><LuUnlink className="h-3 w-3" /> Attach walls</button>
+              </div>
+            </Section>;
+          })()}
           <div className="flex gap-1.5">
             <button
               type="button"

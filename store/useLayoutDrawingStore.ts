@@ -686,6 +686,7 @@ type LayoutDrawingState = {
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
   beginSlabDraw: (kind: "floor" | "ceiling" | "roof", levelId: string) => void;
+  createRoofFromWalls: (levelId: string) => Promise<LayoutSlab | null>;
   beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
   addSlabCorner: (
@@ -2566,6 +2567,27 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: targetSlabId ?? null,
       selectedUnderlayId: null,
     }),
+
+  createRoofFromWalls: async (levelId) => {
+    const s = get();
+    if (!s.projectId) return null;
+    const loops = detectLoopsFromSegments(s.walls.filter(w => w.levelId === levelId && !w.curved), 140).closedLoops;
+    const outer = loops.sort((a, b) => b.areaSqMm - a.areaSqMm)[0];
+    if (!outer?.points?.length || outer.points.length < 3) return null;
+    const xs = outer.points.map(p => p.xMm), ys = outer.points.map(p => p.yMm);
+    const roof: LayoutSlab = {
+      id: newLayoutId("roof"), projectId: s.projectId, levelId, kind: "roof",
+      minXmm: Math.min(...xs), minYmm: Math.min(...ys), maxXmm: Math.max(...xs), maxYmm: Math.max(...ys),
+      boundary: outer.points, holes: [], thicknessMm: s.draftSlabThicknessMm,
+      elevationOffsetMm: s.levels.find(l => l.id === levelId)?.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM,
+      edgeSlopes: outer.points.map((_, edgeIdx) => ({ edgeIdx, pitchDeg: 30, isSloped: true })),
+      autoBoundaryFromWalls: true, roofPreset: "hip", createdAt: Date.now(),
+    };
+    pushWerkzeugHistory();
+    await idbPutSlab(roof);
+    set(prev => ({ slabs: [...prev.slabs, roof], selectedSlabId: roof.id, armedLayoutTool: null, slabDraw: null, lastMutatedAt: Date.now() }));
+    return roof;
+  },
 
   beginFloorHole: (slabId: string) => {
     const slab = get().slabs.find((s) => s.id === slabId);

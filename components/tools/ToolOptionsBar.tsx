@@ -125,6 +125,7 @@ export default function ToolOptionsBar() {
   const beginSlabBoundaryEdit = useLayoutDrawingStore((s) => s.beginSlabBoundaryEdit);
   const cancelSlabBoundaryEdit = useLayoutDrawingStore((s) => s.cancelSlabBoundaryEdit);
   const convertSketchToSlab = useLayoutDrawingStore((s) => s.convertSketchToSlab);
+  const createRoofFromWalls = useLayoutDrawingStore((s) => s.createRoofFromWalls);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
   const selectedStair = useLayoutDrawingStore((s) => s.stairs.find((item) => item.id === s.selectedStairId));
@@ -361,7 +362,13 @@ export default function ToolOptionsBar() {
         )}
 
         {/* FLOOR / ROOF / BOUNDARY EDIT TOOL OPTIONS */}
-        {slabBoundaryEdit ? <BoundarySketchOptions /> : (editingSlabId || (armedLayoutTool === "lines" && sketchTargetKind)) ? (
+        {slabBoundaryEdit ? <BoundarySketchOptions /> : armedLayoutTool === "roof" && !editingSlabId && !sketchTargetKind ? (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="font-bold text-violet-400">Roof by footprint</span>
+            <button type="button" className="rounded-md border border-violet-400/60 bg-violet-400/10 px-2 py-1 font-semibold text-violet-300" onClick={() => { const level = markupFloorId ?? levels[0]?.id; if (level) void createRoofFromWalls(level); }}>Pick wall footprint</button>
+            <span className="text-[10px] text-[var(--text-muted)]">or click points to sketch a custom boundary</span>
+          </div>
+        ) : (editingSlabId || (armedLayoutTool === "lines" && sketchTargetKind)) ? (
           <div className="flex items-center gap-3">
             <span className="font-bold text-pink-500 flex items-center gap-1">
               <LuPencil className="h-3.5 w-3.5" />
