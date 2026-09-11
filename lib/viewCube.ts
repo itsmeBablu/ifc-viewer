@@ -207,6 +207,10 @@ function makeFaceTexture(label: string, hover = false) {
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
+  if (label === "BOTTOM") {
+    ctx.translate(FACE_PX, FACE_PX);
+    ctx.rotate(Math.PI);
+  }
   paintFace(ctx, label, hover);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
