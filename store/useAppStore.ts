@@ -259,6 +259,7 @@ type AppState = {
     label?: string | null,
     fileSizeBytes?: number | null,
   ) => void;
+  renameActiveModel: (label: string) => void;
   setFloors: (floors: Floor[]) => void;
   setRooms: (rooms: Room[]) => void;
   setSelectedFloor: (floorId: string | null) => void;
@@ -587,6 +588,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       loadError: null,
     });
   },
+  renameActiveModel: (label) => set((state) => ({ activeModelLabel: label.trim() || state.activeModelLabel || "Architecture Project" })),
 
   setFloors: (floors) => set({ floors }),
   setRooms: (rooms) =>

@@ -157,6 +157,7 @@ export default function ToolRightPanel({
 
   // -- Store slices ----------------------------------------------------------
   const activeModelLabel = useAppStore((s) => s.activeModelLabel);
+  const renameActiveModel = useAppStore((s) => s.renameActiveModel);
   const selectedFloor = useAppStore((s) => s.selectedFloor);
   const setSelectedFloor = useAppStore((s) => s.setSelectedFloor);
   const floors = useAppStore((s) => s.floors);
@@ -544,9 +545,15 @@ export default function ToolRightPanel({
         <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--panel-divider)] px-2.5 bg-[var(--surface-overlay)]/60">
           <div className="flex items-center gap-2 min-w-0">
             <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
-            <span className="font-semibold text-[11px] text-[var(--text-strong)] truncate">
-              {activeModelLabel || "Architecture Project"}
-            </span>
+            <input
+              key={activeModelLabel ?? "default-project"}
+              aria-label="Project name"
+              defaultValue={activeModelLabel || "Architecture Project"}
+              onBlur={(event) => renameActiveModel(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.currentTarget.blur(); } }}
+              className="min-w-0 max-w-[150px] truncate border-b border-transparent bg-transparent font-semibold text-[11px] text-[var(--text-strong)] outline-none hover:border-[var(--panel-divider)] focus:border-amber-400"
+              title="Rename project"
+            />
             <span className="text-[9px] text-[var(--text-muted)] font-mono shrink-0">
               • {getViewTitle()}
             </span>
