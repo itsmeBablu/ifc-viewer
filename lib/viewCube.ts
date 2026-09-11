@@ -16,15 +16,15 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
  */
 export const VIEW_CUBE_LAYOUT = {
   /** Bump whenever size/margins change so Viewer3D remounts the instance. */
-  revision: 23,
-  /** Desktop default size (CSS px) — compact cube + snug compass circle. */
-  sizeDesktop: 120,
+  revision: 24,
+  /** Desktop default size (CSS px) — 50% larger cube on desktop (180px vs 120px). */
+  sizeDesktop: 180,
   /** iPad / tablet size — scaled down for comfortable touch & screen estate. */
   sizeTablet: 92,
   /** Mobile phone size. */
   sizeMobile: 76,
   /** Default fallback size. */
-  size: 120,
+  size: 180,
   /** Top / right inset (CSS px). */
   marginTop: 16,
   marginRight: 16,
@@ -70,8 +70,8 @@ export type CompassHit =
 type HitMesh = THREE.Mesh;
 
 const FACE_PX = 512;
-const HALF = 0.36;   // cube half-size — nests clearly inside compass ring
-const BAND = 0.22;   // threshold for edge/corner click zones (outer 39% is edge/corner)
+const HALF = 0.38;   // cube half-size — 50% larger presence on desktop
+const BAND = 0.235;  // threshold for edge/corner click zones (outer 38% is edge/corner)
 
 /** Hover overlay gray (slate-400). */
 const HOVER_GRAY = 0x94a3b8;
@@ -257,10 +257,10 @@ function makeFaceTexture(label: string, hover = false) {
 }
 
 /** Compass ring constants — reduced diameter for a tight, elegant fit around the cube. */
-const RING_R = 0.65;        // torus centerline radius — cleanly wraps cube (corner radius ~0.51)
+const RING_R = 0.67;        // torus centerline radius — cleanly wraps cube (corner radius ~0.537)
 const RING_TUBE = 0.022;    // visible tube radius (thin crisp outline style)
 const RING_HIT_TUBE = 0.11; // invisible hit tube for ring drag
-const CARDINAL_R = 0.80;    // distance from center for N/S/E/W sprite labels
+const CARDINAL_R = 0.82;    // distance from center for N/S/E/W sprite labels
 const CARDINAL_LABELS: { label: string; dir: THREE.Vector3 }[] = [
   { label: "N", dir: new THREE.Vector3(0, 0,  1) },
   { label: "S", dir: new THREE.Vector3(0, 0, -1) },
@@ -549,10 +549,10 @@ export class ViewCube {
     );
 
     // Edge / corner overlays — highlight on hover matching the click regions
-    const edgeMid = 0.29; // centered in the [0.22, 0.36] edge/corner band
-    const edgeLen = 0.42;
-    const edgeW = 0.15;
-    const cornerSize = 0.15;
+    const edgeMid = 0.308; // centered in the [0.235, 0.38] edge/corner band
+    const edgeLen = 0.45;
+    const edgeW = 0.155;
+    const cornerSize = 0.155;
     const edgeMids = [
       [1, 1, 0],
       [1, -1, 0],

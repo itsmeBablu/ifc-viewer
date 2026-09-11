@@ -3242,20 +3242,26 @@ export default class LayoutSceneLayer {
     }
     const ms = useToolMarkupStore.getState();
     const visibility = useViewDisplayStore.getState().views[viewDisplayKey(ms.quadView ? ms.quadPresets[ms.quadActiveIndex] : ms.viewPreset, ms.markupFloorId, useLayoutDrawingStore.getState().activeSectionId)];
-    const hits = raycaster.intersectObjects(
-      // Guard: skip meshes whose position buffer has NaN values (e.g. zero-length walls).
-      // Three.js throws "computeBoundingSphere: radius is NaN" and skips them anyway,
-      // but the console error is noisy. Filter them out proactively.
-      this.group.children.filter(child => {
-        if (!(child instanceof THREE.Mesh)) return true;
-        const pos = child.geometry?.getAttribute("position");
-        if (!pos) return false;
-        const arr = pos.array as Float32Array;
-        for (let i = 0; i < arr.length; i++) { if (!isFinite(arr[i])) return false; }
-        return true;
-      }),
-      true,
-    ).filter(hit => isObjectVisibleInView(hit.object, visibility));
+    // Guard: collect all descendant meshes/lines/points and skip any whose position buffer
+    // has NaN/empty values (e.g. zero-length walls). Passing them directly with recursive=false
+    // prevents Three.js from calling computeBoundingSphere on invalid buffers.
+    const safeCandidates: THREE.Object3D[] = [];
+    this.group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Points) {
+        const geo = (child as THREE.Mesh).geometry;
+        if (!geo) return;
+        const pos = geo.getAttribute("position");
+        if (!pos || pos.count === 0) return;
+        const arr = pos.array as ArrayLike<number>;
+        for (let i = 0; i < arr.length; i++) {
+          if (!Number.isFinite(arr[i])) return;
+        }
+        safeCandidates.push(child);
+      }
+    });
+    const hits = raycaster
+      .intersectObjects(safeCandidates, false)
+      .filter((hit) => isObjectVisibleInView(hit.object, visibility));
     for (const h of hits) {
       // Skip hidden CAD/solid sibling so Top picks the symbol, 3D the box.
       if (!h.object.visible) continue;
