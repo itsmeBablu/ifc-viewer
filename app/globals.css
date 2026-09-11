@@ -4101,6 +4101,20 @@ body.mep-mode-active .desktop-shape-option.is-active {
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 3px #000, 0 0 2px #000;
 }
+
+/* Native-feeling touch target and sticky tab strip for the iPad inspector. */
+.werkzeug-ipad-context .werkzeug-ipad-drawer-body > div:first-child {
+  background: color-mix(in srgb, var(--surface-base) 88%, transparent);
+  backdrop-filter: blur(16px);
+}
+.werkzeug-ipad-context .werkzeug-ipad-drawer-body > div:first-child button {
+  min-width: 76px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.werkzeug-ipad-context .werkzeug-ipad-panel-content :is(input, select, button) {
+  touch-action: manipulation;
+}
 .drawing-command-bar {
   position: fixed;
   left: 12px;
