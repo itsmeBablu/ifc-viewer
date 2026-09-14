@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { contextSchema, planSchema } from "./schema";
+import { attachmentsSchema } from "./attachments";
 
 export const commandRequestSchema = z.object({
   command: z.string().trim().min(1).max(4000),
   context: contextSchema,
+  attachments: attachmentsSchema.default([]),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(8000) }).strict()).max(12).default([]),
 }).strict();
 

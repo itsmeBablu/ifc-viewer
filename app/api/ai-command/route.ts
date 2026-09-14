@@ -2,10 +2,11 @@ import { auth } from "@/auth";
 import { commandRequestSchema } from "@/lib/ai/protocol";
 import { generateCommand } from "@/lib/ai/gemini";
 import { limitAiUser } from "@/lib/ai/rateLimit";
+import { MAX_REQUEST_BYTES } from "@/lib/ai/attachments";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const MAX_BYTES = 256_000;
+const MAX_BYTES = MAX_REQUEST_BYTES;
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 async function readBody(request: Request): Promise<unknown> {
