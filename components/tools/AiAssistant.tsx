@@ -21,12 +21,12 @@ function AssistantPanel({ close }: { close: () => void }) {
     return () => ctx.revert();
   }, []);
   return (
-    <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel liquid-glass-panel fixed bottom-20 right-3 z-[100] max-h-[75dvh] w-[min(420px,calc(100vw-24px))] overflow-auto rounded-[26px] p-4 text-sm text-white shadow-xl">
-      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">V Studio copilot</h2><p className="text-[10px] text-white/55">Civil engineering assistant</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
+    <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] max-h-[75dvh] w-[min(420px,calc(100vw-24px))] overflow-auto rounded-[26px] p-4 text-sm shadow-xl">
+      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">V Studio copilot</h2><p className="text-[10px] ai-text-muted">Civil engineering assistant</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
       {status === "loading" ? <p>Checking sign-in…</p> : !session?.user ? <>
-        <p data-ai-stagger className="mb-3 text-white/70">Sign in to create and edit your model with AI. Manual modeling is available without signing in.</p>
+        <p data-ai-stagger className="mb-3 ai-text-body">Sign in to create and edit your model with AI. Manual modeling is available without signing in.</p>
         <button data-ai-stagger className="ai-google-button" onClick={() => { void signIn("google").catch(() => setError("Could not start Google sign-in. Please try again.")); }}><LuSparkles /> Sign in with Google</button>
-      </> : <><p data-ai-stagger className="text-white/70">Signed in as {session.user.name ?? session.user.email}.</p><button data-ai-stagger className="mt-2 underline text-white/70 hover:text-white" onClick={() => void signOut()}>Sign out</button><div data-ai-stagger><AiCommandPanel key={`${session.user.id}:${projectId}`} /></div></>}
+      </> : <><p data-ai-stagger className="ai-text-body">Signed in as {session.user.name ?? session.user.email}.</p><button data-ai-stagger className="mt-2 underline ai-text-body hover:text-[var(--text-strong)]" onClick={() => void signOut()}>Sign out</button><div data-ai-stagger><AiCommandPanel key={`${session.user.id}:${projectId}`} /></div></>}
       {error && <p role="alert">{error}</p>}
     </section>
   );
@@ -43,10 +43,10 @@ function AuthStatusGate({ close }: { close: () => void }) {
     return () => { active = false; };
   }, []);
   if (configured === null) {
-    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm text-white"><p className="ai-chat-loading">Checking AI sign-in configuration…</p></section>;
+    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm"><p className="ai-chat-loading">Checking AI sign-in configuration…</p></section>;
   }
   if (!configured) {
-    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm text-white"><div className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><h2 className="font-semibold">V Studio copilot</h2></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div><p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p></section>;
+    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm"><div className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><h2 className="font-semibold">V Studio copilot</h2></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div><p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p></section>;
   }
   return <SessionProvider><AssistantPanel close={close} /></SessionProvider>;
 }
@@ -65,7 +65,7 @@ export default function AiAssistant() {
     return () => ctx.revert();
   }, []);
   return <>
-    <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-cap-trigger liquid-glass-pill fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold text-zinc-950 shadow-xl">
+    <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-cap-trigger fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold shadow-xl">
       <span ref={ringRef} aria-hidden className="ai-cap-ring" />
       <span ref={capRef} aria-hidden className="ai-cap-icon"><LuHardHat /></span>
       <span className="hidden sm:inline">Ask V Studio</span><LuMessageCircle aria-hidden className="size-4" />
