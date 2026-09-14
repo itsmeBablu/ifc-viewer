@@ -1,11 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NextAuthConfig } from "next-auth";
+import { Auth } from "@auth/core";
 
 const captured = vi.hoisted(() => ({ config: {} as NextAuthConfig }));
 vi.mock("next-auth", () => ({ default: (config: NextAuthConfig) => { captured.config = config; return {}; } }));
 import "./auth";
 
 describe("Google identity", () => {
+  it("serves the session endpoint when AUTH_URL contains a workspace path", async () => {
+    vi.stubEnv("AUTH_URL", "https://example.com/werkzeug");
+    try {
+      const response = await Auth(new Request("https://example.com/api/auth/session"), {
+        ...captured.config,
+        secret: "regression-test-secret-not-for-production",
+        trustHost: true,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("uses the stable provider account ID, not email or client input", async () => {
     const jwt = captured.config.callbacks!.jwt!;
     const token = await jwt({ token: { email: "user@example.com" }, account: { provider: "google", providerAccountId: "google-123" } } as Parameters<typeof jwt>[0]);

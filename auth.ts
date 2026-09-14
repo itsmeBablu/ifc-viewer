@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
 export const { handlers, auth } = NextAuth({
+  // Match the route handler even when AUTH_URL contains a workspace path.
+  basePath: "/api/auth",
   providers: [Google],
   session: { strategy: "jwt" },
   callbacks: {
