@@ -10,6 +10,8 @@ AUTH_GOOGLE_ID=<Google OAuth client ID>
 AUTH_GOOGLE_SECRET=<Google OAuth client secret>
 AUTH_URL=http://localhost:3000
 GEMINI_API_KEY=<Gemini API key from Google AI Studio>
+UPSTASH_REDIS_REST_URL=<Upstash Redis REST URL>
+UPSTASH_REDIS_REST_TOKEN=<Upstash Redis REST token>
 ```
 
 Create a Google Cloud OAuth client of type Web application, configure the consent screen and permitted test users, and register `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI. Add the equivalent HTTPS callback for production and set AUTH_URL to that site's origin. Restart the development server after configuring variables.
@@ -29,3 +31,7 @@ The first release supports up to 150 actions per command and 1,000 context eleme
 Supported actions: create/update levels, straight walls, doors, windows, polygon floors, flat roofs and rectangular hip/gable/shed roofs, columns, beams, and catalog furniture/equipment. Delete actions must remove dependent openings before their wall. Constrained, grouped, or locked elements require manual editing. Connected MEP systems, stairs, structural/MEP engineering validation, collision-free room layouts, and cloud persistence are outside this first release. A proposed house remains an editable concept model, not a certified building design.
 
 Client application uses a single IndexedDB transaction. No geometry is published until persistence succeeds, and the batch gets one shared undo snapshot. Tests cover malformed geometry, missing references, overlap/out-of-wall openings, stale previews, transaction rollback and undo/redo.
+
+## Request limits
+
+Create an Upstash Redis database and copy its REST URL and token into the server environment. AI requests use a sliding window of 10 requests per 10 minutes per authenticated Google account ID. Clarification turns count as requests. IP addresses and client-supplied IDs are not used. Limits survive deployment replicas and new sessions. Exhaustion returns HTTP 429 with Retry-After; missing Redis configuration, errors, or timeouts return 503 and prevent Gemini calls. Configure Upstash before trying the text or voice pipeline. See https://upstash.com/docs/redis/sdks/ratelimit-ts/algorithms.

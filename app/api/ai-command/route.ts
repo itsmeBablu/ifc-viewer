@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { commandRequestSchema } from "@/lib/ai/protocol";
 import { generateCommand } from "@/lib/ai/gemini";
+import { limitAiUser } from "@/lib/ai/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
   try {
     input = commandRequestSchema.parse(await readBody(request));
   } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
+  try {
+    const limit = await limitAiUser(session.user.id);
+    if (!limit.success) {
+      const retryAfter = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
+      return Response.json({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfter) } });
+    }
+  } catch { return reply({ error: "AI is temporarily unavailable because its request limit service is not configured or reachable. Please try again later." }, 503); }
   try { return reply(await generateCommand(input)); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
