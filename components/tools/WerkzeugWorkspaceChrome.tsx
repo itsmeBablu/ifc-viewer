@@ -34,7 +34,6 @@ import { RoofEdgeSlopeEditor } from "./ToolRightPanel";
 import MarkupToolsSection from "./MarkupToolsSection";
 import { MEP_TABS } from "./DesktopIsland";
 import { shortcutText } from "@/lib/shortcuts";
-import AiAssistant from "./AiAssistant";
 
 type PanelKey = "levels" | "materials" | "shapes" | LayoutToolId;
 type Frame = { x: number; y: number; width: number; height: number };
@@ -529,7 +528,6 @@ export default function WerkzeugWorkspaceChrome({
   const activeViewLabel = viewItems.find((view) => view.value === viewPreset)?.label ?? "3D";
   return (
     <>
-      <AiAssistant />
       <div
         data-dock={dockEdge}
         data-panel-open={String(Boolean(panelKey && !panelHidden))}

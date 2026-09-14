@@ -39,6 +39,7 @@ import LoadIfcButton from "@/components/common/LoadIfcButton";
 import GlassPanel from "@/components/common/GlassPanel";
 import { GlassButton, IconAlert } from "@/components/common/ui";
 import WerkzeugWorkspaceChrome from "./WerkzeugWorkspaceChrome";
+import AiAssistant from "./AiAssistant";
 import DesktopIsland from "./DesktopIsland";
 import ToolRibbon from "./ToolRibbon";
 import ToolOptionsBar from "./ToolOptionsBar";
@@ -728,6 +729,7 @@ export default function WerkzeugApp() {
         </div>
 
         {/* 3D CAD Viewport Canvas — reflows on desktop when right panel is open */}
+        {hasActiveWorkspace && <AiAssistant />}
         <main
           className="fixed inset-y-0 left-0 z-0 bg-[#0c0d12] transition-[right] duration-200"
           style={{ right: isDesktop && rightPanelOpen ? panelWidth : 0 }}

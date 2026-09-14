@@ -8,6 +8,7 @@ import { undoWerkzeug } from "@/lib/werkzeugHistory";
 import type { AiContext, AiPlan } from "@/lib/ai/schema";
 import type { CommandRequest } from "@/lib/ai/protocol";
 import AiPlanPreview from "./AiPlanPreview";
+import AiVoiceInput from "./AiVoiceInput";
 
 export default function AiCommandPanel() {
   const [text, setText] = useState("");
@@ -67,13 +68,14 @@ export default function AiCommandPanel() {
       <h3 className="font-semibold">{pending.plan.summary}</h3>
       {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
       <AiPlanPreview plan={pending.plan} context={pending.context} />
-      <ol className="max-h-48 list-inside list-decimal space-y-1 overflow-auto text-xs">{pending.plan.actions.map((a, i) => <li key={i}>{describeAction(a)}</li>)}</ol>
+      <ol className="max-h-48 list-inside list-decimal space-y-1 overflow-auto text-xs">{pending.plan.actions.map((a, i) => <li key={i}>{describeAction(a)}<details className="ml-3"><summary className="cursor-pointer text-zinc-400">All dimensions and properties</summary><dl className="grid grid-cols-[auto_1fr] gap-x-2">{Object.entries(a).map(([name, value]) => <div key={name} className="contents"><dt>{name}</dt><dd className="break-all">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl></details></li>)}</ol>
       {pending.plan.actions.some(a => a.kind === "delete") && <label className="flex gap-2"><input type="checkbox" checked={deleteApproved} onChange={e => setDeleteApproved(e.target.checked)} />I approve the listed deletions.</label>}
       <div className="flex gap-3"><button className="rounded-lg bg-yellow-400 px-3 py-2 text-black disabled:opacity-40" disabled={busy || pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
     </div>}
     <form onSubmit={submit} className="space-y-2">
       <label htmlFor="ai-command" className="block">Your command or clarification</label>
       <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} maxLength={4000} rows={3} disabled={busy} placeholder="Create a house, or describe an edit…" className="w-full rounded-lg border border-zinc-600 bg-zinc-900 p-2 text-base" />
+      <AiVoiceInput disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} />
       <div className="flex gap-3"><button type="submit" disabled={busy || !text.trim()} className="rounded-lg bg-white px-3 py-2 text-black disabled:opacity-40">{busy ? "Working…" : "Send"}</button><button type="button" disabled={busy} onClick={() => { setHistory([]); setPending(null); setError(""); setStatus(""); }}>New conversation</button></div>
     </form>
     {error && <p role="alert" className="text-red-300">{error}</p>}
