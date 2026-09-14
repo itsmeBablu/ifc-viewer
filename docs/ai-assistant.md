@@ -18,7 +18,7 @@ Create a Google Cloud OAuth client of type Web application, configure the consen
 
 Verify Google sign-in, session renewal, sign-out, and a rejected/cancelled login using real credentials. No credentials are committed. Implementation follows https://authjs.dev/getting-started/installation and https://authjs.dev/getting-started/providers/google.
 
-The AI route uses `gemini-2.5-flash` through Google's server-side REST API. Keep the Google project on the free tier to enforce the intended cost policy; a model name alone does not disable billing in a paid project. There is no automatic model upgrade or retry. Review current quotas and data handling at https://ai.google.dev/gemini-api/docs/pricing. Commands and supplied model context are sent to Gemini only when the user submits a command.
+The AI route uses `gemini-3.6-flash` through Google's server-side REST API. Keep the Google project on the free tier to enforce the intended cost policy; a model name alone does not disable billing in a paid project. There is no automatic model upgrade or retry. Review current quotas and data handling at https://ai.google.dev/gemini-api/docs/pricing. Commands and supplied model context are sent to Gemini only when the user submits a command.
 
 Run `npm run lint` and `npm test` using Node 22.13+ (the repository's current Vitest/Vite dependencies cannot run on Node 20.11).
 

@@ -4,9 +4,9 @@ import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
 
 export async function generateCommand(input: CommandRequest) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("AI is not configured. Ask the site owner to configure Gemini.");
-  // Intentionally fixed to a Flash model with a free tier; never silently upgrade or retry on a paid model.
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+  if (!key) throw new Error("GEMINI_API_KEY is missing. Add it to .env.local and restart the server.");
+  // Intentionally fixed to a current Flash model; never silently upgrade or retry on a paid model.
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     signal: AbortSignal.timeout(45000),
@@ -23,7 +23,13 @@ export async function generateCommand(input: CommandRequest) {
       generationConfig: { temperature: 0.2, maxOutputTokens: 16000 },
     }),
   });
-  if (!response.ok) throw new Error(response.status === 429 ? "Gemini's quota is exhausted. Please try again later." : "Gemini is temporarily unavailable. Please try again.");
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("Gemini API key is invalid or does not have Gemini API access. Create a new key in Google AI Studio and restart the server.");
+    if (response.status === 404) throw new Error("The configured Gemini Flash model is unavailable for this API project.");
+    if (response.status === 429) throw new Error("Gemini's quota is exhausted. Please try again later.");
+    if (response.status === 400) throw new Error("Gemini rejected the request. Check that the API key is enabled for the Gemini API, then restart the server.");
+    throw new Error("Gemini is temporarily unavailable. Please try again.");
+  }
   const result = parseModelReply(await response.json());
   if (result.kind === "plan") validatePlan(result.plan, input.context);
   return result;
