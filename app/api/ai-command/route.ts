@@ -44,7 +44,12 @@ export async function POST(request: Request) {
       const retryAfter = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
       return Response.json({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfter) } });
     }
-  } catch { return reply({ error: "AI is temporarily unavailable because its request limit service is not configured or reachable. Please try again later." }, 503); }
+  } catch (error) {
+    const message = error instanceof Error && error.message === "AI rate limiting is not configured."
+      ? "Upstash rate limiting is not configured. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to .env.local, then restart the server."
+      : "Upstash rate limiting is unreachable right now. Check the Redis URL/token and try again later.";
+    return reply({ error: message }, 503);
+  }
   try { return reply(await generateCommand(input)); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.

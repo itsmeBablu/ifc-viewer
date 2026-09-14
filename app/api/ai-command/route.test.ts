@@ -38,7 +38,9 @@ describe("AI command authorization", () => {
     expect(response.status).toBe(429);
     expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(0);
     vi.mocked(limitAiUser).mockRejectedValue(new Error("Redis unavailable"));
-    expect((await POST(request())).status).toBe(503);
+    const outage = await POST(request());
+    expect(outage.status).toBe(503);
+    expect((await outage.json()).error).toMatch(/unreachable/);
     expect(generateCommand).not.toHaveBeenCalled();
   });
 });
