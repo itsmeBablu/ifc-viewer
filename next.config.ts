@@ -16,20 +16,8 @@ const nextConfig: NextConfig = {
   ],
   // LibreDWG WASM is loaded only via dynamic import (API + client DWG path).
   serverExternalPackages: ["@mlightcad/libredwg-web"],
-  async redirects() {
-    return [
-      {
-        source: "/Werkzeug",
-        destination: "/werkzeug",
-        permanent: true,
-      },
-      {
-        source: "/Werkzeug/:path*",
-        destination: "/werkzeug/:path*",
-        permanent: true,
-      },
-    ];
-  },
+  // Case normalization lives in proxy.ts. Config redirects match without
+  // case sensitivity, so /Werkzeug -> /werkzeug redirects to itself forever.
 };
 
 export default nextConfig;
