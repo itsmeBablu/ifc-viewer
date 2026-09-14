@@ -7,7 +7,7 @@ import { MAX_REQUEST_BYTES } from "@/lib/ai/attachments";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const MAX_BYTES = MAX_REQUEST_BYTES;
-const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 
 async function readBody(request: Request): Promise<unknown> {
   if (!request.body) throw new Error("Missing command.");
@@ -39,11 +39,12 @@ export async function POST(request: Request) {
   try {
     input = commandRequestSchema.parse(await readBody(request));
   } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
+  let limit: Awaited<ReturnType<typeof limitAiUser>>;
   try {
-    const limit = await limitAiUser(session.user.id);
+    limit = await limitAiUser(session.user.id);
     if (!limit.success) {
       const retryAfter = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
-      return Response.json({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfter) } });
+      return reply({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, 429, { "Retry-After": String(retryAfter), "X-AI-Remaining": "0", "X-AI-Reset": String(limit.reset) });
     }
   } catch (error) {
     const message = error instanceof Error && error.message === "AI rate limiting is not configured."
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       : "Upstash rate limiting is unreachable right now. Check the Redis URL/token and try again later.";
     return reply({ error: message }, 503);
   }
-  try { return reply(await generateCommand(input)); }
+  try { return reply(await generateCommand(input), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
     const message = error instanceof Error && !error.name.includes("Zod") && error.name !== "TimeoutError" ? error.message : "AI could not produce a valid response. Please try again.";

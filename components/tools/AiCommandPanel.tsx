@@ -23,6 +23,7 @@ export default function AiCommandPanel() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("Reading your project");
+  const [limit, setLimit] = useState({ remaining: 10, total: 10, reset: 0 });
   const [deleteApproved, setDeleteApproved] = useState(false);
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
@@ -48,16 +49,21 @@ export default function AiCommandPanel() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busyRef.current || reading || !text.trim()) return;
+    const submittedText = text.trim();
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
+    setHistory(current => [...current, { role: "user", text: submittedText }].slice(-12) as CommandRequest["history"]);
     const controller = new AbortController(); requestRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), 60_000);
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: text.trim(), context, attachments, history: history.slice(-12) });
+      const body = JSON.stringify({ command: submittedText, context, attachments, history: history.slice(-12) });
       if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const result = await response.json();
+      const remaining = Number(response.headers.get("X-AI-Remaining"));
+      const reset = Number(response.headers.get("X-AI-Reset"));
+      if (Number.isFinite(remaining)) setLimit(current => ({ ...current, remaining, reset: Number.isFinite(reset) ? reset : current.reset }));
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "The AI request failed.");
       if (controller.signal.aborted) return;
       if (fingerprint !== aiFingerprint()) throw new Error("The project changed while AI was planning. Submit again with the current model.");
@@ -67,7 +73,7 @@ export default function AiCommandPanel() {
         setPending({ plan, fingerprint, context }); message = `Proposed (not applied): ${plan.summary}`;
       } else if (result.kind === "clarification" && typeof result.message === "string") message = result.message;
       else throw new Error("The AI response was not recognized.");
-      setHistory([...history, { role: "user", text: text.trim() }, { role: "assistant", text: message }].slice(-12) as CommandRequest["history"]);
+      setHistory(current => [...current, { role: "assistant", text: message }].slice(-12) as CommandRequest["history"]);
       setText(""); setStatus(result.kind === "plan" ? "Review the proposed changes before applying." : "Answer the question below to continue.");
     } catch (e) {
       if (controller.signal.aborted) setError("The AI took too long to respond. Try a smaller command or send it again.");
@@ -93,6 +99,7 @@ export default function AiCommandPanel() {
     <div className="ai-welcome-copy"><span className="ai-sparkle-mark"><LuSparkles /></span><div><p className="text-base font-medium">What are we building today?</p><p className="text-xs ai-text-muted">Upload a plan with wall sizes, describe a space, or ask for a change.</p></div></div>
     <div className="ai-chat-history" aria-label="Conversation">{history.map((turn, i) => <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}><span className="ai-message-label">{turn.role === "user" ? "You" : "3D visualizer"}</span><p>{turn.text}</p></div>)}</div>
     {busy && <div className="ai-thinking" role="status" aria-live="polite"><span className="ai-thinking-avatar"><LuSparkles /></span><span className="ai-thinking-copy"><strong>{thinkingLabel}</strong><small>Gemini is creating your preview</small></span><span className="ai-thinking-dots" aria-hidden="true"><i /><i /><i /></span></div>}
+    <div className="ai-limit-bar" title={limit.reset ? `Up to ${limit.total} requests per 10 minutes. Resets at ${new Date(limit.reset).toLocaleTimeString()}.` : "AI usage limit: 10 requests per 10 minutes."} aria-label={`${limit.remaining} of ${limit.total} AI requests remaining`}><span className="ai-limit-battery"><span style={{ width: `${Math.max(0, Math.min(100, limit.remaining / limit.total * 100))}%` }} /></span><span>{limit.remaining}/{limit.total} requests</span><span className="ai-limit-reset">{limit.reset ? `Resets ${new Date(limit.reset).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "10 min window"}</span></div>
     {pending && <div className="ai-plan-card space-y-3">
       <div className="flex items-center gap-2"><span className="ai-plan-icon"><LuSparkles /></span><h3 className="font-semibold">{pending.plan.summary}</h3></div>
       {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
