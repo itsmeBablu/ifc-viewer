@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuHardHat, LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
+import { LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiCommandPanel from "./AiCommandPanel";
@@ -22,7 +22,7 @@ function AssistantPanel({ close }: { close: () => void }) {
   }, []);
   return (
     <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] max-h-[75dvh] w-[min(420px,calc(100vw-24px))] overflow-auto rounded-[26px] p-4 text-sm shadow-xl">
-      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">V Studio copilot</h2><p className="text-[10px] ai-text-muted">Civil engineering assistant</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
+      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">3D visualizer assistance</h2><p className="text-[10px] ai-text-muted">Plans, dimensions & spaces</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
       {status === "loading" ? <p>Checking sign-in…</p> : !session?.user ? <>
         <p data-ai-stagger className="mb-3 ai-text-body">Sign in to create and edit your model with AI. Manual modeling is available without signing in.</p>
         <button data-ai-stagger className="ai-google-button" onClick={() => { void signIn("google").catch(() => setError("Could not start Google sign-in. Please try again.")); }}><LuSparkles /> Sign in with Google</button>
@@ -46,7 +46,7 @@ function AuthStatusGate({ close }: { close: () => void }) {
     return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm"><p className="ai-chat-loading">Checking AI sign-in configuration…</p></section>;
   }
   if (!configured) {
-    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm"><div className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><h2 className="font-semibold">V Studio copilot</h2></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div><p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p></section>;
+    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm"><div className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><h2 className="font-semibold">3D visualizer assistance</h2></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div><p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p></section>;
   }
   return <SessionProvider><AssistantPanel close={close} /></SessionProvider>;
 }
@@ -54,21 +54,21 @@ function AuthStatusGate({ close }: { close: () => void }) {
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const capRef = useRef<HTMLSpanElement>(null);
+  const orbRef = useRef<HTMLSpanElement>(null);
   const ringRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    if (!capRef.current || !ringRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!orbRef.current || !ringRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const ctx = gsap.context(() => {
-      gsap.to(capRef.current, { y: -5, rotation: 3, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true });
-      gsap.to(ringRef.current, { scale: 1.22, autoAlpha: 0, duration: 1.8, ease: "power1.out", repeat: -1 });
+      gsap.to(orbRef.current, { y: -3, rotation: 12, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true });
+      gsap.to(ringRef.current, { rotation: 360, duration: 8, repeat: -1, ease: "none" });
     }, triggerRef);
     return () => ctx.revert();
   }, []);
   return <>
-    <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-cap-trigger fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold shadow-xl">
-      <span ref={ringRef} aria-hidden className="ai-cap-ring" />
-      <span ref={capRef} aria-hidden className="ai-cap-icon"><LuHardHat /></span>
-      <span className="hidden sm:inline">Ask V Studio</span><LuMessageCircle aria-hidden className="size-4" />
+    <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-orb-trigger fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold shadow-xl">
+      <span ref={ringRef} aria-hidden className="ai-orb-ring" />
+      <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
+      <span className="hidden sm:inline">3D visualizer</span><LuMessageCircle aria-hidden className="size-4" />
     </button>
     {open && <AuthStatusGate close={() => setOpen(false)} />}
   </>;

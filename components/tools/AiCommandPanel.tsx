@@ -7,11 +7,15 @@ import { describeAction, validatePlan } from "@/lib/ai/validate";
 import { undoWerkzeug } from "@/lib/werkzeugHistory";
 import type { AiContext, AiPlan } from "@/lib/ai/schema";
 import type { CommandRequest } from "@/lib/ai/protocol";
+import { readAttachments, attachmentsSchema, MAX_REQUEST_BYTES, type AiAttachment } from "@/lib/ai/attachments";
 import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
 import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2 } from "react-icons/lu";
 
 export default function AiCommandPanel() {
+  const [attachments, setAttachments] = useState<AiAttachment[]>([]);
+  const [reading, setReading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [history, setHistory] = useState<CommandRequest["history"]>([]);
   const [pending, setPending] = useState<{ plan: AiPlan; fingerprint: string; context: AiContext } | null>(null);
@@ -19,6 +23,7 @@ export default function AiCommandPanel() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("Reading your project");
+  const [limit, setLimit] = useState({ remaining: 10, total: 10, reset: 0 });
   const [deleteApproved, setDeleteApproved] = useState(false);
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
@@ -35,19 +40,30 @@ export default function AiCommandPanel() {
     }, 1400);
     return () => window.clearInterval(timer);
   }, [busy]);
+  async function attach(files: File[]) {
+    setReading(true); setError("");
+    try { const added = await readAttachments(files); setAttachments(attachmentsSchema.parse([...attachments, ...added])); }
+    catch (e) { setError(e instanceof Error && !e.name.includes("Zod") ? e.message : "Choose up to 3 PDF or image files, 2.5 MB total."); }
+    finally { setReading(false); }
+  }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (busyRef.current || !text.trim()) return;
+    if (busyRef.current || reading || !text.trim()) return;
+    const submittedText = text.trim();
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
+    setHistory(current => [...current, { role: "user", text: submittedText }].slice(-12) as CommandRequest["history"]);
     const controller = new AbortController(); requestRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), 60_000);
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: text.trim(), context, history: history.slice(-12) });
-      if (new TextEncoder().encode(body).length > 256_000) throw new Error("This project's AI context is too large. Use a smaller project for now.");
+      const body = JSON.stringify({ command: submittedText, context, attachments, history: history.slice(-12) });
+      if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const result = await response.json();
+      const remaining = Number(response.headers.get("X-AI-Remaining"));
+      const reset = Number(response.headers.get("X-AI-Reset"));
+      if (Number.isFinite(remaining)) setLimit(current => ({ ...current, remaining, reset: Number.isFinite(reset) ? reset : current.reset }));
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "The AI request failed.");
       if (controller.signal.aborted) return;
       if (fingerprint !== aiFingerprint()) throw new Error("The project changed while AI was planning. Submit again with the current model.");
@@ -57,7 +73,7 @@ export default function AiCommandPanel() {
         setPending({ plan, fingerprint, context }); message = `Proposed (not applied): ${plan.summary}`;
       } else if (result.kind === "clarification" && typeof result.message === "string") message = result.message;
       else throw new Error("The AI response was not recognized.");
-      setHistory([...history, { role: "user", text: text.trim() }, { role: "assistant", text: message }].slice(-12) as CommandRequest["history"]);
+      setHistory(current => [...current, { role: "assistant", text: message }].slice(-12) as CommandRequest["history"]);
       setText(""); setStatus(result.kind === "plan" ? "Review the proposed changes before applying." : "Answer the question below to continue.");
     } catch (e) {
       if (controller.signal.aborted) setError("The AI took too long to respond. Try a smaller command or send it again.");
@@ -80,9 +96,10 @@ export default function AiCommandPanel() {
     finally { busyRef.current = false; setBusy(false); }
   }
   return <div className="ai-command-panel mt-3 space-y-4">
-    <div className="ai-welcome-copy"><span className="ai-sparkle-mark"><LuSparkles /></span><div><p className="text-base font-medium">What are we building today?</p><p className="text-xs ai-text-muted">Describe a house, place an element, or ask for a change.</p></div></div>
-    <div className="ai-chat-history" aria-label="Conversation">{history.map((turn, i) => <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}><span className="ai-message-label">{turn.role === "user" ? "You" : "V Studio"}</span><p>{turn.text}</p></div>)}</div>
+    <div className="ai-welcome-copy"><span className="ai-sparkle-mark"><LuSparkles /></span><div><p className="text-base font-medium">What are we building today?</p><p className="text-xs ai-text-muted">Upload a plan with wall sizes, describe a space, or ask for a change.</p></div></div>
+    <div className="ai-chat-history" aria-label="Conversation">{history.map((turn, i) => <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}><span className="ai-message-label">{turn.role === "user" ? "You" : "3D visualizer"}</span><p>{turn.text}</p></div>)}</div>
     {busy && <div className="ai-thinking" role="status" aria-live="polite"><span className="ai-thinking-avatar"><LuSparkles /></span><span className="ai-thinking-copy"><strong>{thinkingLabel}</strong><small>Gemini is creating your preview</small></span><span className="ai-thinking-dots" aria-hidden="true"><i /><i /><i /></span></div>}
+    <div className="ai-limit-bar" title={limit.reset ? `Up to ${limit.total} requests per 10 minutes. Resets at ${new Date(limit.reset).toLocaleTimeString()}.` : "AI usage limit: 10 requests per 10 minutes."} aria-label={`${limit.remaining} of ${limit.total} AI requests remaining`}><span className="ai-limit-battery"><span style={{ width: `${Math.max(0, Math.min(100, limit.remaining / limit.total * 100))}%` }} /></span><span>{limit.remaining}/{limit.total} requests</span><span className="ai-limit-reset">{limit.reset ? `Resets ${new Date(limit.reset).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "10 min window"}</span></div>
     {pending && <div className="ai-plan-card space-y-3">
       <div className="flex items-center gap-2"><span className="ai-plan-icon"><LuSparkles /></span><h3 className="font-semibold">{pending.plan.summary}</h3></div>
       {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
@@ -91,10 +108,16 @@ export default function AiCommandPanel() {
       {pending.plan.actions.some(a => a.kind === "delete") && <label className="flex gap-2"><input type="checkbox" checked={deleteApproved} onChange={e => setDeleteApproved(e.target.checked)} />I approve the listed deletions.</label>}
       <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
     </div>}
+    <div className="ai-attachments">
+      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
+      {attachments.map((file, index) => <div className="ai-attachment" key={`${index}:${file.name}`}><span aria-hidden="true">{file.mimeType === "application/pdf" ? "PDF" : "IMG"}</span><span className="truncate">{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={busy || reading} onClick={() => setAttachments(items => items.filter((_, i) => i !== index))}>×</button></div>)}
+      <p className="text-xs ai-text-muted">{reading ? "Reading files…" : "PDF, PNG, JPEG or WebP · 3 files · 2.5 MB total"}</p>
+      {attachments.length > 0 && <p className="text-xs ai-text-muted">Sent with your message and kept for follow-up questions until removed. Include readable dimensions and units.</p>}
+    </div>
     <form onSubmit={submit} className="ai-composer">
       <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
-      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} maxLength={4000} rows={3} disabled={busy} placeholder="Ask V Studio to create…" />
-      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Add context" disabled={busy}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy} onClick={() => { setHistory([]); setPending(null); setError(""); setStatus(""); }}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
+      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} maxLength={4000} rows={3} disabled={busy} placeholder="Describe what to build from your plan…" />
+      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading} onClick={() => fileRef.current?.click()}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading} onClick={() => { setHistory([]); setAttachments([]); setPending(null); setError(""); setStatus(""); }}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || reading || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
     </form>
     <div className="ai-suggestion-row"><button type="button" disabled={busy} onClick={() => setText("Create a two-storey house with three bedrooms")}>Create a house</button><button type="button" disabled={busy} onClick={() => setText("Add furniture to the living room")}>Add furniture</button><button type="button" disabled={busy} onClick={() => setText("Place MEP equipment")}>Place MEP</button></div>
     {error && <p role="alert" className="ai-error">{error}</p>}
