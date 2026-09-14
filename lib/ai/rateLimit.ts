@@ -2,8 +2,25 @@ import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 
 let limiter: Ratelimit | undefined;
+const localBuckets = new Map<string, number[]>();
+const LOCAL_WINDOW_MS = 10 * 60 * 1000;
+
+function localDevelopmentLimit(googleUserId: string) {
+  const now = Date.now();
+  const bucket = (localBuckets.get(googleUserId) ?? []).filter(timestamp => now - timestamp < LOCAL_WINDOW_MS);
+  const success = bucket.length < 10;
+  if (success) bucket.push(now);
+  localBuckets.set(googleUserId, bucket);
+  return { success, remaining: Math.max(0, 10 - bucket.length), reset: (bucket[0] ?? now) + LOCAL_WINDOW_MS };
+}
+
 export async function limitAiUser(googleUserId: string) {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) throw new Error("AI rate limiting is not configured.");
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    // This keeps local development usable when an Upstash database is unavailable.
+    // Production always fails closed and requires the shared Redis limiter.
+    if (process.env.NODE_ENV === "development") return localDevelopmentLimit(googleUserId);
+    throw new Error("AI rate limiting is not configured.");
+  }
   limiter ??= new Ratelimit({
     redis: Redis.fromEnv(),
     limiter: Ratelimit.slidingWindow(10, "10 m"),

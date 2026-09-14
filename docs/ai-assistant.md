@@ -36,6 +36,8 @@ Client application uses a single IndexedDB transaction. No geometry is published
 
 Create an Upstash Redis database and copy its REST URL and token into the server environment. AI requests use a sliding window of 10 requests per 10 minutes per authenticated Google account ID. Clarification turns count as requests. IP addresses and client-supplied IDs are not used. Limits survive deployment replicas and new sessions. Exhaustion returns HTTP 429 with Retry-After; missing Redis configuration, errors, or timeouts return 503 and prevent Gemini calls. Configure Upstash before trying the text or voice pipeline. See https://upstash.com/docs/redis/sdks/ratelimit-ts/algorithms.
 
+For local development only, if these two variables are absent, the server uses a per-user in-memory fallback with the same 10-per-10-minute limit. It resets when the dev server restarts and must not be used as a production substitute. Production still requires Upstash and fails closed when it is missing or unreachable.
+
 ## Voice and device verification
 
 Dictate command uses SpeechRecognition or webkitSpeechRecognition on secure origins. Choose English or German, grant microphone permission, speak, review the resulting text, then Send. There is no separate voice endpoint or automatic execution. Permission denial, absent microphone, missing API, no speech, or speech-service failures keep text input available. Closing the panel releases recognition. Browser recognition may use online services; this is not a promise of offline or on-device audio processing. See https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition.
