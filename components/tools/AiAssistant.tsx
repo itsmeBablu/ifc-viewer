@@ -2,20 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
+import { LuHardHat, LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiCommandPanel from "./AiCommandPanel";
-
-function CivilHelmetIcon({ className = "" }: { className?: string }) {
-  return <svg aria-hidden="true" viewBox="0 0 64 64" className={className} fill="none">
-    <path d="M13 37.5C13 24.52 23.52 14 36.5 14S60 24.52 60 37.5V41H13v-3.5Z" fill="currentColor" opacity=".28" />
-    <path d="M20 36.5V31c0-9.11 7.39-16.5 16.5-16.5S53 21.89 53 31v5.5" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-    <path d="M12 36.5h42c4.42 0 8 2.46 8 5.5s-3.58 5.5-8 5.5H10c-4.42 0-8-2.46-8-5.5s3.58-5.5 8-5.5h2Z" fill="currentColor" />
-    <path d="M36.5 14.5v22M28.5 16.7c1.7 1.16 3.07 2.67 4.05 4.43M44.5 16.7a16.4 16.4 0 0 0-4.05 4.43" stroke="#fff7c2" strokeWidth="2.4" strokeLinecap="round" opacity=".9" />
-    <path d="M22 47.5c.76 3.38 2.4 5.07 4.9 5.07h19.2c2.5 0 4.13-1.69 4.9-5.07" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-  </svg>;
-}
 
 function AssistantPanel({ close }: { close: () => void }) {
   const { data: session, status } = useSession();
@@ -77,7 +67,7 @@ export default function AiAssistant() {
   return <>
     <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-cap-trigger liquid-glass-pill fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold text-zinc-950 shadow-xl">
       <span ref={ringRef} aria-hidden className="ai-cap-ring" />
-      <span ref={capRef} aria-hidden className="ai-cap-icon"><CivilHelmetIcon /></span>
+      <span ref={capRef} aria-hidden className="ai-cap-icon"><LuHardHat /></span>
       <span className="hidden sm:inline">Ask V Studio</span><LuMessageCircle aria-hidden className="size-4" />
     </button>
     {open && <AuthStatusGate close={() => setOpen(false)} />}
