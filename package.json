@@ -29,6 +29,7 @@
     "react-icons": "^5.7.0",
     "three": "^0.185.1",
     "web-ifc": "^0.0.77",
+    "zod": "^4.6.5",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
