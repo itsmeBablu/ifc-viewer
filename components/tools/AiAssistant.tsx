@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuBox, LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
+import { LuMessageCircle, LuSparkles, LuX } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiCommandPanel from "./AiCommandPanel";
@@ -67,7 +67,7 @@ export default function AiAssistant() {
   return <>
     <button ref={triggerRef} onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? "Close AI assistant" : "Open AI assistant"} className="ai-orb-trigger fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-full px-3 py-2 text-left text-sm font-semibold shadow-xl">
       <span ref={ringRef} aria-hidden className="ai-orb-ring" />
-      <span ref={orbRef} aria-hidden className="ai-orb-icon"><LuBox /></span>
+      <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
       <span className="hidden sm:inline">3D visualizer</span><LuMessageCircle aria-hidden className="size-4" />
     </button>
     {open && <AuthStatusGate close={() => setOpen(false)} />}
