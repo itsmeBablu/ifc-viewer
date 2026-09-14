@@ -9,6 +9,7 @@ import type { AiContext, AiPlan } from "@/lib/ai/schema";
 import type { CommandRequest } from "@/lib/ai/protocol";
 import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
+import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2 } from "react-icons/lu";
 
 export default function AiCommandPanel() {
   const [text, setText] = useState("");
@@ -61,25 +62,25 @@ export default function AiCommandPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save changes. Nothing was applied."); setStatus(""); }
     finally { busyRef.current = false; setBusy(false); }
   }
-  return <div className="mt-3 space-y-3">
-    <p className="text-xs text-zinc-400">Describe your house or a change. Commands and model context go to Google Gemini. Projects stay in this browser.</p>
-    <div className="space-y-2" aria-label="Conversation">{history.map((turn, i) => <p key={i} className={turn.role === "user" ? "rounded-lg bg-zinc-800 p-2" : "whitespace-pre-wrap p-2"}><strong>{turn.role === "user" ? "You: " : "AI: "}</strong>{turn.text}</p>)}</div>
-    {pending && <div className="space-y-2 rounded-lg border border-zinc-700 p-2">
-      <h3 className="font-semibold">{pending.plan.summary}</h3>
+  return <div className="ai-command-panel mt-3 space-y-4">
+    <div className="ai-welcome-copy"><span className="ai-sparkle-mark"><LuSparkles /></span><div><p className="text-base font-medium">What are we building today?</p><p className="text-xs text-white/55">Describe a house, place an element, or ask for a change.</p></div></div>
+    <div className="ai-chat-history" aria-label="Conversation">{history.map((turn, i) => <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}><span className="ai-message-label">{turn.role === "user" ? "You" : "V Studio"}</span><p>{turn.text}</p></div>)}</div>
+    {pending && <div className="ai-plan-card space-y-3">
+      <div className="flex items-center gap-2"><span className="ai-plan-icon"><LuSparkles /></span><h3 className="font-semibold">{pending.plan.summary}</h3></div>
       {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
       <AiPlanPreview plan={pending.plan} context={pending.context} />
       <ol className="max-h-48 list-inside list-decimal space-y-1 overflow-auto text-xs">{pending.plan.actions.map((a, i) => <li key={i}>{describeAction(a)}<details className="ml-3"><summary className="cursor-pointer text-zinc-400">All dimensions and properties</summary><dl className="grid grid-cols-[auto_1fr] gap-x-2">{Object.entries(a).map(([name, value]) => <div key={name} className="contents"><dt>{name}</dt><dd className="break-all">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl></details></li>)}</ol>
       {pending.plan.actions.some(a => a.kind === "delete") && <label className="flex gap-2"><input type="checkbox" checked={deleteApproved} onChange={e => setDeleteApproved(e.target.checked)} />I approve the listed deletions.</label>}
-      <div className="flex gap-3"><button className="rounded-lg bg-yellow-400 px-3 py-2 text-black disabled:opacity-40" disabled={busy || pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
+      <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
     </div>}
-    <form onSubmit={submit} className="space-y-2">
-      <label htmlFor="ai-command" className="block">Your command or clarification</label>
-      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} maxLength={4000} rows={3} disabled={busy} placeholder="Create a house, or describe an edit…" className="w-full rounded-lg border border-zinc-600 bg-zinc-900 p-2 text-base" />
-      <AiVoiceInput disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} />
-      <div className="flex gap-3"><button type="submit" disabled={busy || !text.trim()} className="rounded-lg bg-white px-3 py-2 text-black disabled:opacity-40">{busy ? "Working…" : "Send"}</button><button type="button" disabled={busy} onClick={() => { setHistory([]); setPending(null); setError(""); setStatus(""); }}>New conversation</button></div>
+    <form onSubmit={submit} className="ai-composer">
+      <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
+      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} maxLength={4000} rows={3} disabled={busy} placeholder="Ask V Studio to create…" />
+      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Add context" disabled={busy}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy} onClick={() => { setHistory([]); setPending(null); setError(""); setStatus(""); }}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
     </form>
+    <div className="ai-suggestion-row"><button type="button" disabled={busy} onClick={() => setText("Create a two-storey house with three bedrooms")}>Create a house</button><button type="button" disabled={busy} onClick={() => setText("Add furniture to the living room")}>Add furniture</button><button type="button" disabled={busy} onClick={() => setText("Place MEP equipment")}>Place MEP</button></div>
     {error && <p role="alert" className="text-red-300">{error}</p>}
-    <p role="status" aria-live="polite">{status}</p>
-    {appliedFingerprint && <button disabled={busy} className="underline" onClick={async () => { try { if (aiFingerprint() !== appliedFingerprint) throw new Error("The model changed after this batch. Use the editor's Undo to step back through later changes."); await undoWerkzeug(); setAppliedFingerprint(null); setStatus("AI batch undone."); } catch (e) { setError(e instanceof Error ? e.message : "Undo failed."); } }}>Undo AI batch</button>}
+    <p role="status" aria-live="polite" className="ai-status-line">{status}</p>
+    {appliedFingerprint && <button disabled={busy} className="ai-text-button" onClick={async () => { try { if (aiFingerprint() !== appliedFingerprint) throw new Error("The model changed after this batch. Use the editor's Undo to step back through later changes."); await undoWerkzeug(); setAppliedFingerprint(null); setStatus("AI batch undone."); } catch (e) { setError(e instanceof Error ? e.message : "Undo failed."); } }}>Undo AI batch</button>}
   </div>;
 }

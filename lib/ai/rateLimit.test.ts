@@ -15,3 +15,11 @@ it("requires Redis configuration and uses the Google identity as key", async () 
   vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
   await expect(limitAiUser("google-123")).rejects.toThrow(/configured/);
 });
+it("uses a local per-user fallback only in development", async () => {
+  vi.stubEnv("NODE_ENV", "development");
+  vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+  vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+  const user = `local-${Date.now()}`;
+  for (let i = 0; i < 10; i++) expect((await limitAiUser(user)).success).toBe(true);
+  expect((await limitAiUser(user)).success).toBe(false);
+});
