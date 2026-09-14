@@ -13,5 +13,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/:path*",
+  matcher: [
+    /*
+     * Match all request paths except for static files, wasm, models, and metadata
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|wasm|models|.*\\..*).*)",
+  ],
 };
