@@ -136,6 +136,34 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
+export type AiDbChange = {
+  store: "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment";
+  id: string;
+  value?: { id: string; projectId: string };
+};
+
+/** Persist an approved AI batch atomically, before publishing it to the editor. */
+export async function idbApplyAiChanges(changes: AiDbChange[], guard: (abort: () => void) => () => void): Promise<void> {
+  const db = await openDb();
+  let release = () => {};
+  try {
+    const tx = db.transaction([...new Set(changes.map(c => c.store))], "readwrite");
+    const done = transactionDone(tx);
+    try {
+      release = guard(() => { try { tx.abort(); } catch { /* Already completed. */ } });
+      for (const change of changes) {
+        const store = tx.objectStore(change.store);
+        if (change.value) store.put(change.value); else store.delete(change.id);
+      }
+    } catch (error) {
+      try { tx.abort(); } catch { /* Already aborted. */ }
+      await done.catch(() => {});
+      throw error;
+    }
+    await done;
+  } finally { release(); db.close(); }
+}
+
 export const MIN_SAVED_PROJECT_ELEMENTS = 8;
 
 export async function idbGetProjectElementCount(projectId: string): Promise<number> {
@@ -508,4 +536,3 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
     db.close();
   }
 }
-
