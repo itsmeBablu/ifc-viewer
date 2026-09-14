@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { generateCommand } from "@/lib/ai/gemini";
 import { POST } from "./route";
 
-const body = { command: "Build a house", context: { projectId: "p", activeLevelId: null, elements: [] } };
+const body = { command: "Build a house", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } } };
 const request = (data = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
 beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("AUTH_URL", "http://localhost:3000"); });
 describe("AI command authorization", () => {

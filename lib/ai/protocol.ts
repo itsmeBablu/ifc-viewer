@@ -1,12 +1,9 @@
 import { z } from "zod";
+import { contextSchema, planSchema } from "./schema";
 
 export const commandRequestSchema = z.object({
   command: z.string().trim().min(1).max(4000),
-  context: z.object({
-    projectId: z.string().min(1).max(200),
-    activeLevelId: z.string().max(200).nullable(),
-    elements: z.array(z.record(z.string(), z.unknown())).max(1000),
-  }).strict(),
+  context: contextSchema,
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(8000) }).strict()).max(12).default([]),
 }).strict();
 
@@ -16,6 +13,10 @@ export const functionDeclarations = [{
   name: "ask_clarification",
   description: "Ask for essential missing house dimensions, storeys, room requirements, or ambiguous element references. Do not guess consequential design choices.",
   parameters: { type: "OBJECT", properties: { question: { type: "STRING" } }, required: ["question"] },
+}, {
+  name: "propose_model",
+  description: "Propose an ordered, coordinated batch for user preview. Define new levels before walls and walls before openings, using temporary IDs for references. Supported furniture and equipment use catalog family IDs. Updates use existing IDs and complete geometry. Deletion must explicitly include dependants first. Never execute directly.",
+  parametersJsonSchema: z.toJSONSchema(planSchema, { target: "draft-7" }),
 }];
 
 export const modelReplySchema = z.object({
@@ -35,6 +36,7 @@ export function parseModelReply(value: unknown) {
   const parts = candidate.content?.parts.filter(p => !p.thought) ?? [];
   const calls = parts.flatMap(p => p.functionCall ? [p.functionCall] : []);
   if (calls.length) {
+    if (calls.length === 1 && calls[0].name === "propose_model") return { kind: "plan" as const, plan: planSchema.parse(calls[0].args) };
     if (calls.length !== 1 || calls[0].name !== "ask_clarification") throw new Error("The AI returned an unsupported action.");
     const { question } = z.object({ question: z.string().trim().min(1).max(8000) }).strict().parse(calls[0].args);
     return { kind: "clarification" as const, message: question };
