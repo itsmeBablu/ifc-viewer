@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { LuHardHat, LuMessageCircle } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
@@ -28,6 +28,25 @@ function AssistantPanel({ close }: { close: () => void }) {
   );
 }
 
+function AuthStatusGate({ close }: { close: () => void }) {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/auth/status", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ configured?: boolean }> : Promise.reject(new Error("status")))
+      .then((result) => { if (active) setConfigured(result.configured === true); })
+      .catch(() => { if (active) setConfigured(false); });
+    return () => { active = false; };
+  }, []);
+  if (configured === null) {
+    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm text-white"><p>Checking AI sign-in configuration…</p></section>;
+  }
+  if (!configured) {
+    return <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(420px,calc(100vw-24px))] rounded-[26px] p-4 text-sm text-white"><div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">AI modeling assistant</h2><button onClick={close} aria-label="Close AI assistant">Close</button></div><p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p></section>;
+  }
+  return <SessionProvider><AssistantPanel close={close} /></SessionProvider>;
+}
+
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -47,6 +66,6 @@ export default function AiAssistant() {
       <span ref={capRef} aria-hidden className="ai-cap-icon"><LuHardHat /></span>
       <span className="hidden sm:inline">Ask V Studio</span><LuMessageCircle aria-hidden className="size-4" />
     </button>
-    {open && <SessionProvider><AssistantPanel close={() => setOpen(false)} /></SessionProvider>}
+    {open && <AuthStatusGate close={() => setOpen(false)} />}
   </>;
 }
