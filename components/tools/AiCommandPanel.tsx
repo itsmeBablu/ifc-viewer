@@ -8,16 +8,22 @@ import { undoWerkzeug } from "@/lib/werkzeugHistory";
 import type { AiContext, AiPlan } from "@/lib/ai/schema";
 import type { CommandRequest } from "@/lib/ai/protocol";
 import { readAttachments, attachmentsSchema, MAX_REQUEST_BYTES, type AiAttachment } from "@/lib/ai/attachments";
+import { idbClearAiChat, idbGetAiChat, idbPutAiChat } from "@/lib/layoutDrawingDb";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
 import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2 } from "react-icons/lu";
 
-export default function AiCommandPanel() {
+export default function AiCommandPanel({ projectId: propProjectId }: { projectId?: string | null } = {}) {
+  const storeProjectId = useLayoutDrawingStore(s => s.projectId);
+  const projectId = propProjectId ?? storeProjectId ?? "default";
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
   const [reading, setReading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [history, setHistory] = useState<CommandRequest["history"]>([]);
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
+  const historyLoaded = loadedProjectId === projectId;
   const [pending, setPending] = useState<{ plan: AiPlan; fingerprint: string; context: AiContext } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +34,41 @@ export default function AiCommandPanel() {
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void idbGetAiChat(projectId)
+      .then(saved => {
+        if (active) {
+          setHistory(saved as CommandRequest["history"]);
+          setLoadedProjectId(projectId);
+        }
+      })
+      .catch(() => {
+        if (active) setLoadedProjectId(projectId);
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
+
+  const pushHistory = (item: { role: "user" | "assistant"; text: string }) => {
+    setHistory(current => {
+      const next = [...current, item].slice(-12) as CommandRequest["history"];
+      void idbPutAiChat(projectId, next);
+      return next;
+    });
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    setAttachments([]);
+    setPending(null);
+    setError("");
+    setStatus("");
+    void idbClearAiChat(projectId);
+  };
+
   useEffect(() => () => requestRef.current?.abort(), []);
   useEffect(() => {
     if (!busy) return;
@@ -48,10 +89,10 @@ export default function AiCommandPanel() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (busyRef.current || reading || !text.trim()) return;
+    if (busyRef.current || reading || !historyLoaded || !text.trim()) return;
     const submittedText = text.trim();
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
-    setHistory(current => [...current, { role: "user", text: submittedText }].slice(-12) as CommandRequest["history"]);
+    pushHistory({ role: "user", text: submittedText });
     const controller = new AbortController(); requestRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), 60_000);
     try {
@@ -73,7 +114,7 @@ export default function AiCommandPanel() {
         setPending({ plan, fingerprint, context }); message = `Proposed (not applied): ${plan.summary}`;
       } else if (result.kind === "clarification" && typeof result.message === "string") message = result.message;
       else throw new Error("The AI response was not recognized.");
-      setHistory(current => [...current, { role: "assistant", text: message }].slice(-12) as CommandRequest["history"]);
+      pushHistory({ role: "assistant", text: message });
       setText(""); setStatus(result.kind === "plan" ? "Review the proposed changes before applying." : "Answer the question below to continue.");
     } catch (e) {
       if (controller.signal.aborted) setError("The AI took too long to respond. Try a smaller command or send it again.");
@@ -90,7 +131,7 @@ export default function AiCommandPanel() {
       await applyAiPlan(pending.plan, pending.fingerprint);
       setAppliedFingerprint(aiFingerprint());
       setStatus(`Applied ${pending.plan.actions.length} actions. You can undo the complete batch.`);
-      setHistory(h => [...h, { role: "assistant" as const, text: `Applied: ${pending.plan.summary}` }].slice(-12));
+      pushHistory({ role: "assistant", text: `Applied: ${pending.plan.summary}` });
       setPending(null);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save changes. Nothing was applied."); setStatus(""); }
     finally { busyRef.current = false; setBusy(false); }
@@ -116,10 +157,10 @@ export default function AiCommandPanel() {
     </div>
     <form onSubmit={submit} className="ai-composer">
       <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
-      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} maxLength={4000} rows={3} disabled={busy} placeholder="Describe what to build from your plan…" />
-      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading} onClick={() => fileRef.current?.click()}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading} onClick={() => { setHistory([]); setAttachments([]); setPending(null); setError(""); setStatus(""); }}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || reading || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
+      <textarea id="ai-command" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} maxLength={4000} rows={3} disabled={busy || !historyLoaded} placeholder="Describe what to build from your plan…" />
+      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading || !historyLoaded} onClick={() => fileRef.current?.click()}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy || !historyLoaded} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading || !historyLoaded} onClick={clearHistory}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || reading || !historyLoaded || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
     </form>
-    <div className="ai-suggestion-row"><button type="button" disabled={busy} onClick={() => setText("Create a two-storey house with three bedrooms")}>Create a house</button><button type="button" disabled={busy} onClick={() => setText("Add furniture to the living room")}>Add furniture</button><button type="button" disabled={busy} onClick={() => setText("Place MEP equipment")}>Place MEP</button></div>
+    <div className="ai-suggestion-row"><button type="button" disabled={busy || !historyLoaded} onClick={() => setText("Create a two-storey house with three bedrooms")}>Create a house</button><button type="button" disabled={busy || !historyLoaded} onClick={() => setText("Add furniture to the living room")}>Add furniture</button><button type="button" disabled={busy || !historyLoaded} onClick={() => setText("Place MEP equipment")}>Place MEP</button></div>
     {error && <p role="alert" className="ai-error">{error}</p>}
     <p role="status" aria-live="polite" className="ai-status-line">{status}</p>
     {appliedFingerprint && <button disabled={busy} className="ai-text-button" onClick={async () => { try { if (aiFingerprint() !== appliedFingerprint) throw new Error("The model changed after this batch. Use the editor's Undo to step back through later changes."); await undoWerkzeug(); setAppliedFingerprint(null); setStatus("AI batch undone."); } catch (e) { setError(e instanceof Error ? e.message : "Undo failed."); } }}>Undo AI batch</button>}

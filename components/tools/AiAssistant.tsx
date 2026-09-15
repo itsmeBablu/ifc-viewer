@@ -26,7 +26,7 @@ function AssistantPanel({ close }: { close: () => void }) {
       {status === "loading" ? <p>Checking sign-in…</p> : !session?.user ? <>
         <p data-ai-stagger className="mb-3 ai-text-body">Sign in to create and edit your model with AI. Manual modeling is available without signing in.</p>
         <button data-ai-stagger className="ai-google-button" onClick={() => { void signIn("google").catch(() => setError("Could not start Google sign-in. Please try again.")); }}><LuSparkles /> Sign in with Google</button>
-      </> : <><p data-ai-stagger className="ai-text-body">Signed in as {session.user.name ?? session.user.email}.</p><button data-ai-stagger className="mt-2 underline ai-text-body hover:text-[var(--text-strong)]" onClick={() => void signOut()}>Sign out</button><div data-ai-stagger><AiCommandPanel key={`${session.user.id}:${projectId}`} /></div></>}
+      </> : <><p data-ai-stagger className="ai-text-body">Signed in as {session.user.name ?? session.user.email}.</p><button data-ai-stagger className="mt-2 underline ai-text-body hover:text-[var(--text-strong)]" onClick={() => void signOut()}>Sign out</button><div data-ai-stagger><AiCommandPanel key={`${session.user.id}:${projectId}`} projectId={projectId} /></div></>}
       {error && <p role="alert">{error}</p>}
     </section>
   );

@@ -25,7 +25,7 @@ import type {
 import { EMPTY_LAYOUT_PRESETS } from "./layoutDrawing";
 
 const DB_NAME = "ibviewer-layout-drawing";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const SKETCH_LINES = "sketchLines";
 const LEVELS = "levels";
 const WALLS = "walls";
@@ -48,6 +48,7 @@ const MEP_EQUIPMENT = "mepEquipment";
 const WIRES = "wires";
 const ROOMS = "rooms";
 const PROJECTS = "projects";
+const AI_CHAT = "aiChat";
 
 export type StoredLayoutProject = {
   id: string;
@@ -97,6 +98,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(PRESETS)) {
         db.createObjectStore(PRESETS, { keyPath: "projectId" });
+      }
+      if (!db.objectStoreNames.contains(AI_CHAT)) {
+        db.createObjectStore(AI_CHAT, { keyPath: "projectId" });
       }
       if (!db.objectStoreNames.contains(PROJECTS)) {
         const projects = db.createObjectStore(PROJECTS, { keyPath: "id" });
@@ -517,12 +521,12 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
   try {
     const stores = [
       LEVELS, WALLS, DOORS, WINDOWS, SLABS, UNDERLAYS, COLUMNS, BEAMS,
-      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, SKETCH_LINES, WIRES, PRESETS, PROJECTS,
+      GRID_LINES, GROUPS, WALL_TYPES, STAIRS, RAMPS, DUCTS, PIPES, CABLE_TRAYS, MEP_EQUIPMENT, ROOMS, SKETCH_LINES, WIRES, PRESETS, PROJECTS, AI_CHAT,
     ];
     const tx = db.transaction(stores, "readwrite");
     for (const storeName of stores) {
       const store = tx.objectStore(storeName);
-      if (storeName === PRESETS) {
+      if (storeName === PRESETS || storeName === AI_CHAT) {
         store.delete(projectId);
       } else if (storeName === PROJECTS) {
         store.delete(projectId);
@@ -534,5 +538,68 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
     await transactionDone(tx);
   } finally {
     db.close();
+  }
+}
+
+export type AiChatTurn = {
+  role: "user" | "assistant";
+  text: string;
+};
+
+export async function idbGetAiChat(projectId: string): Promise<AiChatTurn[]> {
+  if (!projectId) return [];
+  try {
+    const db = await openDb();
+    try {
+      if (!db.objectStoreNames.contains(AI_CHAT)) return [];
+      const tx = db.transaction(AI_CHAT, "readonly");
+      const row = (await reqToPromise(
+        tx.objectStore(AI_CHAT).get(projectId),
+      )) as { projectId: string; history: AiChatTurn[]; updatedAt: number } | undefined;
+      return Array.isArray(row?.history) ? row.history : [];
+    } finally {
+      db.close();
+    }
+  } catch {
+    return [];
+  }
+}
+
+export async function idbPutAiChat(
+  projectId: string,
+  history: AiChatTurn[],
+): Promise<void> {
+  if (!projectId) return;
+  try {
+    const db = await openDb();
+    try {
+      if (!db.objectStoreNames.contains(AI_CHAT)) return;
+      const tx = db.transaction(AI_CHAT, "readwrite");
+      await reqToPromise(
+        tx.objectStore(AI_CHAT).put({ projectId, history, updatedAt: Date.now() }),
+      );
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  } catch {
+    // IDB write failure is non-fatal
+  }
+}
+
+export async function idbClearAiChat(projectId: string): Promise<void> {
+  if (!projectId) return;
+  try {
+    const db = await openDb();
+    try {
+      if (!db.objectStoreNames.contains(AI_CHAT)) return;
+      const tx = db.transaction(AI_CHAT, "readwrite");
+      await reqToPromise(tx.objectStore(AI_CHAT).delete(projectId));
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  } catch {
+    // IDB delete failure is non-fatal
   }
 }
