@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { generateCommand } from "@/lib/ai/gemini";
 import { limitAiUser } from "@/lib/ai/rateLimit";
 import { POST } from "./route";
+import { GeminiError } from "@/lib/ai/providerError";
 
 const body = { command: "Build a house", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } } };
 const request = (data: unknown = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
@@ -68,5 +69,15 @@ describe("AI command authorization", () => {
     vi.mocked(generateCommand).mockRejectedValue(new TypeError("private URL details"));
     const response = await POST(request());
     expect((await response.json()).error).toBe("AI could not produce a valid response. Please try again.");
+  });
+  it("reports Google's quota failure while preserving the app usage headers", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockRejectedValue(new GeminiError("Google's rate limit was reached, not the app allowance.", "GEMINI_QUOTA", 429, 60));
+    const response = await POST(request());
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    expect(response.headers.get("X-AI-Remaining")).toBe("9");
+    expect(await response.json()).toMatchObject({ code: "GEMINI_QUOTA", provider: "gemini" });
+    expect(limitAiUser).toHaveBeenCalledTimes(1);
   });
 });

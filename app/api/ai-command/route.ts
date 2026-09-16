@@ -4,6 +4,7 @@ import { generateCommand } from "@/lib/ai/gemini";
 import { generateOllamaCommand } from "@/lib/ai/ollama";
 import { limitAiUser } from "@/lib/ai/rateLimit";
 import { MAX_REQUEST_BYTES } from "@/lib/ai/attachments";
+import { GeminiError } from "@/lib/ai/providerError";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
       ? "AI took too long to respond. Try a smaller request."
       : error instanceof Error && !error.name.includes("Zod") && !(error instanceof TypeError) && !(error instanceof SyntaxError)
         ? error.message : "AI could not produce a valid response. Please try again.";
-    return reply({ error: message }, 502, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) });
+    return reply({ error: message, ...(error instanceof GeminiError ? { code: error.code, provider: "gemini" } : {}) }, error instanceof GeminiError ? error.status : 502,
+      { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total),
+        ...(error instanceof GeminiError && error.retryAfter ? { "Retry-After": String(error.retryAfter) } : {}) });
   }
 }

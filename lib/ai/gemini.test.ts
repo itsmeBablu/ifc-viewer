@@ -5,7 +5,7 @@ import type { CommandRequest } from "./protocol";
 const input: CommandRequest = { command: "Add a wall", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } }, history: [], attachments: [] };
 const fetchMock = vi.fn();
 beforeEach(() => { vi.stubEnv("GEMINI_API_KEY", "test-key"); vi.stubEnv("GEMINI_MODEL", ""); vi.stubGlobal("fetch", fetchMock); fetchMock.mockReset(); });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it("defaults to Flash-Lite with minimal thinking and no automatic retry", async () => {
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "How long should the wall be?" }] } }] }));
@@ -16,6 +16,7 @@ it("defaults to Flash-Lite with minimal thinking and no automatic retry", async 
   expect(request.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "MINIMAL" });
   expect(request.generationConfig.maxOutputTokens).toBe(8192);
   expect(request.contents.at(-1).parts).toHaveLength(1);
+  expect(request.toolConfig.functionCallingConfig).toMatchObject({ mode: "AUTO" });
 });
 
 it("supports a server default but rejects models outside the supported list", async () => {
@@ -70,4 +71,45 @@ it("does not expose provider payloads or retry quota failures", async () => {
 it("rejects a truncated plan instead of offering partial geometry", async () => {
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "MAX_TOKENS" }] }));
   await expect(generateCommand(input)).rejects.toThrow(/incomplete/);
+});
+
+it("retries only transient server errors on the same selected model", async () => {
+  vi.useFakeTimers();
+  fetchMock.mockResolvedValueOnce(new Response("private upstream payload", { status: 503 }))
+    .mockResolvedValueOnce(new Response("private upstream payload", { status: 502 }))
+    .mockResolvedValueOnce(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "ask_clarification", args: { question: "Which route?" } } }] } }] }));
+  const pending = generateCommand({ ...input, model: "gemini-3.8-flash" });
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(await pending).toMatchObject({ model: "gemini-3.8-flash", kind: "clarification" });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock.mock.calls.every(call => call[0].includes("gemini-3.8-flash"))).toBe(true);
+  expect(fetchMock.mock.calls[0][1].body).toBe(fetchMock.mock.calls[2][1].body);
+});
+
+it("stops after bounded retries and distinguishes connection errors from invalid responses", async () => {
+  vi.useFakeTimers();
+  fetchMock.mockRejectedValue(new TypeError("private network details"));
+  const pending = expect(generateCommand(input)).rejects.toMatchObject({ code: "GEMINI_CONNECTION", status: 503 });
+  await vi.advanceTimersByTimeAsync(4000);
+  await pending;
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
+it("keeps provider quota separate from app allowance without retrying", async () => {
+  fetchMock.mockResolvedValue(new Response("private payload", { status: 429, headers: { "Retry-After": "60" } }));
+  await expect(generateCommand(input)).rejects.toMatchObject({ code: "GEMINI_QUOTA", status: 429, retryAfter: 60 });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("reports malformed tool arguments without applying or repeatedly generating geometry", async () => {
+  fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "propose_model", args: { actions: [{ kind: "wall" }] } } }] } }] }));
+  await expect(generateCommand(input)).rejects.toMatchObject({ code: "GEMINI_INVALID_RESPONSE" });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("returns actual provider token usage and omits unrelated catalogue rows", async () => {
+  fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "answer_question", args: { answer: "Use a wall path." } } }] } }], usageMetadata: { promptTokenCount: 3100, candidatesTokenCount: 80, thoughtsTokenCount: 12 } }));
+  expect(await generateCommand(input)).toMatchObject({ usage: { inputTokens: 3100, outputTokens: 80, thinkingTokens: 12 } });
+  const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+  expect(request.contents[0].parts[0].text).not.toContain("mep-boiler");
 });
