@@ -20,6 +20,18 @@ function savedPreference(key: string) {
   try { return typeof window === "undefined" ? null : localStorage.getItem(key); } catch { return null; }
 }
 
+function formatResetTime(resetTimestamp: number): string {
+  if (!resetTimestamp || resetTimestamp <= 0) return "";
+  const diffMs = resetTimestamp - Date.now();
+  if (diffMs <= 0) return "resets now";
+  const diffMinutes = Math.ceil(diffMs / 60000);
+  if (diffMinutes < 60) return `resets in ${diffMinutes}m`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remMinutes = diffMinutes % 60;
+  if (remMinutes === 0) return `resets in ${diffHours}h`;
+  return `resets in ${diffHours}h ${remMinutes}m`;
+}
+
 export default function AiCommandPanel({ projectId: propProjectId }: { projectId?: string | null } = {}) {
   const storeProjectId = useLayoutDrawingStore(s => s.projectId);
   const projectId = propProjectId ?? storeProjectId ?? "default";
@@ -43,7 +55,12 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("Reading your project");
-  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>({ remaining: 60, total: 60, reset: 0 });
+  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>(() => ({
+    remaining: 1500,
+    total: 1500,
+    reset: Date.now() + 24 * 60 * 60 * 1000,
+  }));
+  const [, setTick] = useState(0);
   const [failedCommand, setFailedCommand] = useState<string | null>(null);
   const [deleteApproved, setDeleteApproved] = useState(false);
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
@@ -54,6 +71,11 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   useEffect(() => {
     try { localStorage.setItem("ai-assistant-model", model); localStorage.setItem("ai-assistant-mode", mode); } catch { /* Storage is optional. */ }
   }, [model, mode]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -166,9 +188,9 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       const total = Number(totalHeader);
       if (remainingHeader !== null && Number.isFinite(remaining)) {
         setLimit({
-          total: Number.isFinite(total) && total > 0 ? total : 60,
+          total: Number.isFinite(total) && total > 0 ? total : 1500,
           remaining,
-          reset: resetHeader !== null && Number.isFinite(reset) ? reset : 0,
+          reset: resetHeader !== null && Number.isFinite(reset) && reset > 0 ? reset : Date.now() + 24 * 60 * 60 * 1000,
         });
       }
       const result = await response.json().catch(() => { throw new Error("AI could not return a response. Please try again in a moment."); });
@@ -309,41 +331,23 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
           </div>
         )}
 
-        {/* Live Quota & Token Slider Bar */}
+        {/* Live Quota & Token Slider Bar — Single Line Layout */}
         {(() => {
-          const totalQuota = limit?.total && limit.total > 0 ? limit.total : 60;
+          const totalQuota = limit?.total && limit.total > 0 ? limit.total : 1500;
           const remainingQuota = limit?.remaining ?? totalQuota;
           const quotaPct = Math.min(100, Math.max(0, Math.round((remainingQuota / totalQuota) * 100)));
-          return (
-            <div className="ai-limits-bar flex flex-col gap-1 px-2.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[10.5px]">
-              <div className="flex items-center justify-between gap-1.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="flex items-center gap-1 font-semibold text-[var(--text-strong)]">
-                    <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"}`} />
-                    <span>({modelDetails(model).maxOutputTokens.toLocaleString()} tokens)</span>
-                  </span>
-                  <span className="text-[var(--text-muted)] opacity-60">·</span>
-                  <span className="text-[var(--text-muted)] truncate">
-                    {levelCount} {levelCount === 1 ? "lvl" : "lvls"} · {selectedCount} sel
-                  </span>
-                </div>
+          const resetText = limit?.reset ? formatResetTime(limit.reset) : "";
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span
-                    className={`font-mono font-extrabold text-[11px] transition-colors ${
-                      mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
-                    }`}
-                  >
-                    {quotaPct}%
-                  </span>
-                  <span className="text-[10px] text-[var(--text-muted)] opacity-80">
-                    quota ({remainingQuota}/{totalQuota})
-                  </span>
-                </div>
+          return (
+            <div className="ai-limits-bar flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[10.5px]">
+              {/* Left: Token count */}
+              <div className="flex items-center gap-1 shrink-0 font-semibold text-[var(--text-strong)]" title={`${modelDetails(model).maxOutputTokens.toLocaleString()} tokens maximum output`}>
+                <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"}`} />
+                <span>({modelDetails(model).maxOutputTokens.toLocaleString()} tokens)</span>
               </div>
 
-              {/* Slider Track and Live Fill */}
-              <div className="relative w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 mt-0.5">
+              {/* Middle: Live Animated Slider Track */}
+              <div className="relative flex-1 min-w-[50px] h-1.5 rounded-full bg-black/10 dark:bg-white/10">
                 <div
                   className={`h-full rounded-full transition-all duration-700 ease-out relative ${
                     mepModeActive
@@ -362,6 +366,20 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
                     }`}
                   />
                 </div>
+              </div>
+
+              {/* Right: Quota % and Reset Time */}
+              <div className="flex items-center gap-1 shrink-0" title={`Rate limit quota: ${remainingQuota} of ${totalQuota} requests available`}>
+                <span
+                  className={`font-mono font-extrabold text-[11px] transition-colors ${
+                    mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
+                  }`}
+                >
+                  {quotaPct}%
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] opacity-80 whitespace-nowrap">
+                  quota{resetText ? ` · ${resetText}` : ""}
+                </span>
               </div>
             </div>
           );
