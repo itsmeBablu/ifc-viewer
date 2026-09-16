@@ -2010,7 +2010,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
   // Revit-style focus: F frames the current selection in any view.
   useEffect(() => {
     const onFocusSelection = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "f" || event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true]")) return;
+      if (!event.key || event.key.toLowerCase() !== "f" || event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest?.("input,textarea,select,[contenteditable=true]")) return;
       const camera = perspectiveCameraRef.current, controls = controlsRef.current;
       if (!camera || !controls) return;
       const layout = useLayoutDrawingStore.getState(), markup = useToolMarkupStore.getState();
