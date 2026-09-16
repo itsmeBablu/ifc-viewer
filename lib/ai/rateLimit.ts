@@ -44,4 +44,32 @@ export async function limitAiUser(googleUserId: string) {
   }
 }
 
+export async function getAiUserQuota(googleUserId: string) {
+  const now = Date.now();
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    const bucket = (localBuckets.get(googleUserId) ?? []).filter(timestamp => now - timestamp < WINDOW_MS);
+    const reset = (bucket[0] ?? now) + WINDOW_MS;
+    return { remaining: Math.max(0, AI_USER_LIMIT - bucket.length), reset, total: AI_USER_LIMIT };
+  }
+  try {
+    limiter ??= new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(AI_USER_LIMIT, "24 h"),
+      prefix: "v-studio:ai:google",
+      analytics: false,
+      timeout: 4000,
+    });
+    const result = await limiter.getRemaining(googleUserId);
+    return {
+      remaining: result.remaining,
+      reset: result.reset,
+      total: AI_USER_LIMIT,
+    };
+  } catch {
+    const bucket = (localBuckets.get(googleUserId) ?? []).filter(timestamp => now - timestamp < WINDOW_MS);
+    const reset = (bucket[0] ?? now) + WINDOW_MS;
+    return { remaining: Math.max(0, AI_USER_LIMIT - bucket.length), reset, total: AI_USER_LIMIT };
+  }
+}
+
 

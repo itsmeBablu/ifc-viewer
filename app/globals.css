@@ -4504,6 +4504,8 @@ body.mep-mode-active .ai-chat-panel,
   --ai-accent: #38bdf8;
   --ai-accent-glow: rgba(56, 189, 248, 0.55);
   --ai-accent-bg: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 20px rgba(56, 189, 248, 0.3) !important;
 }
 
 /* Smooth rotating light line around the pop-up window in V-Yellow (Arch) or V-Blue (MEP) */
@@ -4696,10 +4698,10 @@ select.vstudio-select option {
 .ai-chat-panel button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* Floating 3D visualizer control. The icon and ring are animated by GSAP. */
-.ai-orb-trigger { position: fixed; z-index: 100; width: 46px; height: 46px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #09090b; border: 1px solid rgba(253, 230, 138, .72); isolation: isolate; overflow: hidden; background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(253,230,138,.42) 42%, rgba(251,191,36,.3)); backdrop-filter: blur(22px) saturate(165%); -webkit-backdrop-filter: blur(22px) saturate(165%); box-shadow: inset 0 1px 0 rgba(255,255,255,.72), inset 0 -1px 0 rgba(180,83,9,.12), 0 6px 18px rgba(251,191,36,.2); transition: transform .2s, box-shadow .2s; }
-.ai-orb-trigger:hover { transform: translateY(-3px) scale(1.05); box-shadow: inset 0 1px 0 rgba(255,255,255,.94), 0 12px 30px rgba(251,191,36,.4); }
+.ai-orb-trigger { position: fixed; z-index: 100; width: 46px; height: 46px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #09090b; border: 1px solid rgba(253, 230, 138, .72); isolation: isolate; overflow: hidden; background: rgba(15, 17, 24, 0.94); backdrop-filter: blur(22px) saturate(165%); -webkit-backdrop-filter: blur(22px) saturate(165%); box-shadow: inset 0 1px 0 rgba(255,255,255,.72), inset 0 -1px 0 rgba(180,83,9,.12), 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(251,191,36,.3); transition: transform .2s, box-shadow .2s; }
+.ai-orb-trigger:hover { transform: translateY(-3px) scale(1.05); box-shadow: inset 0 1px 0 rgba(255,255,255,.94), 0 12px 30px rgba(0,0,0,.6), 0 0 24px rgba(251,191,36,.5); }
 .ai-orb-trigger:focus-visible { outline: 2px solid #facc15; outline-offset: 4px; }
-.ai-orb-icon { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; background: linear-gradient(145deg, rgba(255,247,204,.78), rgba(250,204,21,.72) 62%, rgba(245,158,11,.62)); box-shadow: inset 0 1px 3px rgba(255,255,255,.82), 0 0 14px rgba(250,204,21,.42); }
+.ai-orb-icon { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; overflow: visible; background: transparent !important; box-shadow: none !important; }
 .ai-orb-icon img { width: 22px; height: 22px; object-fit: contain; }
 .ai-orb-ring { position: absolute; inset: 0; margin: auto; width: 44px; height: 44px; border: 1px solid rgba(250,204,21,.65); border-top: 2px solid #fff7cc; border-bottom: 2px solid #d97706; border-radius: 50%; pointer-events: none; }
 
@@ -4707,8 +4709,8 @@ select.vstudio-select option {
 body.mep-mode-active .ai-orb-trigger,
 .ai-orb-trigger[data-discipline="mep"] {
   border-color: rgba(56, 189, 248, 0.72) !important;
-  background: linear-gradient(135deg, rgba(255,255,255,.25), rgba(56,189,248,.38) 42%, rgba(14,165,233,.3)) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 6px 18px rgba(56,189,248,.3) !important;
+  background: rgba(15, 17, 24, 0.94) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56,189,248,.35) !important;
 }
 body.mep-mode-active .ai-orb-trigger .ai-orb-ring,
 .ai-orb-trigger[data-discipline="mep"] .ai-orb-ring {
@@ -4718,8 +4720,8 @@ body.mep-mode-active .ai-orb-trigger .ai-orb-ring,
 }
 body.mep-mode-active .ai-orb-trigger .ai-orb-icon,
 .ai-orb-trigger[data-discipline="mep"] .ai-orb-icon {
-  background: linear-gradient(145deg, rgba(224,242,254,.85), rgba(56,189,248,.8) 62%, rgba(2,132,199,.7)) !important;
-  box-shadow: inset 0 1px 3px rgba(255,255,255,.82), 0 0 14px rgba(56,189,248,.5) !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .ai-attachments { display: grid; gap: 6px; }
@@ -4747,8 +4749,8 @@ body.mep-mode-active .ai-orb-trigger .ai-orb-icon,
 .ai-chat-panel textarea, .ai-chat-panel select { color: var(--text-strong); }
 .ai-chat-panel::before { content: ""; position: absolute; inset: 0 12% auto 0; height: 1px; pointer-events: none; }
 .ai-chat-header { min-height: 38px; }
-.ai-chat-close { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; transition: background .2s ease, color .2s ease, transform .2s ease; }
-.ai-chat-close:hover { transform: rotate(6deg); }
+.ai-chat-close { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: transparent !important; border: none !important; box-shadow: none !important; transition: background .2s ease, color .2s ease, transform .2s ease; }
+.ai-chat-close:hover { transform: rotate(90deg); background: rgba(255, 255, 255, 0.08) !important; }
 .ai-chat-close svg { width: 16px; height: 16px; }
 .ai-google-button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.42); border-radius: 13px; padding: 10px 14px; color: #18181b; background: linear-gradient(135deg, #fff, #fef3c7); box-shadow: inset 0 1px rgba(255,255,255,.9), 0 8px 20px rgba(0,0,0,.16); transition: transform .2s ease, box-shadow .2s ease; }
 .ai-google-button:hover { transform: translateY(-1px); box-shadow: inset 0 1px rgba(255,255,255,.9), 0 12px 24px rgba(250,204,21,.22); }
@@ -4762,9 +4764,9 @@ body.mep-mode-active .ai-orb-trigger .ai-orb-icon,
 .ai-chat-panel[data-theme="dark"],
 .ai-chat-panel {
   background: rgba(15, 17, 24, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(253, 230, 138, 0.72);
   color: #f4f4f5;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 20px rgba(251, 191, 36, 0.25);
 }
 
 [data-theme="dark"] .ai-chat-panel::before,

@@ -28,56 +28,37 @@ function usePanelMorphAnimation(
     const panelRect = panel.getBoundingClientRect();
     const tr = getTriggerRect() ?? {
       left: panelRect.right - 52,
-      top: panelRect.bottom - 52,
-      width: 44,
-      height: 44,
+      top: panelRect.bottom + 20,
+      width: 46,
+      height: 46,
     };
 
     const trCenterX = tr.left + tr.width / 2;
     const trCenterY = tr.top + tr.height / 2;
-    const panelCenterX = panelRect.left + panelRect.width / 2;
-    const panelCenterY = panelRect.top + panelRect.height / 2;
+    const originX = trCenterX - panelRect.left;
+    const originY = trCenterY - panelRect.top;
 
-    const deltaX = trCenterX - panelCenterX;
-    const deltaY = trCenterY - panelCenterY;
-    const initialScale = Math.max(0.06, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+    if (capRef.current) {
+      gsap.killTweensOf(capRef.current);
+      gsap.to(capRef.current, { autoAlpha: 0, duration: 0.15, ease: "power2.in" });
+    }
 
     // Staggered text fade out quickly
     gsap.to(panel.querySelectorAll("[data-ai-stagger]"), {
       autoAlpha: 0,
       y: 6,
-      duration: 0.14,
+      duration: 0.12,
       ease: "power2.in",
     });
 
-    // Icon glides smoothly back into the trigger button's center
-    if (capRef.current) {
-      const capRect = capRef.current.getBoundingClientRect();
-      const localCapX = (capRect.left + capRect.width / 2) - panelRect.left;
-      const localCapY = (capRect.top + capRect.height / 2) - panelRect.top;
-      const offsetX = (panelRect.width / 2) - localCapX;
-      const offsetY = (panelRect.height / 2) - localCapY;
-
-      gsap.to(capRef.current, {
-        x: offsetX,
-        y: offsetY,
-        scale: 1 / initialScale,
-        rotation: -12,
-        autoAlpha: 1,
-        duration: 0.44,
-        ease: "power3.inOut",
-      });
-    }
-
-    // Panel collapses and morphs back into the circular button
+    // Panel collapses smoothly right back into the circular button
     gsap.to(panel, {
-      x: deltaX,
-      y: deltaY,
-      scale: initialScale,
+      transformOrigin: `${originX}px ${originY}px`,
+      scale: 0.08,
       borderRadius: 100,
-      autoAlpha: 1,
-      duration: 0.44,
-      ease: "power3.inOut",
+      autoAlpha: 0,
+      duration: 0.32,
+      ease: "power3.in",
       onComplete: () => {
         onCloseComplete();
       },
@@ -92,77 +73,67 @@ function usePanelMorphAnimation(
     const panelRect = panel.getBoundingClientRect();
     const tr = getTriggerRect() ?? {
       left: panelRect.right - 52,
-      top: panelRect.bottom - 52,
-      width: 44,
-      height: 44,
+      top: panelRect.bottom + 20,
+      width: 46,
+      height: 46,
     };
 
     const trCenterX = tr.left + tr.width / 2;
     const trCenterY = tr.top + tr.height / 2;
-    const panelCenterX = panelRect.left + panelRect.width / 2;
-    const panelCenterY = panelRect.top + panelRect.height / 2;
-
-    const deltaX = trCenterX - panelCenterX;
-    const deltaY = trCenterY - panelCenterY;
-    const initialScale = Math.max(0.06, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+    const originX = trCenterX - panelRect.left;
+    const originY = trCenterY - panelRect.top;
 
     const ctx = gsap.context(() => {
       // Panel blossoms and expands directly from the trigger button
       gsap.fromTo(
         panel,
         {
-          x: deltaX,
-          y: deltaY,
-          scale: initialScale,
+          transformOrigin: `${originX}px ${originY}px`,
+          scale: 0.08,
           borderRadius: 100,
-          autoAlpha: 1,
-          transformOrigin: "center center",
+          autoAlpha: 0.85,
         },
         {
-          x: 0,
-          y: 0,
           scale: 1,
           borderRadius: 26,
           autoAlpha: 1,
-          duration: 0.48,
+          duration: 0.42,
           ease: "power3.out",
         }
       );
 
-      // Icon glides smoothly from the trigger button straight to the top-left heading!
+      // Icon fades in cleanly and starts the wave floating animation
       if (capRef.current) {
-        const capRect = capRef.current.getBoundingClientRect();
-        const localCapX = (capRect.left + capRect.width / 2) - panelRect.left;
-        const localCapY = (capRect.top + capRect.height / 2) - panelRect.top;
-        const offsetX = (panelRect.width / 2) - localCapX;
-        const offsetY = (panelRect.height / 2) - localCapY;
-
         gsap.fromTo(
           capRef.current,
+          { autoAlpha: 0, scale: 0.75 },
           {
-            x: offsetX,
-            y: offsetY,
-            scale: 1 / initialScale,
-            rotation: 15,
             autoAlpha: 1,
-            transformOrigin: "center center",
-          },
-          {
-            x: 0,
-            y: 0,
             scale: 1,
-            rotation: 0,
-            autoAlpha: 1,
-            duration: 0.5,
-            ease: "power3.out",
+            duration: 0.3,
+            delay: 0.1,
+            ease: "power2.out",
+            onComplete: () => {
+              if (capRef.current) {
+                // Gentle floating wave up and down matching the button animation
+                gsap.to(capRef.current, {
+                  y: -3,
+                  rotation: 12,
+                  duration: 1.8,
+                  ease: "sine.inOut",
+                  repeat: -1,
+                  yoyo: true,
+                });
+              }
+            },
           }
         );
       }
 
       gsap.fromTo(
         panel.querySelectorAll("[data-ai-stagger]"),
-        { autoAlpha: 0, y: 10 },
-        { autoAlpha: 1, y: 0, duration: 0.28, stagger: 0.03, delay: 0.16, ease: "power2.out" }
+        { autoAlpha: 0, y: 8 },
+        { autoAlpha: 1, y: 0, duration: 0.25, stagger: 0.03, delay: 0.15, ease: "power2.out" }
       );
     }, panelRef);
 

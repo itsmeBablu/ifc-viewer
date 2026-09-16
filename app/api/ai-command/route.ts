@@ -5,7 +5,7 @@ import { limitAiUser } from "@/lib/ai/rateLimit";
 import { MAX_REQUEST_BYTES } from "@/lib/ai/attachments";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 const MAX_BYTES = MAX_REQUEST_BYTES;
 const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 

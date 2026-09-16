@@ -79,6 +79,35 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
 
   useEffect(() => {
     let active = true;
+    const fetchQuota = () => {
+      void fetch("/api/ai-quota", { cache: "no-store" })
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => {
+          if (active && data && typeof data.remaining === "number") {
+            setLimit({
+              remaining: data.remaining,
+              total: data.total ?? 1500,
+              reset: data.reset ?? Date.now() + 24 * 60 * 60 * 1000,
+            });
+          }
+        })
+        .catch(() => {});
+    };
+    fetchQuota();
+    const interval = setInterval(fetchQuota, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const livePromptTokens = useMemo(() => {
+    if (!text.trim()) return 0;
+    return Math.max(1, Math.ceil(text.trim().length / 3.8));
+  }, [text]);
+
+  useEffect(() => {
+    let active = true;
     void idbGetAiChat(projectId)
       .then(saved => {
         if (active) {
@@ -95,8 +124,9 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   }, [projectId]);
 
   const pushHistory = (item: AiChatTurn) => {
+    const withTimestamp: AiChatTurn = { ...item, timestamp: item.timestamp ?? Date.now() };
     setHistory(current => {
-      const next = [...current, item].slice(-12);
+      const next = [...current, withTimestamp].slice(-12);
       void idbPutAiChat(projectId, next).catch(() => setError("Chat could not be saved in this browser."));
       return next;
     });
@@ -173,7 +203,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
     pushHistory({ role: "user", text: submittedText });
     const controller = new AbortController(); requestRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 90_000);
+    const timeout = window.setTimeout(() => controller.abort(), 240_000);
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
@@ -211,7 +241,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     } catch (e) {
       if (!mountedRef.current) return;
       const message = controller.signal.aborted
-        ? "The AI took too long to respond. Try a smaller command or send it again."
+        ? "AI took too long to formulate this complex plan. You can try again or divide into smaller tasks."
         : e instanceof TypeError ? "AI could not connect. Check your connection and try again."
           : e instanceof Error && !e.name.includes("Zod") ? e.message : "AI could not produce a usable response. Try a smaller request.";
       pushHistory({ role: "assistant", text: message, model, mode });
@@ -272,6 +302,13 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             </div>
             <div className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}>
               {turn.role === "assistant" ? <AiMessageContent text={turn.text} /> : <p className="whitespace-pre-wrap">{turn.text}</p>}
+              <div className="flex items-center justify-end mt-1.5 select-none -mb-0.5">
+                <span className="text-[9px] opacity-60 font-mono tracking-tight text-[var(--text-muted)]">
+                  {turn.timestamp
+                    ? new Date(turn.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
             </div>
           </div>
         ))}
@@ -340,10 +377,21 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
 
           return (
             <div className="ai-limits-bar flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[10.5px]">
-              {/* Left: Token count */}
-              <div className="flex items-center gap-1 shrink-0 font-semibold text-[var(--text-strong)]" title={`${modelDetails(model).maxOutputTokens.toLocaleString()} tokens maximum output`}>
-                <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"}`} />
-                <span>({modelDetails(model).maxOutputTokens.toLocaleString()} tokens)</span>
+              {/* Left: Real-time token count */}
+              <div
+                className="flex items-center gap-1 shrink-0 font-semibold text-[var(--text-strong)]"
+                title={livePromptTokens > 0 ? `Live input: ~${livePromptTokens} tokens` : `${modelDetails(model).maxOutputTokens.toLocaleString()} max tokens`}
+              >
+                <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"} ${livePromptTokens > 0 ? "animate-pulse" : ""}`} />
+                <span>
+                  {livePromptTokens > 0 ? (
+                    <span className="font-mono text-[10px] tabular-nums">
+                      ~{livePromptTokens} tok live
+                    </span>
+                  ) : (
+                    <span>({modelDetails(model).maxOutputTokens.toLocaleString()} tokens)</span>
+                  )}
+                </span>
               </div>
 
               {/* Middle: Live Animated Slider Track */}
@@ -369,9 +417,9 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
               </div>
 
               {/* Right: Quota % and Reset Time */}
-              <div className="flex items-center gap-1 shrink-0" title={`Rate limit quota: ${remainingQuota} of ${totalQuota} requests available`}>
+              <div className="flex items-center gap-1 shrink-0" title={`Live quota: ${remainingQuota} of ${totalQuota} requests available`}>
                 <span
-                  className={`font-mono font-extrabold text-[11px] transition-colors ${
+                  className={`font-mono font-extrabold text-[11px] transition-colors tabular-nums ${
                     mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
                   }`}
                 >
@@ -403,7 +451,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             maxLength={4000}
             rows={2}
             disabled={busy || !historyLoaded}
-            placeholder={busy ? "Waiting for a reply…" : mode === "build" ? "Describe what to build or change…" : mode === "review" ? "Ask to review layout or selection…" : "Ask how to model or use tools…"}
+            placeholder={busy ? "Waiting for a reply…" : mode === "build" ? "Describe walls, rooms, MEP ducting or piping to build…" : mode === "review" ? "Ask to review layout, MEP systems or selection…" : "Ask how to model or use tools…"}
           />
           <div className="ai-composer-toolbar">
             <button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading || !historyLoaded} onClick={() => fileRef.current?.click()}>

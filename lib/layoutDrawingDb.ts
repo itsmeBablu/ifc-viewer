@@ -141,7 +141,7 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
 }
 
 export type AiDbChange = {
-  store: "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment";
+  store: "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes";
   id: string;
   value?: { id: string; projectId: string };
 };
@@ -546,6 +546,7 @@ export type AiChatTurn = {
   text: string;
   model?: string;
   mode?: string;
+  timestamp?: number;
 };
 
 export async function idbGetAiChat(projectId: string): Promise<AiChatTurn[]> {

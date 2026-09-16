@@ -23,6 +23,8 @@ export function describeAction(action: AiAction) {
   if (action.kind === "delete") return `Delete ${action.targetKind} ${action.id}`;
   const verb = action.operation === "create" ? "Create" : "Update";
   if (action.kind === "wall" || action.kind === "beam") return `${verb} ${action.kind} ${action.id}: (${action.startXmm}, ${action.startYmm}) → (${action.endXmm}, ${action.endYmm}) mm, level ${action.levelId}`;
+  if (action.kind === "duct") return `${verb} duct ${action.id}: (${action.startXmm}, ${action.startYmm}) → (${action.endXmm}, ${action.endYmm}) mm, elev ${action.elevationOffsetMm} mm, ${action.shape} ${action.shape === "round" ? `Ø${action.diameterMm ?? 250}` : `${action.widthMm ?? 300}×${action.heightMm ?? 200}`} mm (${action.systemType})`;
+  if (action.kind === "pipe") return `${verb} pipe ${action.id}: (${action.startXmm}, ${action.startYmm}) → (${action.endXmm}, ${action.endYmm}) mm, elev ${action.elevationOffsetMm} mm, Ø${action.diameterMm} mm (${action.systemType})`;
   if (action.kind === "door" || action.kind === "window") return `${verb} ${action.kind} ${action.id}: ${action.widthMm} × ${action.heightMm} mm on wall ${action.wallId}, centre ${action.positionMm} mm`;
   if (action.kind === "level") return `${verb} level ${action.name}: elevation ${action.elevationMm} mm, height ${action.heightMm} mm`;
   if (action.kind === "floor" || action.kind === "roof") return `${verb} ${action.kind} ${action.id}: ${action.boundary.length} boundary points on ${action.levelId}, offset ${action.elevationOffsetMm} mm${action.kind === "roof" ? `, ${action.roofPreset} ${action.pitchDeg}°` : ""}`;
@@ -51,7 +53,7 @@ export function validatePlan(value: unknown, rawContext: AiContext) {
     if (existing && (existing.properties.curved || existing.properties.topLevelId || existing.properties.attachedTopRoofId || existing.properties.attachedBaseRoofId || existing.properties.roofJoin || existing.properties.kitchenWallId || existing.properties.connectedHostId || existing.properties.wallTypeId || (Array.isArray(existing.properties.holes) && existing.properties.holes.length) || (Array.isArray(existing.properties.connectors) && existing.properties.connectors.length) || existing.properties.furnitureParameters)) throw new Error(`Element ${action.id} has geometry constraints. Edit it manually first.`);
     if ("levelId" in action && elements.get(action.levelId)?.kind !== "level") throw new Error(`Level ${action.levelId} does not exist. Create it before its elements.`);
     if ("wallId" in action && elements.get(action.wallId)?.kind !== "wall") throw new Error(`Host wall ${action.wallId} does not exist. Create it before its openings.`);
-    if (action.kind === "wall" || action.kind === "beam") {
+    if (action.kind === "wall" || action.kind === "beam" || action.kind === "duct" || action.kind === "pipe") {
       if (Math.hypot(action.endXmm - action.startXmm, action.endYmm - action.startYmm) < 10) throw new Error(`${action.kind} ${action.id} must be at least 10 mm long.`);
     }
     if (action.kind === "floor" || action.kind === "roof") {
