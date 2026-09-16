@@ -23,8 +23,8 @@ export async function generateOllamaCommand(input: CommandRequest) {
     response = await fetch(new URL("/api/chat", base), {
       method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
       signal: AbortSignal.timeout(220000),
-      body: JSON.stringify({ model, stream: false, think: false, format: z.toJSONSchema(replySchema, { target: "draft-7" }),
-        options: { temperature: 0, num_predict: 8192, num_ctx: 8192 }, messages: [
+      body: JSON.stringify({ model, stream: false, format: z.toJSONSchema(replySchema, { target: "draft-7" }),
+        options: { temperature: 0, num_predict: 8192 }, messages: [
           { role: "system", content: `${SYSTEM_PROMPT} Return JSON matching the schema instead of tool calls. Mode: ${mode}; Review and Guide MUST return advice or clarification, never a plan. Discipline: ${input.discipline ?? "arch"}. Preserve architecture in MEP unless asked. Use routine concept defaults and disclose assumptions: ${JSON.stringify(BIM_DEFAULTS)}` },
           { role: "user", content: JSON.stringify({ catalog: compactCatalog }) },
           ...promptHistory(input.history).map(turn => ({ role: turn.role, content: turn.text })),
