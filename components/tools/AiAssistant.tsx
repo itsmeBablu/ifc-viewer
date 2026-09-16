@@ -205,11 +205,10 @@ function AssistantPanel({
       aria-label="AI modeling assistant"
       data-theme={colorTheme}
       data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl"
     >
-      {/* Apple AI multi-color fluid ambient glow & perimeter ribbon */}
-      <div className="ai-apple-glow-aura" aria-hidden="true" />
-      <div className="ai-apple-glow-ribbon" aria-hidden="true" />
+      {/* Smooth rotating beam of light around perimeter */}
+      <div className="ai-light-beam" aria-hidden="true" />
 
       <div data-ai-stagger className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -392,11 +391,10 @@ function UnconfiguredPanel({
       aria-label="AI modeling assistant"
       data-theme={colorTheme}
       data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl"
     >
-      {/* Apple AI multi-color fluid ambient glow & perimeter ribbon */}
-      <div className="ai-apple-glow-aura" aria-hidden="true" />
-      <div className="ai-apple-glow-ribbon" aria-hidden="true" />
+      {/* Smooth rotating beam of light around perimeter */}
+      <div className="ai-light-beam" aria-hidden="true" />
 
       <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
