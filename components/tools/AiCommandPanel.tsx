@@ -204,11 +204,25 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
           </div>
         )}
         {history.map((turn, i) => (
-          <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}>
-            <span className="ai-message-label">
-              {turn.role === "user" ? "You" : isAiModelId(turn.model) ? `${modelDetails(turn.model).label}${isAiMode(turn.mode) ? ` · ${turn.mode}` : ""}` : "Assistant"}
-            </span>
-            {turn.role === "assistant" ? <AiMessageContent text={turn.text} /> : <p>{turn.text}</p>}
+          <div
+            key={i}
+            className={`ai-message-row flex flex-col ${turn.role === "user" ? "items-end" : "items-start"}`}
+          >
+            <div className={`flex items-center gap-1.5 mb-1 px-1.5 text-[10px] font-semibold text-[var(--text-muted)] ${turn.role === "user" ? "justify-end" : "justify-start"}`}>
+              {turn.role === "assistant" && (
+                <img src="/ai.svg" alt="" className="size-3.5 object-contain opacity-85" />
+              )}
+              <span>
+                {turn.role === "user"
+                  ? "You"
+                  : isAiModelId(turn.model)
+                  ? `${modelDetails(turn.model).label}${isAiMode(turn.mode) ? ` · ${turn.mode}` : ""}`
+                  : "V Studio Assistant"}
+              </span>
+            </div>
+            <div className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}>
+              {turn.role === "assistant" ? <AiMessageContent text={turn.text} /> : <p className="whitespace-pre-wrap">{turn.text}</p>}
+            </div>
           </div>
         ))}
         {failedCommand && (
