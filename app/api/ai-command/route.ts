@@ -48,14 +48,17 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     const message = error instanceof Error && error.message === "AI rate limiting is not configured."
-      ? "Upstash rate limiting is not configured. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to .env.local, then restart the server."
+      ? "AI is unavailable because its usage limiter is not configured. The site owner needs to add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to the server environment, then restart or redeploy."
       : "Upstash rate limiting is unreachable right now. Check the Redis URL/token and try again later.";
     return reply({ error: message }, 503);
   }
   try { return reply(await generateCommand(input), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
-    const message = error instanceof Error && !error.name.includes("Zod") && error.name !== "TimeoutError" ? error.message : "AI could not produce a valid response. Please try again.";
-    return reply({ error: message }, 502);
+    const message = error instanceof Error && error.name === "TimeoutError"
+      ? "AI took too long to respond. Try a smaller request."
+      : error instanceof Error && !error.name.includes("Zod") && !(error instanceof TypeError) && !(error instanceof SyntaxError)
+        ? error.message : "AI could not produce a valid response. Please try again.";
+    return reply({ error: message }, 502, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset) });
   }
 }

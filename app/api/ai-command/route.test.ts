@@ -43,4 +43,18 @@ describe("AI command authorization", () => {
     expect((await outage.json()).error).toMatch(/unreachable/);
     expect(generateCommand).not.toHaveBeenCalled();
   });
+  it("returns readable timeouts and usage headers when Gemini fails", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockRejectedValue(new DOMException("provider details", "TimeoutError"));
+    const response = await POST(request());
+    expect(response.status).toBe(502);
+    expect(response.headers.get("X-AI-Remaining")).toBe("9");
+    expect((await response.json()).error).toBe("AI took too long to respond. Try a smaller request.");
+  });
+  it("does not expose raw network errors", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockRejectedValue(new TypeError("private URL details"));
+    const response = await POST(request());
+    expect((await response.json()).error).toBe("AI could not produce a valid response. Please try again.");
+  });
 });
