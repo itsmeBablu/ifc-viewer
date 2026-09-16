@@ -2,9 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { LuLogOut, LuSparkles, LuX } from "react-icons/lu";
+import { LuLogOut, LuMoon, LuSparkles, LuSun, LuX } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useAppStore } from "@/store/useAppStore";
 import AiCommandPanel from "./AiCommandPanel";
 
 function usePanelMorphAnimation(
@@ -165,6 +166,9 @@ function AssistantPanel({
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
+  const colorTheme = useAppStore(s => s.colorTheme);
+  const setColorTheme = useAppStore(s => s.setColorTheme);
+  const isDark = colorTheme === "dark";
   const panelRef = useRef<HTMLElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -199,6 +203,7 @@ function AssistantPanel({
     <section
       ref={panelRef}
       aria-label="AI modeling assistant"
+      data-theme={colorTheme}
       data-discipline={mepModeActive ? "mep" : "arch"}
       className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl"
     >
@@ -215,7 +220,22 @@ function AssistantPanel({
             <p className="text-[10px] ai-text-muted">Design · Model · Review</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Light / Dark Mode Toggle button inside AI Assistant Header */}
+          <button
+            type="button"
+            onClick={() => setColorTheme(isDark ? "light" : "dark")}
+            title={isDark ? "Switch to white / light mode" : "Switch to dark mode"}
+            aria-label={isDark ? "Switch to white / light mode" : "Switch to dark mode"}
+            className="ai-theme-toggle flex items-center justify-center size-7.5 rounded-xl border border-white/10 hover:border-white/20 transition-all hover:scale-105 active:scale-95"
+          >
+            {isDark ? (
+              <LuSun className="size-4 text-amber-300 transition-transform duration-200 hover:rotate-45" />
+            ) : (
+              <LuMoon className="size-4 text-zinc-700 transition-transform duration-200 hover:-rotate-12" />
+            )}
+          </button>
+
           {session?.user && (
             <div className="relative" ref={userMenuRef}>
               <button
@@ -352,6 +372,9 @@ function UnconfiguredPanel({
   const panelRef = useRef<HTMLElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
+  const colorTheme = useAppStore(s => s.colorTheme);
+  const setColorTheme = useAppStore(s => s.setColorTheme);
+  const isDark = colorTheme === "dark";
   const { handleClose } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
@@ -366,6 +389,7 @@ function UnconfiguredPanel({
     <section
       ref={panelRef}
       aria-label="AI modeling assistant"
+      data-theme={colorTheme}
       data-discipline={mepModeActive ? "mep" : "arch"}
       className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
     >
@@ -379,9 +403,24 @@ function UnconfiguredPanel({
           </div>
           <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
         </div>
-        <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
-          <LuX />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setColorTheme(isDark ? "light" : "dark")}
+            title={isDark ? "Switch to white / light mode" : "Switch to dark mode"}
+            aria-label={isDark ? "Switch to white / light mode" : "Switch to dark mode"}
+            className="ai-theme-toggle flex items-center justify-center size-7.5 rounded-xl border border-white/10 hover:border-white/20 transition-all hover:scale-105 active:scale-95"
+          >
+            {isDark ? (
+              <LuSun className="size-4 text-amber-300 transition-transform duration-200 hover:rotate-45" />
+            ) : (
+              <LuMoon className="size-4 text-zinc-700 transition-transform duration-200 hover:-rotate-12" />
+            )}
+          </button>
+          <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
+            <LuX />
+          </button>
+        </div>
       </div>
       <p data-ai-stagger className="text-xs ai-text-body">
         Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.
