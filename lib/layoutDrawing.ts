@@ -612,6 +612,21 @@ export function getEquipmentConnectors(
 
   const baseConnectors: MepConnector[] = item.connectors?.length
     ? item.connectors
+    : item.category === "sprinkler"
+    ? [{ id: `${item.id}-c-water`, name: "Fire Protection Inlet", type: "pipe", systemType: "fire_protection", relXmm: 0, relYmm: 0, relZmm: h, dir: [0, 0, 1], sizeMm: 25 }]
+    : item.category === "air_terminal" || item.category === "diffuser_overflow"
+    ? [{ id: `${item.id}-c-air`, name: "Air Connection", type: "duct", systemType: item.category === "diffuser_overflow" ? "return" : "supply", relXmm: 0, relYmm: 0, relZmm: h, dir: [0, 0, 1], sizeMm: 160 }]
+    : item.category === "generic_component" && /ahu|fan|air handling/i.test(`${item.familyId ?? ""} ${item.name ?? ""}`)
+    ? [
+        { id: `${item.id}-c-supply`, name: "Supply Air", type: "duct", systemType: "supply", relXmm: w / 2, relYmm: 0, relZmm: h / 2, dir: [1, 0, 0], widthMm: Math.round(d * 0.7), heightMm: Math.round(h * 0.6) },
+        { id: `${item.id}-c-return`, name: "Return Air", type: "duct", systemType: "return", relXmm: -w / 2, relYmm: 0, relZmm: h / 2, dir: [-1, 0, 0], widthMm: Math.round(d * 0.7), heightMm: Math.round(h * 0.6) },
+        { id: `${item.id}-c-power`, name: "Power Supply", type: "electrical", relXmm: 0, relYmm: -d / 2, relZmm: h / 2, dir: [0, -1, 0] },
+      ]
+    : item.category === "generic_component" && /valve|heater/i.test(`${item.familyId ?? ""} ${item.name ?? ""}`)
+    ? [
+        { id: `${item.id}-c-inlet`, name: "Hydronic Inlet", type: "pipe", systemType: "hydronic_supply", relXmm: -w / 2, relYmm: 0, relZmm: h / 2, dir: [-1, 0, 0], sizeMm: 28 },
+        { id: `${item.id}-c-outlet`, name: "Hydronic Outlet", type: "pipe", systemType: /heater/i.test(`${item.familyId ?? ""} ${item.name ?? ""}`) ? "hydronic_return" : "hydronic_supply", relXmm: w / 2, relYmm: 0, relZmm: h / 2, dir: [1, 0, 0], sizeMm: 28 },
+      ]
     : item.category === "toilet"
     ? [
         {

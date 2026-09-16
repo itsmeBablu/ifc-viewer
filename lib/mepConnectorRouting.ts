@@ -1,15 +1,16 @@
 import { getEquipmentConnectors, type LayoutMepEquipment, type DuctSystemType, type PipeSystemType } from "./layoutDrawing";
 import { mepRows, type MepNetwork, type MepSnapPoint, type MepKind } from "./mepConnections";
 
-export function equipmentRoutePorts(equipment: LayoutMepEquipment, network: MepNetwork) {
+export function equipmentRoutePorts(equipment: LayoutMepEquipment, network: MepNetwork, includeConnected = false) {
   return getEquipmentConnectors(equipment).flatMap(c => {
     const kind: MepKind = c.type === "electrical" || c.type === "data" ? "wire" : c.type;
-    if (mepRows(kind, network).some(row =>
+    const connected = mepRows(kind, network).some(row =>
       ("connectedStartEquipmentId" in row && row.connectedStartEquipmentId === equipment.id && "startConnectorId" in row && row.startConnectorId === c.id) ||
-      ("connectedEndEquipmentId" in row && row.connectedEndEquipmentId === equipment.id && "endConnectorId" in row && row.endConnectorId === c.id))) return [];
+      ("connectedEndEquipmentId" in row && row.connectedEndEquipmentId === equipment.id && "endConnectorId" in row && row.endConnectorId === c.id));
+    if (connected && !includeConnected) return [];
     const point: MepSnapPoint = { xMm: c.worldXmm, yMm: c.worldYmm, elevationMm: c.worldZmm,
       equipmentConnector: { equipmentId: equipment.id, connectorId: c.id } };
-    return [{ kind, connector: c, point, levelId: equipment.levelId, label: c.name }];
+    return [{ kind, connector: c, point, levelId: equipment.levelId, label: c.name, connected }];
   });
 }
 

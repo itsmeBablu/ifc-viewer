@@ -6,12 +6,30 @@ import { equipmentRoutePorts, equipmentRouteDefaults } from "@/lib/mepConnectorR
 import { placeMepPoint } from "@/components/tools/mepDrawingActions";
 import type { LayoutMepEquipment } from "@/lib/layoutDrawing";
 import { idbPutPipe, idbPutWire } from "@/lib/layoutDrawingDb";
+import { COMPONENT_CATALOG } from "@/lib/componentCatalog";
+import { mepRows } from "@/lib/mepConnections";
 
 const initial = useLayoutDrawingStore.getState();
 const equipment: LayoutMepEquipment = { id: "unit", projectId: "p", levelId: "l", category: "radiator", xMm: 0, yMm: 0, rotationDeg: 0, elevationMm: 500, createdAt: 1,
   connectors: ["first", "clicked"].map((id, i) => ({ id, name: id, type: "pipe", systemType: "hydronic_return", relXmm: i * 100, relYmm: 0, relZmm: 0, dir: [1, 0, 0], sizeMm: 28 })) };
 beforeEach(() => { vi.clearAllMocks(); useLayoutDrawingStore.setState({ ...initial, projectId: "p", mepEquipment: [equipment], mepChainDrawing: true }, true); });
 describe("click-to-route persistence", () => {
+  it.each(COMPONENT_CATALOG.filter(p => p.id.startsWith("mep-")))("routes every default port of $name", async preset => {
+    const item: LayoutMepEquipment = { ...preset, id: "catalog-unit", familyId: preset.id, projectId: "p", levelId: "l", xMm: 0, yMm: 0, rotationDeg: 30, createdAt: 1 };
+    useLayoutDrawingStore.setState({ mepEquipment: [item] });
+    const ports = equipmentRoutePorts(item, useLayoutDrawingStore.getState());
+    expect(ports.length).toBeGreaterThan(0);
+    for (const port of ports) {
+      useLayoutDrawingStore.getState().setArmedLayoutTool(port.kind);
+      useLayoutDrawingStore.setState({ ...equipmentRouteDefaults(port), ductDraw: null, pipeDraw: null, wireDraw: null });
+      await placeMepPoint("l", port.point);
+      await placeMepPoint("l", { xMm: port.point.xMm + 5000, yMm: port.point.yMm + 5000 });
+      const row = mepRows(port.kind, useLayoutDrawingStore.getState()).at(-1)!;
+      expect(row).toMatchObject({ connectedStartEquipmentId: item.id, startConnectorId: port.connector.id });
+    }
+    expect(equipmentRoutePorts(item, useLayoutDrawingStore.getState())).toHaveLength(0);
+    expect(equipmentRoutePorts(item, useLayoutDrawingStore.getState(), true)).toHaveLength(ports.length);
+  });
   it("persists the clicked port instead of the first nearby port, then continues the run", async () => {
     const port = equipmentRoutePorts(equipment, useLayoutDrawingStore.getState())[1];
     useLayoutDrawingStore.getState().setArmedLayoutTool("pipe");
