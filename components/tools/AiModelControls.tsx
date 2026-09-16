@@ -39,7 +39,7 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
   }, [dropdownOpen]);
 
   return (
-    <div className="ai-composer-controls relative flex items-center justify-between gap-1.5 border-b px-2.5 py-1.5 transition-colors">
+    <div className="ai-composer-controls relative flex items-center justify-between gap-1.5 border-b px-2.5 py-1.5 transition-colors rounded-t-[17px]">
       {/* Mode pills: Build, Review, Guide in v-Yellow/v-Blue palette */}
       <div className="ai-mode-pills-container flex items-center gap-0.5 rounded-lg p-0.5 transition-colors" role="group" aria-label="Assistant mode">
         {AI_MODES.map(option => {
@@ -75,10 +75,14 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
           aria-expanded={dropdownOpen}
           aria-haspopup="listbox"
           title={selectedModel.description}
-          className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-bold tracking-tight transition-all border ${
+          className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-bold tracking-tight transition-all border shadow-sm ${
             mepModeActive
-              ? "bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 text-[#38bdf8] border-[#38bdf8]/30 hover:border-[#38bdf8]/60 shadow-[0_0_10px_rgba(56,189,248,0.15)]"
-              : "bg-[#facc15]/10 hover:bg-[#facc15]/20 text-amber-500 dark:text-[#facc15] border-amber-500/30 dark:border-[#facc15]/30 hover:border-amber-500/60 dark:hover:border-[#facc15]/60 shadow-[0_0_10px_rgba(250,204,21,0.15)]"
+              ? dropdownOpen
+                ? "bg-[#38bdf8]/25 text-[#38bdf8] border-[#38bdf8] ring-2 ring-[#38bdf8]/30 shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+                : "bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 text-[#38bdf8] border-[#38bdf8]/30 hover:border-[#38bdf8]/60 shadow-[0_0_10px_rgba(56,189,248,0.15)]"
+              : dropdownOpen
+                ? "bg-amber-500/25 text-amber-600 dark:text-[#facc15] border-amber-500 dark:border-[#facc15] ring-2 ring-amber-500/30 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
+                : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-[#facc15] border-amber-500/30 dark:border-[#facc15]/30 hover:border-amber-500/60 dark:hover:border-[#facc15]/60 shadow-[0_0_10px_rgba(250,204,21,0.15)]"
           }`}
         >
           <span className="truncate max-w-[110px]">
@@ -94,13 +98,13 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
           <div
             role="listbox"
             aria-label="Select AI Model"
-            className="absolute right-0 bottom-full mb-1.5 z-[200] w-64 rounded-xl border border-[var(--panel-divider,rgba(255,255,255,0.12))] bg-[var(--surface-card,#13151f)]/95 backdrop-blur-2xl p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+            className="ai-model-dropdown-menu animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted,#71717a)] flex items-center gap-1">
+            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted,#71717a)] flex items-center gap-1.5 border-b border-black/5 dark:border-white/10 mb-1">
               <LuSparkles className="size-3 text-amber-400" />
               <span>AI Intelligence Models</span>
             </div>
-            <div className="space-y-1 mt-1">
+            <div className="space-y-1">
               {AI_MODELS.map(option => {
                 const isSelected = option.id === model;
                 return (
@@ -113,12 +117,12 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
                       onModel(option.id);
                       setDropdownOpen(false);
                     }}
-                    className={`w-full text-left p-2 rounded-lg transition-all flex items-start justify-between gap-2 ${
+                    className={`w-full text-left p-2 rounded-xl transition-all flex items-start justify-between gap-2 cursor-pointer ${
                       isSelected
                         ? mepModeActive
-                          ? "bg-[#38bdf8]/15 border border-[#38bdf8]/30 text-[#09090b] dark:text-[#f4f4f5]"
-                          : "bg-[#facc15]/15 border border-[#facc15]/30 text-[#09090b] dark:text-[#f4f4f5]"
-                        : "hover:bg-black/5 dark:hover:bg-white/5 border border-transparent text-[var(--text-strong,#18181b)] dark:text-[#e4e4e7]"
+                          ? "bg-[#38bdf8]/15 border border-[#38bdf8]/40 text-[#09090b] dark:text-[#f4f4f5] shadow-sm"
+                          : "bg-[#facc15]/15 border border-[#facc15]/40 text-[#09090b] dark:text-[#f4f4f5] shadow-sm"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 border border-transparent text-[#18181b] dark:text-[#e4e4e7]"
                     }`}
                   >
                     <div className="min-w-0 flex-1">

@@ -27,6 +27,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const [mode, setMode] = useState<AiMode>(() => { const saved = savedPreference("ai-assistant-mode"); return isAiMode(saved) ? saved : "build"; });
   const selectedCount = useLayoutDrawingStore(s => s.selectedElements.length);
   const levelCount = useLayoutDrawingStore(s => s.levels.length);
+  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
   const [includeAttachments, setIncludeAttachments] = useState(true);
   const [reading, setReading] = useState(false);
@@ -308,33 +309,63 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
           </div>
         )}
 
-        <div className="ai-limits-bar flex items-center justify-between px-1.5 py-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[10.5px]">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="flex items-center gap-1 font-semibold text-[var(--text-strong)]">
-              <LuZap className="size-3 text-amber-400" />
-              <span>{modelDetails(model).maxOutputTokens.toLocaleString()} tokens max</span>
-            </span>
-            <span className="text-[var(--text-muted)] opacity-60">·</span>
-            <span className="text-[var(--text-muted)] truncate">
-              {levelCount} {levelCount === 1 ? "lvl" : "lvls"} · {selectedCount} sel
-            </span>
-          </div>
+        {/* Live Quota & Token Slider Bar */}
+        {(() => {
+          const totalQuota = limit?.total && limit.total > 0 ? limit.total : 60;
+          const remainingQuota = limit?.remaining ?? totalQuota;
+          const quotaPct = Math.min(100, Math.max(0, Math.round((remainingQuota / totalQuota) * 100)));
+          return (
+            <div className="ai-limits-bar flex flex-col gap-1 px-2.5 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-[10.5px]">
+              <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="flex items-center gap-1 font-semibold text-[var(--text-strong)]">
+                    <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"}`} />
+                    <span>({modelDetails(model).maxOutputTokens.toLocaleString()} tokens)</span>
+                  </span>
+                  <span className="text-[var(--text-muted)] opacity-60">·</span>
+                  <span className="text-[var(--text-muted)] truncate">
+                    {levelCount} {levelCount === 1 ? "lvl" : "lvls"} · {selectedCount} sel
+                  </span>
+                </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span
-              className={`px-1.5 py-0.5 rounded-full font-bold text-[10px] ${
-                (limit?.remaining ?? 10) <= 2
-                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                  : (limit?.remaining ?? 10) <= 5
-                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                  : "bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20"
-              }`}
-              title={`Rate limit: ${limit ? limit.remaining : 10} of 10 requests remaining in sliding 10-minute window`}
-            >
-              {limit ? limit.remaining : 10}/10 quota
-            </span>
-          </div>
-        </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className={`font-mono font-extrabold text-[11px] transition-colors ${
+                      mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
+                    }`}
+                  >
+                    {quotaPct}%
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)] opacity-80">
+                    quota ({remainingQuota}/{totalQuota})
+                  </span>
+                </div>
+              </div>
+
+              {/* Slider Track and Live Fill */}
+              <div className="relative w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 mt-0.5">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ease-out relative ${
+                    mepModeActive
+                      ? "bg-gradient-to-r from-sky-500 via-[#38bdf8] to-cyan-300 shadow-[0_0_8px_rgba(56,189,248,0.55)]"
+                      : "bg-gradient-to-r from-amber-500 via-[#facc15] to-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.55)]"
+                  }`}
+                  style={{ width: `${Math.max(3, quotaPct)}%` }}
+                >
+                  <div className="ai-slider-shimmer" />
+                  {/* Glowing Slider Thumb Indicator */}
+                  <div
+                    className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 size-2.5 rounded-full border border-white shadow-sm transition-all duration-700 ${
+                      mepModeActive
+                        ? "bg-[#38bdf8] shadow-[0_0_8px_#38bdf8]"
+                        : "bg-[#facc15] shadow-[0_0_8px_#facc15]"
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         <form onSubmit={submit} className="ai-composer">
           <AiModelControls
