@@ -9,8 +9,20 @@ import { contextSchema, type AiAction, type AiContext, type AiPlan } from "./sch
 import { validatePlan } from "./validate";
 
 type State = ReturnType<typeof useLayoutDrawingStore.getState>;
-type Rows = Pick<State, "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment">;
-const collection = (kind: Exclude<AiAction["kind"], "delete">): keyof Rows => ({ level: "levels", wall: "walls", door: "doors", window: "windows", floor: "slabs", roof: "slabs", column: "columns", beam: "beams", equipment: "mepEquipment" } as const)[kind];
+type Rows = Pick<State, "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes">;
+const collection = (kind: Exclude<AiAction["kind"], "delete">): keyof Rows => ({
+  level: "levels",
+  wall: "walls",
+  door: "doors",
+  window: "windows",
+  floor: "slabs",
+  roof: "slabs",
+  column: "columns",
+  beam: "beams",
+  equipment: "mepEquipment",
+  duct: "ducts",
+  pipe: "pipes",
+} as const)[kind];
 
 export function currentAiContext(): AiContext {
   const s = useLayoutDrawingStore.getState();
@@ -22,6 +34,7 @@ export function currentAiContext(): AiContext {
   add("level", s.levels); add("wall", s.walls); add("door", s.doors); add("window", s.windows);
   add("floor", s.slabs.filter(p => p.kind === "floor")); add("roof", s.slabs.filter(p => p.kind === "roof"));
   add("column", s.columns); add("beam", s.beams); add("equipment", s.mepEquipment);
+  add("duct", s.ducts); add("pipe", s.pipes);
   return contextSchema.parse({
     projectId: s.projectId,
     activeLevelId: useToolMarkupStore.getState().markupFloorId ?? s.levels[0]?.id ?? null,
@@ -45,7 +58,18 @@ function upsert<T extends { id: string }>(rows: T[], value: T) {
 }
 
 export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-${crypto.randomUUID()}`) {
-  const next: Rows = { levels: state.levels, walls: state.walls, doors: state.doors, windows: state.windows, slabs: state.slabs, columns: state.columns, beams: state.beams, mepEquipment: state.mepEquipment };
+  const next: Rows = {
+    levels: state.levels,
+    walls: state.walls,
+    doors: state.doors,
+    windows: state.windows,
+    slabs: state.slabs,
+    columns: state.columns,
+    beams: state.beams,
+    mepEquipment: state.mepEquipment,
+    ducts: state.ducts,
+    pipes: state.pipes,
+  };
   const copied = new Set<keyof Rows>();
   const aliases = new Map(plan.actions.filter(a => a.kind !== "delete" && a.operation === "create").map(a => [a.id, makeId()]));
   const resolve = (id: string) => aliases.get(id) ?? id;
@@ -63,7 +87,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
     if (state.lockedElementKeys.includes(`${lockKind}:${id}`)) throw new Error(`Element ${id} is locked.`);
     if (state.groups.some(g => JSON.stringify(g).includes(`"${id}"`))) throw new Error(`Element ${id} belongs to a group. Edit it manually.`);
     if (action.kind === "delete") {
-      // Dependencies outside the v1 AI context must not be orphaned.
+      // Dependencies outside the AI context must not be orphaned.
       const dependants = [...state.slabs, ...state.walls, ...state.mepEquipment, ...state.ducts, ...state.pipes, ...state.wires, ...state.cableTrays];
       if (dependants.some(row => row.id !== id && JSON.stringify(row).includes(`"${id}"`))) throw new Error(`Element ${id} has dependent geometry. Remove its constraints manually first.`);
       Object.assign(next, { [key]: next[key].filter(row => row.id !== id) });
@@ -92,7 +116,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
       case "floor": case "roof": {
         const xs = action.boundary.map(p => p.xMm), ys = action.boundary.map(p => p.yMm);
         value = { ...next.slabs.find(row => row.id === id), ...common, levelId: resolve(action.levelId), kind: action.kind, boundary: action.boundary, minXmm: Math.min(...xs), maxXmm: Math.max(...xs), minYmm: Math.min(...ys), maxYmm: Math.max(...ys), thicknessMm: action.thicknessMm, elevationOffsetMm: action.elevationOffsetMm, roofPreset: action.roofPreset, autoBoundaryFromWalls: false,
-          edgeSlopes: action.boundary.map((_, edgeIdx) => ({ edgeIdx, pitchDeg: action.pitchDeg, isSloped: action.roofPreset === "hip" || action.roofPreset === "gable" && edgeIdx % 2 === 0 || action.roofPreset === "shed" && edgeIdx === 0 })) };
+          edgeSlopes: action.boundary.map((_, edgeIdx) => ({ edgeIdx, pitchDeg: action.pitchDeg, isSloped: action.roofPreset === "hip" || (action.roofPreset === "gable" && edgeIdx % 2 === 0) || (action.roofPreset === "shed" && edgeIdx === 0) })) };
         next.slabs = upsert(next.slabs, value); break;
       }
       case "column": {
@@ -108,6 +132,40 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
         if (!preset) throw new Error("Unsupported furniture or equipment family.");
         value = { ...next.mepEquipment.find(row => row.id === id), ...common, levelId: resolve(action.levelId), familyId: preset.id, name: preset.name, category: preset.category, widthMm: preset.widthMm, depthMm: preset.depthMm, heightMm: preset.heightMm, xMm: action.xMm, yMm: action.yMm, elevationMm: action.elevationMm, rotationDeg: action.rotationDeg };
         next.mepEquipment = upsert(next.mepEquipment, value); break;
+      }
+      case "duct": {
+        value = {
+          ...next.ducts.find(row => row.id === id),
+          ...common,
+          levelId: resolve(action.levelId),
+          startXmm: action.startXmm,
+          startYmm: action.startYmm,
+          endXmm: action.endXmm,
+          endYmm: action.endYmm,
+          elevationMm: action.elevationMm ?? 2600,
+          shape: action.shape,
+          widthMm: action.widthMm,
+          heightMm: action.heightMm,
+          diameterMm: action.diameterMm,
+          systemType: action.systemType,
+        };
+        next.ducts = upsert(next.ducts, value); break;
+      }
+      case "pipe": {
+        value = {
+          ...next.pipes.find(row => row.id === id),
+          ...common,
+          levelId: resolve(action.levelId),
+          startXmm: action.startXmm,
+          startYmm: action.startYmm,
+          endXmm: action.endXmm,
+          endYmm: action.endYmm,
+          elevationMm: action.elevationMm ?? 2500,
+          diameterMm: action.diameterMm,
+          systemType: action.systemType,
+          slopePercent: action.slopePercent,
+        };
+        next.pipes = upsert(next.pipes, value); break;
       }
     }
     changes.push({ store: key, id, value });
@@ -132,6 +190,16 @@ export async function applyAiPlan(plan: AiPlan, fingerprint: string) {
       return () => { unsubscribe(); unsubscribeMarkup(); };
     });
     pushWerkzeugHistory();
-    useLayoutDrawingStore.setState({ ...next, selectedElements: [], selectedWallId: null, selectedDoorId: null, selectedWindowId: null, selectedSlabId: null, lastMutatedAt: Date.now() });
+    useLayoutDrawingStore.setState({
+      ...next,
+      selectedElements: [],
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      lastMutatedAt: Date.now(),
+    });
   } finally { applying = false; }
 }

@@ -28,6 +28,23 @@ export const recipeSchema = z.discriminatedUnion("kind", [
     kind: z.literal("window_row"), id, ...windowFields,
     count, spacingMm: z.number().min(1).max(100_000),
   }).strict().describe("Create identical windows along one host wall. positionMm is the first centre distance from wall start; spacingMm is centre-to-centre. IDs id:window:0 onwards."),
+  z.object({
+    kind: z.literal("duct_run"), id, levelId: wallFields.levelId,
+    points: z.array(point).min(2).max(64),
+    shape: z.enum(["rectangular", "round"]).default("rectangular"),
+    widthMm: z.number().min(1).max(100_000).optional(),
+    heightMm: z.number().min(1).max(100_000).optional(),
+    diameterMm: z.number().min(1).max(100_000).optional(),
+    elevationOffsetMm: z.number().min(-1_000_000).max(1_000_000).default(2600),
+    systemType: z.enum(["supply", "return", "exhaust", "fresh_air"]).default("supply"),
+  }).strict().describe("Create connected ventilation duct segments along waypoints. Points define the duct route. IDs id:duct:0 onwards."),
+  z.object({
+    kind: z.literal("pipe_run"), id, levelId: wallFields.levelId,
+    points: z.array(point).min(2).max(64),
+    diameterMm: z.number().min(1).max(100_000).default(28),
+    elevationOffsetMm: z.number().min(-1_000_000).max(1_000_000).default(2500),
+    systemType: z.enum(["hydronic_supply", "hydronic_return", "domestic_cold", "domestic_hot", "sanitary_waste", "fire_protection", "gas"]).default("hydronic_supply"),
+  }).strict().describe("Create connected piping segments along waypoints. Points define the pipe route. IDs id:pipe:0 onwards."),
 ]);
 
 // Existing explicit actions remain available for irregular geometry and edits.
@@ -79,6 +96,29 @@ export function expandModelPlan(value: unknown) {
       }
       case "window_row": {
         for (let i = 0; i < item.count; i++) append({ kind: "window", operation: "create", id: `${item.id}:window:${i}`, wallId: item.wallId, positionMm: item.positionMm + i * item.spacingMm, widthMm: item.widthMm, heightMm: item.heightMm, sillHeightMm: item.sillHeightMm, operationType: item.operationType });
+        break;
+      }
+      case "duct_run": {
+        for (let i = 0; i < item.points.length - 1; i++) {
+          const p = item.points[i], q = item.points[i + 1];
+          append({
+            kind: "duct", operation: "create", id: `${item.id}:duct:${i}`, levelId: item.levelId,
+            startXmm: p.xMm, startYmm: p.yMm, endXmm: q.xMm, endYmm: q.yMm,
+            shape: item.shape, widthMm: item.widthMm ?? 300, heightMm: item.heightMm ?? 200, diameterMm: item.diameterMm ?? 250,
+            elevationOffsetMm: item.elevationOffsetMm, systemType: item.systemType,
+          });
+        }
+        break;
+      }
+      case "pipe_run": {
+        for (let i = 0; i < item.points.length - 1; i++) {
+          const p = item.points[i], q = item.points[i + 1];
+          append({
+            kind: "pipe", operation: "create", id: `${item.id}:pipe:${i}`, levelId: item.levelId,
+            startXmm: p.xMm, startYmm: p.yMm, endXmm: q.xMm, endYmm: q.yMm,
+            diameterMm: item.diameterMm, elevationOffsetMm: item.elevationOffsetMm, systemType: item.systemType,
+          });
+        }
         break;
       }
       default: append(item);

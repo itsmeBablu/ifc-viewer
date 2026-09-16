@@ -14,6 +14,25 @@ export const slabFields = { levelId: id, boundary: z.array(point).min(3).max(64)
 export const columnFields = { levelId: id, xMm: coordinate, yMm: coordinate, profile: z.enum(["rect", "circle", "i"]), widthMm: size, depthMm: size, heightMm: size };
 export const beamFields = { levelId: id, startXmm: coordinate, startYmm: coordinate, endXmm: coordinate, endYmm: coordinate, profile: z.enum(["rect", "i"]), widthMm: size, depthMm: size, elevationOffsetMm: coordinate };
 export const equipmentFields = { levelId: id, familyId: z.enum(COMPONENT_CATALOG.map(p => p.id) as [string, ...string[]]), xMm: coordinate, yMm: coordinate, rotationDeg: z.number().min(-360).max(360), elevationMm: coordinate };
+export const ductFields = {
+  levelId: id,
+  startXmm: coordinate, startYmm: coordinate,
+  endXmm: coordinate, endYmm: coordinate,
+  shape: z.enum(["rectangular", "round"]).default("rectangular"),
+  widthMm: size.optional(),
+  heightMm: size.optional(),
+  diameterMm: size.optional(),
+  elevationOffsetMm: coordinate.default(2600),
+  systemType: z.enum(["supply", "return", "exhaust", "fresh_air"]).default("supply"),
+};
+export const pipeFields = {
+  levelId: id,
+  startXmm: coordinate, startYmm: coordinate,
+  endXmm: coordinate, endYmm: coordinate,
+  diameterMm: size.default(28),
+  elevationOffsetMm: coordinate.default(2500),
+  systemType: z.enum(["hydronic_supply", "hydronic_return", "domestic_cold", "domestic_hot", "sanitary_waste", "fire_protection", "gas"]).default("hydronic_supply"),
+};
 
 export const actionSchema = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("level"), ...levelFields }).strict(),
@@ -25,7 +44,9 @@ export const actionSchema = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("column"), ...columnFields }).strict(),
   z.object({ ...base, kind: z.literal("beam"), ...beamFields }).strict(),
   z.object({ ...base, kind: z.literal("equipment"), ...equipmentFields }).strict(),
-  z.object({ kind: z.literal("delete"), id, targetKind: z.enum(["wall", "door", "window", "floor", "roof", "column", "beam", "equipment"]) }).strict(),
+  z.object({ ...base, kind: z.literal("duct"), ...ductFields }).strict(),
+  z.object({ ...base, kind: z.literal("pipe"), ...pipeFields }).strict(),
+  z.object({ kind: z.literal("delete"), id, targetKind: z.enum(["wall", "door", "window", "floor", "roof", "column", "beam", "equipment", "duct", "pipe"]) }).strict(),
 ]);
 export const planSchema = z.object({
   summary: z.string().trim().min(1).max(2000),
@@ -42,7 +63,7 @@ export const contextSchema = z.object({
   projectId: id,
   activeLevelId: id.nullable(),
   elements: z.array(z.object({
-    id, kind: z.enum(["level", "wall", "door", "window", "floor", "roof", "column", "beam", "equipment"]),
+    id, kind: z.enum(["level", "wall", "door", "window", "floor", "roof", "column", "beam", "equipment", "duct", "pipe"]),
     levelId: id.optional(), wallId: id.optional(),
     properties: z.record(z.string(), z.unknown()),
   }).strict()).max(1000),

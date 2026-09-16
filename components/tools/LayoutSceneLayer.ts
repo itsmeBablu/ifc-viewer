@@ -6381,10 +6381,10 @@ export default class LayoutSceneLayer {
 
   private buildEquipmentModel(item: LayoutMepEquipment, w: number, h: number, d: number): THREE.Group {
     const grp = new THREE.Group();
-        // Build procedural 3D model per category
-        if (item.category === "furniture" || isArchitecturalComponent(item.familyId)) {
+        const isToilet = item.category === "toilet" || item.familyId === "bath-toilet" || item.familyId?.includes("toilet");
+        if (!isToilet && (item.category === "furniture" || isArchitecturalComponent(item.familyId))) {
           grp.add(createFurniture(item));
-        } else if (item.category === "toilet") {
+        } else if (isToilet) {
           // Porcelain Toilet (WC): bowl, tank/cistern, seat, flush plate, drain
           const porcelainMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
@@ -6409,10 +6409,11 @@ export default class LayoutSceneLayer {
           baseMesh.userData.layoutEquipmentId = item.id;
           grp.add(baseMesh);
 
-          // 2. Sculpted Bowl
+          // 2. Sculpted Bowl (elongated oval)
           const bowlGeo = new THREE.CylinderGeometry(w * 0.48, w * 0.36, h * 0.25, 24);
           const bowlMesh = new THREE.Mesh(bowlGeo, porcelainMat);
-          bowlMesh.position.set(0, h * 0.42, d * 0.08);
+          bowlMesh.scale.set(1, 1, 1.25);
+          bowlMesh.position.set(0, h * 0.42, d * 0.1);
           bowlMesh.userData.layoutEquipmentId = item.id;
           grp.add(bowlMesh);
 
@@ -6420,27 +6421,36 @@ export default class LayoutSceneLayer {
           const innerBowlGeo = new THREE.CylinderGeometry(w * 0.38, w * 0.22, h * 0.18, 20);
           const innerBowlMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, transparent: true, opacity: 0.7 });
           const innerBowl = new THREE.Mesh(innerBowlGeo, innerBowlMat);
-          innerBowl.position.set(0, h * 0.46, d * 0.08);
+          innerBowl.scale.set(1, 1, 1.2);
+          innerBowl.position.set(0, h * 0.46, d * 0.1);
           grp.add(innerBowl);
 
           // 4. Toilet Seat & Lid
-          const seatGeo = new THREE.CylinderGeometry(w * 0.49, w * 0.49, 0.02, 24);
+          const seatGeo = new THREE.CylinderGeometry(w * 0.49, w * 0.49, 0.025, 24);
           const seatMesh = new THREE.Mesh(seatGeo, seatMat);
-          seatMesh.position.set(0, h * 0.55, d * 0.08);
+          seatMesh.scale.set(1, 1, 1.26);
+          seatMesh.position.set(0, h * 0.55, d * 0.1);
           seatMesh.userData.layoutEquipmentId = item.id;
           grp.add(seatMesh);
 
           // 5. Water Cistern / Tank (rear)
-          const tankGeo = new THREE.BoxGeometry(w * 0.95, h * 0.45, d * 0.32);
+          const tankGeo = new THREE.BoxGeometry(w * 0.92, h * 0.45, d * 0.3);
           const tankMesh = new THREE.Mesh(tankGeo, porcelainMat);
-          tankMesh.position.set(0, h * 0.65, -d * 0.32);
+          tankMesh.position.set(0, h * 0.65, -d * 0.3);
           tankMesh.userData.layoutEquipmentId = item.id;
           grp.add(tankMesh);
 
+          // Cistern Lid
+          const lidGeo = new THREE.BoxGeometry(w * 0.96, h * 0.035, d * 0.33);
+          const lidMesh = new THREE.Mesh(lidGeo, porcelainMat);
+          lidMesh.position.set(0, h * 0.88, -d * 0.3);
+          lidMesh.userData.layoutEquipmentId = item.id;
+          grp.add(lidMesh);
+
           // 6. Dual Flush Button on Tank Top
-          const btnGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.008, 16);
+          const btnGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.012, 16);
           const btn = new THREE.Mesh(btnGeo, chromeMat);
-          btn.position.set(0, h * 0.88, -d * 0.32);
+          btn.position.set(0, h * 0.905, -d * 0.3);
           grp.add(btn);
         } else if (item.category === "sink") {
           // Porcelain Washbasin / Sink: basin, counter, mixer faucet, drain siphon
@@ -6967,8 +6977,9 @@ export default class LayoutSceneLayer {
     if (tool === "equipment" || tool === "component") {
       const elev = fromMm(baseElevMm + (params?.elevationMm ?? 0));
       const cat = params?.category ?? "generic_component";
-      const isArch = cat === "furniture" || isArchitecturalComponent(params?.familyId);
-      const model = isArch ? createFurniture(params) : this.buildEquipmentModel({ ...params, id: "preview", projectId: "preview", levelId: "preview", category: cat, xMm: 0, yMm: 0, createdAt: 0 }, fromMm(params?.widthMm ?? 600), fromMm(params?.heightMm ?? 600), fromMm(params?.depthMm ?? 400));
+      const isToilet = cat === "toilet" || params?.familyId === "bath-toilet" || params?.familyId?.includes("toilet");
+      const isArch = !isToilet && (cat === "furniture" || isArchitecturalComponent(params?.familyId));
+      const model = isArch ? createFurniture(params) : this.buildEquipmentModel({ ...params, id: "preview", projectId: "preview", levelId: "preview", category: isToilet ? "toilet" : cat, xMm: 0, yMm: 0, createdAt: 0 }, fromMm(params?.widthMm ?? (isToilet ? 380 : 600)), fromMm(params?.heightMm ?? (isToilet ? 800 : 600)), fromMm(params?.depthMm ?? (isToilet ? 700 : 400)));
       model.position.set(fromMm(cursor.xMm), elev, fromMm(cursor.yMm));
       model.rotation.y = -THREE.MathUtils.degToRad(params?.rotationDeg ?? 0);
       model.traverse((o) => { o.userData.isMarkupPreview = true; o.raycast = () => undefined; if (o instanceof THREE.Mesh && o.material instanceof THREE.Material) { o.material.transparent = true; o.material.opacity = 0.55; } });

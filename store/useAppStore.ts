@@ -51,6 +51,7 @@ import {
   readWelcomePreferences,
 } from "@/lib/welcomePreferences";
 import { idbRenameProject } from "@/lib/layoutDrawingDb";
+import { applyThemeVars } from "@/lib/themeColors";
 
 const LAST_MODEL_KEY = "ifc-viewer:lastModelId";
 const LEFT_PANEL_KEY = "ifc-viewer:leftPanelOpen";
@@ -1149,6 +1150,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch {
         // ignore
       }
+      applyThemeVars(theme);
     }
     set({ colorTheme: theme });
   },

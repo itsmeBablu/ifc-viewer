@@ -61,6 +61,18 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     box(0, h * 0.025, 0, w, h * 0.05, d, white);
     box(-w * 0.49, h * 0.5, 0, w * 0.02, h, d, glass); box(0, h * 0.5, -d * 0.49, w, h, d * 0.02, glass);
     cylinder(w * 0.35, h * 0.85, -d * 0.4, 0.02, h * 0.25);
+  } else if (id === "bath-toilet" || id.includes("toilet") || id === "wc") {
+    // Porcelain Toilet (WC): bowl, seat, rear cistern tank, and flush button
+    box(0, h * 0.65, -d * 0.32, w * 0.9, h * 0.45, d * 0.28, white);
+    box(0, h * 0.88, -d * 0.32, w * 0.94, h * 0.03, d * 0.31, white);
+    cylinder(0, h * 0.905, -d * 0.32, 0.025, 0.015, dark);
+    cylinder(0, h * 0.18, d * 0.05, w * 0.35, h * 0.35, white);
+    const bowl = cylinder(0, h * 0.42, d * 0.1, w * 0.46, h * 0.24, white);
+    bowl.scale.z = 1.25;
+    const cavity = cylinder(0, h * 0.46, d * 0.1, w * 0.36, 0.14, glass);
+    cavity.scale.z = 1.2;
+    const seat = cylinder(0, h * 0.55, d * 0.1, w * 0.48, 0.025, white);
+    seat.scale.z = 1.26;
   } else {
     const kitchenSet = ["kitchen-straight", "kitchen-l", "kitchen-island"].includes(id);
     const depth = id === "kitchen-l" ? Math.min(0.6, d * 0.45) : d;
