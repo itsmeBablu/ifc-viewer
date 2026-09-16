@@ -184,37 +184,129 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save changes. Nothing was applied."); setStatus(""); }
     finally { busyRef.current = false; setBusy(false); }
   }
-  return <div className="ai-command-panel mt-3 space-y-4">
-    <AiModelControls model={model} mode={mode} disabled={busy} onModel={setModel} onMode={next => { setMode(next); setPending(null); setStatus(""); }} />
-    <p className="ai-context-summary">Project context · {levelCount} {levelCount === 1 ? "level" : "levels"} · {selectedCount} selected</p>
-    {history.length === 0 && <div className="ai-welcome-copy"><span className="ai-sparkle-mark"><LuSparkles /></span><div><p className="text-base font-medium">Your design workspace</p><p className="text-xs ai-text-muted">Describe a brief, review your layout, or ask how to model it.</p></div></div>}
-    <div ref={historyRef} className="ai-chat-history" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation">{history.map((turn, i) => <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}><span className="ai-message-label">{turn.role === "user" ? "You" : isAiModelId(turn.model) ? `${modelDetails(turn.model).label}${isAiMode(turn.mode) ? ` · ${turn.mode}` : ""}` : "Assistant"}</span>{turn.role === "assistant" ? <AiMessageContent text={turn.text} /> : <p>{turn.text}</p>}</div>)}</div>
-    {failedCommand && <button type="button" className="ai-text-button" disabled={busy} onClick={() => { setText(failedCommand); setFailedCommand(null); inputRef.current?.focus(); }}>Edit and resend last message</button>}
-    {busy && <div className="ai-thinking" role="status" aria-live="polite"><span className="ai-thinking-avatar"><LuSparkles /></span><span className="ai-thinking-copy"><strong>{thinkingLabel}</strong><small>{modelDetails(model).label}</small></span><span className="ai-thinking-dots" aria-hidden="true"><i /><i /><i /></span></div>}
-    {limit && <div className="ai-limit-bar" title="Up to 10 requests per 10 minutes" aria-label={`${limit.remaining} of ${limit.total} AI requests remaining`}><span>{limit.remaining}/{limit.total} requests remaining</span><span className="ai-limit-reset">{limit.reset ? `Resets ${new Date(limit.reset).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "10 min window"}</span></div>}
-    {pending && <div className="ai-plan-card space-y-3">
-      <div className="flex items-center gap-2"><span className="ai-plan-icon"><LuSparkles /></span><h3 className="font-semibold">{pending.plan.summary}</h3></div>
-      {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
-      <AiPlanPreview plan={pending.plan} context={pending.context} />
-      {pending.plan.nextSteps && pending.plan.nextSteps.length > 0 && <div className="ai-next-steps"><p className="font-medium">Next steps</p><ul>{pending.plan.nextSteps.map((step, i) => <li key={i}>{step}</li>)}</ul></div>}
-      <ol className="max-h-48 list-inside list-decimal space-y-1 overflow-auto text-xs">{pending.plan.actions.map((a, i) => <li key={i}>{describeAction(a)}<details className="ml-3"><summary className="cursor-pointer ai-text-muted">All dimensions and properties</summary><dl className="grid grid-cols-[auto_1fr] gap-x-2">{Object.entries(a).map(([name, value]) => <div key={name} className="contents"><dt>{name}</dt><dd className="break-all">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl></details></li>)}</ol>
-      {pending.plan.actions.some(a => a.kind === "delete") && <label className="flex gap-2"><input type="checkbox" checked={deleteApproved} onChange={e => setDeleteApproved(e.target.checked)} />I approve the listed deletions.</label>}
-      <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
-    </div>}
-    <div className="ai-attachments">
-      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
-      {attachments.map((file, index) => <div className="ai-attachment" key={`${index}:${file.name}`}><span aria-hidden="true">{file.mimeType === "application/pdf" ? "PDF" : "IMG"}</span><span className="truncate">{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={busy || reading} onClick={() => setAttachments(items => items.filter((_, i) => i !== index))}>×</button></div>)}
-      {reading && <p className="text-xs ai-text-muted">Reading files…</p>}
-      {attachments.length > 0 && <label className="flex items-center gap-2 text-xs ai-text-muted"><input type="checkbox" checked={includeAttachments} disabled={busy || reading} onChange={e => setIncludeAttachments(e.target.checked)} />Include files with next message (uses more tokens)</label>}
+  return (
+    <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden">
+      <div
+        ref={historyRef}
+        className="ai-chat-history flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Conversation"
+      >
+        {history.length === 0 && (
+          <div className="ai-welcome-copy pt-1 pb-2">
+            <span className="ai-sparkle-mark"><LuSparkles /></span>
+            <div>
+              <p className="text-sm font-semibold">Your design workspace</p>
+              <p className="text-xs ai-text-muted">Describe a brief, review your layout, or ask how to model it.</p>
+            </div>
+          </div>
+        )}
+        {history.map((turn, i) => (
+          <div key={i} className={turn.role === "user" ? "ai-message ai-message-user" : "ai-message ai-message-assistant"}>
+            <span className="ai-message-label">
+              {turn.role === "user" ? "You" : isAiModelId(turn.model) ? `${modelDetails(turn.model).label}${isAiMode(turn.mode) ? ` · ${turn.mode}` : ""}` : "Assistant"}
+            </span>
+            {turn.role === "assistant" ? <AiMessageContent text={turn.text} /> : <p>{turn.text}</p>}
+          </div>
+        ))}
+        {failedCommand && (
+          <button type="button" className="ai-text-button" disabled={busy} onClick={() => { setText(failedCommand); setFailedCommand(null); inputRef.current?.focus(); }}>
+            Edit and resend last message
+          </button>
+        )}
+        {busy && (
+          <div className="ai-thinking" role="status" aria-live="polite">
+            <span className="ai-thinking-avatar"><LuSparkles /></span>
+            <span className="ai-thinking-copy"><strong>{thinkingLabel}</strong><small>{modelDetails(model).label}</small></span>
+            <span className="ai-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+          </div>
+        )}
+        {pending && (
+          <div className="ai-plan-card space-y-3">
+            <div className="flex items-center gap-2"><span className="ai-plan-icon"><LuSparkles /></span><h3 className="font-semibold">{pending.plan.summary}</h3></div>
+            {pending.plan.assumptions.length > 0 && <><p>Assumptions to review:</p><ul className="list-inside list-disc text-xs">{pending.plan.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
+            <AiPlanPreview plan={pending.plan} context={pending.context} />
+            {pending.plan.nextSteps && pending.plan.nextSteps.length > 0 && <div className="ai-next-steps"><p className="font-medium">Next steps</p><ul>{pending.plan.nextSteps.map((step, i) => <li key={i}>{step}</li>)}</ul></div>}
+            <ol className="max-h-48 list-inside list-decimal space-y-1 overflow-auto text-xs">{pending.plan.actions.map((a, i) => <li key={i}>{describeAction(a)}<details className="ml-3"><summary className="cursor-pointer ai-text-muted">All dimensions and properties</summary><dl className="grid grid-cols-[auto_1fr] gap-x-2">{Object.entries(a).map(([name, value]) => <div key={name} className="contents"><dt>{name}</dt><dd className="break-all">{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>)}</dl></details></li>)}</ol>
+            {pending.plan.actions.some(a => a.kind === "delete") && <label className="flex gap-2"><input type="checkbox" checked={deleteApproved} onChange={e => setDeleteApproved(e.target.checked)} />I approve the listed deletions.</label>}
+            <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || (pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved)} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
+          </div>
+        )}
+        {history.length === 0 && (
+          <div className="ai-suggestion-row pt-1">
+            {(mode === "build" ? ["Plan a three-bedroom house", "Furnish the living room"] : mode === "review" ? ["Review circulation and opening placement", "Check the selected elements"] : ["How do I turn a floor plan into 3D?", "Explain levels, walls and openings"]).map(suggestion => (
+              <button key={suggestion} type="button" disabled={busy || !historyLoaded} onClick={() => { setText(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
+            ))}
+          </div>
+        )}
+        {error && <p role="alert" className="ai-error">{error}</p>}
+        {status && !busy && <p role="status" aria-live="polite" className="ai-status-line">{status}</p>}
+        {appliedFingerprint && (
+          <button disabled={busy} className="ai-text-button" onClick={async () => { try { if (aiFingerprint() !== appliedFingerprint) throw new Error("The model changed after this batch. Use the editor's Undo to step back through later changes."); await undoWerkzeug(); setAppliedFingerprint(null); setStatus("AI batch undone."); } catch (e) { setError(e instanceof Error ? e.message : "Undo failed."); } }}>Undo AI batch</button>
+        )}
+      </div>
+
+      <div className="ai-command-bottom shrink-0 pt-2 space-y-2">
+        <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
+        {attachments.length > 0 && (
+          <div className="ai-attachments">
+            {attachments.map((file, index) => (
+              <div className="ai-attachment" key={`${index}:${file.name}`}>
+                <span aria-hidden="true">{file.mimeType === "application/pdf" ? "PDF" : "IMG"}</span>
+                <span className="truncate">{file.name}</span>
+                <button type="button" aria-label={`Remove ${file.name}`} disabled={busy || reading} onClick={() => setAttachments(items => items.filter((_, i) => i !== index))}>×</button>
+              </div>
+            ))}
+            {reading && <p className="text-xs ai-text-muted">Reading files…</p>}
+            <label className="flex items-center gap-2 text-xs ai-text-muted">
+              <input type="checkbox" checked={includeAttachments} disabled={busy || reading} onChange={e => setIncludeAttachments(e.target.checked)} />
+              Include files with next message
+            </label>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between px-1 text-[10.5px] text-[var(--text-muted)]">
+          <span>Context: {levelCount} {levelCount === 1 ? "level" : "levels"} · {selectedCount} selected</span>
+          {limit && <span>{limit.remaining}/{limit.total} requests remaining</span>}
+        </div>
+
+        <form onSubmit={submit} className="ai-composer">
+          <AiModelControls
+            model={model}
+            mode={mode}
+            disabled={busy}
+            onModel={setModel}
+            onMode={next => { setMode(next); setPending(null); setStatus(""); }}
+          />
+          <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
+          <textarea
+            ref={inputRef}
+            id="ai-command"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
+            maxLength={4000}
+            rows={2}
+            disabled={busy || !historyLoaded}
+            placeholder={busy ? "Waiting for a reply…" : mode === "build" ? "Describe what to build or change…" : mode === "review" ? "Ask to review layout or selection…" : "Ask how to model or use tools…"}
+          />
+          <div className="ai-composer-toolbar">
+            <button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading || !historyLoaded} onClick={() => fileRef.current?.click()}>
+              <LuCirclePlus />
+            </button>
+            <AiVoiceInput compact disabled={busy || !historyLoaded} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} />
+            <span className="ai-composer-spacer" />
+            <button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading || !historyLoaded} onClick={clearHistory}>
+              <LuUndo2 />
+            </button>
+            <button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || reading || !historyLoaded || !text.trim()} className="ai-send-button">
+              <LuArrowUp />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-    <form onSubmit={submit} className="ai-composer">
-      <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
-      <textarea ref={inputRef} id="ai-command" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} maxLength={4000} rows={2} disabled={busy || !historyLoaded} placeholder={busy ? "Waiting for a reply…" : "Message the assistant…"} />
-      <div className="ai-composer-toolbar"><button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading || !historyLoaded} onClick={() => fileRef.current?.click()}><LuCirclePlus /></button><AiVoiceInput compact disabled={busy || !historyLoaded} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} /><span className="ai-composer-spacer" /><button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading || !historyLoaded} onClick={clearHistory}><LuUndo2 /></button><button type="submit" aria-label={busy ? "Working" : "Send command"} disabled={busy || reading || !historyLoaded || !text.trim()} className="ai-send-button"><LuArrowUp /></button></div>
-    </form>
-    {history.length === 0 && <div className="ai-suggestion-row">{(mode === "build" ? ["Plan a three-bedroom house", "Furnish the living room"] : mode === "review" ? ["Review circulation and opening placement", "Check the selected elements"] : ["How do I turn a floor plan into 3D?", "Explain levels, walls and openings"]).map(suggestion => <button key={suggestion} type="button" disabled={busy || !historyLoaded} onClick={() => { setText(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>)}</div>}
-    {error && <p role="alert" className="ai-error">{error}</p>}
-    {status && !busy && <p role="status" aria-live="polite" className="ai-status-line">{status}</p>}
-    {appliedFingerprint && <button disabled={busy} className="ai-text-button" onClick={async () => { try { if (aiFingerprint() !== appliedFingerprint) throw new Error("The model changed after this batch. Use the editor's Undo to step back through later changes."); await undoWerkzeug(); setAppliedFingerprint(null); setStatus("AI batch undone."); } catch (e) { setError(e instanceof Error ? e.message : "Undo failed."); } }}>Undo AI batch</button>}
-  </div>;
+  );
 }
