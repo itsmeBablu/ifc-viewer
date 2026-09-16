@@ -1,3 +1,7 @@
+# Current AI workflow
+
+See [AI BIM modeling](bim/README.md) for the current direct-drawing workflow, Arch/MEP defaults and Ollama setup. Build now applies validated changes automatically; the preview-approval descriptions below document the earlier release. The current app request allowance is 1,500 per 24 hours with counted memory fallback when Redis is unavailable. It does not represent Google provider quota.
+
 # AI modeling assistant setup
 
 AI access requires Google sign-in. Manual modeling remains public. Projects remain in this browser's IndexedDB; signing in does not add cloud storage or synchronization.

@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { LuLogOut, LuSparkles, LuX } from "react-icons/lu";
 import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
-import { useAppStore } from "@/store/useAppStore";
 import AiCommandPanel from "./AiCommandPanel";
+
+function animateAssistantIcon(icon: Element | null) {
+  if (!icon) return;
+  gsap.fromTo(icon, { y: 0, rotation: 0 }, {
+    y: -3, rotation: 12, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true,
+  }).totalTime(gsap.globalTimeline.time());
+}
 
 function usePanelMorphAnimation(
   panelRef: React.RefObject<HTMLElement | null>,
@@ -14,130 +20,79 @@ function usePanelMorphAnimation(
   getTriggerRect: () => DOMRect | null,
   onCloseComplete: () => void
 ) {
-  const isClosingRef = useRef(false);
-  const hasEnteredRef = useRef(false);
+
+  const closingRef = useRef(false);
+  const timelineRef = useRef<gsap.core.Timeline | null>(null);
 
   const handleClose = () => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
-    if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    const panel = panelRef.current;
+    if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       onCloseComplete();
       return;
     }
-    const panel = panelRef.current;
-    const panelRect = panel.getBoundingClientRect();
-    const tr = getTriggerRect() ?? {
-      left: panelRect.right - 52,
-      top: panelRect.bottom + 20,
-      width: 46,
-      height: 46,
-    };
-
-    const trCenterX = tr.left + tr.width / 2;
-    const trCenterY = tr.top + tr.height / 2;
-    const originX = trCenterX - panelRect.left;
-    const originY = trCenterY - panelRect.top;
-
-    if (capRef.current) {
-      gsap.killTweensOf(capRef.current);
-      gsap.to(capRef.current, { autoAlpha: 0, duration: 0.15, ease: "power2.in" });
+    timelineRef.current?.kill();
+    const rect = panel.getBoundingClientRect();
+    const trigger = getTriggerRect() ?? rect;
+    const inner = panel.querySelector<HTMLElement>(".ai-chat-inner");
+    const icon = capRef.current;
+    const iconRect = icon?.getBoundingClientRect();
+    // Keep the current content layout even when closing midway through opening.
+    if (inner && !inner.style.width) {
+      gsap.set(inner, { width: panel.clientWidth, height: panel.clientHeight });
     }
-
-    // Staggered text fade out quickly
-    gsap.to(panel.querySelectorAll("[data-ai-stagger]"), {
-      autoAlpha: 0,
-      y: 6,
-      duration: 0.12,
-      ease: "power2.in",
-    });
-
-    // Panel collapses smoothly right back into the circular button
-    gsap.to(panel, {
-      transformOrigin: `${originX}px ${originY}px`,
-      scale: 0.08,
-      borderRadius: 100,
-      autoAlpha: 0,
-      duration: 0.32,
-      ease: "power3.in",
-      onComplete: () => {
-        onCloseComplete();
-      },
-    });
+    // Width/height must not move a right/bottom-anchored shell as it shrinks.
+    gsap.set(panel, { left: rect.left, top: rect.top, right: "auto", bottom: "auto", x: 0, y: 0,
+      width: rect.width, height: rect.height });
+    timelineRef.current = gsap.timeline({ onComplete: onCloseComplete })
+      .to(panel.querySelectorAll("[data-ai-stagger]"), { autoAlpha: 0, duration: .12 }, 0)
+      .to(panel, { left: trigger.left, top: trigger.top, width: trigger.width, height: trigger.height,
+        borderRadius: trigger.width / 2, "--ai-glass-fill": "rgba(253,230,138,.65)",
+        duration: .5, ease: "power3.inOut" }, .04);
+    if (icon && iconRect) {
+      timelineRef.current.to(icon, {
+        x: Number(gsap.getProperty(icon, "x")) + trigger.width / 2 - (iconRect.left + iconRect.width / 2 - rect.left),
+        y: Number(gsap.getProperty(icon, "y")) + trigger.height / 2 - (iconRect.top + iconRect.height / 2 - rect.top),
+        duration: .5, ease: "power3.inOut",
+      }, .04);
+    }
   };
 
   useLayoutEffect(() => {
-    if (hasEnteredRef.current) return;
-    hasEnteredRef.current = true;
-    if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const panel = panelRef.current;
-    const panelRect = panel.getBoundingClientRect();
-    const tr = getTriggerRect() ?? {
-      left: panelRect.right - 52,
-      top: panelRect.bottom + 20,
-      width: 46,
-      height: 46,
-    };
-
-    const trCenterX = tr.left + tr.width / 2;
-    const trCenterY = tr.top + tr.height / 2;
-    const originX = trCenterX - panelRect.left;
-    const originY = trCenterY - panelRect.top;
-
+    if (!panel) return;
+    closingRef.current = false;
     const ctx = gsap.context(() => {
-      // Panel blossoms and expands directly from the trigger button
-      gsap.fromTo(
-        panel,
-        {
-          transformOrigin: `${originX}px ${originY}px`,
-          scale: 0.08,
-          borderRadius: 100,
-          autoAlpha: 0.85,
-        },
-        {
-          scale: 1,
-          borderRadius: 26,
-          autoAlpha: 1,
-          duration: 0.42,
-          ease: "power3.out",
-        }
-      );
-
-      // Icon fades in cleanly and starts the wave floating animation
-      if (capRef.current) {
-        gsap.fromTo(
-          capRef.current,
-          { autoAlpha: 0, scale: 0.75 },
-          {
-            autoAlpha: 1,
-            scale: 1,
-            duration: 0.3,
-            delay: 0.1,
-            ease: "power2.out",
-            onComplete: () => {
-              if (capRef.current) {
-                // Gentle floating wave up and down matching the button animation
-                gsap.to(capRef.current, {
-                  y: -3,
-                  rotation: 12,
-                  duration: 1.8,
-                  ease: "sine.inOut",
-                  repeat: -1,
-                  yoyo: true,
-                });
-              }
-            },
-          }
-        );
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      animateAssistantIcon(capRef.current?.querySelector("img") ?? null);
+      const rect = panel.getBoundingClientRect();
+      const trigger = getTriggerRect() ?? rect;
+      const inner = panel.querySelector(".ai-chat-inner");
+      const icon = capRef.current;
+      const iconRect = icon?.getBoundingClientRect();
+      gsap.set(inner, { width: panel.clientWidth, height: panel.clientHeight });
+      gsap.set(panel, { left: trigger.left, top: trigger.top, right: "auto", bottom: "auto",
+        width: trigger.width, height: trigger.height, borderRadius: trigger.width / 2,
+        "--ai-glass-fill": "rgba(253,230,138,.65)" });
+      if (icon && iconRect) {
+        gsap.set(icon, { x: trigger.width / 2 - (iconRect.left + iconRect.width / 2 - rect.left),
+          y: trigger.height / 2 - (iconRect.top + iconRect.height / 2 - rect.top) });
       }
-
-      gsap.fromTo(
-        panel.querySelectorAll("[data-ai-stagger]"),
-        { autoAlpha: 0, y: 8 },
-        { autoAlpha: 1, y: 0, duration: 0.25, stagger: 0.03, delay: 0.15, ease: "power2.out" }
-      );
+      timelineRef.current = gsap.timeline()
+        .to(panel, { left: rect.left, top: rect.top, width: rect.width, height: rect.height, borderRadius: 26,
+          "--ai-glass-fill": "rgba(255,255,255,.82)", duration: .58, ease: "power3.inOut",
+          onComplete: () => {
+            // Return sizing to CSS so viewport changes continue to reflow the chat.
+            gsap.set(panel, { clearProps: "left,top,right,bottom,width,height,borderRadius" });
+            gsap.set(inner, { clearProps: "width,height" });
+          } }, 0)
+        .fromTo(panel.querySelectorAll("[data-ai-stagger]"), { autoAlpha: 0, y: 8 },
+          { autoAlpha: 1, y: 0, duration: .22, stagger: .025 }, .32);
+      if (icon) timelineRef.current.to(icon, { x: 0, y: 0, duration: .58, ease: "power3.inOut" }, 0);
+      gsap.to(panel.querySelector(".ai-light-beam"), { "--ai-beam-angle": "360deg", duration: 6, repeat: -1, ease: "none" });
     }, panelRef);
-
-    return () => ctx.revert();
+    return () => { timelineRef.current?.kill(); ctx.revert(); };
   }, [panelRef, capRef, getTriggerRect]);
 
   return { handleClose };
@@ -153,8 +108,6 @@ function AssistantPanel({
   const { data: session, status } = useSession();
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
-  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
-  const colorTheme = useAppStore(s => s.colorTheme);
   const panelRef = useRef<HTMLElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -189,16 +142,17 @@ function AssistantPanel({
     <section
       ref={panelRef}
       aria-label="AI modeling assistant"
-      data-theme={colorTheme}
-      data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
+      data-theme="light"
+      data-discipline="arch"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] rounded-[26px] text-sm shadow-2xl"
     >
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
+      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-2.5">
 
       <div className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div ref={capRef} className="flex items-center justify-center shrink-0">
+          <div ref={capRef} className="ai-orb-icon shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <div data-ai-stagger>
@@ -329,6 +283,7 @@ function AssistantPanel({
         </div>
       )}
       {error && <p role="alert" className="text-xs text-red-400 mt-2 shrink-0">{error}</p>}
+      </div>
     </section>
   );
 }
@@ -342,8 +297,6 @@ function UnconfiguredPanel({
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
-  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
-  const colorTheme = useAppStore(s => s.colorTheme);
   const { handleClose } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
@@ -358,16 +311,17 @@ function UnconfiguredPanel({
     <section
       ref={panelRef}
       aria-label="AI modeling assistant"
-      data-theme={colorTheme}
-      data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
+      data-theme="light"
+      data-discipline="arch"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] text-sm shadow-2xl"
     >
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
+      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-2.5">
 
       <div className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div ref={capRef} className="flex items-center justify-center shrink-0">
+          <div ref={capRef} className="ai-orb-icon shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <h2 data-ai-stagger className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
@@ -381,6 +335,7 @@ function UnconfiguredPanel({
       <p data-ai-stagger className="text-xs ai-text-body">
         Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.
       </p>
+      </div>
     </section>
   );
 }
@@ -388,7 +343,6 @@ function UnconfiguredPanel({
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const triggerRectRef = useRef<DOMRect | null>(null);
   const orbRef = useRef<HTMLSpanElement>(null);
@@ -413,7 +367,7 @@ export default function AiAssistant() {
   useLayoutEffect(() => {
     if (!orbRef.current || !ringRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const ctx = gsap.context(() => {
-      gsap.to(orbRef.current, { y: -3, rotation: 12, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true });
+      animateAssistantIcon(orbRef.current?.querySelector("img") ?? null);
       gsap.to(ringRef.current, { rotation: 360, duration: 8, repeat: -1, ease: "none" });
     }, triggerRef);
     return () => ctx.revert();
@@ -423,20 +377,21 @@ export default function AiAssistant() {
     if (triggerRef.current) {
       triggerRectRef.current = triggerRef.current.getBoundingClientRect();
     }
-    setOpen(true);
+    if (configured !== null) setOpen(true);
   };
 
-  const handleCloseComplete = () => {
+  const handleCloseComplete = useCallback(() => {
     setOpen(false);
-  };
+    triggerRef.current?.focus({ preventScroll: true });
+  }, []);
 
-  const getTriggerRect = () => {
+  const getTriggerRect = useCallback(() => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) return rect;
     }
     return triggerRectRef.current;
-  };
+  }, []);
 
   return (
     <>
@@ -444,8 +399,9 @@ export default function AiAssistant() {
         ref={triggerRef}
         onClick={handleOpen}
         aria-expanded={open}
+        tabIndex={open ? -1 : 0}
         aria-label="Open AI assistant"
-        data-discipline={mepModeActive ? "mep" : "arch"}
+        data-discipline="arch"
         style={{
           opacity: open ? 0 : 1,
           pointerEvents: open ? "none" : "auto",

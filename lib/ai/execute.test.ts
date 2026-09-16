@@ -18,6 +18,23 @@ beforeEach(() => {
   clearWerkzeugHistory();
 });
 describe("AI batch persistence", () => {
+  it("reveals a committed live batch and undoes it as one operation", async () => {
+    await applyAiPlan(plan, aiFingerprint(), true);
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(1);
+    expect(useLayoutDrawingStore.getState().doors).toHaveLength(1);
+    await undoWerkzeug();
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(0);
+    expect(useLayoutDrawingStore.getState().doors).toHaveLength(0);
+  });
+  it("preserves MEP elevation, fresh-air mapping and drainage slope", () => {
+    const expanded = expandModelPlan({ summary: "Services", assumptions: [], actions: [
+      { kind: "duct_run", id: "air", levelId: "l", points: [{ xMm: 0, yMm: 0 }, { xMm: 3000, yMm: 0 }], shape: "round", diameterMm: 250, elevationOffsetMm: 2800, systemType: "fresh_air" },
+      { kind: "pipe_run", id: "waste", levelId: "l", points: [{ xMm: 0, yMm: 0 }, { xMm: 3000, yMm: 0 }], diameterMm: 108, elevationOffsetMm: 200, systemType: "sanitary_waste", slopePercent: 1 },
+    ] });
+    const prepared = prepareAiChanges(expanded, useLayoutDrawingStore.getState());
+    expect(prepared.next.ducts.at(-1)).toMatchObject({ elevationMm: 2800, systemType: "outdoor" });
+    expect(prepared.next.pipes.at(-1)).toMatchObject({ elevationMm: 200, slopePercent: 1 });
+  });
   it("copies only changed collections and never mutates the original state", () => {
     const state = useLayoutDrawingStore.getState();
     const prepared = prepareAiChanges(plan, state);

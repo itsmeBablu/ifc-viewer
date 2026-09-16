@@ -141,7 +141,7 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
 }
 
 export type AiDbChange = {
-  store: "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes";
+  store: "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes" | "cableTrays";
   id: string;
   value?: { id: string; projectId: string };
 };

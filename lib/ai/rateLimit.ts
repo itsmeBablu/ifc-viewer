@@ -32,6 +32,7 @@ export async function limitAiUser(googleUserId: string) {
       timeout: 4000,
     });
     const result = await limiter.limit(googleUserId);
+    if (result.reason === "timeout") return localDevelopmentLimit(googleUserId);
     return {
       success: result.success,
       remaining: result.remaining,

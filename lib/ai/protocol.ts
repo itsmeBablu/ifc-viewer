@@ -9,6 +9,7 @@ export const commandRequestSchema = z.object({
   model: z.enum(AI_MODEL_IDS).optional(),
   mode: z.enum(["build", "review", "guide"]).optional(),
   context: contextSchema,
+  discipline: z.enum(["arch", "mep"]).optional(),
   attachments: attachmentsSchema.default([]),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(8000) }).strict()).max(12).default([]),
 }).strict();
