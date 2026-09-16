@@ -5195,3 +5195,37 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
 @media (prefers-reduced-motion: reduce) {
   .ai-thinking, .ai-thinking-avatar svg, .ai-thinking-dots i { animation: none !important; }
 }
+
+/* Yellow bubble and white liquid glass share one morphing shell. */
+.ai-chat-panel[data-theme="light"][data-discipline="arch"] {
+  --text-strong: #18181b; --text-body: #3f3f46; --text-muted: #71717a;
+  --surface-card: rgba(255,255,255,.82); --ai-muted: #71717a;
+  --ai-accent: #facc15; --ai-accent-ink: #854d0e;
+  --ai-glass-fill: rgba(255,255,255,.82);
+  overflow: hidden; isolation: isolate; color-scheme: light;
+  background: linear-gradient(135deg, rgba(255,255,255,.35), transparent 60%), var(--ai-glass-fill) !important;
+  border: 1px solid rgba(250,204,21,.8) !important;
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(250,204,21,.2), 0 20px 55px rgba(0,0,0,.18), 0 0 20px rgba(250,204,21,.18) !important;
+}
+.ai-chat-inner { position: relative; flex-shrink: 0; }
+.ai-chat-panel[data-discipline="arch"] .ai-light-beam {
+  inset: 0; border-radius: inherit; animation: none; padding: 2px;
+  background: conic-gradient(from var(--ai-beam-angle), transparent 0deg 220deg, rgba(250,204,21,.2) 260deg, #facc15 300deg, #fff 316deg, #facc15 330deg, transparent 360deg);
+}
+.ai-chat-panel[data-discipline="arch"] .ai-light-beam::after { content: none; }
+.ai-chat-panel[data-theme="light"] :is(.ai-message-assistant, .ai-composer, .ai-plan-card) { background: rgba(255,255,255,.64) !important; }
+.ai-orb-trigger[aria-expanded="true"] { transform: none; }
+
+body.mep-mode-active .ai-orb-trigger[data-discipline="arch"] {
+  border-color: rgba(253,230,138,.72) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(253,230,138,.42) 42%, rgba(251,191,36,.3)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 6px 18px rgba(251,191,36,.2) !important;
+}
+body.mep-mode-active .ai-orb-trigger[data-discipline="arch"] .ai-orb-ring {
+  border-color: rgba(250,204,21,.65) !important; border-top-color: #fff7cc !important; border-bottom-color: #d97706 !important;
+}
+body.mep-mode-active .ai-orb-trigger[data-discipline="arch"] .ai-orb-icon {
+  background: linear-gradient(145deg, rgba(255,247,204,.78), rgba(250,204,21,.72) 62%, rgba(245,158,11,.62)) !important;
+  box-shadow: inset 0 1px 3px rgba(255,255,255,.82), 0 0 14px rgba(250,204,21,.42) !important;
+}
