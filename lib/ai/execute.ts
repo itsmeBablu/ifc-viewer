@@ -36,16 +36,27 @@ export function aiFingerprint() {
   return JSON.stringify({ snapshot: takeWerkzeugSnapshot(), locked: s.lockedElementKeys, groups: s.groups, activeLevelId: useToolMarkupStore.getState().markupFloorId, selection: s.selectedElements });
 }
 
-function upsert<T extends { id: string }>(rows: T[], value: T) { return rows.some(r => r.id === value.id) ? rows.map(r => r.id === value.id ? value : r) : [...rows, value]; }
+// These arrays are private copies: update in place during assembly, publish once.
+function upsert<T extends { id: string }>(rows: T[], value: T) {
+  const index = rows.findIndex(row => row.id === value.id);
+  if (index === -1) rows.push(value);
+  else rows[index] = value;
+  return rows;
+}
 
 export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-${crypto.randomUUID()}`) {
-  const next: Rows = { levels: [...state.levels], walls: [...state.walls], doors: [...state.doors], windows: [...state.windows], slabs: [...state.slabs], columns: [...state.columns], beams: [...state.beams], mepEquipment: [...state.mepEquipment] };
+  const next: Rows = { levels: state.levels, walls: state.walls, doors: state.doors, windows: state.windows, slabs: state.slabs, columns: state.columns, beams: state.beams, mepEquipment: state.mepEquipment };
+  const copied = new Set<keyof Rows>();
   const aliases = new Map(plan.actions.filter(a => a.kind !== "delete" && a.operation === "create").map(a => [a.id, makeId()]));
   const resolve = (id: string) => aliases.get(id) ?? id;
   const changes: AiDbChange[] = [];
   for (const action of plan.actions) {
     const kind = action.kind === "delete" ? action.targetKind : action.kind;
     const key = collection(kind);
+    if (!copied.has(key)) {
+      Object.assign(next, { [key]: [...next[key]] });
+      copied.add(key);
+    }
     const id = resolve(action.id);
     const old = next[key].find(row => row.id === id);
     const lockKind = kind === "floor" || kind === "roof" ? "slab" : kind;
@@ -55,10 +66,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
       // Dependencies outside the v1 AI context must not be orphaned.
       const dependants = [...state.slabs, ...state.walls, ...state.mepEquipment, ...state.ducts, ...state.pipes, ...state.wires, ...state.cableTrays];
       if (dependants.some(row => row.id !== id && JSON.stringify(row).includes(`"${id}"`))) throw new Error(`Element ${id} has dependent geometry. Remove its constraints manually first.`);
-      for (const name of Object.keys(next) as Array<keyof Rows>) {
-        // Every collection keeps its original element type; only matching IDs are removed.
-        Object.assign(next, { [name]: next[name].filter(row => row.id !== id) });
-      }
+      Object.assign(next, { [key]: next[key].filter(row => row.id !== id) });
       changes.push({ store: key, id });
       continue;
     }

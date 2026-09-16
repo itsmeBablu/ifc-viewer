@@ -4,7 +4,8 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { clearWerkzeugHistory, undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
 import { idbApplyAiChanges, idbListWalls } from "@/lib/layoutDrawingDb";
-import { aiFingerprint, applyAiPlan } from "./execute";
+import { aiFingerprint, applyAiPlan, prepareAiChanges } from "./execute";
+import { expandModelPlan } from "./recipes";
 import type { AiPlan } from "./schema";
 
 const plan: AiPlan = { summary: "Wall and door", assumptions: [], actions: [
@@ -17,6 +18,60 @@ beforeEach(() => {
   clearWerkzeugHistory();
 });
 describe("AI batch persistence", () => {
+  it("copies only changed collections and never mutates the original state", () => {
+    const state = useLayoutDrawingStore.getState();
+    const prepared = prepareAiChanges(plan, state);
+    expect(prepared.next.walls).not.toBe(state.walls);
+    expect(prepared.next.doors).not.toBe(state.doors);
+    expect(prepared.next.levels).toBe(state.levels);
+    expect(prepared.next.slabs).toBe(state.slabs);
+    expect(prepared.next.mepEquipment).toBe(state.mepEquipment);
+    expect(state.walls).toHaveLength(0);
+    expect(state.doors).toHaveLength(0);
+  });
+  it("applies a recipe as one atomic model update and one undo step", async () => {
+    const recipe = expandModelPlan({ summary: "Shell", assumptions: [], actions: [{ kind: "rectangular_shell", id: "shell", levelId: "l", xMm: 0, yMm: 0, widthMm: 8000, depthMm: 6000, heightMm: 3000, thicknessMm: 200, floorThicknessMm: 200 }] });
+    const originalLevels = useLayoutDrawingStore.getState().levels;
+    let updates = 0;
+    const unsubscribe = useLayoutDrawingStore.subscribe(() => updates++);
+    try { await applyAiPlan(recipe, aiFingerprint()); } finally { unsubscribe(); }
+    expect(updates).toBe(1);
+    expect(useLayoutDrawingStore.getState().levels).toBe(originalLevels);
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(4);
+    expect(useLayoutDrawingStore.getState().slabs).toHaveLength(1);
+    await undoWerkzeug();
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(0);
+    expect(useLayoutDrawingStore.getState().slabs).toHaveLength(0);
+  });
+  it("applies a 100-item grid with unique IDs and preserves the untouched model", async () => {
+    const recipe = expandModelPlan({ summary: "Chairs", assumptions: [], actions: [{ kind: "equipment_grid", id: "chairs", levelId: "l", familyId: "dining-chair", xMm: 0, yMm: 0, elevationMm: 0, rotationDeg: 0, columns: 10, rows: 10, stepXmm: 1000, stepYmm: 1500 }] });
+    const original = useLayoutDrawingStore.getState();
+    await applyAiPlan(recipe, aiFingerprint());
+    const built = useLayoutDrawingStore.getState();
+    expect(built.mepEquipment).toHaveLength(100);
+    expect(new Set(built.mepEquipment.map(item => item.id)).size).toBe(100);
+    expect(built.mepEquipment[99]).toMatchObject({ xMm: 9000, yMm: 13500 });
+    expect(built.walls).toBe(original.walls);
+    expect(built.slabs).toBe(original.slabs);
+    expect(original.mepEquipment).toHaveLength(0);
+    await undoWerkzeug();
+    expect(useLayoutDrawingStore.getState().mepEquipment).toHaveLength(0);
+    await redoWerkzeug();
+    expect(useLayoutDrawingStore.getState().mepEquipment).toHaveLength(100);
+  });
+  it("does not mutate earlier wall snapshots when updating or deleting", async () => {
+    await applyAiPlan(plan, aiFingerprint());
+    const before = useLayoutDrawingStore.getState();
+    const wall = before.walls[0];
+    const door = before.doors[0];
+    await applyAiPlan({ summary: "Extend wall", assumptions: [], actions: [{ ...plan.actions[0], id: wall.id, operation: "update", endXmm: 6000 } as AiPlan["actions"][number]] }, aiFingerprint());
+    expect(before.walls[0].endXmm).toBe(5000);
+    const extended = useLayoutDrawingStore.getState();
+    await applyAiPlan({ summary: "Remove door", assumptions: [], actions: [{ kind: "delete", id: door.id, targetKind: "door" }] }, aiFingerprint());
+    expect(extended.doors).toHaveLength(1);
+    expect(useLayoutDrawingStore.getState().doors).toHaveLength(0);
+    expect(useLayoutDrawingStore.getState().walls).toBe(extended.walls);
+  });
   it("applies related elements atomically and undoes/redoes as one operation", async () => {
     await applyAiPlan(plan, aiFingerprint());
     const s = useLayoutDrawingStore.getState();

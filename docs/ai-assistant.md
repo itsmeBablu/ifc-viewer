@@ -10,6 +10,7 @@ AUTH_GOOGLE_ID=<Google OAuth client ID>
 AUTH_GOOGLE_SECRET=<Google OAuth client secret>
 AUTH_URL=http://localhost:3000
 GEMINI_API_KEY=<Gemini API key from Google AI Studio>
+GEMINI_MODEL=gemini-3.1-flash-lite
 UPSTASH_REDIS_REST_URL=<Upstash Redis REST URL>
 UPSTASH_REDIS_REST_TOKEN=<Upstash Redis REST token>
 ```
@@ -41,7 +42,7 @@ Redis stores per-account request counters, not projects or chat. It lets all pro
 
 ## Token use and chat behavior
 
-The prompt sends the catalogue as compact rows, removes duplicate identity/persistence fields from model context, and includes at most 12,000 characters of complete recent conversation turns. Geometry and element references remain available for validation. Gemini uses low thinking effort and concise replies; the output ceiling remains large enough for structured plans. Requests are never automatically retried.
+The prompt sends the catalogue as compact rows, removes duplicate identity/persistence fields from model context, and includes at most 12,000 characters of complete recent conversation turns. Geometry and element references remain available for validation. Gemini uses minimal thinking, concise replies and an 8,192-token output ceiling. Large irregular builds should be split into batches; truncated output is rejected rather than partially applied. Requests are never automatically retried.
 
 Files are sent with the first message after attaching them. They stay visible for reuse, but are not automatically resent on every follow-up: check **Include files with next message** when another image/PDF read is necessary. After a failed request this option is restored for retry. Actual token savings depend on the project and attachments.
 
@@ -49,7 +50,26 @@ Sending clears the composer immediately. Failures, timeouts and unusable respons
 
 Verify Google sign-in, session renewal, sign-out, and a rejected/cancelled login using real credentials. No credentials are committed. Implementation follows https://authjs.dev/getting-started/installation and https://authjs.dev/getting-started/providers/google.
 
-The AI route uses `gemini-3.6-flash` through Google's server-side REST API. Keep the Google project on the free tier to enforce the intended cost policy; a model name alone does not disable billing in a paid project. There is no automatic model upgrade or retry. Review current quotas and data handling at https://ai.google.dev/gemini-api/docs/pricing. Commands and supplied model context are sent to Gemini only when the user submits a command.
+The AI route defaults to `gemini-3.1-flash-lite` through Google's server-side REST API. Optionally set `GEMINI_MODEL=gemini-3.5-flash-lite` to use the newer economy model. Only these two models are accepted; there is no automatic upgrade to Flash/Pro or retry on failure. A model name does not disable billing on a paid project. Review current quotas, prices and data handling at https://ai.google.dev/gemini-api/docs/pricing. Commands and supplied model context are sent to Gemini only when the user submits a command.
+
+## Faster creation with modeling recipes
+
+The model can now emit a compact recipe instead of writing every element's full geometry:
+
+| Recipe | Code generates |
+| --- | --- |
+| `rectangular_shell` | Four walls, plus an optional floor and roof, on a specified level |
+| `wall_path` | Connected straight wall segments from shared points and dimensions |
+| `window_row` | Equally spaced windows with shared dimensions on one host wall |
+| `equipment_grid` | Rows/columns of the same catalogue item with specified spacing |
+
+Recipes can be mixed with explicit level creation, individual elements, irregular geometry and edits in the same plan. They are expanded on the server into the normal editable elements before preview. The 150-element limit applies **after expansion**. Computed coordinates, IDs, host references, opening overlaps and roof geometry still pass normal validation on both server and client. Applying remains one IndexedDB transaction, one model update and one undo step. Only changed collections are copied; unaffected geometry retains its array references.
+
+For shells, the origin and spans describe wall centrelines; slabs extend to exterior wall faces. Roof height equals wall height above the level. Recipes do not infer interior rooms, openings, spacing or consequential dimensions. Repeated equipment is placement only, not collision-aware room planning. Explicit dimensional requests let the assistant build immediately; missing essential details still produce a question.
+
+Example: “On the ground floor, make an 8 m by 6 m wall-centre shell at (0, 0), height 3 m, walls 200 mm, floor 200 mm and flat roof 200 mm. No openings.” Or: “Place 100 dining chairs in 10 rows and 10 columns, first centre (0, 0), X spacing 1000 mm, Y spacing 1500 mm, rotation 0, elevation 0.”
+
+The September 2026 live smoke check with ordinary dimensional prompts returned a validated shell with three windows (nine elements) in about 1.6 seconds and a 100-chair grid in about 1.2 seconds using Flash-Lite. The grid required 140 generated tokens; code expanded the 187-character action into 100 elements. These are individual preview-generation observations, not latency guarantees or measurements of browser rendering. Actual cost and time depend on model load, context, attachments and requested geometry.
 
 Run `npm run lint` and `npm test` using Node 22.13+ (the repository's current Vitest/Vite dependencies cannot run on Node 20.11).
 

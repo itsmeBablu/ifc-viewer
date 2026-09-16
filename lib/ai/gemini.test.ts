@@ -4,16 +4,29 @@ import type { CommandRequest } from "./protocol";
 
 const input: CommandRequest = { command: "Add a wall", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } }, history: [], attachments: [] };
 const fetchMock = vi.fn();
-beforeEach(() => { vi.stubEnv("GEMINI_API_KEY", "test-key"); vi.stubGlobal("fetch", fetchMock); fetchMock.mockReset(); });
+beforeEach(() => { vi.stubEnv("GEMINI_API_KEY", "test-key"); vi.stubEnv("GEMINI_MODEL", ""); vi.stubGlobal("fetch", fetchMock); fetchMock.mockReset(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-it("returns a clarification using low thinking effort and no automatic retry", async () => {
+it("defaults to Flash-Lite with minimal thinking and no automatic retry", async () => {
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "How long should the wall be?" }] } }] }));
   expect(await generateCommand(input)).toEqual({ kind: "clarification", message: "How long should the wall be?" });
   expect(fetchMock).toHaveBeenCalledTimes(1);
   const request = JSON.parse(fetchMock.mock.calls[0][1].body);
-  expect(request.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "LOW" });
+  expect(fetchMock.mock.calls[0][0]).toContain("/gemini-3.1-flash-lite:generateContent");
+  expect(request.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "MINIMAL" });
+  expect(request.generationConfig.maxOutputTokens).toBe(8192);
   expect(request.contents.at(-1).parts).toHaveLength(1);
+});
+
+it("supports the alternate economy model but rejects expensive overrides", async () => {
+  vi.stubEnv("GEMINI_MODEL", "gemini-3.5-flash-lite");
+  fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "Dimensions?" }] } }] }));
+  await generateCommand(input);
+  expect(fetchMock.mock.calls[0][0]).toContain("/gemini-3.5-flash-lite:generateContent");
+  fetchMock.mockClear();
+  vi.stubEnv("GEMINI_MODEL", "gemini-3.6-flash");
+  await expect(generateCommand(input)).rejects.toThrow(/Automatic upgrades/);
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 it("explains missing configuration without making a provider request", async () => {
