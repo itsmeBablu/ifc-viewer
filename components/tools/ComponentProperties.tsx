@@ -1,7 +1,7 @@
 "use client";
 
 import { furnitureParametersFor, evaluateFurniture } from "@/lib/parametricFurniture";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { COMPONENT_CATALOG, componentPreset, isArchitecturalComponent } from "@/lib/componentCatalog";
 import type { LayoutMepEquipment } from "@/lib/layoutDrawing";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -127,11 +127,15 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
 
   // Auto-heal draftComponentId if it's currently an MEP component in furniture mode, or furniture in MEP mode
   const activeFamilyId = item?.familyId ?? store.draftComponentId;
-  if (!item && isFurniture && !isArchitecturalComponent(activeFamilyId)) {
-    store.chooseComponent("sofa-3");
-  } else if (!item && !isFurniture && isArchitecturalComponent(activeFamilyId)) {
-    store.chooseComponent("mep-boiler");
-  }
+  const chooseComponent = store.chooseComponent;
+  useEffect(() => {
+    if (item) return;
+    if (isFurniture && !isArchitecturalComponent(activeFamilyId)) {
+      chooseComponent("sofa-3");
+    } else if (!isFurniture && isArchitecturalComponent(activeFamilyId)) {
+      chooseComponent("mep-boiler");
+    }
+  }, [item, isFurniture, activeFamilyId, chooseComponent]);
 
   const preset = componentPreset(item?.familyId ?? store.draftComponentId);
   const isPlan = (markup.quadView ? markup.quadPresets[markup.quadActiveIndex] : markup.viewPreset) === "top";
