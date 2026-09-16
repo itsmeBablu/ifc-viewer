@@ -13,6 +13,7 @@ function usePanelMorphAnimation(
   onCloseComplete: () => void
 ) {
   const isClosingRef = useRef(false);
+  const hasEnteredRef = useRef(false);
 
   const handleClose = () => {
     if (isClosingRef.current) return;
@@ -56,6 +57,8 @@ function usePanelMorphAnimation(
   };
 
   useLayoutEffect(() => {
+    if (hasEnteredRef.current) return;
+    hasEnteredRef.current = true;
     if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const panel = panelRef.current;
     const panelRect = panel.getBoundingClientRect();
@@ -114,6 +117,7 @@ function AssistantPanel({
   const { data: session, status } = useSession();
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
+  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const panelRef = useRef<HTMLElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -144,12 +148,19 @@ function AssistantPanel({
   }, [userMenuOpen, handleClose]);
 
   return (
-    <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl">
+    <section
+      ref={panelRef}
+      aria-label="AI modeling assistant"
+      data-discipline={mepModeActive ? "mep" : "arch"}
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl"
+    >
       <div data-ai-stagger className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="ai-chat-status-dot" />
+        <div className="flex items-center gap-2.5">
+          <div className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0">
+            <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
+          </div>
           <div>
-            <h2 className="font-semibold tracking-tight leading-tight">V Studio Assistant</h2>
+            <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
             <p className="text-[10px] ai-text-muted">Design · Model · Review</p>
           </div>
         </div>
@@ -288,6 +299,7 @@ function UnconfiguredPanel({
   onCloseComplete: () => void;
 }) {
   const panelRef = useRef<HTMLElement>(null);
+  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const { handleClose } = usePanelMorphAnimation(panelRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
@@ -299,11 +311,18 @@ function UnconfiguredPanel({
   }, [handleClose]);
 
   return (
-    <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl">
+    <section
+      ref={panelRef}
+      aria-label="AI modeling assistant"
+      data-discipline={mepModeActive ? "mep" : "arch"}
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
+    >
       <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="ai-chat-status-dot" />
-          <h2 className="font-semibold">V Studio Assistant</h2>
+        <div className="flex items-center gap-2.5">
+          <div className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0">
+            <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
+          </div>
+          <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
         </div>
         <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
           <LuX />
@@ -319,6 +338,7 @@ function UnconfiguredPanel({
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const triggerRectRef = useRef<DOMRect | null>(null);
   const orbRef = useRef<HTMLSpanElement>(null);
@@ -358,9 +378,11 @@ export default function AiAssistant() {
           autoAlpha: 0,
           duration: 0.18,
           ease: "power2.in",
+          onComplete: () => {
+            setOpen(true);
+          },
         });
-      } else {
-        gsap.set(triggerRef.current, { autoAlpha: 0 });
+        return;
       }
     }
     setOpen(true);
@@ -396,8 +418,9 @@ export default function AiAssistant() {
         onClick={handleOpen}
         aria-expanded={open}
         aria-label="Open AI assistant"
-        style={{ pointerEvents: open ? "none" : "auto" }}
-        className="ai-orb-trigger fixed bottom-4 right-4 z-[100] flex items-center justify-center rounded-full shadow-xl"
+        data-discipline={mepModeActive ? "mep" : "arch"}
+        style={{ display: open ? "none" : "flex" }}
+        className="ai-orb-trigger fixed bottom-4 right-4 z-[100] items-center justify-center rounded-full shadow-xl"
       >
         <span ref={ringRef} aria-hidden className="ai-orb-ring" />
         <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
