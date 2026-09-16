@@ -22,7 +22,7 @@ function AssistantPanel({ close }: { close: () => void }) {
   }, []);
   return (
     <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] max-h-[75dvh] w-[min(420px,calc(100vw-24px))] overflow-auto rounded-[26px] p-4 text-sm shadow-xl">
-      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">3D visualizer assistance</h2><p className="text-[10px] ai-text-muted">Plans, dimensions & spaces</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
+      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><span className="ai-chat-status-dot" /><div><h2 className="font-semibold tracking-tight">V Studio Assistant</h2><p className="text-[10px] ai-text-muted">Design · Model · Review</p></div></div><button className="ai-chat-close" onClick={close} aria-label="Close AI assistant"><LuX /></button></div>
       {status === "loading" ? <p>Checking sign-in…</p> : !session?.user ? <>
         <p data-ai-stagger className="mb-3 ai-text-body">Sign in to create and edit your model with AI. Manual modeling is available without signing in.</p>
         <button data-ai-stagger className="ai-google-button" onClick={() => { void signIn("google").catch(() => setError("Could not start Google sign-in. Please try again.")); }}><LuSparkles /> Sign in with Google</button>

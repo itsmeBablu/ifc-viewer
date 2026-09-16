@@ -29,6 +29,8 @@ export const actionSchema = z.discriminatedUnion("kind", [
 ]);
 export const planSchema = z.object({
   summary: z.string().trim().min(1).max(2000),
+  rationale: z.string().trim().min(1).max(2000).optional().describe("Explain the layout decisions, dimensions and how this addresses the user's brief. Do not claim changes are applied."),
+  nextSteps: z.array(z.string().trim().min(1).max(400)).max(5).optional().describe("Specific remaining tasks or decisions after this preview, if any."),
   assumptions: z.array(z.string().trim().min(1).max(300)).max(20),
   actions: z.array(actionSchema).min(1).max(150),
 }).strict();

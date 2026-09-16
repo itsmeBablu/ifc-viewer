@@ -544,6 +544,8 @@ export async function idbDeleteProject(projectId: string): Promise<void> {
 export type AiChatTurn = {
   role: "user" | "assistant";
   text: string;
+  model?: string;
+  mode?: string;
 };
 
 export async function idbGetAiChat(projectId: string): Promise<AiChatTurn[]> {

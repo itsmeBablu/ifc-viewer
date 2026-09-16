@@ -1,10 +1,9 @@
-export const DEFAULT_AI_MODEL = "gemini-3.1-flash-lite";
-const ECONOMY_MODELS = [DEFAULT_AI_MODEL, "gemini-3.5-flash-lite"] as const;
+import { DEFAULT_AI_MODEL, isAiModelId } from "./models";
 
-export function aiModel() {
-  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_AI_MODEL;
-  if (!ECONOMY_MODELS.some(allowed => model === allowed)) {
-    throw new Error("Choose gemini-3.1-flash-lite or gemini-3.5-flash-lite for GEMINI_MODEL. Automatic upgrades to more expensive models are disabled.");
+export function aiModel(requested?: string) {
+  const model = requested ?? (process.env.GEMINI_MODEL?.trim() || DEFAULT_AI_MODEL);
+  if (!isAiModelId(model)) {
+    throw new Error("The selected Gemini model is not supported. Choose a model from the assistant's model selector.");
   }
   return model;
 }
