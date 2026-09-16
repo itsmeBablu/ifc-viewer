@@ -9,6 +9,7 @@ import AiCommandPanel from "./AiCommandPanel";
 
 function usePanelMorphAnimation(
   panelRef: React.RefObject<HTMLElement | null>,
+  capRef: React.RefObject<HTMLElement | null>,
   getTriggerRect: () => DOMRect | null,
   onCloseComplete: () => void
 ) {
@@ -34,6 +35,7 @@ function usePanelMorphAnimation(
     const deltaY = tr.top + tr.height / 2 - (panelRect.top + panelRect.height / 2);
     const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
 
+    // Staggered text fade out
     gsap.to(panel.querySelectorAll("[data-ai-stagger]"), {
       autoAlpha: 0,
       y: 6,
@@ -41,14 +43,31 @@ function usePanelMorphAnimation(
       ease: "power2.in",
     });
 
+    // Helmet cap icon flies back smoothly towards the corner button
+    if (capRef.current) {
+      const capRect = capRef.current.getBoundingClientRect();
+      const capDeltaX = tr.left + tr.width / 2 - (capRect.left + capRect.width / 2);
+      const capDeltaY = tr.top + tr.height / 2 - (capRect.top + capRect.height / 2);
+      gsap.to(capRef.current, {
+        x: capDeltaX,
+        y: capDeltaY,
+        scale: 1.25,
+        rotation: -25,
+        autoAlpha: 0.3,
+        duration: 0.36,
+        ease: "power3.inOut",
+      });
+    }
+
+    // Panel collapses and morphs back into the circular orb
     gsap.to(panel, {
       x: deltaX,
       y: deltaY,
       scale: initialScale,
       borderRadius: 100,
-      filter: "drop-shadow(0 0 16px rgba(250,204,21,0.75))",
+      filter: "drop-shadow(0 0 18px rgba(250,204,21,0.75))",
       autoAlpha: 0,
-      duration: 0.35,
+      duration: 0.36,
       ease: "power3.inOut",
       onComplete: () => {
         onCloseComplete();
@@ -73,6 +92,7 @@ function usePanelMorphAnimation(
     const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
 
     const ctx = gsap.context(() => {
+      // Panel blossoms and expands from the bubble button
       gsap.fromTo(
         panel,
         {
@@ -81,7 +101,7 @@ function usePanelMorphAnimation(
           scale: initialScale,
           borderRadius: 100,
           autoAlpha: 0.2,
-          filter: "drop-shadow(0 0 16px rgba(250,204,21,0.75))",
+          filter: "drop-shadow(0 0 20px rgba(250,204,21,0.85))",
           transformOrigin: "center center",
         },
         {
@@ -91,10 +111,37 @@ function usePanelMorphAnimation(
           borderRadius: 26,
           autoAlpha: 1,
           filter: "drop-shadow(0 0 0px rgba(250,204,21,0))",
-          duration: 0.44,
+          duration: 0.46,
           ease: "power3.out",
         }
       );
+
+      // Helmet cap icon smoothly flies from the trigger location straight to the header badge!
+      if (capRef.current) {
+        const capRect = capRef.current.getBoundingClientRect();
+        const capDeltaX = tr.left + tr.width / 2 - (capRect.left + capRect.width / 2);
+        const capDeltaY = tr.top + tr.height / 2 - (capRect.top + capRect.height / 2);
+        gsap.fromTo(
+          capRef.current,
+          {
+            x: capDeltaX,
+            y: capDeltaY,
+            scale: 1.3,
+            rotation: 25,
+            autoAlpha: 0.9,
+          },
+          {
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            autoAlpha: 1,
+            duration: 0.48,
+            ease: "power3.out",
+          }
+        );
+      }
+
       gsap.fromTo(
         panel.querySelectorAll("[data-ai-stagger]"),
         { autoAlpha: 0, y: 10 },
@@ -102,7 +149,7 @@ function usePanelMorphAnimation(
       );
     }, panelRef);
     return () => ctx.revert();
-  }, [panelRef, getTriggerRect]);
+  }, [panelRef, capRef, getTriggerRect]);
 
   return { handleClose };
 }
@@ -119,10 +166,11 @@ function AssistantPanel({
   const projectId = useLayoutDrawingStore(s => s.projectId);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const panelRef = useRef<HTMLElement>(null);
+  const capRef = useRef<HTMLDivElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const { handleClose } = usePanelMorphAnimation(panelRef, getTriggerRect, onCloseComplete);
+  const { handleClose } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -156,7 +204,10 @@ function AssistantPanel({
     >
       <div data-ai-stagger className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0">
+          <div
+            ref={capRef}
+            className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0"
+          >
             <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
           </div>
           <div>
@@ -299,8 +350,9 @@ function UnconfiguredPanel({
   onCloseComplete: () => void;
 }) {
   const panelRef = useRef<HTMLElement>(null);
+  const capRef = useRef<HTMLDivElement>(null);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
-  const { handleClose } = usePanelMorphAnimation(panelRef, getTriggerRect, onCloseComplete);
+  const { handleClose } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -319,7 +371,10 @@ function UnconfiguredPanel({
     >
       <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0">
+          <div
+            ref={capRef}
+            className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0"
+          >
             <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
           </div>
           <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
