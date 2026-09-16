@@ -27,48 +27,56 @@ function usePanelMorphAnimation(
     const panel = panelRef.current;
     const panelRect = panel.getBoundingClientRect();
     const tr = getTriggerRect() ?? {
-      left: panelRect.right - 46,
-      top: panelRect.bottom - 46,
-      width: 46,
-      height: 46,
+      left: panelRect.right - 52,
+      top: panelRect.bottom - 52,
+      width: 44,
+      height: 44,
     };
-    const deltaX = tr.left + tr.width / 2 - (panelRect.left + panelRect.width / 2);
-    const deltaY = tr.top + tr.height / 2 - (panelRect.top + panelRect.height / 2);
-    const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
 
-    // Staggered text fade out
+    const trCenterX = tr.left + tr.width / 2;
+    const trCenterY = tr.top + tr.height / 2;
+    const panelCenterX = panelRect.left + panelRect.width / 2;
+    const panelCenterY = panelRect.top + panelRect.height / 2;
+
+    const deltaX = trCenterX - panelCenterX;
+    const deltaY = trCenterY - panelCenterY;
+    const initialScale = Math.max(0.06, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+
+    // Staggered text fade out quickly
     gsap.to(panel.querySelectorAll("[data-ai-stagger]"), {
       autoAlpha: 0,
       y: 6,
-      duration: 0.12,
+      duration: 0.14,
       ease: "power2.in",
     });
 
-    // Helmet cap icon flies back smoothly towards the corner button
+    // Icon glides smoothly back into the trigger button's center
     if (capRef.current) {
       const capRect = capRef.current.getBoundingClientRect();
-      const capDeltaX = tr.left + tr.width / 2 - (capRect.left + capRect.width / 2);
-      const capDeltaY = tr.top + tr.height / 2 - (capRect.top + capRect.height / 2);
+      const localCapX = (capRect.left + capRect.width / 2) - panelRect.left;
+      const localCapY = (capRect.top + capRect.height / 2) - panelRect.top;
+      const offsetX = (panelRect.width / 2) - localCapX;
+      const offsetY = (panelRect.height / 2) - localCapY;
+
       gsap.to(capRef.current, {
-        x: capDeltaX,
-        y: capDeltaY,
-        scale: 1.25,
-        rotation: -25,
-        autoAlpha: 0.3,
-        duration: 0.36,
+        x: offsetX,
+        y: offsetY,
+        scale: 1 / initialScale,
+        rotation: -12,
+        autoAlpha: 1,
+        duration: 0.44,
         ease: "power3.inOut",
       });
     }
 
-    // Panel collapses and morphs back into the circular orb
+    // Panel collapses and morphs back into the circular button
     gsap.to(panel, {
       x: deltaX,
       y: deltaY,
       scale: initialScale,
       borderRadius: 100,
-      filter: "drop-shadow(0 0 18px rgba(250,204,21,0.75))",
-      autoAlpha: 0,
-      duration: 0.36,
+      autoAlpha: 1,
+      duration: 0.44,
       ease: "power3.inOut",
       onComplete: () => {
         onCloseComplete();
@@ -83,17 +91,23 @@ function usePanelMorphAnimation(
     const panel = panelRef.current;
     const panelRect = panel.getBoundingClientRect();
     const tr = getTriggerRect() ?? {
-      left: panelRect.right - 46,
-      top: panelRect.bottom - 46,
-      width: 46,
-      height: 46,
+      left: panelRect.right - 52,
+      top: panelRect.bottom - 52,
+      width: 44,
+      height: 44,
     };
-    const deltaX = tr.left + tr.width / 2 - (panelRect.left + panelRect.width / 2);
-    const deltaY = tr.top + tr.height / 2 - (panelRect.top + panelRect.height / 2);
-    const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+
+    const trCenterX = tr.left + tr.width / 2;
+    const trCenterY = tr.top + tr.height / 2;
+    const panelCenterX = panelRect.left + panelRect.width / 2;
+    const panelCenterY = panelRect.top + panelRect.height / 2;
+
+    const deltaX = trCenterX - panelCenterX;
+    const deltaY = trCenterY - panelCenterY;
+    const initialScale = Math.max(0.06, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
 
     const ctx = gsap.context(() => {
-      // Panel blossoms and expands from the bubble button
+      // Panel blossoms and expands directly from the trigger button
       gsap.fromTo(
         panel,
         {
@@ -101,8 +115,7 @@ function usePanelMorphAnimation(
           y: deltaY,
           scale: initialScale,
           borderRadius: 100,
-          autoAlpha: 0.2,
-          filter: "drop-shadow(0 0 20px rgba(250,204,21,0.85))",
+          autoAlpha: 1,
           transformOrigin: "center center",
         },
         {
@@ -111,25 +124,28 @@ function usePanelMorphAnimation(
           scale: 1,
           borderRadius: 26,
           autoAlpha: 1,
-          filter: "drop-shadow(0 0 0px rgba(250,204,21,0))",
-          duration: 0.46,
+          duration: 0.48,
           ease: "power3.out",
         }
       );
 
-      // Helmet cap icon smoothly flies from the trigger location straight to the header badge!
+      // Icon glides smoothly from the trigger button straight to the top-left heading!
       if (capRef.current) {
         const capRect = capRef.current.getBoundingClientRect();
-        const capDeltaX = tr.left + tr.width / 2 - (capRect.left + capRect.width / 2);
-        const capDeltaY = tr.top + tr.height / 2 - (capRect.top + capRect.height / 2);
+        const localCapX = (capRect.left + capRect.width / 2) - panelRect.left;
+        const localCapY = (capRect.top + capRect.height / 2) - panelRect.top;
+        const offsetX = (panelRect.width / 2) - localCapX;
+        const offsetY = (panelRect.height / 2) - localCapY;
+
         gsap.fromTo(
           capRef.current,
           {
-            x: capDeltaX,
-            y: capDeltaY,
-            scale: 1.3,
-            rotation: 25,
-            autoAlpha: 0.9,
+            x: offsetX,
+            y: offsetY,
+            scale: 1 / initialScale,
+            rotation: 15,
+            autoAlpha: 1,
+            transformOrigin: "center center",
           },
           {
             x: 0,
@@ -137,7 +153,7 @@ function usePanelMorphAnimation(
             scale: 1,
             rotation: 0,
             autoAlpha: 1,
-            duration: 0.48,
+            duration: 0.5,
             ease: "power3.out",
           }
         );
@@ -146,9 +162,10 @@ function usePanelMorphAnimation(
       gsap.fromTo(
         panel.querySelectorAll("[data-ai-stagger]"),
         { autoAlpha: 0, y: 10 },
-        { autoAlpha: 1, y: 0, duration: 0.28, stagger: 0.04, delay: 0.14, ease: "power2.out" }
+        { autoAlpha: 1, y: 0, duration: 0.28, stagger: 0.03, delay: 0.16, ease: "power2.out" }
       );
     }, panelRef);
+
     return () => ctx.revert();
   }, [panelRef, capRef, getTriggerRect]);
 
@@ -208,17 +225,17 @@ function AssistantPanel({
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
 
-      <div data-ai-stagger className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
+      <div className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div ref={capRef} className="flex items-center justify-center shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
-          <div>
+          <div data-ai-stagger>
             <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
             <p className="text-[10px] ai-text-muted">Design · Model · Review</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div data-ai-stagger className="flex items-center gap-1.5">
           {session?.user && (
             <div className="relative" ref={userMenuRef}>
               <button
@@ -377,14 +394,14 @@ function UnconfiguredPanel({
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
 
-      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
+      <div className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div ref={capRef} className="flex items-center justify-center shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
-          <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
+          <h2 data-ai-stagger className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div data-ai-stagger className="flex items-center gap-1.5">
           <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
             <LuX />
           </button>
@@ -434,35 +451,12 @@ export default function AiAssistant() {
   const handleOpen = () => {
     if (triggerRef.current) {
       triggerRectRef.current = triggerRef.current.getBoundingClientRect();
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        gsap.to(triggerRef.current, {
-          scale: 0.25,
-          autoAlpha: 0,
-          duration: 0.18,
-          ease: "power2.in",
-          onComplete: () => {
-            setOpen(true);
-          },
-        });
-        return;
-      }
     }
     setOpen(true);
   };
 
   const handleCloseComplete = () => {
     setOpen(false);
-    if (triggerRef.current) {
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        gsap.fromTo(
-          triggerRef.current,
-          { scale: 0.2, autoAlpha: 0, rotation: -30 },
-          { scale: 1, autoAlpha: 1, rotation: 0, duration: 0.45, ease: "back.out(2)" }
-        );
-      } else {
-        gsap.set(triggerRef.current, { autoAlpha: 1, scale: 1 });
-      }
-    }
   };
 
   const getTriggerRect = () => {
@@ -481,8 +475,12 @@ export default function AiAssistant() {
         aria-expanded={open}
         aria-label="Open AI assistant"
         data-discipline={mepModeActive ? "mep" : "arch"}
-        style={{ display: open ? "none" : "flex" }}
-        className="ai-orb-trigger fixed bottom-4 right-4 z-[100] items-center justify-center rounded-full shadow-xl"
+        style={{
+          opacity: open ? 0 : 1,
+          pointerEvents: open ? "none" : "auto",
+          transition: "opacity 0.08s ease",
+        }}
+        className="ai-orb-trigger fixed bottom-4 right-4 z-[100] items-center justify-center rounded-full shadow-xl flex"
       >
         <span ref={ringRef} aria-hidden className="ai-orb-ring" />
         <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
