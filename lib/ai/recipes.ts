@@ -41,6 +41,7 @@ export const recipeSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("pipe_run"), id, levelId: wallFields.levelId,
     points: z.array(point).min(2).max(64),
+    slopePercent: z.number().min(0).max(20).default(0),
     diameterMm: z.number().min(1).max(100_000).default(28),
     elevationOffsetMm: z.number().min(-1_000_000).max(1_000_000).default(2500),
     systemType: z.enum(["hydronic_supply", "hydronic_return", "domestic_cold", "domestic_hot", "sanitary_waste", "fire_protection", "gas"]).default("hydronic_supply"),
@@ -116,7 +117,7 @@ export function expandModelPlan(value: unknown) {
           append({
             kind: "pipe", operation: "create", id: `${item.id}:pipe:${i}`, levelId: item.levelId,
             startXmm: p.xMm, startYmm: p.yMm, endXmm: q.xMm, endYmm: q.yMm,
-            diameterMm: item.diameterMm, elevationOffsetMm: item.elevationOffsetMm, systemType: item.systemType,
+            slopePercent: item.slopePercent, diameterMm: item.diameterMm, elevationOffsetMm: item.elevationOffsetMm, systemType: item.systemType,
           });
         }
         break;

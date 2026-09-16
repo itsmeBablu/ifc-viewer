@@ -18,7 +18,7 @@ describe("drawing attachments", () => {
     vi.stubGlobal("fetch", fetchMock);
     const context = { projectId: "p", activeLevelId: null, selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 }, elements: [] };
     const input = commandRequestSchema.parse({ command: "Build these walls", context, attachments: [pdf] });
-    expect(await generateCommand(input)).toEqual({ kind: "clarification", message: "What is the wall height?" });
+    expect(await generateCommand(input)).toEqual({ kind: "clarification", message: "What is the wall height?", model: "gemini-3.1-flash-lite", mode: "build" });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.contents.at(-1).parts[1]).toEqual({ inlineData: { mimeType: pdf.mimeType, data: pdf.data } });
   });

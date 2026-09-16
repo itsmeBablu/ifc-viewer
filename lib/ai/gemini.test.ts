@@ -30,9 +30,9 @@ it("supports a server default but rejects models outside the supported list", as
 });
 
 it.each([
-  ["gemini-3.5-flash-lite", "LOW", 8192],
-  ["gemini-3.8-flash", "MEDIUM", 12000],
-  ["gemini-3.1-pro-preview", "MEDIUM", 16000],
+  ["gemini-3.5-flash-lite", "MINIMAL", 8192],
+  ["gemini-3.8-flash", "LOW", 12000],
+  ["gemini-3.1-pro-preview", "LOW", 16000],
 ] as const)("honors explicit %s selection and supported reasoning settings", async (model, thinkingLevel, maxOutputTokens) => {
   vi.stubEnv("GEMINI_MODEL", "gemini-3.1-flash-lite");
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "answer_question", args: { answer: "Review the door clearance before placing furniture." } } }] } }] }));

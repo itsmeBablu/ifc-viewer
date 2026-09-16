@@ -1,3 +1,4 @@
+import { BIM_DEFAULTS } from "./bim/defaults";
 import type { MepEquipmentCategory } from "./layoutDrawing";
 
 export type ComponentPreset = {
@@ -8,6 +9,10 @@ const furniture = (id: string, name: string, room: string, widthMm: number, dept
 const mep = (id: MepEquipmentCategory, name: string, room: string, widthMm: number, depthMm: number, heightMm: number, elevationMm = 0): ComponentPreset => ({ id: `mep-${id}`, name, room, category: id, widthMm, depthMm, heightMm, elevationMm });
 
 export const COMPONENT_CATALOG: ComponentPreset[] = [
+  { ...mep("generic_component", "Air handling unit (AHU)", "HVAC", BIM_DEFAULTS.mep.ahu.widthMm, BIM_DEFAULTS.mep.ahu.depthMm, BIM_DEFAULTS.mep.ahu.heightMm), id: "mep-ahu" },
+  { ...mep("generic_component", "Inline fan", "HVAC", 500, 500, 500, BIM_DEFAULTS.mep.ductElevationMm), id: "mep-fan" },
+  { ...mep("generic_component", "Pipe valve", "Plumbing", 100, 100, 150, BIM_DEFAULTS.mep.pipeElevationMm), id: "mep-valve" },
+  { ...mep("generic_component", "Heater", "Heating", BIM_DEFAULTS.mep.heater.widthMm, BIM_DEFAULTS.mep.heater.depthMm, BIM_DEFAULTS.mep.heater.heightMm), id: "mep-heater" },
   furniture("sofa-2", "Two-seat sofa", "Living room", 1800, 850, 800),
   furniture("sofa-3", "Three-seat sofa", "Living room", 2400, 900, 800),
   furniture("armchair", "Armchair", "Living room", 850, 850, 850),

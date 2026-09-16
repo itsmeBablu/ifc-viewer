@@ -10,6 +10,7 @@ import { DEFAULT_AI_MODEL, isAiModelId, isAiMode, modelDetails, type AiModelId, 
 import { readAttachments, attachmentsSchema, MAX_REQUEST_BYTES, type AiAttachment } from "@/lib/ai/attachments";
 import { idbClearAiChat, idbGetAiChat, idbPutAiChat, type AiChatTurn } from "@/lib/layoutDrawingDb";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
 import AiModelControls from "./AiModelControls";
@@ -67,6 +68,18 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const requestRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    if (!busy) return;
+    const block = (event: Event) => {
+      if (!event.isTrusted) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    const events = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "submit"];
+    for (const name of events) window.addEventListener(name, block, { capture: true, passive: false });
+    return () => { for (const name of events) window.removeEventListener(name, block, true); };
+  }, [busy]);
 
   useEffect(() => {
     try { localStorage.setItem("ai-assistant-model", model); localStorage.setItem("ai-assistant-mode", mode); } catch { /* Storage is optional. */ }
@@ -197,6 +210,8 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busyRef.current || reading || !historyLoaded || !text.trim()) return;
+    useToolMarkupStore.getState().setQuadView(false);
+    useToolMarkupStore.getState().setViewPreset("free");
     const submittedText = text.trim();
     const submittedAttachments = includeAttachments ? attachments : [];
     setText(""); setFailedCommand(null); setIncludeAttachments(false);
@@ -207,7 +222,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: submittedText, model, mode, context, attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
+      const body = JSON.stringify({ command: submittedText, model, mode, discipline: mepModeActive ? "mep" : "arch", context, attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
       if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const remainingHeader = response.headers.get("X-AI-Remaining");
@@ -233,11 +248,14 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
         if (mode !== "build") throw new Error("Switch to Build to request a model preview. Review and Guide do not change geometry.");
         if (fingerprint !== aiFingerprint()) throw new Error("The project changed while AI was planning. Submit again with the current model.");
         const plan = validatePlan(result.plan, currentAiContext());
-        setPending({ plan, fingerprint, context, model: responseModel }); message = `**Proposed — not applied**\n${plan.summary}${plan.rationale ? `\n\n${plan.rationale}` : ""}`;
+        setThinkingLabel("Drawing live in 3D");
+        await applyAiPlan(plan, fingerprint, true);
+        setAppliedFingerprint(aiFingerprint());
+        message = `**Applied in 3D**\n${plan.summary}${plan.rationale ? `\n\n${plan.rationale}` : ""}${plan.assumptions.length ? `\n\nAssumptions:\n${plan.assumptions.map(a => `- ${a}`).join("\n")}` : ""}`;
       } else if ((result.kind === "clarification" || result.kind === "advice") && typeof result.message === "string" && result.message.trim()) message = result.message;
       else throw new Error("The AI response was not recognized.");
       pushHistory({ role: "assistant", text: message, model: responseModel, mode });
-      setStatus(result.kind === "plan" ? "Review the proposed changes before applying." : "");
+      setStatus(result.kind === "plan" ? "Changes saved. You can undo the complete AI batch." : "");
     } catch (e) {
       if (!mountedRef.current) return;
       const message = controller.signal.aborted
@@ -266,6 +284,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   }
   return (
     <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden">
+      {busy && <div className="fixed inset-x-0 top-3 z-[9999] pointer-events-none flex justify-center" role="status"><span className="rounded-xl bg-black/80 text-white px-4 py-2 text-sm">AI is working in 3D · Editing is locked</span></div>}
       <div
         ref={historyRef}
         className="ai-chat-history flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
@@ -417,7 +436,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
               </div>
 
               {/* Right: Quota % and Reset Time */}
-              <div className="flex items-center gap-1 shrink-0" title={`Live quota: ${remainingQuota} of ${totalQuota} requests available`}>
+              <div className="flex items-center gap-1 shrink-0" title={`App request allowance (not provider quota): ${remainingQuota} of ${totalQuota} requests available`}>
                 <span
                   className={`font-mono font-extrabold text-[11px] transition-colors tabular-nums ${
                     mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
@@ -426,7 +445,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
                   {quotaPct}%
                 </span>
                 <span className="text-[10px] text-[var(--text-muted)] opacity-80 whitespace-nowrap">
-                  quota{resetText ? ` · ${resetText}` : ""}
+                  app allowance{resetText ? ` · ${resetText}` : ""}
                 </span>
               </div>
             </div>

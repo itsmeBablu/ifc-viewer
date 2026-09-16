@@ -1,4 +1,5 @@
 export const AI_MODELS = [
+  { id: "ollama-local", label: "Ollama · Local", tier: "Local", description: "Text modeling with the server's installed Ollama model.", thinkingLevel: "LOW", maxOutputTokens: 8192 },
   { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", tier: "Economy", description: "Fastest response. Quick edits and repeated elements.", thinkingLevel: "MINIMAL", maxOutputTokens: 8192 },
   { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", tier: "Economy+", description: "Superfast lightweight model for everyday modeling.", thinkingLevel: "MINIMAL", maxOutputTokens: 8192 },
   { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", tier: "Balanced", description: "Balanced speed and reasoning for layouts and reviews.", thinkingLevel: "LOW", maxOutputTokens: 12000 },
@@ -12,7 +13,7 @@ export const isAiModelId = (value: unknown): value is AiModelId => AI_MODELS.som
 export const modelDetails = (id: AiModelId) => AI_MODELS.find(model => model.id === id)!;
 
 export const AI_MODES = [
-  { id: "build", label: "Build", description: "Create or modify elements with a preview before applying." },
+  { id: "build", label: "Build", description: "Draw directly in 3D with workspace input locked while AI works." },
   { id: "review", label: "Review", description: "Assess layout, dimensions and selected elements. No model changes." },
   { id: "guide", label: "Guide", description: "Get modeling advice and step-by-step workflow help. No model changes." },
 ] as const;

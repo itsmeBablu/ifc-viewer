@@ -9,7 +9,7 @@ import { contextSchema, type AiAction, type AiContext, type AiPlan } from "./sch
 import { validatePlan } from "./validate";
 
 type State = ReturnType<typeof useLayoutDrawingStore.getState>;
-type Rows = Pick<State, "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes">;
+type Rows = Pick<State, "levels" | "walls" | "doors" | "windows" | "slabs" | "columns" | "beams" | "mepEquipment" | "ducts" | "pipes" | "cableTrays">;
 const collection = (kind: Exclude<AiAction["kind"], "delete">): keyof Rows => ({
   level: "levels",
   wall: "walls",
@@ -22,6 +22,7 @@ const collection = (kind: Exclude<AiAction["kind"], "delete">): keyof Rows => ({
   equipment: "mepEquipment",
   duct: "ducts",
   pipe: "pipes",
+  cabletray: "cableTrays",
 } as const)[kind];
 
 export function currentAiContext(): AiContext {
@@ -34,7 +35,7 @@ export function currentAiContext(): AiContext {
   add("level", s.levels); add("wall", s.walls); add("door", s.doors); add("window", s.windows);
   add("floor", s.slabs.filter(p => p.kind === "floor")); add("roof", s.slabs.filter(p => p.kind === "roof"));
   add("column", s.columns); add("beam", s.beams); add("equipment", s.mepEquipment);
-  add("duct", s.ducts); add("pipe", s.pipes);
+  add("cabletray", s.cableTrays); add("duct", s.ducts); add("pipe", s.pipes);
   return contextSchema.parse({
     projectId: s.projectId,
     activeLevelId: useToolMarkupStore.getState().markupFloorId ?? s.levels[0]?.id ?? null,
@@ -69,6 +70,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
     mepEquipment: state.mepEquipment,
     ducts: state.ducts,
     pipes: state.pipes,
+    cableTrays: state.cableTrays,
   };
   const copied = new Set<keyof Rows>();
   const aliases = new Map(plan.actions.filter(a => a.kind !== "delete" && a.operation === "create").map(a => [a.id, makeId()]));
@@ -142,14 +144,18 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
           startYmm: action.startYmm,
           endXmm: action.endXmm,
           endYmm: action.endYmm,
-          elevationMm: action.elevationMm ?? 2600,
+          elevationMm: action.elevationOffsetMm,
           shape: action.shape,
           widthMm: action.widthMm,
           heightMm: action.heightMm,
           diameterMm: action.diameterMm,
-          systemType: action.systemType,
+          systemType: action.systemType === "fresh_air" ? "outdoor" : action.systemType,
         };
         next.ducts = upsert(next.ducts, value); break;
+      }
+      case "cabletray": {
+        value = { ...next.cableTrays.find(row => row.id === id), ...common, levelId: resolve(action.levelId), startXmm: action.startXmm, startYmm: action.startYmm, endXmm: action.endXmm, endYmm: action.endYmm, elevationMm: action.elevationOffsetMm, widthMm: action.widthMm, heightMm: action.heightMm, trayType: action.trayType };
+        next.cableTrays = upsert(next.cableTrays, value); break;
       }
       case "pipe": {
         value = {
@@ -160,7 +166,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
           startYmm: action.startYmm,
           endXmm: action.endXmm,
           endYmm: action.endYmm,
-          elevationMm: action.elevationMm ?? 2500,
+          elevationMm: action.elevationOffsetMm,
           diameterMm: action.diameterMm,
           systemType: action.systemType,
           slopePercent: action.slopePercent,
@@ -174,7 +180,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
 }
 
 let applying = false;
-export async function applyAiPlan(plan: AiPlan, fingerprint: string) {
+export async function applyAiPlan(plan: AiPlan, fingerprint: string, live = false) {
   if (applying || isWerkzeugHistoryRestoring()) throw new Error("Another model operation is still running.");
   const fresh = () => aiFingerprint() === fingerprint && !isWerkzeugHistoryRestoring();
   if (!fresh()) throw new Error("The project changed. Generate a new preview before applying.");
@@ -190,6 +196,19 @@ export async function applyAiPlan(plan: AiPlan, fingerprint: string) {
       return () => { unsubscribe(); unsubscribeMarkup(); };
     });
     pushWerkzeugHistory();
+    if (live) {
+      // Persist atomically first, then reveal committed geometry in bounded visual batches.
+      const visible = { ...useLayoutDrawingStore.getState() };
+      for (let i = 0; i < changes.length; i++) {
+        const change = changes[i];
+        const key = change.store as keyof Rows;
+        Object.assign(visible, { [key]: [...visible[key].filter(row => row.id !== change.id), ...(change.value ? [change.value] : [])] });
+        if (i % 5 === 4 || i === changes.length - 1) {
+          useLayoutDrawingStore.setState(Object.fromEntries(Object.keys(next).map(key => [key, visible[key as keyof Rows]])));
+          await new Promise(resolve => setTimeout(resolve, 60));
+        }
+      }
+    }
     useLayoutDrawingStore.setState({
       ...next,
       selectedElements: [],
