@@ -4507,21 +4507,24 @@ body.mep-mode-active .ai-chat-panel,
 }
 
 /* Smooth rotating beam of light around the pop-up window in V-Yellow (Arch) or V-Blue (MEP) */
+/* Light ray optical profile: starts thin, thickens & glows brightly in the middle, and tapers back to thin */
 .ai-light-beam {
   position: absolute;
-  inset: -2px;
-  border-radius: 28px;
-  padding: 2.25px;
+  inset: -1.5px;
+  border-radius: 27px;
+  padding: 1.5px;
   background: conic-gradient(
     from var(--ai-beam-angle, 0deg),
     transparent 0deg,
-    transparent 60deg,
-    var(--ai-accent-glow, rgba(250, 204, 21, 0.25)) 100deg,
+    transparent 65deg,
+    rgba(250, 204, 21, 0.12) 95deg,
+    var(--ai-accent-glow, rgba(250, 204, 21, 0.45)) 120deg,
     var(--ai-accent, #facc15) 140deg,
-    #ffffff 155deg,
-    var(--ai-accent, #facc15) 170deg,
-    var(--ai-accent-glow, rgba(250, 204, 21, 0.25)) 210deg,
-    transparent 250deg,
+    #ffffff 152deg,
+    var(--ai-accent, #facc15) 164deg,
+    var(--ai-accent-glow, rgba(250, 204, 21, 0.45)) 184deg,
+    rgba(250, 204, 21, 0.12) 209deg,
+    transparent 239deg,
     transparent 360deg
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -4530,8 +4533,36 @@ body.mep-mode-active .ai-chat-panel,
   mask-composite: exclude;
   pointer-events: none;
   z-index: 50;
-  animation: ai-beam-spin 4.5s linear infinite;
-  filter: drop-shadow(0 0 6px var(--ai-accent-glow, rgba(250, 204, 21, 0.5)));
+  animation: ai-beam-spin 4s linear infinite;
+  filter: drop-shadow(0 0 5px var(--ai-accent-glow, rgba(250, 204, 21, 0.5)));
+}
+
+/* Radiant blooming head: creates the thick glowing light hotspot in the center of the beam */
+.ai-light-beam::after {
+  content: "";
+  position: absolute;
+  inset: -3.5px;
+  border-radius: 30px;
+  padding: 4px;
+  background: conic-gradient(
+    from var(--ai-beam-angle, 0deg),
+    transparent 0deg,
+    transparent 110deg,
+    var(--ai-accent-glow, rgba(250, 204, 21, 0.35)) 130deg,
+    var(--ai-accent, #facc15) 146deg,
+    #ffffff 152deg,
+    var(--ai-accent, #facc15) 158deg,
+    var(--ai-accent-glow, rgba(250, 204, 21, 0.35)) 174deg,
+    transparent 194deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  filter: blur(3px) drop-shadow(0 0 8px var(--ai-accent-glow, rgba(250, 204, 21, 0.75)));
+  opacity: 0.9;
 }
 
 body.mep-mode-active .ai-light-beam,
@@ -4539,16 +4570,35 @@ body.mep-mode-active .ai-light-beam,
   background: conic-gradient(
     from var(--ai-beam-angle, 0deg),
     transparent 0deg,
-    transparent 60deg,
-    rgba(56, 189, 248, 0.25) 100deg,
+    transparent 65deg,
+    rgba(56, 189, 248, 0.12) 95deg,
+    rgba(56, 189, 248, 0.45) 120deg,
     #38bdf8 140deg,
-    #ffffff 155deg,
-    #38bdf8 170deg,
-    rgba(56, 189, 248, 0.25) 210deg,
-    transparent 250deg,
+    #ffffff 152deg,
+    #38bdf8 164deg,
+    rgba(56, 189, 248, 0.45) 184deg,
+    rgba(56, 189, 248, 0.12) 209deg,
+    transparent 239deg,
     transparent 360deg
   );
-  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.5));
+  filter: drop-shadow(0 0 5px rgba(56, 189, 248, 0.5));
+}
+
+body.mep-mode-active .ai-light-beam::after,
+.ai-chat-panel[data-discipline="mep"] .ai-light-beam::after {
+  background: conic-gradient(
+    from var(--ai-beam-angle, 0deg),
+    transparent 0deg,
+    transparent 110deg,
+    rgba(56, 189, 248, 0.35) 130deg,
+    #38bdf8 146deg,
+    #ffffff 152deg,
+    #38bdf8 158deg,
+    rgba(56, 189, 248, 0.35) 174deg,
+    transparent 194deg,
+    transparent 360deg
+  );
+  filter: blur(3px) drop-shadow(0 0 8px rgba(56, 189, 248, 0.75));
 }
 
 @property --ai-beam-angle {

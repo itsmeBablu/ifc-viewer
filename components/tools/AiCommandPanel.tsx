@@ -14,7 +14,7 @@ import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
 import AiModelControls from "./AiModelControls";
 import AiMessageContent from "./AiMessageContent";
-import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2 } from "react-icons/lu";
+import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2, LuZap } from "react-icons/lu";
 
 function savedPreference(key: string) {
   try { return typeof window === "undefined" ? null : localStorage.getItem(key); } catch { return null; }
@@ -281,9 +281,32 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
           </div>
         )}
 
-        <div className="flex items-center justify-between px-1 text-[10.5px] text-[var(--text-muted)]">
-          <span>Context: {levelCount} {levelCount === 1 ? "level" : "levels"} · {selectedCount} selected</span>
-          {limit && <span>{limit.remaining}/{limit.total} requests remaining</span>}
+        <div className="ai-limits-bar flex items-center justify-between px-1.5 py-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[10.5px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="flex items-center gap-1 font-semibold text-[var(--text-strong)]">
+              <LuZap className="size-3 text-amber-400" />
+              <span>{modelDetails(model).maxOutputTokens.toLocaleString()} tokens max</span>
+            </span>
+            <span className="text-[var(--text-muted)] opacity-60">·</span>
+            <span className="text-[var(--text-muted)] truncate">
+              {levelCount} {levelCount === 1 ? "lvl" : "lvls"} · {selectedCount} sel
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className={`px-1.5 py-0.5 rounded-full font-bold text-[10px] ${
+                (limit?.remaining ?? 10) <= 2
+                  ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                  : (limit?.remaining ?? 10) <= 5
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  : "bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20"
+              }`}
+              title={`Rate limit: ${limit ? limit.remaining : 10} of 10 requests remaining in sliding 10-minute window`}
+            >
+              {limit ? limit.remaining : 10}/10 quota
+            </span>
+          </div>
         </div>
 
         <form onSubmit={submit} className="ai-composer">
