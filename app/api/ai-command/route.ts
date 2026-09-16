@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     limit = await limitAiUser(session.user.id);
     if (!limit.success) {
       const retryAfter = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
-      return reply({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, 429, { "Retry-After": String(retryAfter), "X-AI-Remaining": "0", "X-AI-Reset": String(limit.reset) });
+      return reply({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, 429, { "Retry-After": String(retryAfter), "X-AI-Remaining": "0", "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) });
     }
   } catch (error) {
     const message = error instanceof Error && error.message === "AI rate limiting is not configured."
@@ -52,13 +52,13 @@ export async function POST(request: Request) {
       : "Upstash rate limiting is unreachable right now. Check the Redis URL/token and try again later.";
     return reply({ error: message }, 503);
   }
-  try { return reply(await generateCommand(input), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset) }); }
+  try { return reply(await generateCommand(input), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
     const message = error instanceof Error && error.name === "TimeoutError"
       ? "AI took too long to respond. Try a smaller request."
       : error instanceof Error && !error.name.includes("Zod") && !(error instanceof TypeError) && !(error instanceof SyntaxError)
         ? error.message : "AI could not produce a valid response. Please try again.";
-    return reply({ error: message }, 502, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset) });
+    return reply({ error: message }, 502, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) });
   }
 }

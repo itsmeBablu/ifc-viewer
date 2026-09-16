@@ -42,7 +42,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("Reading your project");
-  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>(null);
+  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>({ remaining: 60, total: 60, reset: 0 });
   const [failedCommand, setFailedCommand] = useState<string | null>(null);
   const [deleteApproved, setDeleteApproved] = useState(false);
   const [appliedFingerprint, setAppliedFingerprint] = useState<string | null>(null);
@@ -94,17 +94,36 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     mountedRef.current = true;
     return () => { mountedRef.current = false; requestRef.current?.abort(); };
   }, []);
+
   useEffect(() => {
-    const container = historyRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
+    const scrollToBottom = () => {
+      const container = historyRef.current;
+      if (container) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    };
+    scrollToBottom();
+    const raf = requestAnimationFrame(scrollToBottom);
+    const timer = setTimeout(scrollToBottom, 80);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [history, busy]);
+
   useEffect(() => {
     const container = historyRef.current;
     if (!container) return;
-    const observer = new ResizeObserver(() => { container.scrollTop = container.scrollHeight; });
+    const observer = new ResizeObserver(() => {
+      container.scrollTop = container.scrollHeight;
+    });
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
+
   useEffect(() => {
     if (!busy) return;
     const stages = mode === "build" ? ["Reading your project", "Working through the layout", "Preparing your proposal"] : ["Reading your project", "Assessing the details", "Preparing recommendations"];
@@ -140,9 +159,17 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const remainingHeader = response.headers.get("X-AI-Remaining");
       const resetHeader = response.headers.get("X-AI-Reset");
+      const totalHeader = response.headers.get("X-AI-Total");
       const remaining = Number(remainingHeader);
       const reset = Number(resetHeader);
-      if (remainingHeader !== null && Number.isFinite(remaining)) setLimit({ total: 10, remaining, reset: resetHeader !== null && Number.isFinite(reset) ? reset : 0 });
+      const total = Number(totalHeader);
+      if (remainingHeader !== null && Number.isFinite(remaining)) {
+        setLimit({
+          total: Number.isFinite(total) && total > 0 ? total : 60,
+          remaining,
+          reset: resetHeader !== null && Number.isFinite(reset) ? reset : 0,
+        });
+      }
       const result = await response.json().catch(() => { throw new Error("AI could not return a response. Please try again in a moment."); });
       if (!result || typeof result !== "object") throw new Error("AI returned an empty response. Please try again.");
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "The AI request failed.");
