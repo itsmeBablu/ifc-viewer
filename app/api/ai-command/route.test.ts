@@ -9,7 +9,7 @@ import { limitAiUser } from "@/lib/ai/rateLimit";
 import { POST } from "./route";
 
 const body = { command: "Build a house", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } } };
-const request = (data = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
+const request = (data: unknown = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
 beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("AUTH_URL", "http://localhost:3000"); vi.mocked(limitAiUser).mockResolvedValue({ success: true, remaining: 9, reset: Date.now() + 60_000 }); });
 describe("AI command authorization", () => {
   it("rejects anonymous requests before calling Gemini", async () => {
@@ -25,10 +25,10 @@ describe("AI command authorization", () => {
   });
   it("accepts clarification history for a signed-in user", async () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
-    vi.mocked(generateCommand).mockResolvedValue({ kind: "clarification", message: "How many floors?" });
+    vi.mocked(generateCommand).mockResolvedValue({ kind: "clarification", message: "How many floors?", model: "gemini-3.1-flash-lite", mode: "build" });
     const response = await POST(request());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ kind: "clarification", message: "How many floors?" });
+    expect(await response.json()).toMatchObject({ kind: "clarification", message: "How many floors?" });
     expect(limitAiUser).toHaveBeenCalledWith("google-123");
   });
   it("blocks exhausted users and Redis outages before calling Gemini", async () => {
@@ -42,5 +42,32 @@ describe("AI command authorization", () => {
     expect(outage.status).toBe(503);
     expect((await outage.json()).error).toMatch(/unreachable/);
     expect(generateCommand).not.toHaveBeenCalled();
+  });
+  it("validates model and mode before consuming quota", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    expect((await POST(request({ ...body, model: "arbitrary-model" }))).status).toBe(400);
+    expect((await POST(request({ ...body, mode: "execute" }))).status).toBe(400);
+    expect(limitAiUser).not.toHaveBeenCalled();
+    expect(generateCommand).not.toHaveBeenCalled();
+  });
+  it("forwards explicit Pro and Review selections to the generator", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockResolvedValue({ kind: "advice", message: "Review", model: "gemini-3.1-pro-preview", mode: "review" });
+    expect((await POST(request({ ...body, model: "gemini-3.1-pro-preview", mode: "review" }))).status).toBe(200);
+    expect(generateCommand).toHaveBeenCalledWith(expect.objectContaining({ model: "gemini-3.1-pro-preview", mode: "review" }));
+  });
+  it("returns readable timeouts and usage headers when Gemini fails", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockRejectedValue(new DOMException("provider details", "TimeoutError"));
+    const response = await POST(request());
+    expect(response.status).toBe(502);
+    expect(response.headers.get("X-AI-Remaining")).toBe("9");
+    expect((await response.json()).error).toBe("AI took too long to respond. Try a smaller request.");
+  });
+  it("does not expose raw network errors", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockRejectedValue(new TypeError("private URL details"));
+    const response = await POST(request());
+    expect((await response.json()).error).toBe("AI could not produce a valid response. Please try again.");
   });
 });
