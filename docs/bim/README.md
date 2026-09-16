@@ -31,4 +31,10 @@ The complete response is validated and saved in one atomic transaction before co
 
 The displayed app allowance counts app requests, not Gemini quota. Gemini can return temporary upstream errors despite remaining allowance. Select another Gemini model or explicitly select Ollama; this cannot increase Google's quota or guarantee service availability.
 
+## Efficient creation
+
+Runtime [creation playbooks](../../lib/ai/playbooks/README.md) teach Gemini how to construct shells, walls/openings, equipment grids and MEP routes. Relevant guides, action schemas and catalogue rows are selected per request; broad tasks, files and edits keep the required vocabulary. Recipe expansion, fitting derivation, batch validation and persistence run in the tool rather than requiring the model to generate every repeated coordinate. Existing project geometry remains available for grounding and validation.
+
+Successful Gemini responses include actual token usage in chat. Temporary provider server/network failures use at most two retries on the selected Gemini model. One app request is counted for the overall operation. Provider quota failures do not trigger automatic retries or provider switching.
+
 Sources: [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs), [Gemini troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting).

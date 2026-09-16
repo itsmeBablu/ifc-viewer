@@ -21,6 +21,10 @@ export const compactCatalog = {
   rows: COMPONENT_CATALOG.map(p => [p.id, p.name, p.room, p.category, p.widthMm, p.depthMm, p.heightMm, p.elevationMm]),
 };
 
+export function catalogPrompt(items: typeof COMPONENT_CATALOG) {
+  return { columns: compactCatalog.columns, rows: items.map(p => [p.id, p.name, p.room, p.category, p.widthMm, p.depthMm, p.heightMm, p.elevationMm]) };
+}
+
 export function promptContext(context: CommandRequest["context"]) {
   return {
     ...context,

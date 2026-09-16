@@ -34,6 +34,18 @@ export function toolsForMode(mode: AiMode) {
   return mode === "build" ? functionDeclarations : functionDeclarations.filter(tool => tool.name !== "propose_model");
 }
 
+export function toolsForCreation(mode: AiMode, kinds: string[]) {
+  if (mode !== "build") return toolsForMode(mode);
+  const options = modelPlanSchema.shape.actions.element.options.filter(option => kinds.includes(option.shape.kind.value));
+  if (!options.length) return toolsForMode(mode);
+  const schema = modelPlanSchema.extend({
+    actions: z.array(z.discriminatedUnion("kind", options as [typeof options[number], ...typeof options[number][]])).min(1).max(150),
+  });
+  return functionDeclarations.map(tool => tool.name === "propose_model"
+    ? { ...tool, parametersJsonSchema: z.toJSONSchema(schema, { target: "draft-7" }) }
+    : tool);
+}
+
 export const modelReplySchema = z.object({
   candidates: z.array(z.object({
     finishReason: z.string().optional(),

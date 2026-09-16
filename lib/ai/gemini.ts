@@ -1,9 +1,11 @@
 import { BIM_DEFAULTS } from "@/lib/bim/defaults";
-import { toolsForMode, parseModelReply, type CommandRequest } from "./protocol";
+import { toolsForCreation, parseModelReply, type CommandRequest } from "./protocol";
 import { validatePlan } from "./validate";
-import { compactCatalog, promptContext, promptHistory } from "./prompt";
+import { catalogPrompt, promptContext, promptHistory } from "./prompt";
 import { aiModel } from "./model";
 import { modelDetails, type AiMode } from "./models";
+import { creationPlaybook } from "./playbooks";
+import { GeminiError } from "./providerError";
 
 const MODE_INSTRUCTIONS: Record<AiMode, string> = {
   build: "BUILD mode: propose actionable geometry when the brief is sufficient. Keep explanations simple, clear, and easy to read with short bullet points for dimensions and spatial layout, plus a direct next step. Answer design questions with answer_question. Use ask_clarification only for essential missing information.",
@@ -28,36 +30,78 @@ export const SYSTEM_PROMPT = [
 export async function generateCommand(input: CommandRequest) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("AI is not configured on this server. The site owner needs to add GEMINI_API_KEY from Google AI Studio and restart or redeploy.");
-  // Only an explicit selection or server default changes models. Never silently upgrade/retry.
+  // Every attempt uses the selected Gemini model; never silently switch providers.
   const model = aiModel(input.model);
   const settings = modelDetails(model);
   const mode = input.mode ?? "build";
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    signal: AbortSignal.timeout(240000),
-    cache: "no-store",
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT} ${MODE_INSTRUCTIONS[mode]} Discipline: ${input.discipline ?? "arch"}. Central concept defaults: ${JSON.stringify(BIM_DEFAULTS)}. Explicit prompt and project dimensions win. Preserve architecture in MEP unless explicitly asked. Use defaults for routine sizes and disclose assumptions.` }] },
+  const playbook = creationPlaybook(input);
+  const tools = toolsForCreation(mode, playbook.kinds);
+  const request = {
+      systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT} ${MODE_INSTRUCTIONS[mode]} Discipline: ${input.discipline ?? "arch"}. Explicit prompt and project dimensions win. Preserve architecture in MEP unless explicitly asked. Use defaults for routine sizes and disclose assumptions. Creation guide: ${JSON.stringify(playbook.guide)}. Return only fields supported by the supplied tools.` }] },
       contents: [
-        { role: "user", parts: [{ text: `Do not repeat the command or catalogue. Conversation may contain only recent turns; ask if essential earlier details are missing. Files are available only when attached to this request. Catalogue rows use the supplied columns (all dimensions in mm): ${JSON.stringify(compactCatalog)}` }] },
+        { role: "user", parts: [{ text: `Do not repeat the command or catalogue. Conversation contains recent complete turns; ask if essential earlier details are missing. Files are available only when attached to this request. Catalogue columns are in mm: ${JSON.stringify(catalogPrompt(playbook.catalog))}. Concept defaults: ${JSON.stringify({ architectural: BIM_DEFAULTS.architectural, ...(playbook.guide.some(guide => guide.id === "mep") ? { mep: BIM_DEFAULTS.mep } : {}) })}` }] },
         ...promptHistory(input.history).map(turn => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })),
         { role: "user", parts: [{ text: JSON.stringify({ command: input.command, project: promptContext(input.context), attachedFiles: input.attachments.map(file => file.name) }) }, ...input.attachments.map(file => ({ inlineData: { mimeType: file.mimeType, data: file.data } }))] },
       ],
-      tools: [{ functionDeclarations: toolsForMode(mode) }],
+      tools: [{ functionDeclarations: tools }],
+      // Constrained decoding rejects our mixed recipe/action union on the live API.
+      // AUTO accepts the documented JSON-schema declarations; local validation stays strict.
       toolConfig: { functionCallingConfig: { mode: "AUTO" } },
       generationConfig: { temperature: 0.2, maxOutputTokens: settings.maxOutputTokens, thinkingConfig: { thinkingLevel: settings.thinkingLevel } },
-    }),
-  });
+  };
+  const signal = AbortSignal.timeout(240000);
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        signal,
+        cache: "no-store",
+        body: JSON.stringify(request),
+      });
+    } catch {
+      if (signal.aborted) throw signal.reason;
+      if (attempt === 2) throw new GeminiError("Could not connect to Gemini. Your app allowance is separate from Google's service availability. Please try again.", "GEMINI_CONNECTION", 503);
+    }
+    if (response && ![408, 500, 502, 503, 504].includes(response.status)) break;
+    if (attempt === 2) break;
+    await response?.body?.cancel();
+    response = undefined;
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(signal.reason); };
+      const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 700 * 2 ** attempt + Math.random() * 300);
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
+    });
+  }
+  if (!response) throw new GeminiError("Gemini could not complete the request. Please try again.", "GEMINI_CONNECTION", 503);
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw new Error("Gemini could not authorize this server's API key. The site owner should check the key and project access in Google AI Studio, then restart or redeploy. Google sign-in alone does not grant API access.");
     if (response.status === 404) throw new Error(`${settings.label} is unavailable for this API project. Choose another model; no automatic fallback was used.`);
-    if (response.status === 429) throw new Error("Gemini's quota is exhausted. Please try again later.");
-    if (response.status === 400) throw new Error("Gemini rejected the request. Check that the API key is enabled for the Gemini API, then restart the server.");
-    throw new Error(`Gemini is temporarily unavailable upstream (HTTP ${response.status}). This is separate from the app request allowance. Try again or select Ollama.`);
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get("Retry-After"));
+      throw new GeminiError("Gemini's quota is exhausted or its request rate limit was reached. The app allowance does not measure Google's quota. Wait for Google's limit to reset or check the API project's limits in Google AI Studio.", "GEMINI_QUOTA", 429, retryAfter > 0 && Number.isFinite(retryAfter) ? Math.ceil(retryAfter) : undefined);
+    }
+    if (response.status === 400) throw new GeminiError("Gemini rejected the model or tool settings for this request. Try a smaller task or another Gemini model. The app allowance is unrelated to this error.", "GEMINI_REQUEST", 400);
+    throw new GeminiError(`Gemini is temporarily unavailable (HTTP ${response.status}) after bounded retries. Your app allowance remains separate. Please try again shortly.`, "GEMINI_UNAVAILABLE", 503);
   }
-  const result = parseModelReply(await response.json());
+  let envelope;
+  let result;
+  try {
+    envelope = await response.json();
+    result = parseModelReply(envelope);
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof Error && error.name.includes("Zod")) {
+      throw new GeminiError("Gemini returned a response that did not match the modeling tools. Nothing was applied. Try one smaller modeling step with explicit dimensions.", "GEMINI_INVALID_RESPONSE");
+    }
+    throw error;
+  }
   if (mode !== "build" && result.kind === "plan") throw new Error("Review and Guide cannot create changes. Switch to Build to request a preview.");
   if (result.kind === "plan") validatePlan(result.plan, input.context);
-  return { ...result, model, mode };
+  const metadata = envelope.usageMetadata;
+  const usage = metadata && [metadata.promptTokenCount, metadata.candidatesTokenCount].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)
+    ? { inputTokens: metadata.promptTokenCount as number, outputTokens: metadata.candidatesTokenCount as number,
+      thinkingTokens: typeof metadata.thoughtsTokenCount === "number" && Number.isFinite(metadata.thoughtsTokenCount) && metadata.thoughtsTokenCount >= 0 ? metadata.thoughtsTokenCount : 0 } : undefined;
+  return { ...result, model, mode, ...(usage ? { usage } : {}) };
 }

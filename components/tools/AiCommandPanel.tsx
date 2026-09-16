@@ -56,11 +56,8 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("Reading your project");
-  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>(() => ({
-    remaining: 1500,
-    total: 1500,
-    reset: Date.now() + 24 * 60 * 60 * 1000,
-  }));
+  const [limit, setLimit] = useState<{ remaining: number; total: number; reset: number } | null>(null);
+  const [usage, setUsage] = useState<{ inputTokens: number; outputTokens: number; thinkingTokens: number } | null>(null);
   const [, setTick] = useState(0);
   const [failedCommand, setFailedCommand] = useState<string | null>(null);
   const [deleteApproved, setDeleteApproved] = useState(false);
@@ -146,6 +143,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   };
 
   const clearHistory = () => {
+    setUsage(null);
     setHistory([]);
     setAttachments([]);
     setPending(null);
@@ -241,6 +239,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       const result = await response.json().catch(() => { throw new Error("AI could not return a response. Please try again in a moment."); });
       if (!result || typeof result !== "object") throw new Error("AI returned an empty response. Please try again.");
       if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "The AI request failed.");
+      if (result.usage && [result.usage.inputTokens, result.usage.outputTokens, result.usage.thinkingTokens].every((value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0)) setUsage(result.usage);
       if (controller.signal.aborted) return;
       const responseModel = isAiModelId(result.model) ? result.model : model;
       let message: string;
@@ -399,7 +398,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
               {/* Left: Real-time token count */}
               <div
                 className="flex items-center gap-1 shrink-0 font-semibold text-[var(--text-strong)]"
-                title={livePromptTokens > 0 ? `Live input: ~${livePromptTokens} tokens` : `${modelDetails(model).maxOutputTokens.toLocaleString()} max tokens`}
+                title={livePromptTokens > 0 ? `Your message only: ~${livePromptTokens} tokens. Project context and tools also use input tokens.` : "The output limit is a ceiling, not tokens charged per request."}
               >
                 <LuZap className={`size-3 shrink-0 ${mepModeActive ? "text-[#38bdf8]" : "text-amber-400"} ${livePromptTokens > 0 ? "animate-pulse" : ""}`} />
                 <span>
@@ -421,7 +420,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
                       ? "bg-gradient-to-r from-sky-500 via-[#38bdf8] to-cyan-300 shadow-[0_0_8px_rgba(56,189,248,0.55)]"
                       : "bg-gradient-to-r from-amber-500 via-[#facc15] to-yellow-200 shadow-[0_0_8px_rgba(250,204,21,0.55)]"
                   }`}
-                  style={{ width: `${Math.max(3, quotaPct)}%` }}
+                  style={{ width: `${limit ? Math.max(3, quotaPct) : 0}%` }}
                 >
                   <div className="ai-slider-shimmer" />
                   {/* Glowing Slider Thumb Indicator */}
@@ -436,21 +435,22 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
               </div>
 
               {/* Right: Quota % and Reset Time */}
-              <div className="flex items-center gap-1 shrink-0" title={`App request allowance (not provider quota): ${remainingQuota} of ${totalQuota} requests available`}>
+              <div className="flex items-center gap-1 shrink-0" title={limit ? `App requests (not Gemini quota): ${remainingQuota} of ${totalQuota} available` : "Checking app request allowance"}>
                 <span
                   className={`font-mono font-extrabold text-[11px] transition-colors tabular-nums ${
                     mepModeActive ? "text-[#38bdf8]" : "text-amber-500 dark:text-[#facc15]"
                   }`}
                 >
-                  {quotaPct}%
+                  {limit ? `${quotaPct}%` : "…"}
                 </span>
                 <span className="text-[10px] text-[var(--text-muted)] opacity-80 whitespace-nowrap">
-                  app allowance{resetText ? ` · ${resetText}` : ""}
+                  app requests{resetText ? ` · ${resetText}` : ""}
                 </span>
               </div>
             </div>
           );
         })()}
+        {usage && <p className="ai-text-muted text-[10px] px-1" title="Actual token counts reported by Gemini for the last successful request.">Last Gemini request: {usage.inputTokens.toLocaleString()} input · {usage.outputTokens.toLocaleString()} output{usage.thinkingTokens > 0 ? ` · ${usage.thinkingTokens.toLocaleString()} thinking` : ""} tokens</p>}
 
         <form onSubmit={submit} className="ai-composer">
           <AiModelControls

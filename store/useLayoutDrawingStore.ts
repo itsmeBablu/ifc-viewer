@@ -2,6 +2,7 @@
 import { nextOpeningOrientation, type OpeningOrientation } from "@/lib/openingOrientation";
 import { isMepSelectionLocked } from "@/lib/mepSelectionLock";
 import { connectMepSegment, mepOffset, mepEndpoints, type MepSnapPoint } from "@/lib/mepConnections";
+import { matchesRequestedPort, equipmentRoutePorts } from "@/lib/mepConnectorRouting";
 
 import { reflowKitchenRun } from "@/lib/componentPlacement";
 import { normalizeParametricFurniture } from "@/lib/parametricFurniture";
@@ -5614,7 +5615,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
           (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
-          if (dStart <= 350 && !(dd.start as MepSnapPoint).mepEndpoint) {
+          if (dStart <= 350 && !(dd.start as MepSnapPoint).mepEndpoint && matchesRequestedPort(dd.start, eq.id, c.id)) {
             startX = Math.round(c.worldXmm);
             startY = Math.round(c.worldYmm);
             startConnectorId = c.id;
@@ -5635,7 +5636,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
           (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
-          if (dEnd <= 350 && !(dd.cursor as MepSnapPoint).mepEndpoint) {
+          if (dEnd <= 350 && !(dd.cursor as MepSnapPoint).mepEndpoint && matchesRequestedPort(dd.cursor, eq.id, c.id)) {
             endX = Math.round(c.worldXmm);
             endY = Math.round(c.worldYmm);
             endConnectorId = c.id;
@@ -5816,7 +5817,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
           (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dStart = Math.hypot(startX - c.worldXmm, startY - c.worldYmm);
-          if (dStart <= 350 && !(pd.start as MepSnapPoint).mepEndpoint) {
+          if (dStart <= 350 && !(pd.start as MepSnapPoint).mepEndpoint && matchesRequestedPort(pd.start, eq.id, c.id)) {
             startX = Math.round(c.worldXmm);
             startY = Math.round(c.worldYmm);
             startConnectorId = c.id;
@@ -5837,7 +5838,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
           (row.connectedStartEquipmentId === eq.id && row.startConnectorId === c.id) ||
           (row.connectedEndEquipmentId === eq.id && row.endConnectorId === c.id))) {
           const dEnd = Math.hypot(endX - c.worldXmm, endY - c.worldYmm);
-          if (dEnd <= 350 && !(pd.cursor as MepSnapPoint).mepEndpoint) {
+          if (dEnd <= 350 && !(pd.cursor as MepSnapPoint).mepEndpoint && matchesRequestedPort(pd.cursor, eq.id, c.id)) {
             endX = Math.round(c.worldXmm);
             endY = Math.round(c.worldYmm);
             endConnectorId = c.id;
@@ -6335,10 +6336,20 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     };
     pushWerkzeugHistory();
     Object.assign(wire, connectMepSegment("wire", wire, get(), get().wireDraw?.start ?? undefined, get().wireDraw?.cursor ?? undefined));
+    for (const endpoint of ["start", "end"] as const) {
+      const point = endpoint === "start" ? wd.start : wd.cursor;
+      const requested = (point as MepSnapPoint).equipmentConnector;
+      const equipment = s.mepEquipment.find(e => e.id === requested?.equipmentId && e.levelId === wd.levelId);
+      const port = equipment && equipmentRoutePorts(equipment, s).find(p => p.kind === "wire" && p.connector.id === requested?.connectorId);
+      if (port && Math.abs(port.point.elevationMm! - wire.elevationMm!) <= 25) {
+        wire[endpoint === "start" ? "connectedStartEquipmentId" : "connectedEndEquipmentId"] = equipment!.id;
+        wire[endpoint === "start" ? "startConnectorId" : "endConnectorId"] = port.connector.id;
+      }
+    }
     await idbPutWire(wire);
     set((prev) => ({
       wires: [...prev.wires, wire],
-      wireDraw: prev.mepChainDrawing && prev.wireDraw?.start === wd.start && !wire.endConnection
+      wireDraw: prev.mepChainDrawing && prev.wireDraw?.start === wd.start && !wire.endConnection && !wire.connectedEndEquipmentId
         ? { ...wd, start: { xMm: wire.endXmm, yMm: wire.endYmm }, cursor: null } : null,
       selectedWireId: wire.id,
       selectedElements: [{ kind: "wire" as any, id: wire.id }],

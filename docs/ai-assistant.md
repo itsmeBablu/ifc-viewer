@@ -2,6 +2,10 @@
 
 See [AI BIM modeling](bim/README.md) for the current direct-drawing workflow, Arch/MEP defaults and Ollama setup. Build now applies validated changes automatically; the preview-approval descriptions below document the earlier release. The current app request allowance is 1,500 per 24 hours with counted memory fallback when Redis is unavailable. It does not represent Google provider quota.
 
+Gemini loads relevant runtime [creation playbooks](../lib/ai/playbooks/README.md) and focused action schemas/catalogue rows. It interprets the brief; code expands bounded recipes and validates the entire batch. The chat shows actual input/output/thinking tokens reported by Gemini after successful requests. The live typing estimate covers only the user's message, and model output limits are ceilings rather than tokens charged automatically.
+
+Temporary server/network errors are retried at most twice with backoff on the same selected Gemini model, under one overall deadline. Google quota, key, model-access, request-schema and invalid-output errors are not retried or silently sent to Ollama. Error responses distinguish Gemini quota (HTTP 429) from app requests, with app usage headers retained.
+
 # AI modeling assistant setup
 
 AI access requires Google sign-in. Manual modeling remains public. Projects remain in this browser's IndexedDB; signing in does not add cloud storage or synchronization.
