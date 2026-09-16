@@ -7,6 +7,13 @@ import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiCommandPanel from "./AiCommandPanel";
 
+function animateAssistantIcon(icon: Element | null) {
+  if (!icon) return;
+  gsap.fromTo(icon, { y: 0, rotation: 0 }, {
+    y: -3, rotation: 12, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true,
+  }).totalTime(gsap.globalTimeline.time());
+}
+
 function usePanelMorphAnimation(
   panelRef: React.RefObject<HTMLElement | null>,
   capRef: React.RefObject<HTMLElement | null>,
@@ -16,54 +23,70 @@ function usePanelMorphAnimation(
 
   const closingRef = useRef(false);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
-  const targetRef = useRef({ x: 0, y: 0, width: 46, height: 46 });
+
   const handleClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     const panel = panelRef.current;
-    if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { onCloseComplete(); return; }
+    if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onCloseComplete();
+      return;
+    }
     timelineRef.current?.kill();
     const rect = panel.getBoundingClientRect();
-    const trigger = getTriggerRect();
-    const target = targetRef.current;
-    if (trigger) {
-      target.x = trigger.left - rect.left + Number(gsap.getProperty(panel, "x"));
-      target.y = trigger.top - rect.top + Number(gsap.getProperty(panel, "y"));
+    const trigger = getTriggerRect() ?? rect;
+    const inner = panel.querySelector<HTMLElement>(".ai-chat-inner");
+    const icon = capRef.current;
+    const iconRect = icon?.getBoundingClientRect();
+    // Keep the current content layout even when closing midway through opening.
+    if (inner && !inner.style.width) {
+      gsap.set(inner, { width: panel.clientWidth, height: panel.clientHeight });
     }
-    const inner = panel.querySelector(".ai-chat-inner");
-    gsap.set(inner, { width: rect.width - 2, height: rect.height - 2 });
+    // Width/height must not move a right/bottom-anchored shell as it shrinks.
+    gsap.set(panel, { left: rect.left, top: rect.top, right: "auto", bottom: "auto", x: 0, y: 0,
+      width: rect.width, height: rect.height });
     timelineRef.current = gsap.timeline({ onComplete: onCloseComplete })
       .to(panel.querySelectorAll("[data-ai-stagger]"), { autoAlpha: 0, duration: .12 }, 0)
-      .to(panel, { ...target, borderRadius: target.width / 2, "--ai-glass-fill": "rgba(253,230,138,.65)", duration: .5, ease: "power3.inOut" }, .04);
-    if (capRef.current) {
-      const icon = capRef.current;
-      const iconRect = icon.getBoundingClientRect();
-      timelineRef.current.to(icon, { x: rect.left + target.width / 2 - iconRect.left - iconRect.width / 2,
-        y: rect.top + target.height / 2 - iconRect.top - iconRect.height / 2, duration: .5, ease: "power3.inOut" }, .04);
+      .to(panel, { left: trigger.left, top: trigger.top, width: trigger.width, height: trigger.height,
+        borderRadius: trigger.width / 2, "--ai-glass-fill": "rgba(253,230,138,.65)",
+        duration: .5, ease: "power3.inOut" }, .04);
+    if (icon && iconRect) {
+      timelineRef.current.to(icon, {
+        x: Number(gsap.getProperty(icon, "x")) + trigger.width / 2 - (iconRect.left + iconRect.width / 2 - rect.left),
+        y: Number(gsap.getProperty(icon, "y")) + trigger.height / 2 - (iconRect.top + iconRect.height / 2 - rect.top),
+        duration: .5, ease: "power3.inOut",
+      }, .04);
     }
   };
+
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
     closingRef.current = false;
     const ctx = gsap.context(() => {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      animateAssistantIcon(capRef.current?.querySelector("img") ?? null);
       const rect = panel.getBoundingClientRect();
-      const trigger = getTriggerRect();
-      const target = { x: (trigger?.left ?? rect.right - 46) - rect.left, y: (trigger?.top ?? rect.bottom - 46) - rect.top,
-        width: trigger?.width ?? 46, height: trigger?.height ?? 46 };
-      targetRef.current = target;
+      const trigger = getTriggerRect() ?? rect;
       const inner = panel.querySelector(".ai-chat-inner");
       const icon = capRef.current;
       const iconRect = icon?.getBoundingClientRect();
-      gsap.set(inner, { width: rect.width - 2, height: rect.height - 2 });
-      gsap.set(panel, { ...target, borderRadius: target.width / 2, "--ai-glass-fill": "rgba(253,230,138,.65)" });
-      if (icon && iconRect) gsap.set(icon, { x: rect.left + target.width / 2 - iconRect.left - iconRect.width / 2,
-        y: rect.top + target.height / 2 - iconRect.top - iconRect.height / 2 });
+      gsap.set(inner, { width: panel.clientWidth, height: panel.clientHeight });
+      gsap.set(panel, { left: trigger.left, top: trigger.top, right: "auto", bottom: "auto",
+        width: trigger.width, height: trigger.height, borderRadius: trigger.width / 2,
+        "--ai-glass-fill": "rgba(253,230,138,.65)" });
+      if (icon && iconRect) {
+        gsap.set(icon, { x: trigger.width / 2 - (iconRect.left + iconRect.width / 2 - rect.left),
+          y: trigger.height / 2 - (iconRect.top + iconRect.height / 2 - rect.top) });
+      }
       timelineRef.current = gsap.timeline()
-        .to(panel, { x: 0, y: 0, width: rect.width, height: rect.height, borderRadius: 26,
+        .to(panel, { left: rect.left, top: rect.top, width: rect.width, height: rect.height, borderRadius: 26,
           "--ai-glass-fill": "rgba(255,255,255,.82)", duration: .58, ease: "power3.inOut",
-          onComplete: () => { gsap.set([panel, inner], { clearProps: "width,height" }); } }, 0)
+          onComplete: () => {
+            // Return sizing to CSS so viewport changes continue to reflow the chat.
+            gsap.set(panel, { clearProps: "left,top,right,bottom,width,height,borderRadius" });
+            gsap.set(inner, { clearProps: "width,height" });
+          } }, 0)
         .fromTo(panel.querySelectorAll("[data-ai-stagger]"), { autoAlpha: 0, y: 8 },
           { autoAlpha: 1, y: 0, duration: .22, stagger: .025 }, .32);
       if (icon) timelineRef.current.to(icon, { x: 0, y: 0, duration: .58, ease: "power3.inOut" }, 0);
@@ -125,11 +148,11 @@ function AssistantPanel({
     >
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
-      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-4">
+      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-2.5">
 
       <div className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div ref={capRef} className="flex items-center justify-center shrink-0">
+          <div ref={capRef} className="ai-orb-icon shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <div data-ai-stagger>
@@ -294,11 +317,11 @@ function UnconfiguredPanel({
     >
       {/* Smooth rotating beam of light around perimeter */}
       <div className="ai-light-beam" aria-hidden="true" />
-      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-4">
+      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-2.5">
 
       <div className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div ref={capRef} className="flex items-center justify-center shrink-0">
+          <div ref={capRef} className="ai-orb-icon shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <h2 data-ai-stagger className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
@@ -344,7 +367,7 @@ export default function AiAssistant() {
   useLayoutEffect(() => {
     if (!orbRef.current || !ringRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const ctx = gsap.context(() => {
-      gsap.to(orbRef.current, { y: -3, rotation: 12, duration: 1.8, ease: "sine.inOut", repeat: -1, yoyo: true });
+      animateAssistantIcon(orbRef.current?.querySelector("img") ?? null);
       gsap.to(ringRef.current, { rotation: 360, duration: 8, repeat: -1, ease: "none" });
     }, triggerRef);
     return () => ctx.revert();
@@ -357,10 +380,10 @@ export default function AiAssistant() {
     if (configured !== null) setOpen(true);
   };
 
-  const handleCloseComplete = () => {
+  const handleCloseComplete = useCallback(() => {
     setOpen(false);
     triggerRef.current?.focus({ preventScroll: true });
-  };
+  }, []);
 
   const getTriggerRect = useCallback(() => {
     if (triggerRef.current) {
