@@ -1,5 +1,4 @@
 import { AI_MODELS, AI_MODES, isAiModelId, modelDetails, type AiModelId, type AiMode } from "@/lib/ai/models";
-import { LuChevronDown } from "react-icons/lu";
 
 type Props = {
   model: AiModelId;
@@ -38,7 +37,7 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
         })}
       </div>
 
-      {/* Model selector dropdown */}
+      {/* Model selector dropdown (single modern arrow from select styling) */}
       <div className="relative flex items-center" title={selectedModel.description}>
         <select
           id="ai-model"
@@ -48,7 +47,7 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
           onChange={event => {
             if (isAiModelId(event.target.value)) onModel(event.target.value);
           }}
-          className="h-6.5 cursor-pointer appearance-none rounded-lg border border-[var(--panel-divider)]/50 bg-[var(--surface-card)]/70 pl-2 pr-5 text-[11px] font-medium text-[var(--text-strong)] hover:border-amber-400/50 focus:outline-none transition-colors"
+          className="h-6.5 cursor-pointer rounded-lg text-[11px] font-semibold"
         >
           {AI_MODELS.map(option => (
             <option key={option.id} value={option.id}>
@@ -56,8 +55,8 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
             </option>
           ))}
         </select>
-        <LuChevronDown className="pointer-events-none absolute right-1.5 size-3 text-[var(--text-muted)]" />
       </div>
     </div>
   );
 }
+

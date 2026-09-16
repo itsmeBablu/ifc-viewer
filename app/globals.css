@@ -1128,76 +1128,86 @@ body.pdf-capturing .pdf-capture-hide {
   color: inherit !important;
 }
 
-/* V Studio property selects: replace the native browser dropdown chrome. */
-:is(.tool-chrome, body.werkzeug-active) select:not([multiple]) {
-  appearance: none;
-  min-height: 30px;
-  padding-right: 2rem !important;
-  border: 1px solid var(--panel-divider);
-  border-radius: 8px;
-  background-color: var(--surface-overlay);
-  color: var(--text-strong);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.55rem center;
-  background-size: 14px 14px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-}
-
-:is(.tool-chrome, body.werkzeug-active) select:not([multiple]):hover {
-  border-color: color-mix(in srgb, #eab308 55%, var(--panel-divider));
-}
-
-:is(.tool-chrome, body.werkzeug-active) select:not([multiple]):focus,
-:is(.tool-chrome, body.werkzeug-active) select:not([multiple]):focus-visible {
-  border-color: #eab308;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(250,204,21,.25);
-}
-:is(.tool-chrome, body.werkzeug-active) select:not([multiple]):disabled {
-  cursor: not-allowed;
-  opacity: .48;
-}
-:is(.tool-chrome, body.werkzeug-active) select option {
-  background: var(--popover-bg);
-  color: var(--text-strong);
-}
-.vstudio-select {
+/* ── V Studio & /werkzeug modern select dropdown styling ───────────────── */
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]),
+select.vstudio-select {
   appearance: none !important;
-  min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--panel-divider) 76%, white 24%) !important;
-  border-radius: 11px !important;
-  padding: 0 2rem 0 .65rem !important;
-  background-color: color-mix(in srgb, var(--glass-inset-bg) 76%, white 24%) !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ca8a04' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right .55rem center !important;
-  background-size: 14px 14px !important;
-  color: var(--text-strong) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.78), 0 4px 12px rgba(15,23,42,.07) !important;
-  cursor: pointer;
-}
-.vstudio-select-compact {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
   min-height: 28px;
+  padding: 4px 26px 4px 9px !important;
+  border: 1px solid var(--panel-divider) !important;
   border-radius: 9px !important;
-  padding-left: .5rem !important;
+  background-color: var(--surface-card) !important;
+  color: var(--text-strong) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 12px 12px !important;
+  outline: none !important;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.4;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
 }
-.vstudio-select:hover {
-  border-color: rgba(234,179,8,.7) !important;
-  background-color: color-mix(in srgb, var(--glass-inset-bg) 64%, #fef9c3 36%) !important;
+
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]):hover,
+select.vstudio-select:hover {
+  border-color: rgba(250, 204, 21, 0.65) !important;
+  background-color: var(--surface-overlay) !important;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
 }
-.vstudio-select:focus-visible {
-  border-color: #eab308 !important;
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(250,204,21,.2), inset 0 1px 0 rgba(255,255,255,.84) !important;
+
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]):focus,
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]):focus-visible,
+select.vstudio-select:focus,
+select.vstudio-select:focus-visible {
+  border-color: #facc15 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2.5px rgba(250, 204, 21, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
 }
-.vstudio-select option {
-  padding: .55rem .7rem;
-  background: var(--popover-bg);
-  color: var(--text-strong);
-  font-weight: 600;
+
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]):disabled,
+select.vstudio-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  border-color: var(--panel-divider) !important;
+  box-shadow: none !important;
+}
+
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select::-ms-expand,
+select.vstudio-select::-ms-expand {
+  display: none !important;
+}
+
+:is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select option,
+select.vstudio-select option {
+  background-color: var(--surface-card) !important;
+  color: var(--text-strong) !important;
+  padding: 6px 10px;
+}
+
+:is([data-theme="dark"], .dark) :is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select:not([multiple]),
+:is([data-theme="dark"], .dark) select.vstudio-select {
+  background-color: #1e2029 !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23facc15' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+:is([data-theme="dark"], .dark) :is(.tool-chrome, body.werkzeug-active, .ai-chat-panel, .ai-composer) select option,
+:is([data-theme="dark"], .dark) select.vstudio-select option {
+  background-color: #1a1c24 !important;
+  color: #f4f4f5 !important;
+}
+
+.vstudio-select-compact {
+  min-height: 26px !important;
+  padding: 2px 22px 2px 7px !important;
+  border-radius: 7px !important;
+  font-size: 10.5px !important;
 }
 
 /* Reusable Werkzeug controls: one modern glass interaction language. */

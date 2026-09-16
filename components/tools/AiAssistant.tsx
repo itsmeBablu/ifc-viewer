@@ -7,13 +7,118 @@ import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import AiCommandPanel from "./AiCommandPanel";
 
-function AssistantPanel({ close }: { close: () => void }) {
+function usePanelMorphAnimation(
+  panelRef: React.RefObject<HTMLElement | null>,
+  getTriggerRect: () => DOMRect | null,
+  onCloseComplete: () => void
+) {
+  const isClosingRef = useRef(false);
+
+  const handleClose = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onCloseComplete();
+      return;
+    }
+    const panel = panelRef.current;
+    const panelRect = panel.getBoundingClientRect();
+    const tr = getTriggerRect() ?? {
+      left: panelRect.right - 46,
+      top: panelRect.bottom - 46,
+      width: 46,
+      height: 46,
+    };
+    const deltaX = tr.left + tr.width / 2 - (panelRect.left + panelRect.width / 2);
+    const deltaY = tr.top + tr.height / 2 - (panelRect.top + panelRect.height / 2);
+    const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+
+    gsap.to(panel.querySelectorAll("[data-ai-stagger]"), {
+      autoAlpha: 0,
+      y: 6,
+      duration: 0.12,
+      ease: "power2.in",
+    });
+
+    gsap.to(panel, {
+      x: deltaX,
+      y: deltaY,
+      scale: initialScale,
+      borderRadius: 100,
+      filter: "drop-shadow(0 0 16px rgba(250,204,21,0.75))",
+      autoAlpha: 0,
+      duration: 0.35,
+      ease: "power3.inOut",
+      onComplete: () => {
+        onCloseComplete();
+      },
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const panel = panelRef.current;
+    const panelRect = panel.getBoundingClientRect();
+    const tr = getTriggerRect() ?? {
+      left: panelRect.right - 46,
+      top: panelRect.bottom - 46,
+      width: 46,
+      height: 46,
+    };
+    const deltaX = tr.left + tr.width / 2 - (panelRect.left + panelRect.width / 2);
+    const deltaY = tr.top + tr.height / 2 - (panelRect.top + panelRect.height / 2);
+    const initialScale = Math.max(0.08, Math.min(tr.width / panelRect.width, tr.height / panelRect.height));
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        panel,
+        {
+          x: deltaX,
+          y: deltaY,
+          scale: initialScale,
+          borderRadius: 100,
+          autoAlpha: 0.2,
+          filter: "drop-shadow(0 0 16px rgba(250,204,21,0.75))",
+          transformOrigin: "center center",
+        },
+        {
+          x: 0,
+          y: 0,
+          scale: 1,
+          borderRadius: 26,
+          autoAlpha: 1,
+          filter: "drop-shadow(0 0 0px rgba(250,204,21,0))",
+          duration: 0.44,
+          ease: "power3.out",
+        }
+      );
+      gsap.fromTo(
+        panel.querySelectorAll("[data-ai-stagger]"),
+        { autoAlpha: 0, y: 10 },
+        { autoAlpha: 1, y: 0, duration: 0.28, stagger: 0.04, delay: 0.14, ease: "power2.out" }
+      );
+    }, panelRef);
+    return () => ctx.revert();
+  }, [panelRef, getTriggerRect]);
+
+  return { handleClose };
+}
+
+function AssistantPanel({
+  getTriggerRect,
+  onCloseComplete,
+}: {
+  getTriggerRect: () => DOMRect | null;
+  onCloseComplete: () => void;
+}) {
   const { data: session, status } = useSession();
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
   const panelRef = useRef<HTMLElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const { handleClose } = usePanelMorphAnimation(panelRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -22,26 +127,21 @@ function AssistantPanel({ close }: { close: () => void }) {
       }
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setUserMenuOpen(false);
+      if (e.key === "Escape") {
+        if (userMenuOpen) {
+          setUserMenuOpen(false);
+        } else {
+          handleClose();
+        }
+      }
     }
-    if (userMenuOpen) {
-      window.addEventListener("pointerdown", onPointerDown);
-      window.addEventListener("keydown", onKeyDown);
-    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [userMenuOpen]);
-
-  useLayoutEffect(() => {
-    if (!panelRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(panelRef.current, { autoAlpha: 0, y: 22, scale: 0.94, transformOrigin: "bottom right" }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.42, ease: "power3.out" });
-      gsap.fromTo("[data-ai-stagger]", { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.28, stagger: 0.045, delay: 0.12, ease: "power2.out" });
-    }, panelRef);
-    return () => ctx.revert();
-  }, []);
+  }, [userMenuOpen, handleClose]);
 
   return (
     <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl">
@@ -146,7 +246,7 @@ function AssistantPanel({ close }: { close: () => void }) {
               )}
             </div>
           )}
-          <button className="ai-chat-close" onClick={close} aria-label="Close AI assistant">
+          <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
             <LuX />
           </button>
         </div>
@@ -180,47 +280,66 @@ function AssistantPanel({ close }: { close: () => void }) {
   );
 }
 
-function AuthStatusGate({ close }: { close: () => void }) {
-  const [configured, setConfigured] = useState<boolean | null>(null);
+function UnconfiguredPanel({
+  getTriggerRect,
+  onCloseComplete,
+}: {
+  getTriggerRect: () => DOMRect | null;
+  onCloseComplete: () => void;
+}) {
+  const panelRef = useRef<HTMLElement>(null);
+  const { handleClose } = usePanelMorphAnimation(panelRef, getTriggerRect, onCloseComplete);
+
   useEffect(() => {
-    let active = true;
-    void fetch("/api/auth/status", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() as Promise<{ configured?: boolean }> : Promise.reject(new Error("status")))
-      .then((result) => { if (active) setConfigured(result.configured === true); })
-      .catch(() => { if (active) setConfigured(false); });
-    return () => { active = false; };
-  }, []);
-  if (configured === null) {
-    return (
-      <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl">
-        <p className="ai-chat-loading">Checking AI sign-in configuration…</p>
-      </section>
-    );
-  }
-  if (!configured) {
-    return (
-      <section aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl">
-        <div className="ai-chat-header mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="ai-chat-status-dot" />
-            <h2 className="font-semibold">V Studio Assistant</h2>
-          </div>
-          <button className="ai-chat-close" onClick={close} aria-label="Close AI assistant">
-            <LuX />
-          </button>
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") handleClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleClose]);
+
+  return (
+    <section ref={panelRef} aria-label="AI modeling assistant" className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl">
+      <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="ai-chat-status-dot" />
+          <h2 className="font-semibold">V Studio Assistant</h2>
         </div>
-        <p>Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.</p>
-      </section>
-    );
-  }
-  return <SessionProvider><AssistantPanel close={close} /></SessionProvider>;
+        <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
+          <LuX />
+        </button>
+      </div>
+      <p data-ai-stagger className="text-xs ai-text-body">
+        Google sign-in is not configured on this server yet. Add <code>AUTH_SECRET</code>, <code>AUTH_GOOGLE_ID</code>, and <code>AUTH_GOOGLE_SECRET</code>, then restart the server. Manual modeling remains available.
+      </p>
+    </section>
+  );
 }
 
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRectRef = useRef<DOMRect | null>(null);
   const orbRef = useRef<HTMLSpanElement>(null);
   const ringRef = useRef<HTMLSpanElement>(null);
+
+  // Preflight auth configuration on mount so there is no flickering/re-morphing
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/auth/status", { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<{ configured?: boolean }>) : Promise.reject(new Error("status"))))
+      .then((result) => {
+        if (active) setConfigured(result.configured === true);
+      })
+      .catch(() => {
+        if (active) setConfigured(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (!orbRef.current || !ringRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const ctx = gsap.context(() => {
@@ -229,17 +348,76 @@ export default function AiAssistant() {
     }, triggerRef);
     return () => ctx.revert();
   }, []);
-  return <>
-    <button
-      ref={triggerRef}
-      onClick={() => setOpen(!open)}
-      aria-expanded={open}
-      aria-label={open ? "Close AI assistant" : "Open AI assistant"}
-      className="ai-orb-trigger fixed bottom-4 right-4 z-[100] flex items-center justify-center rounded-full shadow-xl"
-    >
-      <span ref={ringRef} aria-hidden className="ai-orb-ring" />
-      <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
-    </button>
-    {open && <AuthStatusGate close={() => setOpen(false)} />}
-  </>;
+
+  const handleOpen = () => {
+    if (triggerRef.current) {
+      triggerRectRef.current = triggerRef.current.getBoundingClientRect();
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        gsap.to(triggerRef.current, {
+          scale: 0.25,
+          autoAlpha: 0,
+          duration: 0.18,
+          ease: "power2.in",
+        });
+      } else {
+        gsap.set(triggerRef.current, { autoAlpha: 0 });
+      }
+    }
+    setOpen(true);
+  };
+
+  const handleCloseComplete = () => {
+    setOpen(false);
+    if (triggerRef.current) {
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        gsap.fromTo(
+          triggerRef.current,
+          { scale: 0.2, autoAlpha: 0, rotation: -30 },
+          { scale: 1, autoAlpha: 1, rotation: 0, duration: 0.45, ease: "back.out(2)" }
+        );
+      } else {
+        gsap.set(triggerRef.current, { autoAlpha: 1, scale: 1 });
+      }
+    }
+  };
+
+  const getTriggerRect = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return rect;
+    }
+    return triggerRectRef.current;
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={handleOpen}
+        aria-expanded={open}
+        aria-label="Open AI assistant"
+        style={{ pointerEvents: open ? "none" : "auto" }}
+        className="ai-orb-trigger fixed bottom-4 right-4 z-[100] flex items-center justify-center rounded-full shadow-xl"
+      >
+        <span ref={ringRef} aria-hidden className="ai-orb-ring" />
+        <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
+      </button>
+
+      {open && configured !== false && (
+        <SessionProvider>
+          <AssistantPanel
+            getTriggerRect={getTriggerRect}
+            onCloseComplete={handleCloseComplete}
+          />
+        </SessionProvider>
+      )}
+
+      {open && configured === false && (
+        <UnconfiguredPanel
+          getTriggerRect={getTriggerRect}
+          onCloseComplete={handleCloseComplete}
+        />
+      )}
+    </>
+  );
 }
