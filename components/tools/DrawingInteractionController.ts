@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { constrainedDrawingPoint, mepRunKind, segmentDimensions } from "@/lib/drawingInteraction";
 import { currentMepDrawing, cancelMepDrawing, placeMepPoint, changeMepDrawingLevel } from "./mepDrawingActions";
 import { mepEndpoints, type MepSnapPoint } from "@/lib/mepConnections";
-import { getEquipmentConnectors } from "@/lib/layoutDrawing";
 import { snapElevatedEndpoints, type GlobalSnapType } from "@/lib/globalSnapping";
 import { undoWerkzeug } from "@/lib/werkzeugHistory";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
@@ -14,6 +13,8 @@ import { meshDrawingEdges, nearestDrawingEdge, projectDrawingEdges } from "@/lib
 import { underlaySnapSegmentsWorld } from "@/lib/underlaySnap";
 import { snapMeshMeasurement } from "@/lib/measurementSnap";
 import { collectRaycastCandidates } from "@/lib/modifySelection";
+import { equipmentRoutePorts } from "@/lib/mepConnectorRouting";
+import { installMepRouteHandles } from "./MepRouteHandles";
 
 type Options = {
   canvas: HTMLCanvasElement;
@@ -120,8 +121,8 @@ export function installDrawingInteractionController(options: Options) {
         const aperture = { camera, canvas: snapCanvas, clientPos: { x, y }, activeModes: layout.planSnapModes, tolerancePx: pointer?.touch ? 22 : 12 };
         const endpoint = snapElevatedEndpoints(mepEndpoints(mep.kind as "duct" | "pipe" | "cabletray" | "wire", layout, level.id, mep.offset), aperture);
         if (endpoint) { point = endpoint; label = "MEP endpoint"; snapType = "endpoint"; }
-        else if (mep.kind === "duct" || mep.kind === "pipe") {
-          const equipment = layout.mepEquipment.filter(e => e.levelId === level.id).flatMap(e => getEquipmentConnectors(e).filter(c => c.type === mep.kind && Math.abs(c.worldZmm - mep.offset) <= 25).map(c => ({ xMm: c.worldXmm, yMm: c.worldYmm, worldElevationMm: level.elevationMm + c.worldZmm })));
+        else if (mep.kind !== "cabletray") {
+          const equipment = layout.mepEquipment.filter(e => e.levelId === level.id).flatMap(e => equipmentRoutePorts(e, layout).filter(p => p.kind === mep.kind && Math.abs(p.point.elevationMm! - mep.offset) <= 25).map(p => ({ ...p.point, worldElevationMm: level.elevationMm + p.point.elevationMm! })));
           const connector = snapElevatedEndpoints(equipment, aperture);
           if (connector) { point = connector; label = "Equipment connector"; snapType = "endpoint"; }
         }
@@ -328,12 +329,47 @@ export function installDrawingInteractionController(options: Options) {
     if (s.shape !== prev.shape) reset();
     if (s.navigating !== prev.navigating) { cancel(); if (!s.navigating) preview(lastX, lastY); }
   });
+  const disposeHandles = installMepRouteHandles({ ...options, activate: async handle => {
+    if (useDrawingInteractionStore.getState().busy) return;
+    const active = currentMepDrawing();
+    if (active.draw?.start) {
+      if (active.kind !== handle.kind || active.draw.levelId !== handle.levelId || Math.abs(active.offset - (handle.point.elevationMm ?? 0)) > 25) {
+        useDrawingInteractionStore.setState({ message: "Finish or cancel the current run before routing from this connector." });
+        return;
+      }
+      const d = active.draw, defaults = handle.defaults;
+      const mismatch = "shape" in d ? d.system !== defaults.draftDuctSystem || d.shape !== defaults.draftDuctShape || (d.shape === "round" ? d.diameterMm !== defaults.draftDuctDiameterMm : d.widthMm !== defaults.draftDuctWidthMm || d.heightMm !== defaults.draftDuctHeightMm)
+        : "diameterMm" in d ? d.system !== defaults.draftPipeSystem || d.diameterMm !== defaults.draftPipeDiameterMm
+        : "trayType" in d ? d.trayType !== defaults.draftCableTrayType || d.widthMm !== defaults.draftCableTrayWidthMm || d.heightMm !== defaults.draftCableTrayHeightMm
+        : d.systemType !== defaults.draftWireSystem;
+      if (mismatch) {
+        useDrawingInteractionStore.setState({ message: "This connector has a different size or system. Use a compatible connector or finish the current run first." });
+        return;
+      }
+    } else {
+      const state = useLayoutDrawingStore.getState();
+      state.setArmedLayoutTool(handle.kind);
+      if (useLayoutDrawingStore.getState().armedLayoutTool !== handle.kind) return;
+      reset();
+      useLayoutDrawingStore.setState(handle.defaults);
+    }
+    useDrawingInteractionStore.setState({ busy: true, navigating: false, message: null });
+    try {
+      await placeMepPoint(handle.levelId, handle.point);
+      if (active.draw?.start) committedSteps++;
+      const next = currentMepDrawing().draw;
+      points = next?.start ? [next.start] : [];
+      useDrawingInteractionStore.setState({ hasPoints: points.length > 0 });
+      clear(); options.mepPreview?.(null, null, 0);
+    } catch (error) { useDrawingInteractionStore.setState({ message: String(error) }); }
+    finally { useDrawingInteractionStore.setState({ busy: false }); }
+  } });
   const events = [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", cancel], ["click", swallow], ["dblclick", doubleClick], ["contextmenu", swallow]] as const;
   events.forEach(([name, handler]) => canvas.addEventListener(name, handler as EventListener, true));
   canvas.addEventListener("pointerdown", navigationDown);
   window.addEventListener("keydown", key, true); window.addEventListener("blur", cancel); window.addEventListener("werkzeug-drawing-reset", reset); window.addEventListener("werkzeug-drawing-finish", finish); window.addEventListener("werkzeug-drawing-undo", undoPoint);
   return () => {
-    cancel(); reset(); unsub(); unsubMarkup(); unsubDrawing(); svg.remove(); hud.remove();
+    disposeHandles(); cancel(); reset(); unsub(); unsubMarkup(); unsubDrawing(); svg.remove(); hud.remove();
     events.forEach(([name, handler]) => canvas.removeEventListener(name, handler as EventListener, true));
     canvas.removeEventListener("pointerdown", navigationDown);
     window.removeEventListener("keydown", key, true); window.removeEventListener("blur", cancel); window.removeEventListener("werkzeug-drawing-reset", reset); window.removeEventListener("werkzeug-drawing-finish", finish); window.removeEventListener("werkzeug-drawing-undo", undoPoint);

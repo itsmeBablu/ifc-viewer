@@ -3,7 +3,7 @@ import type { LayoutDuct, LayoutPipe, LayoutCableTray, LayoutWire, LayoutLevel, 
 export type MepSegment = LayoutDuct | LayoutPipe | LayoutCableTray | LayoutWire;
 export type MepKind = MepEndpointLink["kind"];
 export type MepNetwork = { ducts: LayoutDuct[]; pipes: LayoutPipe[]; cableTrays: LayoutCableTray[]; wires: LayoutWire[]; levels: LayoutLevel[] };
-export type MepSnapPoint = { xMm: number; yMm: number; elevationMm?: number; mepEndpoint?: MepEndpointLink };
+export type MepSnapPoint = { xMm: number; yMm: number; elevationMm?: number; mepEndpoint?: MepEndpointLink; equipmentConnector?: { equipmentId: string; connectorId: string } };
 export const mepRows = (kind: MepKind, state: MepNetwork): MepSegment[] => kind === "duct" ? state.ducts : kind === "pipe" ? state.pipes : kind === "wire" ? state.wires : state.cableTrays;
 export const mepOffset = (row: MepSegment) => row.elevationMm ?? ("elevationOffsetMm" in row ? row.elevationOffsetMm : undefined) ?? ("shape" in row ? 2600 : "diameterMm" in row ? 2700 : 2800);
 export const endpointPoint = (row: MepSegment, endpoint: "start" | "end") => ({ xMm: endpoint === "start" ? row.startXmm : row.endXmm, yMm: endpoint === "start" ? row.startYmm : row.endYmm });

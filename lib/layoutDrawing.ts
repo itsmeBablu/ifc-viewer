@@ -472,6 +472,10 @@ export type LayoutCableTray = {
 };
 
 export type LayoutWire = {
+  connectedStartEquipmentId?: string;
+  connectedEndEquipmentId?: string;
+  startConnectorId?: string;
+  endConnectorId?: string;
   startConnection?: MepEndpointLink;
   endConnection?: MepEndpointLink;
   id: string;
