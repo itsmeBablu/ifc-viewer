@@ -150,7 +150,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
     pushHistory({ role: "user", text: submittedText });
     const controller = new AbortController(); requestRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 60_000);
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();

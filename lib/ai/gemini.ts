@@ -34,7 +34,7 @@ export async function generateCommand(input: CommandRequest) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(80000),
     cache: "no-store",
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT} ${MODE_INSTRUCTIONS[mode]}` }] },

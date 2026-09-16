@@ -1,8 +1,8 @@
 export const AI_MODELS = [
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", tier: "Economy", description: "Lowest cost. Quick edits and repeated elements.", thinkingLevel: "MINIMAL", maxOutputTokens: 8192 },
-  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", tier: "Economy+", description: "Newer lightweight model for everyday modeling.", thinkingLevel: "LOW", maxOutputTokens: 8192 },
-  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", tier: "Balanced", description: "More reasoning for coordinated layouts. Higher API cost.", thinkingLevel: "MEDIUM", maxOutputTokens: 12000 },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (Preview)", tier: "Advanced", description: "Detailed design reasoning and reviews. Highest cost; may take longer.", thinkingLevel: "MEDIUM", maxOutputTokens: 16000 },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", tier: "Economy", description: "Fastest response. Quick edits and repeated elements.", thinkingLevel: "MINIMAL", maxOutputTokens: 8192 },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", tier: "Economy+", description: "Superfast lightweight model for everyday modeling.", thinkingLevel: "MINIMAL", maxOutputTokens: 8192 },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", tier: "Balanced", description: "Balanced speed and reasoning for layouts and reviews.", thinkingLevel: "LOW", maxOutputTokens: 12000 },
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (Preview)", tier: "Advanced", description: "In-depth design reasoning and reviews with optimized latency.", thinkingLevel: "LOW", maxOutputTokens: 16000 },
 ] as const;
 
 export type AiModelId = typeof AI_MODELS[number]["id"];
