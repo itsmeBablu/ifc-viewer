@@ -205,15 +205,16 @@ function AssistantPanel({
       aria-label="AI modeling assistant"
       data-theme={colorTheme}
       data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] overflow-hidden rounded-[26px] p-4 text-sm shadow-2xl"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
     >
+      {/* Apple AI multi-color fluid ambient glow & perimeter ribbon */}
+      <div className="ai-apple-glow-aura" aria-hidden="true" />
+      <div className="ai-apple-glow-ribbon" aria-hidden="true" />
+
       <div data-ai-stagger className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div
-            ref={capRef}
-            className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0"
-          >
-            <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
+          <div ref={capRef} className="flex items-center justify-center shrink-0">
+            <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <div>
             <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
@@ -393,13 +394,14 @@ function UnconfiguredPanel({
       data-discipline={mepModeActive ? "mep" : "arch"}
       className="ai-chat-panel fixed bottom-20 right-3 z-[100] w-[min(440px,calc(100vw-24px))] rounded-[26px] p-4 text-sm shadow-2xl"
     >
+      {/* Apple AI multi-color fluid ambient glow & perimeter ribbon */}
+      <div className="ai-apple-glow-aura" aria-hidden="true" />
+      <div className="ai-apple-glow-ribbon" aria-hidden="true" />
+
       <div data-ai-stagger className="ai-chat-header mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div
-            ref={capRef}
-            className="ai-header-cap-badge flex items-center justify-center size-7.5 rounded-xl border border-[var(--ai-accent,#facc15)]/40 bg-[var(--ai-accent-bg,rgba(250,204,21,0.15))] shadow-[0_0_12px_var(--ai-accent-glow,rgba(250,204,21,0.25))] shrink-0"
-          >
-            <img src="/ai.svg" alt="" className="size-4.5 object-contain" />
+          <div ref={capRef} className="flex items-center justify-center shrink-0">
+            <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
         </div>
