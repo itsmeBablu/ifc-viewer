@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSession } from "next-auth/react";
 import { aiFingerprint, applyAiPlan, currentAiContext } from "@/lib/ai/execute";
 import { describeAction, validatePlan } from "@/lib/ai/validate";
