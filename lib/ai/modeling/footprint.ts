@@ -83,7 +83,7 @@ function rectangleInside(x: number, y: number, w: number, d: number, points: Poi
   }
   return true;
 }
-function inscribedRectangle(points: Point[]) {
+export function inscribedRectangle(points: Point[]) {
   const xs=[...new Set(points.map(p=>p.xMm))].sort((a,b)=>a-b),ys=[...new Set(points.map(p=>p.yMm))].sort((a,b)=>a-b);
   // Extra grid coordinates allow a usable block inside diagonal, freely drawn outlines.
   for(let i=1;i<8;i++){xs.push(xs[0]+(Math.max(...xs)-xs[0])*i/8);ys.push(ys[0]+(Math.max(...ys)-ys[0])*i/8);}

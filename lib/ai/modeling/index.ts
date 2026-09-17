@@ -3,6 +3,8 @@ import { expandModelPlan } from "../recipes";
 import { validatePlan } from "../validate";
 import { defaultResidentialBrief } from "./brief";
 import { allocateBuilding } from "./footprint";
+import { sketchActions,validateSketches } from "./sketch";
+import { polygonArea } from "./footprint";
 
 /** Only standalone, explicitly default briefs bypass language-model interpretation. */
 export function defaultModelingPlan(input: CommandRequest) {
@@ -27,6 +29,17 @@ export function defaultModelingPlan(input: CommandRequest) {
   }
   const brief = input.residential ?? defaultResidentialBrief(input.command);
   if (!brief) return null;
+  if(brief.sketches){
+    validateSketches(brief.sketches);
+    const id=`sketch-${crypto.randomUUID()}`,levelId=input.context.activeLevelId??`${id}:ground`,height=input.context.defaults.wallHeightMm;
+    const base=Number(input.context.elements.find(e=>e.id===levelId)?.properties.elevationMm??0);
+    const extents=input.context.elements.filter(e=>e.kind==="wall"&&e.levelId===levelId).flatMap(e=>[e.properties.startXmm,e.properties.endXmm]).filter((n):n is number=>typeof n==="number");
+    const area=brief.sketches.reduce((sum,s)=>sum+polygonArea(s.points)/1e6,0);
+    if(brief.totalAreaM2!==undefined&&Math.abs(area-brief.totalAreaM2)>.1)throw new Error(`Drawn floors give ${area.toFixed(1)} m². Update the total area or adjust the drawn lines.`);
+    const actions=sketchActions(brief,id,levelId,base,height,input.context.defaults.wallThicknessMm,extents.length?Math.max(...extents)+2000:0);
+    const plan=validatePlan({summary:`Sketch-based ${brief.variant}: ${brief.sketches.length} floor(s), ${area.toFixed(1)} m² internal area.`,assumptions:["Drawn outside and inside lines determine each floor; explicit drawing dimensions take precedence over automatic room areas.","Outside-only floors receive automatic rooms; interior partitions determine enclosed rooms and furniture placement.","Furniture follows walls and room groups with circulation and stair clearances.","Multi-storey homes include concept U-stairs and aligned floor openings; garage and garden are additional."],actions:[...(input.context.activeLevelId?[]:[{kind:"level",operation:"create",id:levelId,name:"Ground",elevationMm:0,heightMm:height}]),...actions]},input.context);
+    return {kind:"plan"as const,plan,model:input.model??"gemini-3.1-flash-lite",mode:"build"as const,usage:{inputTokens:0,outputTokens:0,thinkingTokens:0}};
+  }
   const { bedrooms, variant, ...parameters } = brief;
   const building=allocateBuilding(brief,input.context.defaults.wallHeightMm,input.context.defaults.wallThicknessMm),allocation=building.allocation;
   const id = `${variant}-${crypto.randomUUID()}`;

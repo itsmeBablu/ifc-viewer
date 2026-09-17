@@ -1,5 +1,7 @@
 export type ResidentialVariant = "apartment" | "villa" | "duplex";
-export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[] };
+export type SketchPoint = { xMm: number; yMm: number };
+export type FloorSketch = { points: SketchPoint[]; lines: { start: SketchPoint; end: SketchPoint }[] };
+export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
 export const RESIDENTIAL_PRESETS = [
   { label: "2-bedroom apartment", variant: "apartment", bedrooms: 2 },
   { label: "3-bedroom apartment", variant: "apartment", bedrooms: 3 },
@@ -102,6 +104,7 @@ export function allocateResidential(input: ResidentialParameters, wallHeightMm =
 }
 
 export function residentialCommand(input: ResidentialParameters) {
+  if(input.sketches)return `Create a ${input.variant} from my ${input.sketches.length} floor drawings, with ${input.bedrooms} bedrooms. Preserve the exact outside and inside line dimensions${input.furnished!==false?", with properly arranged basic furniture":""}${input.underfloorHeating?", underfloor heating":""}${input.piping&&input.piping!=="none"?`, water piping ${input.piping}`:""}${input.ducts==="ceiling"?", ceiling ducts":""}.`;
   const noun = input.variant === "apartment" ? "apartment" : input.variant === "villa" ? "villa" : "duplex house";
   return `Create a ${input.bedrooms}-bedroom ${noun}${input.totalAreaM2 !== undefined ? ` with total area ${input.totalAreaM2} m²` : ""} and bedrooms ${input.bedroomAreaM2 ?? 20} m² each${input.livingAreaM2 !== undefined ? `, living room ${input.livingAreaM2} m²` : ""}${input.kitchenAreaM2 !== undefined ? `, kitchen ${input.kitchenAreaM2} m²` : ""}${input.bathroomAreaM2 !== undefined ? `, bathroom ${input.bathroomAreaM2} m²` : ""}${input.footprint&&input.footprint!=="rectangle"?`, ${input.footprint} footprint`:""}${input.widthM&&input.lengthM?`, ${input.widthM} m wide by ${input.lengthM} m long inside walls`:""}${input.furnished!==undefined?`, ${input.furnished?"basic furniture":"unfurnished"}`:""}${input.underfloorHeating?", underfloor heating":""}${input.piping&&input.piping!=="none"?`, water piping ${input.piping}`:""}${input.ducts==="ceiling"?", ducts below roof":""}${input.garage&&input.garage!=="none"?`, ${input.garage} garage ${input.garageWidthM??3.5} × ${input.garageDepthM??6} m`:""}${input.gardenAreaM2?`, garden ${input.gardenAreaM2} m²`:""}`;
 }

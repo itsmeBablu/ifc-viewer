@@ -37,6 +37,7 @@ export function defaultResidentialBrief(command: string) {
   return { variant, bedrooms, ...areas } as ResidentialParameters;
 }
 export const residentialOptions = {
+  sketches: z.array(z.object({ points:z.array(z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()).min(3).max(32), lines:z.array(z.object({start:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict(),end:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()}).strict()).max(30) }).strict()).min(1).max(4).optional(),
   furnished: z.boolean().optional(), underfloorHeating: z.boolean().optional(),
   piping: z.enum(["none", "underfloor", "ceiling"]).optional(), ducts: z.enum(["none", "ceiling"]).optional(),
   garage: z.enum(["none", "open", "enclosed"]).optional(), garageWidthM: z.number().min(3).max(12).optional(), garageDepthM: z.number().min(5.5).max(15).optional(),

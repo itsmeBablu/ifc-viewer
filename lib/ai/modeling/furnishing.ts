@@ -1,34 +1,18 @@
-import { componentPreset } from "../../componentCatalog";
-import { defaultFurnitureParameters,evaluateFurniture } from "../../parametricFurniture";
+import { arrangeRoom } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import type { ResidentialParameters, allocateResidential } from "./allocation";
 
 type Allocation = ReturnType<typeof allocateResidential>;
 type Rect = { x:number;y:number;w:number;d:number };
-const overlaps=(a:Rect,b:Rect)=>a.x<b.x+b.w+100&&a.x+a.w+100>b.x&&a.y<b.y+b.d+100&&a.y+a.d+100>b.y;
-export function furnishFloor(input:ResidentialParameters, a:Allocation, id:string,levelId:string,xMm:number,yMm:number,t:number,heightMm:number,actualBedrooms:number,upper=false):AiAction[]{
+export function furnishFloor(input:ResidentialParameters, a:Allocation, id:string,levelId:string,xMm:number,yMm:number,t:number,heightMm:number,actualBedrooms:number,upper=false,stairOverride?:Rect):AiAction[]{
   const actions:AiAction[]=[];let index=0;
   const add=(familyId:string,x:number,y:number,rotationDeg=0,elevationMm=0)=>actions.push({kind:"equipment",operation:"create",id:`${id}:component:${index++}`,levelId,familyId,xMm:xMm+x,yMm:yMm+y,rotationDeg,elevationMm});
-  const place=(familyId:string,zone:Rect,occupied:Rect[])=>{
-    const p=componentPreset(familyId)!;
-    const parameters=defaultFurnitureParameters(familyId),evaluated=parameters?evaluateFurniture(parameters):null;
-    const dimensions=evaluated?{widthMm:Math.max(evaluated.widthMm,...evaluated.parts.map(part=>Math.abs(part.xMm)*2+(Math.abs(part.rotationDeg??0)%180===90?part.depthMm:part.widthMm))),depthMm:Math.max(evaluated.depthMm,...evaluated.parts.map(part=>Math.abs(part.yMm)*2+(Math.abs(part.rotationDeg??0)%180===90?part.widthMm:part.depthMm)))}:p;
-    for(const rotation of [0,90]){
-      const w=rotation?dimensions.depthMm:dimensions.widthMm,d=rotation?dimensions.widthMm:dimensions.depthMm;
-      for(let y=zone.y+50;y+d<=zone.y+zone.d-50;y+=150)for(let x=zone.x+50;x+w<=zone.x+zone.w-50;x+=150){
-        const rect={x,y,w,d};if(occupied.some(o=>overlaps(o,rect)))continue;
-        occupied.push(rect);add(familyId,x+w/2,y+d/2,rotation);return true;
-      }
-    }
-    return false;
-  };
   for(let i=0;i<a.bays;i++){
     const start=t/2+i*(a.roomWidthMm+150);
     const room={x:start,y:t/2,w:a.roomWidthMm,d:a.roomDepthMm};
     if(input.furnished!==false){
       const occupied:Rect[]=[{x:start+a.roomWidthMm/2-600,y:t/2+a.roomDepthMm-1000,w:1200,d:1000}];
-      if(i<actualBedrooms){place(a.roomWidthMm>=2800?"bed-double":"bed-single",room,occupied);place("wardrobe",room,occupied);place("bedside",room,occupied);}
-      else{place("desk",room,occupied);place("office-chair",room,occupied);}
+      arrangeRoom(i<actualBedrooms?"bedroom":"study",room,occupied,add);
     }
     if(input.underfloorHeating){
       const left=start+350,right=start+a.roomWidthMm-350,front=t/2+350,rear=t/2+a.roomDepthMm-350;
@@ -41,13 +25,11 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
   if(input.furnished!==false){
     const bath={x:t/2,y:serviceY,w:a.bathroomWidthMm,d:a.bathroomDepthMm};
     const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:950}];
-    place("bath-shower",bath,occupied);place("bath-toilet",bath,occupied);place("bath-vanity",bath,occupied);
+    arrangeRoom("bathroom",bath,occupied,add);
     const zone={x:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
     const used:Rect[]=[{x:a.widthMm-t/2-1550,y:serviceY,w:1100,d:1000}];
-    if(input.variant==="duplex")used.push({x:t/2+a.bathroomWidthMm+300,y:serviceY+1200,w:a.stair.widthMm,d:a.stair.runMm+a.stair.landingMm});
-    place("kitchen-sink",zone,used);place("kitchen-hob",zone,used);place("kitchen-base",zone,used);place("kitchen-fridge",zone,used);
-    place("sofa-2",zone,used);place("coffee-table",zone,used);
-    place("dining-table",zone,used);place("tv-cabinet",zone,used);
+    if(input.variant==="duplex")used.push(stairOverride??{x:t/2+a.bathroomWidthMm+300,y:serviceY+1200,w:a.stair.widthMm,d:a.stair.runMm+a.stair.landingMm});
+    arrangeRoom("living",zone,used,add);
   }
   const corridorY=(a.bedroomEndMm+a.corridorEndMm)/2;
   if(input.underfloorHeating){
