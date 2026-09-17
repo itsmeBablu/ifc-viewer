@@ -18,6 +18,10 @@ it("creates a complete validated default apartment without provider tokens", () 
   expect(result.plan.actions.filter(a => a.kind === "window")).toHaveLength(4);
   expect(result.plan.actions.some(a => a.kind === "floor")).toBe(true);
 });
+it("maps German roof preferences to native roof geometry", () => {
+  const result = expandModelPlan({ summary: "Villa", assumptions: [], actions: [{ kind: "house_layout", id: "v", levelId: "l", variant: "villa", bedrooms: 3, roofStyle: "german-gable" }] });
+  expect(result.actions.find(a => a.kind === "roof")).toMatchObject({ roofPreset: "gable", pitchDeg: 35 });
+});
 it.each([1, 2, 3, 4])("validates %i bedroom layouts and exact bedroom clear areas", bedrooms => {
   const context = { ...input.context, activeLevelId: "l", elements: [{ id: "l", kind: "level" as const, properties: {} }] };
   const plan = validatePlan(expandModelPlan({ summary: "Apartment", assumptions: [], actions: [{ kind: "apartment_layout", id: "a", levelId: "l", bedrooms }] }), context);

@@ -34,7 +34,7 @@ export function arrangeRoom(type:import("./allocation").RoomUse,zone:FurnitureRe
   }else if(type==="study"){
     put("desk",cx,zone.y+400);put("office-chair",cx,zone.y+1200,180);
   }else if(type==="bathroom"){
-    put("bath-shower",zone.x+500,rear-500);
+    put("bath-tub",zone.x+500,rear-500);
     put("bath-toilet",zone.x+zone.w-300,rear-500);
     put("bath-vanity",zone.x+zone.w-350,zone.y+1500,90);
   }else if(type==="garage"){

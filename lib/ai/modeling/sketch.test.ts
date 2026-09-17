@@ -1,5 +1,5 @@
 import { expect,it } from "vitest";
-import { sketchRooms,sketchActions,validateSketches } from "./sketch";
+import { sketchRooms,sketchActions,validateSketches,normalizeSketchJunctions } from "./sketch";
 import { resizeSketchLine,circularOutline,arcSegments,lineAngleDeg,rotateSketchLine } from "./sketchEditing";
 import { residentialParametersSchema } from "./brief";
 import { polygonArea } from "./footprint";
@@ -8,6 +8,10 @@ import { arrangeRoom,furnitureBounds } from "./roomFurniture";
 import type { FloorSketch } from "./allocation";
 import { RESIDENTIAL_PRESETS } from "./allocation";
 const points=[{xMm:0,yMm:0},{xMm:14000,yMm:0},{xMm:14000,yMm:14000},{xMm:0,yMm:14000}];
+it("joins small endpoint drift into continuous wall junctions",()=>{
+  const s=normalizeSketchJunctions({points,lines:[{start:{xMm:7000,yMm:200},end:{xMm:7000,yMm:5000}},{start:{xMm:7000,yMm:5200},end:{xMm:12000,yMm:5200}}]});
+  expect(s.lines[0].end).toEqual(s.lines[1].start);
+});
 it("offers compact apartment and villa/duplex starting styles",()=>{expect(RESIDENTIAL_PRESETS.length).toBeGreaterThanOrEqual(8);expect(RESIDENTIAL_PRESETS.some(p=>p.label.includes("Courtyard"))).toBe(true);});
 const manual:FloorSketch={points,lines:[{start:{xMm:0,yMm:5000},end:{xMm:14000,yMm:5000}},{start:{xMm:7000,yMm:0},end:{xMm:7000,yMm:5000}}]};
 it("length edits keep rectangular corners aligned and move attached interior endpoints",()=>{
