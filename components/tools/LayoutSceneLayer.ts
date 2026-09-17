@@ -2,6 +2,7 @@ import { isMepSelectionLocked } from "@/lib/mepSelectionLock";
 import { isObjectVisibleInView } from "@/lib/viewVisibility";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
+import { useAppStore } from "@/store/useAppStore";
 import { createOperableWindow } from "@/lib/windowGeometry";
 import { roofWallProfile } from "@/lib/roofConnections";
 import { buildPlanarRoof, offsetRoofBoundary } from "@/lib/roofGeometry";

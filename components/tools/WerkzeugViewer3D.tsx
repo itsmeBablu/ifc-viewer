@@ -5,6 +5,7 @@ import { buildMepJointGeometry } from "./MepJointGeometry";
 import { applyPlanViewDisplay } from "./PlanViewDisplay";
 import { applyViewVisibility, applyRenderPresentation, isObjectVisibleInView } from "@/lib/viewVisibility";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
+import type { LayoutRoom } from "@/lib/layoutDrawing";
 
 import { alignKitchenPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
 import { componentPreset } from "@/lib/componentCatalog";

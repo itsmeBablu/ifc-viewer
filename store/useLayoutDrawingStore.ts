@@ -972,6 +972,7 @@ function refreshAutoSlabBoundaries(
 
 export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   projectId: null,
+  selectedRoomId: null,
   isEmptyProject: false,
   lastMutatedAt: 0,
   levels: [],

@@ -47,6 +47,7 @@ export default function RoomScheduleDialog({
         { xMm: -2000, yMm: 2000 },
       ],
       tagPosMm: { xMm: 0, yMm: 0 },
+      levelId: floors[0]?.id,
     });
   };
 

@@ -34,6 +34,7 @@ export type LayoutLevel = {
 };
 
 export type CurtainGridConfig = {
+  panelMaterial?: string;
   horizontalSpacingMm?: number;
   verticalSpacingMm?: number;
   horizontalCount?: number;
