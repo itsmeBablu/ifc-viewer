@@ -23,6 +23,15 @@ export const RESIDENTIAL_PRESETS = [
   { label: "Organic curved courtyard", variant: "villa", bedrooms: 4, layoutStyle: "courtyard", footprint: "drawn", footprintPoints: [{x:.08,y:.18},{x:.22,y:.06},{x:.78,y:.06},{x:.92,y:.2},{x:.84,y:.46},{x:.94,y:.78},{x:.7,y:.94},{x:.3,y:.94},{x:.06,y:.76},{x:.16,y:.48}], roofStyle: "german-hip", gardenAreaM2: 100 },
 ] as const;
 
+/** Area-grounded typology suggestions used by the guided plot flow. */
+export function suggestResidentialTypes(plotAreaM2: number) {
+  if (!Number.isFinite(plotAreaM2) || plotAreaM2 <= 0) return [] as const;
+  if (plotAreaM2 < 70) return [{ label: "1-bedroom apartment", reason: "Compact plot" }, { label: "2-bedroom starter apartment", reason: "Efficient footprint" }];
+  if (plotAreaM2 < 140) return [{ label: "2-bedroom apartment", reason: "Fits standard 70–110 m² internal area" }, { label: "3-bedroom apartment", reason: "Fits with compact circulation" }, { label: "2-bedroom duplex", reason: "Stacks rooms over two floors" }];
+  if (plotAreaM2 < 240) return [{ label: "3-bedroom villa", reason: "Comfortable single-storey footprint" }, { label: "4-bedroom duplex", reason: "Room for stacked family zones" }, { label: "3-bedroom courtyard villa", reason: "Courtyard and garden remain possible" }];
+  return [{ label: "4-bedroom villa", reason: "Large single-storey plan" }, { label: "5-bedroom duplex", reason: "Generous two-storey layout" }, { label: "Apartment block", reason: "Shared core and multiple homes fit" }];
+}
+
 export function conceptStair(heightMm: number) {
   const riseMm = heightMm + 200;
   const steps = Math.ceil(riseMm / 360) * 2;

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { residentialCommand, RESIDENTIAL_PRESETS, type ResidentialParameters } from "@/lib/ai/modeling/allocation";
+import { residentialCommand, RESIDENTIAL_PRESETS, suggestResidentialTypes, type ResidentialParameters } from "@/lib/ai/modeling/allocation";
 import { allocateBuilding } from "@/lib/ai/modeling/footprint";
 import AiFootprintCanvas from "./AiFootprintCanvas";
 import { validateSketches } from "@/lib/ai/modeling/sketch";
@@ -8,6 +8,7 @@ import { polygonArea } from "@/lib/ai/modeling/footprint";
 
 export default function AiBuildingPresets({disabled,heightMm,thicknessMm,onChoose,onCreate}:{disabled:boolean;heightMm:number;thicknessMm:number;onChoose:(command:string,p:ResidentialParameters)=>void;onCreate:(command:string,p:ResidentialParameters)=>void}){
   const [selected,setSelected]=useState<number|null>(null);
+  const [plotArea,setPlotArea]=useState(0);
   const [p,setP]=useState<ResidentialParameters>({variant:"apartment",bedrooms:2,bedroomAreaM2:20,furnished:true});
   let result:ReturnType<typeof allocateBuilding>|null=null,error="";
   const validate=(next:ResidentialParameters)=>{if(next.apartmentFloors!==undefined||next.apartmentsPerFloor!==undefined||next.bedroomsPerApartment!==undefined)return null;if(next.sketches){validateSketches(next.sketches);const area=next.sketches.reduce((sum,s)=>sum+polygonArea(s.points)/1e6,0);if(next.totalAreaM2!==undefined&&Math.abs(area-next.totalAreaM2)>.1)throw new Error(`Drawn floors give ${area.toFixed(1)} mÂ². Update the total or adjust the lines.`);return null;}return allocateBuilding(next,heightMm,thicknessMm);};
@@ -16,6 +17,8 @@ export default function AiBuildingPresets({disabled,heightMm,thicknessMm,onChoos
   const fields=[{key:"totalAreaM2",label:"Total internal area",min:30,max:2000},{key:"bedroomAreaM2",label:"Each bedroom",min:1,max:100},{key:"livingAreaM2",label:"Living / dining",min:10,max:300},{key:"kitchenAreaM2",label:"Kitchen",min:6,max:300},{key:"bathroomAreaM2",label:"Each bathroom",min:4,max:300},{key:"widthM",label:"Building width Â· m",min:4,max:80},{key:"lengthM",label:"Building length Â· m",min:4,max:80}]as const;
   const allocation=result?.allocation;
   return <section className="ai-building-presets" aria-label="Building examples">
+    <div className="ai-area-fields"><label>Plot / buildable area · m²<input aria-label="Plot area" type="number" min={30} step="1" value={plotArea||""} placeholder="Enter plot area first" onChange={e=>setPlotArea(Number(e.target.value)||0)} /></label></div>
+    {plotArea>0&&<p className="ai-text-muted" aria-live="polite">Suggested for {plotArea} m²: {suggestResidentialTypes(plotArea).map(s=>s.label).join(" · ")}</p>}
     <div className="ai-suggestion-row" aria-label="Choose a building">{RESIDENTIAL_PRESETS.map((item,index)=><button key={item.label} type="button" aria-pressed={selected===index} disabled={disabled} onClick={()=>{setSelected(index);const style=item.layoutStyle;update({variant:item.variant,bedrooms:item.bedrooms,bedroomAreaM2:20,furnished:true,layoutStyle:style,cultureStyle:"cultureStyle" in item?item.cultureStyle:"standard",roofStyle:"roofStyle" in item?item.roofStyle:item.variant==="apartment"?undefined:"modern-flat",separateKitchen:"separateKitchen" in item?item.separateKitchen:item.variant==="apartment",ensuiteBathrooms:"ensuiteBathrooms" in item?item.ensuiteBathrooms:item.variant==="apartment",footprint:"footprint" in item?item.footprint:style==="courtyard"||style==="central"?"u":style==="corner"?"l":"rectangle",footprintPoints:"footprintPoints" in item?item.footprintPoints.map(point=>({...point})):undefined,garage:"garage" in item?item.garage:item.variant==="apartment"?"none":"enclosed",gardenAreaM2:"gardenAreaM2" in item?item.gardenAreaM2:item.variant==="apartment"?0:40,...("totalAreaM2" in item?{totalAreaM2:item.totalAreaM2}:{}),...( "apartmentFloors" in item?{apartmentFloors:item.apartmentFloors,apartmentsPerFloor:item.apartmentsPerFloor,bedroomsPerApartment:item.bedroomsPerApartment}: {})});}}>{item.label}</button>)}</div>
     {selected!==null&&<details open className="ai-building-options"><summary>{RESIDENTIAL_PRESETS[selected].label} Â· choose layout</summary>
       <AiFootprintCanvas parameters={p} onChange={update} disabled={disabled} building={result}/>
