@@ -64,6 +64,22 @@ export function formatWallTypeName(
 
 export const DEFAULT_ELEMENT_TYPES: Record<string, ElementTypeDefinition> = {
   ...EXTRA_ELEMENT_TYPES,
+  // Curtain Wall System (Double Glazed & Metal Frame)
+  "curtain-wall": {
+    id: "curtain-wall",
+    name: "Curtain Wall · Double Glazed & Metal Frame",
+    category: "Wall",
+    thicknessMm: 200,
+    heightMm: 3000,
+    material: "Glass & Aluminium",
+    functionType: "Exterior",
+    thermalConductivity: "1.10 W/m²K (U)",
+    fireRating: "G30",
+    layers: [
+      { id: "cw-glass", name: "Double Glazed Glass", function: "structure", material: "Glass", thicknessMm: 32, color: "#38bdf8" },
+      { id: "cw-frame", name: "Anodized Aluminium Frame", function: "finish2", material: "Aluminium", thicknessMm: 168, color: "#1e293b" },
+    ],
+  },
   // Revit & GEG Standard Wall Types
   "wall-de-aw-wdvs-300": {
     id: "wall-de-aw-wdvs-300",

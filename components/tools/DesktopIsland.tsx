@@ -143,7 +143,6 @@ export const SHAPE_ITEMS: Array<{
 const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "wall", label: "Wall", hint: "Choose a wall type and draw (W)", icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" />, hasDropdown: true },
-  { id: "curtain-wall", label: "Curtain Wall", hint: "Draw curtain wall with customizable grid frames & mullions", icon: <LuGrid2X2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" /> },
   { id: "window", label: "Window", hint: "Choose a window type and place it", icon: <IconMarkupWindow className="h-3.5 w-3.5 text-sky-400 shrink-0" />, hasDropdown: true },
   { id: "door", label: "Door", hint: "Choose a door type and place it (D)", icon: <LuDoorOpen className="h-3 w-3 text-orange-500 shrink-0" />, hasDropdown: true },
   { id: "space", label: "Space", hint: "Place Revit-style space to compute area, volume & heating/cooling load", icon: <LuBox className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
@@ -851,13 +850,6 @@ export default function DesktopIsland() {
       if (!useViewDisplayStore.getState().renderPreview) enterRenderView();
       return;
     }
-    if (id === "curtain-wall") {
-      clearSelection();
-      useLayoutDrawingStore.getState().setArmedLayoutTool("curtain-wall");
-      useAppStore.getState().setRightPanelOpen(true);
-      return;
-    }
-
     if (id === "space") {
       clearSelection();
       useLayoutDrawingStore.getState().setArmedLayoutTool("space");
@@ -866,7 +858,12 @@ export default function DesktopIsland() {
     }
 
     clearSelection();
-    useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
+    if (id === "wall") {
+      const draftId = useLayoutDrawingStore.getState().draftWallTypeId;
+      useLayoutDrawingStore.getState().setArmedLayoutTool(draftId === "curtain-wall" ? "curtain-wall" : "wall");
+    } else {
+      useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
+    }
     useAppStore.getState().setRightPanelOpen(true);
   };
 
@@ -878,14 +875,23 @@ export default function DesktopIsland() {
       layout.setDraftWallTypeId(typeDef.id);
       if (typeDef.thicknessMm) layout.setDraftWallThicknessMm(typeDef.thicknessMm);
       if (typeDef.heightMm) layout.setDraftWallHeightMm(typeDef.heightMm);
+      if (typeDef.id === "curtain-wall") {
+        layout.setArmedLayoutTool("curtain-wall");
+      } else {
+        layout.setArmedLayoutTool("wall");
+      }
     } else if (toolId === "door" && typeDef.widthMm && typeDef.heightMm) {
       layout.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     } else if (toolId === "window" && typeDef.widthMm && typeDef.heightMm) {
       layout.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? layout.draftWindowSillMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     } else if ((toolId === "floor" || toolId === "roof") && typeDef.thicknessMm) {
       layout.setDraftSlabThicknessMm(typeDef.thicknessMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
+    } else {
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     }
-    layout.setArmedLayoutTool(toolId as LayoutToolId);
     useAppStore.getState().setRightPanelOpen(true);
     useToolMarkupStore.getState().setArmedTool(null);
     setTypeMenu(null);
@@ -914,6 +920,7 @@ export default function DesktopIsland() {
     if (id === "roofs-texture") return textureMenu?.category === "roofs";
     if (id === "floors-texture") return textureMenu?.category === "floors";
     if (id === "select") return !measureMode && armed === null && armedMarkupTool === null;
+    if (id === "wall") return armed === "wall" || armed === "curtain-wall";
     return armed === id;
   };
 

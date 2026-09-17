@@ -2453,7 +2453,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     } else {
       const base = state.levels.find(level => level.id === levelId);
       const top = state.levels.find(level => level.id === state.draftWallTopLevelId);
-      const isCurtain = kind === "curtain-wall" || state.armedLayoutTool === "curtain-wall";
+      const isCurtain = kind === "curtain-wall" || state.armedLayoutTool === "curtain-wall" || state.draftWallTypeId === "curtain-wall";
       const walls: LayoutWall[] = segments.map(segment => ({
         ...segment,
         id: newLayoutId("wall"),

@@ -182,6 +182,11 @@ export default function ToolOptionsBar() {
                 onChange={(e) => {
                   const typeId = e.target.value;
                   setDraftWallTypeId(typeId);
+                  if (typeId === "curtain-wall") {
+                    setArmedLayoutTool("curtain-wall");
+                  } else if (armedLayoutTool === "curtain-wall") {
+                    setArmedLayoutTool("wall");
+                  }
                   const customTypes = (useLayoutDrawingStore.getState() as any).customElementTypes || {};
                   const tDef = customTypes[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
                   if (tDef?.thicknessMm) setDraftWallThicknessMm(tDef.thicknessMm);

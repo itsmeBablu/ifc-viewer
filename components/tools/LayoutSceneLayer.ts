@@ -652,23 +652,27 @@ export default class LayoutSceneLayer {
       }
       grp.visible = visible;
       const isWallSelected = wall.id === opts.selectedWallId || Boolean(opts.selectedWallIds?.has(wall.id));
-      const layers = this.resolveWallLayers(wall);
-      let layerIdx = 0;
-      grp.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.userData.isWallLayer) {
-          const layer = layers[layerIdx++] || {
-            id: "l-def",
-            name: "Structure",
-            function: "structure" as const,
-            material: wall.material || "Concrete",
-            thicknessMm: wall.thicknessMm || 200,
-            color: wall.color,
-          };
-          if (child.material instanceof THREE.MeshStandardMaterial) {
-            this.applyWallLayerMaterial(child.material, layer, wall, isWallSelected, this.currentRenderMode);
+      if (wall.isCurtainWall || wall.wallTypeId === "curtain-wall") {
+        this.applyCurtainWallMaterials(grp, wall, isWallSelected, this.currentRenderMode);
+      } else {
+        const layers = this.resolveWallLayers(wall);
+        let layerIdx = 0;
+        grp.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.userData.isWallLayer) {
+            const layer = layers[layerIdx++] || {
+              id: "l-def",
+              name: "Structure",
+              function: "structure" as const,
+              material: wall.material || "Concrete",
+              thicknessMm: wall.thicknessMm || 200,
+              color: wall.color,
+            };
+            if (child.material instanceof THREE.MeshStandardMaterial) {
+              this.applyWallLayerMaterial(child.material, layer, wall, isWallSelected, this.currentRenderMode);
+            }
           }
-        }
-      });
+        });
+      }
       this.applyGhostMaterial(grp, vis.isGhosted);
       this.setMeshSelectionOutline(grp, isWallSelected);
       const showWallEdges = this.currentRenderMode === "wireframe" || this.currentRenderMode === "fullColor";
@@ -4007,23 +4011,27 @@ export default class LayoutSceneLayer {
       const wall = state.walls.find((w) => w.id === id);
       const isSelected = wall ? (wall.id === state.selectedWallId || state.selectedElements.some((e) => e.kind === "wall" && e.id === wall.id)) : false;
       if (wall) {
-        const layers = this.resolveWallLayers(wall);
-        let layerIdx = 0;
-        grp.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.userData.isWallLayer) {
-            const layer = layers[layerIdx++] || {
-              id: "l-def",
-              name: "Structure",
-              function: "structure" as const,
-              material: wall.material || "Concrete",
-              thicknessMm: wall.thicknessMm || 200,
-              color: wall.color,
-            };
-            if (child.material instanceof THREE.MeshStandardMaterial) {
-              this.applyWallLayerMaterial(child.material, layer, wall, isSelected, this.currentRenderMode);
+        if (wall.isCurtainWall || wall.wallTypeId === "curtain-wall") {
+          this.applyCurtainWallMaterials(grp, wall, isSelected, this.currentRenderMode);
+        } else {
+          const layers = this.resolveWallLayers(wall);
+          let layerIdx = 0;
+          grp.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.userData.isWallLayer) {
+              const layer = layers[layerIdx++] || {
+                id: "l-def",
+                name: "Structure",
+                function: "structure" as const,
+                material: wall.material || "Concrete",
+                thicknessMm: wall.thicknessMm || 200,
+                color: wall.color,
+              };
+              if (child.material instanceof THREE.MeshStandardMaterial) {
+                this.applyWallLayerMaterial(child.material, layer, wall, isSelected, this.currentRenderMode);
+              }
             }
-          }
-        });
+          });
+        }
       }
       this.updateWireframeEdges(grp, showEdges, isWireframe);
     }
@@ -4383,6 +4391,61 @@ export default class LayoutSceneLayer {
         { id: "l-ext", name: "Exterior Finish", function: "finish2", material: extMat, thicknessMm: 15, color: extColor },
       ];
     }
+  }
+
+  private applyCurtainWallMaterials(
+    grp: THREE.Group,
+    wall: LayoutWall,
+    isSelected: boolean,
+    renderMode: RenderMode,
+  ) {
+    grp.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (child.userData.isCurtainGlass || child.name === "curtain-outer-glass" || child.name === "curtain-inner-glass") {
+        const isOuter = child.name === "curtain-outer-glass";
+        const mat = child.material;
+        if (!(mat instanceof THREE.MeshPhysicalMaterial)) return;
+        mat.transparent = true;
+        mat.depthWrite = false;
+        mat.depthTest = true;
+        mat.side = THREE.DoubleSide;
+        if (isSelected) {
+          mat.color.setHex(0x38bdf8);
+          mat.opacity = 0.55;
+          mat.transmission = 0.75;
+          mat.emissive.setHex(0x0284c7);
+          mat.emissiveIntensity = 0.35;
+        } else {
+          mat.color.setHex(isOuter ? 0x38bdf8 : 0xbae6fd);
+          mat.opacity = isOuter ? 0.28 : 0.20;
+          mat.transmission = isOuter ? 0.90 : 0.95;
+          mat.roughness = isOuter ? 0.04 : 0.02;
+          mat.metalness = isOuter ? 0.12 : 0.05;
+          mat.ior = 1.52;
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+        }
+        mat.needsUpdate = true;
+      } else if (child.userData.isCurtainFrame || child.name?.startsWith("curtain-frame-") || child.userData.isWallLayer) {
+        const mat = child.material;
+        if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+        mat.transparent = false;
+        mat.opacity = 1.0;
+        mat.depthWrite = true;
+        mat.metalness = 0.92;
+        mat.roughness = 0.22;
+        if (isSelected) {
+          mat.color.setHex(0xf59e0b);
+          mat.emissive.setHex(0x92400e);
+          mat.emissiveIntensity = 0.35;
+        } else {
+          mat.color.setHex(0x1e293b);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+        }
+        mat.needsUpdate = true;
+      }
+    });
   }
 
   applyWallLayerMaterial(
@@ -4853,8 +4916,12 @@ export default class LayoutSceneLayer {
     const totalThickM = fromMm(totalThickMm);
     const halfThick = totalThickM / 2;
 
-    const dx = cl.endXmm - cl.startXmm;
-    const dy = cl.endYmm - cl.startYmm;
+    const startX = cl?.startXmm ?? wall.startXmm ?? 0;
+    const startY = cl?.startYmm ?? wall.startYmm ?? 0;
+    const endX = cl?.endXmm ?? wall.endXmm ?? 0;
+    const endY = cl?.endYmm ?? wall.endYmm ?? 0;
+    const dx = endX - startX;
+    const dy = endY - startY;
     const len = Math.max(50, Math.hypot(dx, dy));
     const lenM = fromMm(len);
     const halfLen = lenM / 2;
@@ -5192,10 +5259,11 @@ export default class LayoutSceneLayer {
         depthWrite: false,
       });
       const outerGlassGeo = new THREE.BoxGeometry(lenM - 0.01, heightM - 0.01, paneThickM);
+      outerGlassMat.side = THREE.DoubleSide;
       const outerGlassMesh = new THREE.Mesh(outerGlassGeo, outerGlassMat);
       outerGlassMesh.position.set(0, 0, -paneZOffset);
       outerGlassMesh.name = "curtain-outer-glass";
-      outerGlassMesh.userData.isWallLayer = true;
+      outerGlassMesh.userData.isCurtainGlass = true;
       outerGlassMesh.userData.layoutWallId = wall.id;
       grp.add(outerGlassMesh);
 
@@ -5211,10 +5279,11 @@ export default class LayoutSceneLayer {
         depthWrite: false,
       });
       const innerGlassGeo = new THREE.BoxGeometry(lenM - 0.01, heightM - 0.01, paneThickM);
+      innerGlassMat.side = THREE.DoubleSide;
       const innerGlassMesh = new THREE.Mesh(innerGlassGeo, innerGlassMat);
       innerGlassMesh.position.set(0, 0, paneZOffset);
       innerGlassMesh.name = "curtain-inner-glass";
-      innerGlassMesh.userData.isWallLayer = true;
+      innerGlassMesh.userData.isCurtainGlass = true;
       innerGlassMesh.userData.layoutWallId = wall.id;
       grp.add(innerGlassMesh);
 
@@ -5231,27 +5300,27 @@ export default class LayoutSceneLayer {
       const topFrameGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
       const topFrame = new THREE.Mesh(topFrameGeo, mullionMat);
       topFrame.position.set(0, heightM / 2 - mullionWM / 2, 0);
-      topFrame.userData.isWallLayer = true;
+      topFrame.userData.isCurtainFrame = true;
       topFrame.userData.layoutWallId = wall.id;
       grp.add(topFrame);
 
       const btmFrameGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
       const btmFrame = new THREE.Mesh(btmFrameGeo, mullionMat);
       btmFrame.position.set(0, -heightM / 2 + mullionWM / 2, 0);
-      btmFrame.userData.isWallLayer = true;
+      btmFrame.userData.isCurtainFrame = true;
       btmFrame.userData.layoutWallId = wall.id;
       grp.add(btmFrame);
 
       const jambGeo = new THREE.BoxGeometry(mullionWM, heightM, mullionDM);
       const leftJamb = new THREE.Mesh(jambGeo, mullionMat);
       leftJamb.position.set(-lenM / 2 + mullionWM / 2, 0, 0);
-      leftJamb.userData.isWallLayer = true;
+      leftJamb.userData.isCurtainFrame = true;
       leftJamb.userData.layoutWallId = wall.id;
       grp.add(leftJamb);
 
       const rightJamb = new THREE.Mesh(jambGeo, mullionMat);
       rightJamb.position.set(lenM / 2 - mullionWM / 2, 0, 0);
-      rightJamb.userData.isWallLayer = true;
+      rightJamb.userData.isCurtainFrame = true;
       rightJamb.userData.layoutWallId = wall.id;
       grp.add(rightJamb);
 
@@ -5263,7 +5332,7 @@ export default class LayoutSceneLayer {
         const vMullionGeo = new THREE.BoxGeometry(mullionWM, heightM, mullionDM);
         const vMullionMesh = new THREE.Mesh(vMullionGeo, mullionMat);
         vMullionMesh.position.set(xOffsetM, 0, 0);
-        vMullionMesh.userData.isWallLayer = true;
+        vMullionMesh.userData.isCurtainFrame = true;
         vMullionMesh.userData.layoutWallId = wall.id;
         grp.add(vMullionMesh);
 
@@ -5271,7 +5340,7 @@ export default class LayoutSceneLayer {
         const capGeo = new THREE.BoxGeometry(mullionWM + 0.01, heightM, 0.015);
         const capMesh = new THREE.Mesh(capGeo, capMat);
         capMesh.position.set(xOffsetM, 0, -mullionDM / 2 - 0.007);
-        capMesh.userData.isWallLayer = true;
+        capMesh.userData.isCurtainFrame = true;
         capMesh.userData.layoutWallId = wall.id;
         grp.add(capMesh);
       }
@@ -5284,7 +5353,7 @@ export default class LayoutSceneLayer {
         const hMullionGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
         const hMullionMesh = new THREE.Mesh(hMullionGeo, mullionMat);
         hMullionMesh.position.set(0, yOffsetM, 0);
-        hMullionMesh.userData.isWallLayer = true;
+        hMullionMesh.userData.isCurtainFrame = true;
         hMullionMesh.userData.layoutWallId = wall.id;
         grp.add(hMullionMesh);
 
@@ -5292,7 +5361,7 @@ export default class LayoutSceneLayer {
         const capGeo = new THREE.BoxGeometry(lenM, mullionWM + 0.01, 0.015);
         const capMesh = new THREE.Mesh(capGeo, capMat);
         capMesh.position.set(0, yOffsetM, -mullionDM / 2 - 0.007);
-        capMesh.userData.isWallLayer = true;
+        capMesh.userData.isCurtainFrame = true;
         capMesh.userData.layoutWallId = wall.id;
         grp.add(capMesh);
       }
