@@ -2702,13 +2702,15 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   createSiteTerrain: async (levelId) => {
     const s = get();
     if (!s.projectId) return null;
-    const target = s.levels.find(l => l.id === levelId) ?? [...s.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
+    const target = s.levels.find(l => l.id === levelId) ?? [...s.levels].sort((a, b) => Math.abs(a.elevationMm) - Math.abs(b.elevationMm))[0];
     if (!target) return null;
     const source = s.walls.filter(w => w.levelId === target.id);
     const xs = source.flatMap(w => [w.startXmm, w.endXmm]), ys = source.flatMap(w => [w.startYmm, w.endYmm]);
     const minXmm = (xs.length ? Math.min(...xs) : -5000) - 6000, maxXmm = (xs.length ? Math.max(...xs) : 5000) + 6000;
     const minYmm = (ys.length ? Math.min(...ys) : -5000) - 6000, maxYmm = (ys.length ? Math.max(...ys) : 5000) + 6000;
-    const terrain: LayoutSlab = { id: newLayoutId("site"), projectId: s.projectId, levelId: target.id, kind: "floor", minXmm, minYmm, maxXmm, maxYmm, boundary: [{ xMm: minXmm, yMm: minYmm }, { xMm: maxXmm, yMm: minYmm }, { xMm: maxXmm, yMm: maxYmm }, { xMm: minXmm, yMm: maxYmm }], thicknessMm: 40, elevationOffsetMm: 0, material: "terrain-grass", terrain: createTerrainGrid(minXmm, minYmm, maxXmm, maxYmm), createdAt: Date.now() };
+    const boundary = [{ xMm: minXmm, yMm: minYmm }, { xMm: maxXmm, yMm: minYmm }, { xMm: maxXmm, yMm: maxYmm }, { xMm: minXmm, yMm: maxYmm }];
+    const building = xs.length ? { minXmm: Math.min(...xs), minYmm: Math.min(...ys), maxXmm: Math.max(...xs), maxYmm: Math.max(...ys) } : undefined;
+    const terrain: LayoutSlab = { id: newLayoutId("site"), projectId: s.projectId, levelId: target.id, kind: "floor", minXmm, minYmm, maxXmm, maxYmm, boundary, thicknessMm: 40, elevationOffsetMm: 0, material: "terrain-grass", terrain: { ...createTerrainGrid(minXmm, minYmm, maxXmm, maxYmm, 17, 17, 0, building), zones: [{ boundary, material: "grass" }] }, createdAt: Date.now() };
     pushWerkzeugHistory();
     await idbPutSlab(terrain);
     set(prev => ({ slabs: [...prev.slabs, terrain], selectedSlabId: terrain.id, armedLayoutTool: null, lastMutatedAt: Date.now() }));

@@ -134,7 +134,7 @@ export type LayoutWindow = {
 /** Horizontal slab — floor plate or roof plate. */
 export type LayoutSlab = {
   /** Optional subdivided site mesh used by the Earth/Site tool. Heights are mm above the slab base. */
-  terrain?: { rows: number; cols: number; points: { xMm: number; yMm: number; heightMm: number }[]; zones?: { boundary: { xMm: number; yMm: number }[]; material: "earth" | "grass" | "road" }[] };
+  terrain?: { rows: number; cols: number; points: { xMm: number; yMm: number; heightMm: number }[]; zones?: { boundary: { xMm: number; yMm: number }[]; material: "earth" | "grass" | "mud" | "road" | "water" }[] };
   roofJoin?: { positions: number[]; targetId: string; originalBoundary: { xMm: number; yMm: number }[]; originalEdgeSlopes?: { edgeIdx: number; pitchDeg: number; isSloped: boolean }[] };
   id: string;
   projectId: string;

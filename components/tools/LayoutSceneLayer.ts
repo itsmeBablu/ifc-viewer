@@ -3939,6 +3939,7 @@ export default class LayoutSceneLayer {
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.9,
       metalness: 0.02,
+      vertexColors: Boolean(slab.terrain),
       transparent: true,
       opacity: 0.85,
     });
@@ -4002,13 +4003,17 @@ export default class LayoutSceneLayer {
     const terrain = slab.terrain;
     if (!terrain || terrain.rows < 2 || terrain.cols < 2) return this.buildSlabGeometry(slab);
     const positions: number[] = [], indices: number[] = [];
-    for (const p of terrain.points) positions.push(fromMm(p.xMm), fromMm(p.heightMm), fromMm(p.yMm));
+    const zoneColor = (material: string) => ({ grass: new THREE.Color("#6f9d4f"), earth: new THREE.Color("#8b6b4a"), mud: new THREE.Color("#5f4635"), road: new THREE.Color("#4b5563"), water: new THREE.Color("#3b82f6") }[material] ?? new THREE.Color("#6f9d4f"));
+    const inside = (x: number, y: number, polygon: { xMm: number; yMm: number }[]) => { let hit = false; for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) { const a = polygon[i], b = polygon[j]; if ((a.yMm > y) !== (b.yMm > y) && x < (b.xMm - a.xMm) * (y - a.yMm) / ((b.yMm - a.yMm) || 1) + a.xMm) hit = !hit; } return hit; };
+    const colors: number[] = [];
+    for (const p of terrain.points) { positions.push(fromMm(p.xMm), fromMm(p.heightMm), fromMm(p.yMm)); const zone = (terrain.zones ?? []).find(z => inside(p.xMm, p.yMm, z.boundary)); const c = zoneColor(zone?.material ?? "grass"); colors.push(c.r, c.g, c.b); }
     for (let row = 0; row < terrain.rows - 1; row++) for (let col = 0; col < terrain.cols - 1; col++) {
       const a = row * terrain.cols + col, b = a + 1, c = a + terrain.cols, d = c + 1;
       indices.push(a, c, b, b, c, d);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingBox(); geometry.computeBoundingSphere();
     geometry.userData.isTerrain = true;
     return geometry;

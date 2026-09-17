@@ -675,7 +675,7 @@ export default function DesktopIsland() {
   const handleCapsuleClick = (id: string) => {
   const layout = useLayoutDrawingStore.getState();
     if (id === "site") {
-      const level = layout.levels.slice().sort((a, b) => a.elevationMm - b.elevationMm)[0];
+      const level = layout.levels.slice().sort((a, b) => Math.abs(a.elevationMm) - Math.abs(b.elevationMm))[0];
       if (level) void layout.createSiteTerrain(level.id);
       else useAppStore.getState().setRightPanelOpen(true);
       return;
