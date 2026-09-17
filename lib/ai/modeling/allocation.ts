@@ -16,6 +16,11 @@ export const RESIDENTIAL_PRESETS = [
   { label: "Courtyard villa", variant: "villa", bedrooms: 4, layoutStyle: "courtyard" },
   { label: "5-bedroom duplex", variant: "duplex", bedrooms: 5, layoutStyle: "split" },
   { label: "6-bedroom duplex", variant: "duplex", bedrooms: 6, layoutStyle: "central" },
+  { label: "Scandinavian courtyard home", variant: "villa", bedrooms: 3, layoutStyle: "courtyard", roofStyle: "german-gable", cultureStyle: "standard", separateKitchen: true, ensuiteBathrooms: true, garage: "enclosed", gardenAreaM2: 80 },
+  { label: "Mediterranean patio villa", variant: "villa", bedrooms: 4, layoutStyle: "courtyard", roofStyle: "german-hip", cultureStyle: "standard", separateKitchen: true, ensuiteBathrooms: true, garage: "enclosed", gardenAreaM2: 120 },
+  { label: "Modern split-level villa", variant: "duplex", bedrooms: 5, layoutStyle: "split", roofStyle: "modern-flat", cultureStyle: "standard", separateKitchen: true, ensuiteBathrooms: true, garage: "enclosed", gardenAreaM2: 70 },
+  { label: "Penthouse terrace apartment", variant: "apartment", bedrooms: 3, layoutStyle: "corner", separateKitchen: true, ensuiteBathrooms: true, totalAreaM2: 150 },
+  { label: "Organic curved courtyard", variant: "villa", bedrooms: 4, layoutStyle: "courtyard", footprint: "drawn", footprintPoints: [{x:.08,y:.18},{x:.22,y:.06},{x:.78,y:.06},{x:.92,y:.2},{x:.84,y:.46},{x:.94,y:.78},{x:.7,y:.94},{x:.3,y:.94},{x:.06,y:.76},{x:.16,y:.48}], roofStyle: "german-hip", gardenAreaM2: 100 },
 ] as const;
 
 export function conceptStair(heightMm: number) {
