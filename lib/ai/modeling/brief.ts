@@ -53,6 +53,7 @@ export const residentialOptions = {
   garage: z.enum(["none", "open", "enclosed"]).optional(), garageWidthM: z.number().min(3).max(12).optional(), garageDepthM: z.number().min(5.5).max(15).optional(),
   gardenAreaM2: z.number().min(0).max(2000).optional(),
   apartmentFloors:z.number().int().min(1).max(12).optional(), apartmentsPerFloor:z.number().int().min(2).max(10).optional(), bedroomsPerApartment:z.union([z.literal(1),z.literal(2),z.literal(3)]).optional(),
+  layoutSeed:z.number().int().min(0).max(1000000).optional(),
   layoutStyle:z.enum(["linear","courtyard","corner","split","central"]).optional(),
   cultureStyle:z.enum(["standard","vastu","german"]).optional(), roofStyle:z.enum(["german-gable","german-hip","mansard","modern-flat"]).optional(),
   separateKitchen:z.boolean().optional(), ensuiteBathrooms:z.boolean().optional(),
@@ -65,3 +66,9 @@ export const residentialParametersSchema = z.object({
   livingAreaM2: z.number().min(10).max(300).optional(), kitchenAreaM2: z.number().min(6).max(300).optional(), bathroomAreaM2: z.number().min(4).max(300).optional(),
   ...residentialOptions,
 }).strict();
+
+
+
+
+
+

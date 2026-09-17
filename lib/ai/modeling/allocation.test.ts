@@ -45,6 +45,13 @@ it("parses Vastu planning and German roof presets", () => {
   expect(defaultResidentialBrief("3 bedroom Vastu apartment")).toMatchObject({ cultureStyle: "vastu", bedrooms: 3 });
   expect(defaultResidentialBrief("German mansard villa")).toMatchObject({ cultureStyle: "german", roofStyle: "mansard" });
 });
+it("refresh seeds produce distinct editable bedroom subdivisions", () => {
+  const a = expandModelPlan({ summary: "A", assumptions: [], actions: [{ kind: "apartment_layout", id: "a", levelId: "l", bedrooms: 3, layoutSeed: 11 }] }).actions;
+  const b = expandModelPlan({ summary: "B", assumptions: [], actions: [{ kind: "apartment_layout", id: "b", levelId: "l", bedrooms: 3, layoutSeed: 982 }] }).actions;
+  const wallsA = a.filter(x => x.kind === "wall").map(x => x.kind === "wall" ? `${x.startXmm}:${x.endXmm}` : "").join(",");
+  const wallsB = b.filter(x => x.kind === "wall").map(x => x.kind === "wall" ? `${x.startXmm}:${x.endXmm}` : "").join(",");
+  expect(wallsA).not.toBe(wallsB);
+});
 it.each([
   ["create a 2 bedroom apartment with total area 110 m2 and bedrooms 24 m2 each", { variant: "apartment", bedrooms: 2, totalAreaM2: 110, bedroomAreaM2: 24 }],
   ["create a villa with living room 40 square meters and kitchen 15 sqm", { variant: "villa", bedrooms: 3, livingAreaM2: 40, kitchenAreaM2: 15 }],

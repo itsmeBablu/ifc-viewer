@@ -27,6 +27,11 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   const allocation = options.allocation ?? building!.allocation;
   const t = item.thicknessMm, p = 150, roomW = allocation.roomWidthMm;
   const { bays, widthMm: w, depthMm: d, bedroomEndMm: bedroomEnd, corridorEndMm: corridorEnd, bathroomWidthMm } = allocation;
+  // Seeded subdivision: vary bay proportions while preserving the overall footprint.
+  const seed = item.layoutSeed ?? 0;
+  const factors = Array.from({ length: bays }, (_, i) => 0.82 + (((seed * 17 + i * 31) % 37) / 100));
+  const factorTotal = factors.reduce((sum, value) => sum + value, 0);
+  const bayWidths = factors.map(value => roomW * bays * value / factorTotal);
   let wallIndex = 0, openingIndex = 0;
   const wall = (x1: number, y1: number, x2: number, y2: number, thickness = p) => {
     const id = `${item.id}:wall:${wallIndex++}`;
@@ -42,9 +47,10 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   const bedrooms = wall(0, bedroomEnd, w, bedroomEnd);
   const living = wall(0, corridorEnd, w, corridorEnd);
   for (let i = 0; i < bays; i++) {
-    const start = t / 2 + i * (roomW + p);
-    door(bedrooms, start + roomW / 2);
-    window(front, start + roomW / 2);
+    const start = t / 2 + bayWidths.slice(0, i).reduce((sum, value) => sum + value + p, 0);
+    const bayWidth = bayWidths[i];
+    door(bedrooms, start + bayWidth / 2);
+    window(front, start + bayWidth / 2);
     if (i) wall(start - p / 2, 0, start - p / 2, bedroomEnd);
   }
   // Modern plans can isolate the kitchen and give each sleeping bay a compact ensuite.

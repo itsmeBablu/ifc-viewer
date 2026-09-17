@@ -32,7 +32,7 @@ export default function AiBuildingPresets({disabled,heightMm,thicknessMm,onChoos
       {error&&<p role="alert" className="ai-error">{error}</p>}
       {p.sketches&&<p className="ai-text-muted">Custom drawing Â· {p.sketches.length} floors Â· {p.sketches.reduce((sum,s)=>sum+polygonArea(s.points)/1e6,0).toFixed(1)} mÂ². Drawn dimensions determine room sizes.</p>}
       {allocation&&<div className="ai-area-summary" aria-live="polite"><strong>{Number((allocation.totalAreaM2+(result?.extraAreaM2??0)).toFixed(1))} mÂ² total Â· {allocation.floors} floor{allocation.floors>1?"s":""}</strong><p>Bedrooms {Number(allocation.bedroomTotalM2.toFixed(1))} Â· Living {Number(allocation.livingTotalM2.toFixed(1))} Â· Kitchen {Number(allocation.kitchenTotalM2.toFixed(1))} Â· Baths {Number(allocation.bathroomTotalM2.toFixed(1))} mÂ²{(result?.extraAreaM2??0)>.1?` Â· Additional living wings ${result!.extraAreaM2.toFixed(1)} mÂ²`:""}</p></div>}
-      <button type="button" className="ai-create-layout" disabled={disabled||!!error||(p.bedroomAreaM2??20)<11} onClick={()=>onCreate(residentialCommand(p),p)}>Create this layout</button>
+      <div className="ai-layout-actions"><button type="button" className="ai-secondary-button" disabled={disabled} onClick={()=>update({...p,layoutSeed:Math.floor(Math.random()*1000000)})}>Refresh / Shuffle layout</button><button type="button" className="ai-create-layout" disabled={disabled||!!error||(p.bedroomAreaM2??20)<11} onClick={()=>onCreate(residentialCommand(p),p)}>Create this layout</button></div>
     </details>}
   </section>;
 }
