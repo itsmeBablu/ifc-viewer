@@ -18,7 +18,7 @@ export type CommandRequest = z.infer<typeof commandRequestSchema>;
 
 export const functionDeclarations = [{
   name: "ask_clarification",
-  description: "Ask for essential missing house dimensions, storeys, room requirements, or ambiguous element references. Do not guess consequential design choices.",
+  description: "Ask only for ambiguous references, existing system connections or conflicting constraints. Use concept defaults for routine creation dimensions and room requirements.",
   parameters: { type: "OBJECT", properties: { question: { type: "STRING" } }, required: ["question"] },
 }, {
   name: "answer_question",

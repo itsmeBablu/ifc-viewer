@@ -10,6 +10,12 @@ const input: CommandRequest = { command: "Create an 8 m by 6 m shell", attachmen
     elements: [{ id: "ground", kind: "level", properties: { name: "Ground", elevationMm: 0, heightMm: 3000 } }] } };
 
 describe("runtime creation playbooks", () => {
+  it("offers only the compact layout recipe for standard apartment requests", () => {
+    const playbook = creationPlaybook({ ...input, command: "Create a two bedroom apartment with default sizes" });
+    expect(playbook.kinds).toEqual(["level", "apartment_layout"]);
+    expect(playbook.catalog).toEqual([]);
+    expect(JSON.stringify(toolsForCreation("build", playbook.kinds)).length).toBeLessThan(JSON.stringify(functionDeclarations).length / 4);
+  });
   it("reduces shell tools and catalogue without discarding validation geometry", () => {
     const playbook = creationPlaybook(input);
     expect(playbook.kinds).toContain("rectangular_shell");
