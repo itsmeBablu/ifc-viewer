@@ -45,6 +45,24 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const selectedCount = useLayoutDrawingStore(s => s.selectedElements.length);
   const levelCount = useLayoutDrawingStore(s => s.levels.length);
   const modelInventory = useLayoutDrawingStore(s => `${s.walls.length} walls · ${s.doors.length} doors · ${s.windows.length} windows · ${s.slabs.length} floors/roofs · ${s.mepEquipment.length} furniture/equipment · ${s.pipes.length} pipes · ${s.ducts.length} ducts · ${s.cableTrays.length} trays · ${s.columns.length} columns · ${s.beams.length} beams`);
+  // Sketch summary for AI context
+  const sketchSummary = useLayoutDrawingStore(s => {
+    const params = (s as { residentialParameters?: { sketches?: Array<{ points: Array<{xMm:number;yMm:number}>; lines: Array<{start:{xMm:number;yMm:number};end:{xMm:number;yMm:number}}>; labels?: Array<{name:string;use:string}> }> } }).residentialParameters;
+    const sketches = params?.sketches;
+    if (!sketches?.length) return "";
+    const parts: string[] = [`Sketch drawing: ${sketches.length} floor(s)`];
+    sketches.forEach((sk, fi) => {
+      const lvl = s.levels[fi];
+      const floorLabel = lvl ? `${lvl.name} (${(lvl.elevationMm/1000).toFixed(1)}m)` : `Floor ${fi}`;
+      const totalLines = sk.points.length + sk.lines.length;
+      const allPts = [...sk.points, ...sk.lines.flatMap(l => [l.start, l.end])];
+      const maxX = allPts.length ? Math.max(...allPts.map(p => p.xMm)) : 0;
+      const maxY = allPts.length ? Math.max(...allPts.map(p => p.yMm)) : 0;
+      const rooms = sk.labels?.map(l => `${l.name} (${l.use})`).join(", ") ?? "";
+      parts.push(`  ${floorLabel}: ${totalLines} wall segments, approx ${(maxX/1000).toFixed(1)}m × ${(maxY/1000).toFixed(1)}m${rooms ? `, rooms: ${rooms}` : ""}`);
+    });
+    return parts.join("\n");
+  });
   const [conversationKey,setConversationKey]=useState(0);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
@@ -240,19 +258,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     const submittedResidential=template?.parameters??residential;
     const submittedAttachments = includeAttachments ? attachments : [];
     setText(""); setResidential(undefined); setFailedCommand(null); setIncludeAttachments(false);
-    busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
-    pushHistory({ role: "user", text: submittedText });
-    const controller = new AbortController(); requestRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 240_000);
-    try {
-      const context = currentAiContext();
-      const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: submittedText, model, mode, discipline: mepModeActive ? "mep" : "arch", context, ...(mode === "build" && submittedResidential && !submittedAttachments.length ? { residential:submittedResidential } : {}), ...(submittedAttachments.length && drawingReference ? { drawingReference } : {}), attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
-      if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
-      const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
-      const remainingHeader = response.headers.get("X-AI-Remaining");
-      const resetHeader = response.headers.get("X-AI-Reset");
-      const totalHeader = response.headers.get("X-AI-Total");
       const remaining = Number(remainingHeader);
       const reset = Number(resetHeader);
       const total = Number(totalHeader);
