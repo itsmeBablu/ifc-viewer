@@ -4853,6 +4853,12 @@ export default class LayoutSceneLayer {
     const totalThickM = fromMm(totalThickMm);
     const halfThick = totalThickM / 2;
 
+    const dx = cl.endXmm - cl.startXmm;
+    const dy = cl.endYmm - cl.startYmm;
+    const len = Math.max(50, Math.hypot(dx, dy));
+    const lenM = fromMm(len);
+    const halfLen = lenM / 2;
+
     const edgeMat = new THREE.LineBasicMaterial({
       color: 0x18181b,
       depthTest: false,
