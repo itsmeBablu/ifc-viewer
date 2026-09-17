@@ -3,7 +3,7 @@ export type SketchPoint = { xMm: number; yMm: number };
 export type RoomUse = "bedroom" | "living" | "kitchen" | "dining" | "study" | "bathroom" | "corridor" | "garage";
 export type SketchSegment = { start: SketchPoint; end: SketchPoint };
 export type FloorSketch = { points: SketchPoint[]; lines: SketchSegment[]; furnitureLines?: SketchSegment[]; mepLines?: SketchSegment[]; labels?: { point:SketchPoint; name:string; use:RoomUse }[]; locks?: { index:number; interior:boolean; lengthMm:number }[]; wallTypes?: { index:number; interior:boolean; type:"exterior"|"partition"|"fire"|"curtain" }[]; openings?: { point:SketchPoint; kind:"door"|"doubleDoor"|"window"; widthMm:number }[]; gardens?: SketchPoint[][] };
-export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomDistribution?: (1|2|3)[]; layoutSeed?: number; cultureStyle?: "standard" | "vastu" | "german"; roofStyle?: "german-gable" | "german-hip" | "mansard" | "modern-flat"; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; apartmentFloors?: number; apartmentsPerFloor?: number; bedroomsPerApartment?: 1|2|3; layoutStyle?: "linear" | "courtyard" | "corner" | "split" | "central"; separateKitchen?: boolean; ensuiteBathrooms?: boolean; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
+export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomDistribution?: (1|2|3)[]; layoutSeed?: number; plotAreaM2?: number; plotWidthM?: number; plotLengthM?: number; balcony?: "none" | "front" | "terrace" | "roof"; cultureStyle?: "standard" | "vastu" | "german"; roofStyle?: "german-gable" | "german-hip" | "mansard" | "modern-flat"; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; apartmentFloors?: number; apartmentsPerFloor?: number; bedroomsPerApartment?: 1|2|3; layoutStyle?: "linear" | "courtyard" | "corner" | "split" | "central"; separateKitchen?: boolean; ensuiteBathrooms?: boolean; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
 export const RESIDENTIAL_PRESETS = [
   { label: "Multi-storey apartments", variant: "apartment", bedrooms: 2, apartmentFloors: 4, apartmentsPerFloor: 4, bedroomsPerApartment: 2, layoutStyle: "central", cultureStyle: "standard" },
   { label: "India Vastu 3BHK", variant: "apartment", bedrooms: 3, layoutStyle: "central", cultureStyle: "vastu", separateKitchen: true, ensuiteBathrooms: true },
@@ -23,13 +23,53 @@ export const RESIDENTIAL_PRESETS = [
   { label: "Organic curved courtyard", variant: "villa", bedrooms: 4, layoutStyle: "courtyard", footprint: "drawn", footprintPoints: [{x:.08,y:.18},{x:.22,y:.06},{x:.78,y:.06},{x:.92,y:.2},{x:.84,y:.46},{x:.94,y:.78},{x:.7,y:.94},{x:.3,y:.94},{x:.06,y:.76},{x:.16,y:.48}], roofStyle: "german-hip", gardenAreaM2: 100 },
 ] as const;
 
-/** Area-grounded typology suggestions used by the guided plot flow. */
-export function suggestResidentialTypes(plotAreaM2: number) {
-  if (!Number.isFinite(plotAreaM2) || plotAreaM2 <= 0) return [] as const;
-  if (plotAreaM2 < 70) return [{ label: "1-bedroom apartment", reason: "Compact plot" }, { label: "2-bedroom starter apartment", reason: "Efficient footprint" }];
-  if (plotAreaM2 < 140) return [{ label: "2-bedroom apartment", reason: "Fits standard 70–110 m² internal area" }, { label: "3-bedroom apartment", reason: "Fits with compact circulation" }, { label: "2-bedroom duplex", reason: "Stacks rooms over two floors" }];
-  if (plotAreaM2 < 240) return [{ label: "3-bedroom villa", reason: "Comfortable single-storey footprint" }, { label: "4-bedroom duplex", reason: "Room for stacked family zones" }, { label: "3-bedroom courtyard villa", reason: "Courtyard and garden remain possible" }];
-  return [{ label: "4-bedroom villa", reason: "Large single-storey plan" }, { label: "5-bedroom duplex", reason: "Generous two-storey layout" }, { label: "Apartment block", reason: "Shared core and multiple homes fit" }];
+export type TypologySuggestion = {
+  label: string;
+  reason: string;
+  variant: ResidentialVariant;
+  bedrooms: number;
+  layoutStyle?: ResidentialParameters["layoutStyle"];
+  apartmentFloors?: number;
+  apartmentsPerFloor?: number;
+  bedroomsPerApartment?: 1 | 2 | 3;
+  estimatedAreaM2: number;
+};
+
+/** Area-grounded typology suggestions calculated from Neufert/DIN site coverage and space standards */
+export function suggestResidentialTypes(plotAreaM2: number): TypologySuggestion[] {
+  if (!Number.isFinite(plotAreaM2) || plotAreaM2 <= 0) return [];
+  if (plotAreaM2 < 70) {
+    return [
+      { label: "1-bedroom compact apartment", reason: "Fits compact urban plot (42–48 m² footprint)", variant: "apartment", bedrooms: 1, estimatedAreaM2: 45, layoutStyle: "linear" },
+      { label: "2-bedroom starter apartment", reason: "Efficient space planning (55–65 m² footprint)", variant: "apartment", bedrooms: 2, estimatedAreaM2: 60, layoutStyle: "linear" },
+    ];
+  }
+  if (plotAreaM2 < 140) {
+    return [
+      { label: "2-bedroom apartment", reason: "Standard 70–85 m² internal area with balcony", variant: "apartment", bedrooms: 2, estimatedAreaM2: 75, layoutStyle: "linear" },
+      { label: "3-bedroom apartment", reason: "Family 3-bed layout (90–105 m²)", variant: "apartment", bedrooms: 3, estimatedAreaM2: 95, layoutStyle: "corner" },
+      { label: "2-bedroom duplex", reason: "Stacks rooms over 2 floors (80–90 m² total)", variant: "duplex", bedrooms: 2, estimatedAreaM2: 85, layoutStyle: "split" },
+    ];
+  }
+  if (plotAreaM2 < 260) {
+    return [
+      { label: "3-bedroom villa", reason: "Comfortable single-storey footprint (120–140 m²)", variant: "villa", bedrooms: 3, estimatedAreaM2: 130, layoutStyle: "linear" },
+      { label: "4-bedroom duplex", reason: "Room for stacked family zones over 2 floors (155–175 m²)", variant: "duplex", bedrooms: 4, estimatedAreaM2: 165, layoutStyle: "split" },
+      { label: "3-bedroom courtyard villa", reason: "U-shaped plan enclosing a private patio garden", variant: "villa", bedrooms: 3, estimatedAreaM2: 140, layoutStyle: "courtyard" },
+    ];
+  }
+  if (plotAreaM2 < 500) {
+    return [
+      { label: "4-bedroom luxury villa", reason: "Generous single-storey footprint (180–220 m²)", variant: "villa", bedrooms: 4, estimatedAreaM2: 195, layoutStyle: "linear" },
+      { label: "5-bedroom duplex", reason: "Executive 2-storey residence (210–250 m²)", variant: "duplex", bedrooms: 5, estimatedAreaM2: 230, layoutStyle: "split" },
+      { label: "4-bedroom courtyard villa", reason: "Day & night wings around central courtyard", variant: "villa", bedrooms: 4, estimatedAreaM2: 200, layoutStyle: "courtyard" },
+    ];
+  }
+  return [
+    { label: "4-bedroom villa", reason: "Spacious estate home (200–240 m²)", variant: "villa", bedrooms: 4, estimatedAreaM2: 220, layoutStyle: "linear" },
+    { label: "5-bedroom duplex", reason: "Grand 2-storey residence (240–280 m²)", variant: "duplex", bedrooms: 5, estimatedAreaM2: 260, layoutStyle: "central" },
+    { label: "Apartment block", reason: "3 storeys, 4 homes per floor with shared core & lift", variant: "apartment", bedrooms: 2, estimatedAreaM2: 720, apartmentFloors: 3, apartmentsPerFloor: 4, bedroomsPerApartment: 2, layoutStyle: "central" },
+  ];
 }
 
 export function conceptStair(heightMm: number) {
@@ -44,7 +84,6 @@ export function conceptStair(heightMm: number) {
 export function allocateResidential(input: ResidentialParameters, wallHeightMm = 3000, thicknessMm = 200, fixedInternalWidthMm?: number) {
   const { variant, bedrooms } = input;
   const bedroomAreaM2 = input.bedroomAreaM2 ?? 20;
-  if (!Number.isInteger(bedrooms) || bedrooms < 1 || bedrooms > 6 || !Number.isFinite(bedroomAreaM2) || bedroomAreaM2 < 7.5 || bedroomAreaM2 > 100) throw new Error("Choose 1–6 bedrooms with 7.5–100 m² per bedroom.");
   for (const [name, area, minimum] of [["living", input.livingAreaM2, 10], ["kitchen", input.kitchenAreaM2, 6], ["bathroom", input.bathroomAreaM2, 4]] as const) {
     if (area !== undefined && (!Number.isFinite(area) || area < minimum || area > 300)) throw new Error(`${name} area must be ${minimum}–300 m².`);
   }
@@ -131,7 +170,7 @@ export function residentialCommand(input: ResidentialParameters) {
   if(input.sketches)return `Create a ${input.variant} from my ${input.sketches.length} floor drawings, with ${input.bedrooms} bedrooms. Preserve the exact outside and inside line dimensions${input.furnished!==false?", with properly arranged basic furniture":""}${input.underfloorHeating?", underfloor heating":""}${input.piping&&input.piping!=="none"?`, water piping ${input.piping}`:""}${input.ducts==="ceiling"?", ceiling ducts":""}.`;
   const noun = input.variant === "apartment" ? "apartment" : input.variant === "villa" ? "villa" : "duplex house";
   const styleFootprint = input.layoutStyle === "courtyard" ? "u" : input.layoutStyle === "corner" ? "l" : input.layoutStyle === "central" ? "u" : input.footprint;
-  return `Create a ${input.bedrooms}-bedroom ${noun}${input.totalAreaM2 !== undefined ? ` with total area ${input.totalAreaM2} m²` : ""} and bedrooms ${input.bedroomAreaM2 ?? 20} m² each${input.livingAreaM2 !== undefined ? `, living room ${input.livingAreaM2} m²` : ""}${input.kitchenAreaM2 !== undefined ? `, kitchen ${input.kitchenAreaM2} m²` : ""}${input.bathroomAreaM2 !== undefined ? `, bathroom ${input.bathroomAreaM2} m²` : ""}${styleFootprint&&styleFootprint!=="rectangle"?`, ${input.layoutStyle ?? styleFootprint} footprint`:""}${input.widthM&&input.lengthM?`, ${input.widthM} m wide by ${input.lengthM} m long inside walls`:""}${input.cultureStyle === "vastu" ? ", Vastu-oriented zoning" : input.cultureStyle === "german" ? ", German planning style" : ""}${input.roofStyle ? `, ${input.roofStyle} roof` : ""}${input.separateKitchen?", separate kitchen room":""}${input.ensuiteBathrooms?", ensuite bathrooms":""}${input.furnished!==undefined?`, ${input.furnished?"basic furniture":"unfurnished"}`:""}${input.underfloorHeating?", underfloor heating":""}${input.piping&&input.piping!=="none"?`, water piping ${input.piping}`:""}${input.ducts==="ceiling"?", ducts below roof":""}${input.garage&&input.garage!=="none"?`, ${input.garage} garage ${input.garageWidthM??3.5} × ${input.garageDepthM??6} m`:""}${input.gardenAreaM2?`, garden ${input.gardenAreaM2} m²`:""}`;
+  return `Create a ${input.bedrooms}-bedroom ${noun}${input.totalAreaM2 !== undefined ? ` with total area ${input.totalAreaM2} m²` : ""} and bedrooms ${input.bedroomAreaM2 ?? 20} m² each${input.livingAreaM2 !== undefined ? `, living room ${input.livingAreaM2} m²` : ""}${input.kitchenAreaM2 !== undefined ? `, kitchen ${input.kitchenAreaM2} m²` : ""}${input.bathroomAreaM2 !== undefined ? `, bathroom ${input.bathroomAreaM2} m²` : ""}${styleFootprint&&styleFootprint!=="rectangle"?`, ${input.layoutStyle ?? styleFootprint} footprint`:""}${input.widthM&&input.lengthM?`, ${input.widthM} m wide by ${input.lengthM} m long inside walls`:""}${input.cultureStyle === "vastu" ? ", Vastu-oriented zoning" : input.cultureStyle === "german" ? ", German planning style" : ""}${input.roofStyle ? `, ${input.roofStyle} roof` : ""}${input.separateKitchen?", separate kitchen room":""}${input.ensuiteBathrooms?", ensuite bathrooms":""}${input.furnished!==undefined?`, ${input.furnished?"basic furniture":"unfurnished"}`:""}${input.underfloorHeating?", underfloor heating":""}${input.piping&&input.piping!=="none"?`, water piping ${input.piping}`:""}${input.ducts==="ceiling"?", ducts below roof":""}${input.garage&&input.garage!=="none"?`, ${input.garage} garage ${input.garageWidthM??3.5} × ${input.garageDepthM??6} m`:""}${input.gardenAreaM2?`, garden ${input.gardenAreaM2} m²`:""}${input.layoutSeed !== undefined ? `, layout seed ${input.layoutSeed}` : ""}`;
 }
 
 

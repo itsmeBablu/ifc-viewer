@@ -604,13 +604,19 @@ export default function AiAssistant() {
     return () => ctx.revert();
   }, []);
 
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     if (triggerRef.current) {
       triggerRectRef.current = triggerRef.current.getBoundingClientRect();
       gsap.killTweensOf(triggerRef.current);
     }
     if (configured !== null) setOpen(true);
-  };
+  }, [configured]);
+
+  useEffect(() => {
+    const onOpen = () => handleOpen();
+    window.addEventListener("open-smart-building-generator", onOpen);
+    return () => window.removeEventListener("open-smart-building-generator", onOpen);
+  }, [handleOpen]);
 
   const handleCloseComplete = useCallback(() => {
     setOpen(false);

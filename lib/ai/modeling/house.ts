@@ -31,7 +31,7 @@ export function houseActions(item: z.infer<typeof houseSchema>): AiAction[] {
     const prefix = `${item.id}:${floor ? "first" : "ground"}`;
     // All bays keep identical footprints; unused bedroom bays are optional studies.
     const bedrooms=floor?item.bedrooms-groundBedrooms:groundBedrooms;
-    let layout = apartmentActions(apartmentSchema.parse({ kind: "apartment_layout", id: prefix, levelId, bedrooms: Math.max(1,bedrooms), bedroomAreaM2: item.bedroomAreaM2, xMm: item.xMm, yMm: item.yMm, heightMm: item.heightMm, thicknessMm: item.thicknessMm,furnished:false }), { allocation, entrance: !floor });
+    let layout = apartmentActions(apartmentSchema.parse({ kind: "apartment_layout", id: prefix, levelId, bedrooms: Math.max(1,bedrooms), bedroomAreaM2: item.bedroomAreaM2, xMm: item.xMm, yMm: item.yMm, heightMm: item.heightMm, thicknessMm: item.thicknessMm, furnished: false, layoutSeed: item.layoutSeed !== undefined ? (item.layoutSeed + floor * 101) : undefined, separateKitchen: item.separateKitchen, ensuiteBathrooms: item.ensuiteBathrooms }), { allocation, entrance: !floor });
     layout.push(...furnishFloor(item,allocation,prefix,levelId,item.xMm,item.yMm,item.thicknessMm,item.heightMm,bedrooms,Boolean(floor)));
     const slab = layout.find((a): a is Extract<AiAction, { kind: "floor" }> => a.kind === "floor")!;
     if(building.polygon)layout=applyFootprint(layout,building.polygon,original.xMm,original.yMm,item.thicknessMm,item.heightMm,levelId,prefix);
@@ -48,7 +48,8 @@ export function houseActions(item: z.infer<typeof houseSchema>): AiAction[] {
       }
     }
     if (floor === floors - 1) {
-      const roofPreset = item.roofStyle === "modern-flat" ? "flat" : item.roofStyle === "german-gable" ? "gable" : item.roofStyle === "mansard" ? "shed" : item.roofStyle === "german-hip" ? "hip" : "hip";
+      const requestedPreset = item.roofStyle === "modern-flat" ? "flat" : item.roofStyle === "german-gable" ? "gable" : item.roofStyle === "mansard" ? "shed" : item.roofStyle === "german-hip" ? "hip" : (item.variant === "villa" && !building.polygon ? "gable" : "flat");
+      const roofPreset = (building.polygon && building.polygon.length !== 4) ? "flat" : requestedPreset;
       actions.push({ ...slab, kind: "roof", id: `${item.id}:roof`, roofPreset, pitchDeg: roofPreset === "flat" ? 0 : roofPreset === "gable" ? 35 : roofPreset === "shed" ? 25 : 30, ...(building.polygon?{boundary:offsetPolygon(building.polygon,item.thicknessMm).map(p=>({xMm:p.xMm+original.xMm,yMm:p.yMm+original.yMm}))}:{}), elevationOffsetMm: item.heightMm });
     }
   }

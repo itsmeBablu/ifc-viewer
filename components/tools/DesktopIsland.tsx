@@ -185,6 +185,7 @@ const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
 
 const ARCH_INSERT_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
+  { id: "smart-building", label: "Smart Building", hint: "Guided plot-based design workflow with realistic layout generator & Refresh", icon: <LuSparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
   { id: "site", label: "Earth / Site", hint: "Generate an editable subdivided terrain surface around the building", icon: <LuSunMedium className="h-3.5 w-3.5 text-lime-400 shrink-0" /> },
   { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
   { id: "extras", label: "Extras", hint: "Cars, trees, garden plants and lawn", icon: <LuSunMedium className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
@@ -674,6 +675,10 @@ export default function DesktopIsland() {
 
   const handleCapsuleClick = (id: string) => {
   const layout = useLayoutDrawingStore.getState();
+    if (id === "smart-building") {
+      window.dispatchEvent(new CustomEvent("open-smart-building-generator"));
+      return;
+    }
     if (id === "site") {
       const level = layout.levels.slice().sort((a, b) => Math.abs(a.elevationMm) - Math.abs(b.elevationMm))[0];
       if (level) void layout.createSiteTerrain(level.id);

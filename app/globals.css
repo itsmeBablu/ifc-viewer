@@ -5453,3 +5453,88 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
   .ai-sketch-canvas-note span {display:none;}
   .ai-sketch-toolbox { grid-template-columns:repeat(5,1fr); }
 }
+
+/* Smart Building Generator Guided Wizard Styles */
+.ai-wizard-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-overlay, rgba(15, 23, 42, 0.4));
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-divider, rgba(255, 255, 255, 0.08));
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.ai-wizard-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.ai-wizard-tab:hover:not(:disabled) {
+  color: var(--text-strong, #f8fafc);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ai-wizard-tab.is-active {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.ai-wizard-tab.is-complete {
+  color: #10b981;
+}
+
+.ai-wizard-tab-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+}
+
+.ai-wizard-tab.is-active .ai-wizard-tab-num {
+  background: #f59e0b;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.ai-wizard-tab.is-complete .ai-wizard-tab-num {
+  background: #10b98125;
+  color: #10b981;
+}
+
+.ai-typology-card {
+  position: relative;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.ai-typology-card:hover {
+  transform: translateY(-1px);
+}
+
+.ai-wizard-step {
+  padding: 4px 0;
+}
+
+.ai-wizard-step-header h4 {
+  margin-bottom: 2px;
+}
+

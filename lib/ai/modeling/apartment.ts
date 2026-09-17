@@ -38,7 +38,7 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
     actions.push({ kind: "wall", operation: "create", id, levelId: item.levelId, startXmm: item.xMm + x1, startYmm: item.yMm + y1, endXmm: item.xMm + x2, endYmm: item.yMm + y2, thicknessMm: thickness, heightMm: item.heightMm });
     return id;
   };
-  const door = (wallId: string, positionMm: number) => actions.push({ kind: "door", operation: "create", id: `${item.id}:door:${openingIndex++}`, wallId, positionMm, widthMm: 900, heightMm: 2100, hinge: "start", swing: 1, style: "wood" });
+  const door = (wallId: string, positionMm: number, style: "wood" | "metal" | "glass" | "double" | "sliding" | "garage" = "wood", widthMm = 900) => actions.push({ kind: "door", operation: "create", id: `${item.id}:door:${openingIndex++}`, wallId, positionMm, widthMm, heightMm: 2100, hinge: "start", swing: 1, style });
   const window = (wallId: string, positionMm: number) => actions.push({ kind: "window", operation: "create", id: `${item.id}:window:${openingIndex++}`, wallId, positionMm, widthMm: 1200, heightMm: 1200, sillHeightMm: 900, operationType: "casement" });
   const front = wall(0, 0, w, 0, t);
   wall(w, 0, w, d, t);
@@ -53,9 +53,15 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
     window(front, start + bayWidth / 2);
     if (i) wall(start - p / 2, 0, start - p / 2, bedroomEnd);
   }
+  // Layout arrangement varies with layoutSeed: flip bathroom & kitchen sides for genuine variety
+  const flipSide = (seed % 2 === 1);
+  const bathLeft = flipSide ? (w - t / 2 - bathroomWidthMm - p / 2) : (t / 2);
+  const bathRight = bathLeft + bathroomWidthMm + p / 2;
+  const bathroomEnd = corridorEnd + p / 2 + allocation.bathroomDepthMm + p / 2;
+
   // Modern plans can isolate the kitchen and give each sleeping bay a compact ensuite.
   if (item.separateKitchen) {
-    const kitchenStart = Math.max(t / 2 + bathroomWidthMm + p, w - 4200);
+    const kitchenStart = flipSide ? Math.min(bathLeft - 600, 4200) : Math.max(bathRight + 600, w - 4200);
     const kitchenWall = wall(kitchenStart, corridorEnd, kitchenStart, d);
     door(kitchenWall, Math.min(1100, d - corridorEnd - 700));
   }
@@ -73,14 +79,17 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
     }
   }
   // Group the bathroom beside the open kitchen/living zone, accessed from the corridor.
-  const bathroomEnd = corridorEnd + p / 2 + allocation.bathroomDepthMm + p / 2;
-  wall(t / 2 + bathroomWidthMm + p / 2, corridorEnd, t / 2 + bathroomWidthMm + p / 2, allocation.bathroomEnclosed ? bathroomEnd : d);
-  if (allocation.bathroomEnclosed) wall(0, bathroomEnd, t / 2 + bathroomWidthMm + p / 2, bathroomEnd);
-  door(living, t / 2 + bathroomWidthMm / 2);
-  door(living, w - t / 2 - 1000);
-  if (options.entrance !== false) door(entry, d - (bedroomEnd + corridorEnd) / 2);
+  wall(bathRight, corridorEnd, bathRight, allocation.bathroomEnclosed ? bathroomEnd : d);
+  if (flipSide) {
+    wall(bathLeft, corridorEnd, bathLeft, allocation.bathroomEnclosed ? bathroomEnd : d);
+  }
+  if (allocation.bathroomEnclosed) wall(bathLeft, bathroomEnd, bathRight, bathroomEnd);
+  door(living, bathLeft + bathroomWidthMm / 2);
+  door(living, flipSide ? (t / 2 + 1000) : (w - t / 2 - 1000));
+  // Double door at main entry by default (1600mm wide)
+  if (options.entrance !== false) door(entry, d - (bedroomEnd + corridorEnd) / 2, "double", 1600);
   window(entry, d - (corridorEnd + p / 2 + allocation.bathroomDepthMm / 2));
-  window(rear, (w - t - bathroomWidthMm - p) / 2 + t / 2);
+  window(rear, flipSide ? ((bathLeft - t) / 2 + t / 2) : ((w - bathRight) / 2 + bathRight));
   actions.push({ kind: "floor", operation: "create", id: `${item.id}:floor`, levelId: item.levelId, boundary: [{ xMm: item.xMm-t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm+d+t/2 }, { xMm: item.xMm-t/2, yMm: item.yMm+d+t/2 }], thicknessMm: 200, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
   // A usable front balcony makes the generated plan read as a complete residential project.
   // It is a separate slab with low parapet walls, so it remains editable like native CAD geometry.
