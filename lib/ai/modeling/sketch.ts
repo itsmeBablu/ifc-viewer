@@ -13,6 +13,17 @@ const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
 const pointSegmentDistance=(p:SketchPoint,a:SketchPoint,b:SketchPoint)=>{const dx=b.xMm-a.xMm,dy=b.yMm-a.yMm,t=Math.max(0,Math.min(1,((p.xMm-a.xMm)*dx+(p.yMm-a.yMm)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.xMm-(a.xMm+t*dx),p.yMm-(a.yMm+t*dy));};
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
+/** Joins hand-drawn endpoints into a shared CAD vertex, tolerating small pointer drift. */
+export function normalizeSketchJunctions(s:FloorSketch, toleranceMm = 350): FloorSketch {
+  const vertices: SketchPoint[] = [];
+  const join = (p: SketchPoint) => {
+    const existing = vertices.find(v => Math.hypot(v.xMm - p.xMm, v.yMm - p.yMm) <= toleranceMm);
+    if (existing) return existing;
+    const next = { xMm: Math.round(p.xMm / 50) * 50, yMm: Math.round(p.yMm / 50) * 50 };
+    vertices.push(next); return next;
+  };
+  return { ...s, points: s.points.map(join), lines: s.lines.map(l => ({ start: join(l.start), end: join(l.end) })) };
+}
 export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
   if (s.points.length >= 3) return s;
   if (!s.lines.length) return s;
@@ -85,7 +96,7 @@ export function sketchRooms(s:FloorSketch):SketchPoint[][]{
 }
 
 export function sketchActions(input:ResidentialParameters,id:string,groundId:string,baseElevation:number,height:number,thickness:number,x=0):AiAction[]{
-  const sketches=(input.sketches??[]).map(ensureSketchBoundary);validateSketches(sketches);
+  const sketches=(input.sketches??[]).map(s=>normalizeSketchJunctions(ensureSketchBoundary(s)));validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
     if(s.lines.length||s.labels?.length)return null;

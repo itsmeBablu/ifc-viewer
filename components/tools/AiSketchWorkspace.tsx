@@ -10,7 +10,7 @@ import {
 import type { FloorSketch, ResidentialParameters, RoomUse, SketchPoint } from "@/lib/ai/modeling/allocation";
 import { FOOTPRINTS, insidePolygon, inscribedRectangle, polygonArea } from "@/lib/ai/modeling/footprint";
 import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine } from "@/lib/ai/modeling/sketchEditing";
-import { sketchRooms } from "@/lib/ai/modeling/sketch";
+import { sketchRooms, normalizeSketchJunctions } from "@/lib/ai/modeling/sketch";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
@@ -140,6 +140,7 @@ export default function AiSketchWorkspace({
         viewY = minY + (extent - span) / 2 + pan.y;
 
   const change = (next: FloorSketch[], variant = parameters.variant) => {
+    next = next.map(s => normalizeSketchJunctions(s));
     setPast(v => [...v.slice(-29), sketches]);
     setFuture([]);
     setError("");
