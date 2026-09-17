@@ -522,7 +522,7 @@ type LayoutDrawingState = {
   deleteLevel: (id: string) => Promise<void>;
   setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
   setUnitSystem: (system: "metric" | "imperial") => void;
-  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
+  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "createdAt"> & { levelId?: string }) => LayoutRoom;
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
   selectRoom: (id: string | null) => void;
@@ -930,13 +930,16 @@ export function wallRegionAtPoint(
   levelId: string,
   point: { xMm: number; yMm: number },
 ) {
-  const loops = detectLoopsFromSegments(
-    walls.filter((wall) => wall.levelId === levelId && !wall.curved),
-    140,
-  ).closedLoops;
-  return loops
-    .filter((loop) => isPointInsidePolygon(point, loop.points))
-    .sort((a, b) => a.areaSqMm - b.areaSqMm)[0] ?? null;
+  const levelWalls = walls.filter((wall) => (!levelId || wall.levelId === levelId) && !wall.curved);
+  const candidateWalls = levelWalls.length > 0 ? levelWalls : walls.filter((wall) => !wall.curved);
+  for (const tol of [140, 350, 600]) {
+    const loops = detectLoopsFromSegments(candidateWalls, tol).closedLoops;
+    const match = loops
+      .filter((loop) => isPointInsidePolygon(point, loop.points))
+      .sort((a, b) => a.areaSqMm - b.areaSqMm)[0];
+    if (match) return match;
+  }
+  return null;
 }
 
 function refreshAutoSlabBoundaries(
@@ -1933,8 +1936,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
   },
   addRoom: (r) => {
-    const activeLevelId = get().levels[0]?.id || "default-level";
-    const level = get().levels.find((l) => l.id === activeLevelId);
+    const activeLevelId = r.levelId || get().levels[0]?.id || "default-level";
+    const level = get().levels.find((l) => l.id === activeLevelId) ?? get().levels[0];
     const heightMm = r.heightMm ?? level?.heightMm ?? 2800;
     const volumeM3 = Number((r.areaSqM * (heightMm / 1000)).toFixed(2));
     const baseRoom: LayoutRoom = {
@@ -1964,7 +1967,13 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       layoutRooms: [...(s.layoutRooms || []), room],
       selectedRoomId: room.id,
       selectedElements: [{ kind: "room", id: room.id }],
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      lastMutatedAt: Date.now(),
     }));
+    return room;
   },
   updateRoom: (id, patch) => {
     const existing = (get().layoutRooms || []).find((r) => r.id === id);

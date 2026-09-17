@@ -3224,7 +3224,7 @@ export default class LayoutSceneLayer {
       "duct", "pipe", "cabletray", "wire", "equipment", "flex_duct", "mep_placeholder"
     ].includes(layoutState.armedLayoutTool || "");
     const isArchTool = [
-      "wall", "door", "window", "slab", "floor", "roof", "ceiling", "column", "beam", "stair", "ramp", "component"
+      "wall", "door", "window", "slab", "floor", "roof", "ceiling", "column", "beam", "stair", "ramp", "component", "space", "curtain-wall"
     ].includes(layoutState.armedLayoutTool || "");
     const ignoreArchitecture = !isArchTool && (isMepTool || (layoutState.mepModeActive && layoutState.mepArchitectureLocked));
 
@@ -4919,11 +4919,49 @@ export default class LayoutSceneLayer {
       return group;
     }
 
-    const dx = cl.endXmm - cl.startXmm;
-    const dy = cl.endYmm - cl.startYmm;
-    const len = Math.max(50, Math.hypot(dx, dy));
-    const lenM = fromMm(len);
-    const halfLen = lenM / 2;
+    if (wall.isCurtainWall || wall.wallTypeId === "curtain-wall") {
+      const grid = wall.curtainGrid ?? {
+        verticalSpacingMm: 1200,
+        mullionWidthMm: 50,
+        mullionDepthMm: 150,
+      };
+      const mWM = fromMm(grid.mullionWidthMm || 50);
+      const mDM = fromMm(grid.mullionDepthMm || 150);
+      const glassMat = new THREE.LineBasicMaterial({ color: 0x0284c7, depthTest: false });
+      const mullionBoxMat = new THREE.MeshBasicMaterial({ color: 0x334155, depthTest: false });
+      const mullionLineMat = new THREE.LineBasicMaterial({ color: 0x0f172a, depthTest: false });
+
+      // Double Glazing: Outer and Inner Glass Lines
+      for (const zOffset of [-0.016, 0.016]) {
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-halfLen, 0, zOffset),
+          new THREE.Vector3(halfLen, 0, zOffset),
+        ]);
+        const line = new THREE.Line(lineGeo, glassMat);
+        line.renderOrder = 32;
+        group.add(line);
+      }
+
+      // Mullion cut boxes at vertical grid locations
+      const vSpacingMm = Math.max(300, grid.verticalSpacingMm || 1200);
+      const vCount = Math.max(1, Math.floor(len / vSpacingMm));
+      for (let i = 0; i <= vCount; i++) {
+        const xOffsetM = (i / vCount) * lenM - halfLen;
+        const boxGeo = new THREE.PlaneGeometry(mWM, mDM);
+        boxGeo.rotateX(-Math.PI / 2);
+        const box = new THREE.Mesh(boxGeo, mullionBoxMat);
+        box.position.set(xOffsetM, 0.001, 0);
+        box.renderOrder = 33;
+        group.add(box);
+
+        const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+        const edges = new THREE.LineSegments(edgeGeo, mullionLineMat);
+        edges.position.set(xOffsetM, 0.002, 0);
+        edges.renderOrder = 34;
+        group.add(edges);
+      }
+      return group;
+    }
 
     // Collect opening voids along wall local X
     const openings: { x1: number; x2: number }[] = [];
@@ -5109,37 +5147,112 @@ export default class LayoutSceneLayer {
 
       const mullionWM = fromMm(grid.mullionWidthMm || 50);
       const mullionDM = fromMm(grid.mullionDepthMm || 150);
-      const glassThickM = 0.024;
 
-      const glassMat = new THREE.MeshPhysicalMaterial({
-        color: 0x38bdf8,
-        transparent: true,
-        opacity: 0.45,
-        roughness: 0.1,
-        metalness: 0.1,
-        transmission: 0.8,
-        ior: 1.5,
-        depthWrite: false,
-      });
-
+      // Architectural Anodized Aluminum Mullion Material
       const mullionMat = new THREE.MeshStandardMaterial({
         color: 0x1e293b,
-        metalness: 0.85,
-        roughness: 0.25,
+        metalness: 0.88,
+        roughness: 0.22,
       });
 
-      // Glass panel
-      const glassGeo = new THREE.BoxGeometry(lenM, heightM, glassThickM);
-      const glassMesh = new THREE.Mesh(glassGeo, glassMat);
-      glassMesh.name = "curtain-glass";
-      glassMesh.userData.isWallLayer = true;
-      glassMesh.userData.layoutWallId = wall.id;
-      grp.add(glassMesh);
+      // Exterior Pressure Plate / Cover Cap Material
+      const capMat = new THREE.MeshStandardMaterial({
+        color: 0x0f172a,
+        metalness: 0.92,
+        roughness: 0.18,
+      });
 
-      // Vertical mullions
+      // Thermal Spacer Bar (between double glass panes)
+      const spacerMat = new THREE.MeshStandardMaterial({
+        color: 0x090d16,
+        metalness: 0.3,
+        roughness: 0.7,
+      });
+
+      // Double-Glazed System: 2-Layered Glass with 16mm Air Gap
+      const paneThickM = 0.008; // 8mm glass pane
+      const airGapM = 0.016;    // 16mm argon/air cavity
+      const paneZOffset = (paneThickM + airGapM) / 2;
+
+      // Layer 1: Outer Glass Pane (Reflective architectural blue/cyan tint)
+      const outerGlassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.48,
+        roughness: 0.04,
+        metalness: 0.15,
+        transmission: 0.85,
+        ior: 1.52,
+        depthWrite: false,
+      });
+      const outerGlassGeo = new THREE.BoxGeometry(lenM - 0.01, heightM - 0.01, paneThickM);
+      const outerGlassMesh = new THREE.Mesh(outerGlassGeo, outerGlassMat);
+      outerGlassMesh.position.set(0, 0, -paneZOffset);
+      outerGlassMesh.name = "curtain-outer-glass";
+      outerGlassMesh.userData.isWallLayer = true;
+      outerGlassMesh.userData.layoutWallId = wall.id;
+      grp.add(outerGlassMesh);
+
+      // Layer 2: Inner Glass Pane (Clear physical low-E glass)
+      const innerGlassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xbae6fd,
+        transparent: true,
+        opacity: 0.38,
+        roughness: 0.03,
+        metalness: 0.05,
+        transmission: 0.92,
+        ior: 1.52,
+        depthWrite: false,
+      });
+      const innerGlassGeo = new THREE.BoxGeometry(lenM - 0.01, heightM - 0.01, paneThickM);
+      const innerGlassMesh = new THREE.Mesh(innerGlassGeo, innerGlassMat);
+      innerGlassMesh.position.set(0, 0, paneZOffset);
+      innerGlassMesh.name = "curtain-inner-glass";
+      innerGlassMesh.userData.isWallLayer = true;
+      innerGlassMesh.userData.layoutWallId = wall.id;
+      grp.add(innerGlassMesh);
+
+      // Thermal Spacer Bar Perimeter (gasket holding the 2 glass layers)
+      const spacerGeo = new THREE.BoxGeometry(lenM, 0.012, airGapM);
+      const topSpacer = new THREE.Mesh(spacerGeo, spacerMat);
+      topSpacer.position.set(0, heightM / 2 - 0.02, 0);
+      grp.add(topSpacer);
+      const btmSpacer = new THREE.Mesh(spacerGeo, spacerMat);
+      btmSpacer.position.set(0, -heightM / 2 + 0.02, 0);
+      grp.add(btmSpacer);
+
+      // Metal Outer Perimeter Frame: Top Header, Bottom Sill, Left & Right Jambs
+      const topFrameGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
+      const topFrame = new THREE.Mesh(topFrameGeo, mullionMat);
+      topFrame.position.set(0, heightM / 2 - mullionWM / 2, 0);
+      topFrame.userData.isWallLayer = true;
+      topFrame.userData.layoutWallId = wall.id;
+      grp.add(topFrame);
+
+      const btmFrameGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
+      const btmFrame = new THREE.Mesh(btmFrameGeo, mullionMat);
+      btmFrame.position.set(0, -heightM / 2 + mullionWM / 2, 0);
+      btmFrame.userData.isWallLayer = true;
+      btmFrame.userData.layoutWallId = wall.id;
+      grp.add(btmFrame);
+
+      const jambGeo = new THREE.BoxGeometry(mullionWM, heightM, mullionDM);
+      const leftJamb = new THREE.Mesh(jambGeo, mullionMat);
+      leftJamb.position.set(-lenM / 2 + mullionWM / 2, 0, 0);
+      leftJamb.userData.isWallLayer = true;
+      leftJamb.userData.layoutWallId = wall.id;
+      grp.add(leftJamb);
+
+      const rightJamb = new THREE.Mesh(jambGeo, mullionMat);
+      rightJamb.position.set(lenM / 2 - mullionWM / 2, 0, 0);
+      rightJamb.userData.isWallLayer = true;
+      rightJamb.userData.layoutWallId = wall.id;
+      grp.add(rightJamb);
+
+      // Intermediate Vertical Mullions
       const vSpacingMm = Math.max(300, grid.verticalSpacingMm || 1200);
       const vCount = Math.max(1, Math.floor(wallLenMm / vSpacingMm));
-      for (let i = 0; i <= vCount; i++) {
+      for (let i = 1; i < vCount; i++) {
         const xOffsetM = (i / vCount) * lenM - lenM / 2;
         const vMullionGeo = new THREE.BoxGeometry(mullionWM, heightM, mullionDM);
         const vMullionMesh = new THREE.Mesh(vMullionGeo, mullionMat);
@@ -5147,12 +5260,20 @@ export default class LayoutSceneLayer {
         vMullionMesh.userData.isWallLayer = true;
         vMullionMesh.userData.layoutWallId = wall.id;
         grp.add(vMullionMesh);
+
+        // Exterior metal cover cap strip
+        const capGeo = new THREE.BoxGeometry(mullionWM + 0.01, heightM, 0.015);
+        const capMesh = new THREE.Mesh(capGeo, capMat);
+        capMesh.position.set(xOffsetM, 0, -mullionDM / 2 - 0.007);
+        capMesh.userData.isWallLayer = true;
+        capMesh.userData.layoutWallId = wall.id;
+        grp.add(capMesh);
       }
 
-      // Horizontal transoms
+      // Intermediate Horizontal Transoms
       const hSpacingMm = Math.max(300, grid.horizontalSpacingMm || 1500);
       const hCount = Math.max(1, Math.floor(wallHeightMm / hSpacingMm));
-      for (let j = 0; j <= hCount; j++) {
+      for (let j = 1; j < hCount; j++) {
         const yOffsetM = (j / hCount) * heightM - heightM / 2;
         const hMullionGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
         const hMullionMesh = new THREE.Mesh(hMullionGeo, mullionMat);
@@ -5160,6 +5281,14 @@ export default class LayoutSceneLayer {
         hMullionMesh.userData.isWallLayer = true;
         hMullionMesh.userData.layoutWallId = wall.id;
         grp.add(hMullionMesh);
+
+        // Exterior metal cover cap strip
+        const capGeo = new THREE.BoxGeometry(lenM, mullionWM + 0.01, 0.015);
+        const capMesh = new THREE.Mesh(capGeo, capMat);
+        capMesh.position.set(0, yOffsetM, -mullionDM / 2 - 0.007);
+        capMesh.userData.isWallLayer = true;
+        capMesh.userData.layoutWallId = wall.id;
+        grp.add(capMesh);
       }
     } else {
       let currentOffsetM = 0;
@@ -7342,6 +7471,7 @@ export default class LayoutSceneLayer {
       depthTest: false,
     });
     const lineMesh = new THREE.Line(lineGeo, lineMat);
+    lineMesh.userData.layoutRoomId = room.id;
     lineMesh.renderOrder = 105;
     root.add(lineMesh);
 

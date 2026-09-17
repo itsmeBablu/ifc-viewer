@@ -6518,8 +6518,8 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
 
             if (layoutStore.armedLayoutTool === "space") {
               let plan: { xMm: number; yMm: number } | null = null;
-              if (layoutHit?.kind === "ground" || layoutHit?.kind === "underlay") {
-                plan = planPointFromHit(layoutHit.point);
+              if (layoutHit && "point" in layoutHit && (layoutHit as any).point) {
+                plan = planPointFromHit((layoutHit as any).point);
               } else {
                 const roots: THREE.Object3D[] = [layoutLayer.group];
                 if (shellCloneRef.current) roots.push(shellCloneRef.current);
@@ -6529,21 +6529,32 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
               if (!plan) {
                 plan = planMmFromPointer(e.clientX, e.clientY);
               }
+              if (!plan) {
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                const level = layoutStore.levels.find((l) => l.id === levelId) ?? layoutStore.levels[0];
+                const elevM = fromMm(level?.elevationMm ?? 0);
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -elevM);
+                const hitPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, hitPt)) {
+                  plan = { xMm: Math.round(toMm(hitPt.x)), yMm: Math.round(toMm(hitPt.z)) };
+                }
+              }
               if (plan) {
                 const levelId =
                   markupStore.markupFloorId ??
                   layoutStore.levels[0]?.id ??
-                  "default-level";
-                const level = layoutStore.levels.find((l) => l.id === levelId);
+                  (layoutStore.walls[0]?.levelId ?? "default-level");
+                const level = layoutStore.levels.find((l) => l.id === levelId) ?? layoutStore.levels[0];
                 const heightMm = level?.heightMm ?? 2800;
                 const region = wallRegionAtPoint(layoutStore.walls, levelId, plan);
                 const existingCount = (layoutStore.layoutRooms || []).length;
                 const roomNum = `${101 + existingCount}`;
 
+                let createdRoom: LayoutRoom | null = null;
                 if (region && region.points && region.points.length >= 3) {
                   const areaSqM = Math.round((region.areaSqMm / 1e6) * 100) / 100;
                   const volumeM3 = Math.round((areaSqM * (heightMm / 1000)) * 100) / 100;
-                  void layoutStore.addRoom({
+                  createdRoom = layoutStore.addRoom({
                     levelId,
                     name: `Space ${existingCount + 1}`,
                     number: roomNum,
@@ -6553,8 +6564,6 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                     spaceType: "office",
                     boundaryPoints: region.points,
                     tagPosMm: plan,
-                  }).then((created) => {
-                    if (created) layoutStore.selectRoom(created.id);
                   });
                 } else {
                   const half = 2000;
@@ -6566,7 +6575,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                   ];
                   const areaSqM = 16.0;
                   const volumeM3 = Math.round((areaSqM * (heightMm / 1000)) * 100) / 100;
-                  void layoutStore.addRoom({
+                  createdRoom = layoutStore.addRoom({
                     levelId,
                     name: `Space ${existingCount + 1}`,
                     number: roomNum,
@@ -6576,9 +6585,11 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                     spaceType: "office",
                     boundaryPoints,
                     tagPosMm: plan,
-                  }).then((created) => {
-                    if (created) layoutStore.selectRoom(created.id);
                   });
+                }
+                if (createdRoom) {
+                  layoutStore.selectRoom(createdRoom.id);
+                  useAppStore.getState().setRightPanelOpen(true);
                 }
                 useToolMarkupStore.getState().setDragSnapHint({
                   text: `Space ${roomNum} Placed ✦`,
