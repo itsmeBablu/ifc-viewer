@@ -10,6 +10,7 @@ import { validateBoundary } from "../validate";
 type Segment={start:SketchPoint;end:SketchPoint};
 const cross=(a:SketchPoint,b:SketchPoint)=>a.xMm*b.yMm-a.yMm*b.xMm;
 const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
+const pointSegmentDistance=(p:SketchPoint,a:SketchPoint,b:SketchPoint)=>{const dx=b.xMm-a.xMm,dy=b.yMm-a.yMm,t=Math.max(0,Math.min(1,((p.xMm-a.xMm)*dx+(p.yMm-a.yMm)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.xMm-(a.xMm+t*dx),p.yMm-(a.yMm+t*dy));};
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
 export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
@@ -52,7 +53,7 @@ export function validateSketches(sketches:FloorSketch[]){
     for(const l of s.lines){
       if(Math.hypot(l.end.xMm-l.start.xMm,l.end.yMm-l.start.yMm)<300)throw new Error(`Floor ${floor}: interior lines need at least 0.3 m.`);
       const cuts=[0,1,...sketchSegments({...s,lines:[]}).flatMap(edge=>{const i=intersection(l,edge);return i?[i.t]:[];})].sort((a,b)=>a-b);
-      for(const t of [...cuts,...cuts.slice(1).map((t,i)=>(t+cuts[i])/2)])if(!insidePolygon({xMm:l.start.xMm+(l.end.xMm-l.start.xMm)*t,yMm:l.start.yMm+(l.end.yMm-l.start.yMm)*t},s.points))throw new Error(`Floor ${floor}: an interior line extends outside the outline.`);
+      for(const t of [...cuts,...cuts.slice(1).map((t,i)=>(t+cuts[i])/2)]){const point={xMm:l.start.xMm+(l.end.xMm-l.start.xMm)*t,yMm:l.start.yMm+(l.end.yMm-l.start.yMm)*t};if(!insidePolygon(point,s.points)&&Math.min(...s.points.map((p,i)=>pointSegmentDistance(point,p,s.points[(i+1)%s.points.length])))>300)throw new Error(`Floor ${floor}: an interior line extends outside the outline.`);}
     }
   }
 }
