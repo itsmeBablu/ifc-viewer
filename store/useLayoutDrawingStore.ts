@@ -86,6 +86,7 @@ import {
   type StairShapeType,
   type WallType,
 } from "@/lib/layoutDrawing";
+import { assignTerrainZone, createTerrainGrid, sculptTerrain, type TerrainZone } from "@/lib/terrain";
 import {
   detectLoopsFromSegments,
   isPointInsidePolygon,
@@ -693,6 +694,9 @@ type LayoutDrawingState = {
     LayoutWall | LayoutDoor | LayoutWindow | null
   >;
   beginSlabDraw: (kind: "floor" | "ceiling" | "roof", levelId: string) => void;
+  createSiteTerrain: (levelId?: string) => Promise<LayoutSlab | null>;
+  sculptSiteTerrain: (id: string, center: { xMm: number; yMm: number }, deltaMm: number, radiusMm: number) => Promise<void>;
+  paintSiteZone: (id: string, zone: TerrainZone) => Promise<void>;
   createRoofFromWalls: (levelId: string) => Promise<LayoutSlab | null>;
   beginSlabRedraw: (id: string) => void;
   updateSlabCursor: (cursor: { xMm: number; yMm: number } | null) => void;
@@ -2683,6 +2687,38 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedSlabId: targetSlabId ?? null,
       selectedUnderlayId: null,
     }),
+
+  createSiteTerrain: async (levelId) => {
+    const s = get();
+    if (!s.projectId) return null;
+    const target = s.levels.find(l => l.id === levelId) ?? [...s.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
+    if (!target) return null;
+    const source = s.walls.filter(w => w.levelId === target.id);
+    const xs = source.flatMap(w => [w.startXmm, w.endXmm]), ys = source.flatMap(w => [w.startYmm, w.endYmm]);
+    const minXmm = (xs.length ? Math.min(...xs) : -5000) - 6000, maxXmm = (xs.length ? Math.max(...xs) : 5000) + 6000;
+    const minYmm = (ys.length ? Math.min(...ys) : -5000) - 6000, maxYmm = (ys.length ? Math.max(...ys) : 5000) + 6000;
+    const terrain: LayoutSlab = { id: newLayoutId("site"), projectId: s.projectId, levelId: target.id, kind: "floor", minXmm, minYmm, maxXmm, maxYmm, boundary: [{ xMm: minXmm, yMm: minYmm }, { xMm: maxXmm, yMm: minYmm }, { xMm: maxXmm, yMm: maxYmm }, { xMm: minXmm, yMm: maxYmm }], thicknessMm: 40, elevationOffsetMm: 0, material: "terrain-grass", terrain: createTerrainGrid(minXmm, minYmm, maxXmm, maxYmm), createdAt: Date.now() };
+    pushWerkzeugHistory();
+    await idbPutSlab(terrain);
+    set(prev => ({ slabs: [...prev.slabs, terrain], selectedSlabId: terrain.id, armedLayoutTool: null, lastMutatedAt: Date.now() }));
+    return terrain;
+  },
+
+  sculptSiteTerrain: async (id, center, deltaMm, radiusMm) => {
+    const slab = get().slabs.find(s => s.id === id && s.terrain);
+    if (!slab?.terrain) return;
+    const next = { ...slab, terrain: sculptTerrain(slab.terrain, center, deltaMm, radiusMm) };
+    await idbPutSlab(next);
+    set(state => ({ slabs: state.slabs.map(s => s.id === id ? next : s), lastMutatedAt: Date.now() }));
+  },
+
+  paintSiteZone: async (id, zone) => {
+    const slab = get().slabs.find(s => s.id === id && s.terrain);
+    if (!slab?.terrain) return;
+    const next = { ...slab, terrain: assignTerrainZone(slab.terrain, zone) };
+    await idbPutSlab(next);
+    set(state => ({ slabs: state.slabs.map(s => s.id === id ? next : s), lastMutatedAt: Date.now() }));
+  },
 
   createRoofFromWalls: async (levelId) => {
     const s = get();

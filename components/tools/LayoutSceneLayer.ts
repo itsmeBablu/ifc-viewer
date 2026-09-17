@@ -3944,7 +3944,7 @@ export default class LayoutSceneLayer {
     });
     this.applyMaterialAndColor(mat, slab.color, slab.material);
     if (!slab.color && !slab.material) {
-      mat.color.setHex(slab.kind === "roof" ? ROOF_COLOR : slab.kind === "ceiling" ? 0x8db6c7 : FLOOR_COLOR);
+      mat.color.setHex(slab.terrain ? 0x6b8e52 : slab.kind === "roof" ? ROOF_COLOR : slab.kind === "ceiling" ? 0x8db6c7 : FLOOR_COLOR);
     }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.userData.layoutSlabId = slab.id;
@@ -3972,9 +3972,10 @@ export default class LayoutSceneLayer {
       slab.roofPreset,
       slab.overhangMm,
       slab.roofJoin?.positions,
+      slab.terrain,
     ]);
     if (mesh.userData.slabGeometryKey !== geometryKey) {
-      const geometry = this.buildSlabGeometry(slab);
+      const geometry = slab.terrain ? this.buildTerrainGeometry(slab) : this.buildSlabGeometry(slab);
       mesh.geometry.dispose();
       mesh.geometry = geometry;
       mesh.userData.slabGeometryKey = geometryKey;
@@ -3986,13 +3987,31 @@ export default class LayoutSceneLayer {
     mesh.position.set(0, 0, 0);
     mesh.rotation.set(0, 0, 0);
 
-    if (slab.kind === "roof") {
+    if (slab.terrain) {
+      mesh.position.y = baseY;
+    } else if (slab.kind === "roof") {
       mesh.position.y = mesh.geometry.userData?.isComplexRoof ? baseY : baseY + thickness;
     } else {
       mesh.position.y = baseY;
     }
     mesh.userData.layoutSlabId = slab.id;
-    mesh.userData.renderCategory = slab.kind === "roof" ? "Roofs" : "Floors";
+    mesh.userData.renderCategory = slab.terrain ? "Site" : slab.kind === "roof" ? "Roofs" : "Floors";
+  }
+
+  private buildTerrainGeometry(slab: LayoutSlab): THREE.BufferGeometry {
+    const terrain = slab.terrain;
+    if (!terrain || terrain.rows < 2 || terrain.cols < 2) return this.buildSlabGeometry(slab);
+    const positions: number[] = [], indices: number[] = [];
+    for (const p of terrain.points) positions.push(fromMm(p.xMm), fromMm(p.heightMm), fromMm(p.yMm));
+    for (let row = 0; row < terrain.rows - 1; row++) for (let col = 0; col < terrain.cols - 1; col++) {
+      const a = row * terrain.cols + col, b = a + 1, c = a + terrain.cols, d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+    geometry.userData.isTerrain = true;
+    return geometry;
   }
 
   setRenderMode(mode: RenderMode) {

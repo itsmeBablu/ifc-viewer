@@ -185,6 +185,7 @@ const ARCH_ANNOTATE_ITEMS: CapsuleItem[] = [
 
 const ARCH_INSERT_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
+  { id: "site", label: "Earth / Site", hint: "Generate an editable subdivided terrain surface around the building", icon: <LuSunMedium className="h-3.5 w-3.5 text-lime-400 shrink-0" /> },
   { id: "component", label: "Component", hint: "Place furniture and architectural components", icon: <LuArmchair className="h-3.5 w-3.5 text-amber-400 shrink-0" /> },
   { id: "extras", label: "Extras", hint: "Cars, trees, garden plants and lawn", icon: <LuSunMedium className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> },
   { id: "shapes", label: "Shapes", hint: "Pick and place 3D shape (Box, Sphere, Cylinder, etc.)", icon: <LuShapes className="h-3.5 w-3.5 text-pink-400 shrink-0" />, hasDropdown: true },
@@ -672,7 +673,13 @@ export default function DesktopIsland() {
   };
 
   const handleCapsuleClick = (id: string) => {
-    const layout = useLayoutDrawingStore.getState();
+  const layout = useLayoutDrawingStore.getState();
+    if (id === "site") {
+      const level = layout.levels.slice().sort((a, b) => a.elevationMm - b.elevationMm)[0];
+      if (level) void layout.createSiteTerrain(level.id);
+      else useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
     if(id==="extras"){
       clearSelection();layout.chooseComponent("extras-tree");layout.setArmedLayoutTool("component");
       useToolMarkupStore.getState().setArmedTool(null);useAppStore.getState().setRightPanelOpen(true);return;
