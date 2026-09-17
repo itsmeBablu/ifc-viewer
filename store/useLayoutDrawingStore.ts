@@ -331,7 +331,7 @@ type LayoutDrawingState = {
   activeSectionId: string | null;
   draftSectionStart: { xMm: number; yMm: number } | null;
   draftDrawMode: "line" | "arc";
-  commitDrawingSegments: (kind: "wall" | "lines", levelId: string, segments: DrawingSegment[]) => Promise<void>;
+  commitDrawingSegments: (kind: "wall" | "curtain-wall" | "lines", levelId: string, segments: DrawingSegment[]) => Promise<void>;
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
   stairDraw: StairDrawState;
@@ -925,7 +925,7 @@ async function persistPresets(projectId: string, presets: LayoutPresets) {
   await idbPutPresets(projectId, presets);
 }
 
-function wallRegionAtPoint(
+export function wallRegionAtPoint(
   walls: LayoutWall[],
   levelId: string,
   point: { xMm: number; yMm: number },
@@ -2444,10 +2444,28 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     } else {
       const base = state.levels.find(level => level.id === levelId);
       const top = state.levels.find(level => level.id === state.draftWallTopLevelId);
-      const walls: LayoutWall[] = segments.map(segment => ({ ...segment, id: newLayoutId("wall"), projectId: state.projectId!, levelId,
-        topLevelId: top?.id, heightMm: top && base && top.elevationMm > base.elevationMm ? top.elevationMm - base.elevationMm : state.draftWallHeightMm,
-        thicknessMm: state.draftWallThicknessMm, color: "#d6d3d1", createdAt }));
-      await idbPutDrawingShape(kind, walls);
+      const isCurtain = kind === "curtain-wall" || state.armedLayoutTool === "curtain-wall";
+      const walls: LayoutWall[] = segments.map(segment => ({
+        ...segment,
+        id: newLayoutId("wall"),
+        projectId: state.projectId!,
+        levelId,
+        topLevelId: top?.id,
+        heightMm: top && base && top.elevationMm > base.elevationMm ? top.elevationMm - base.elevationMm : state.draftWallHeightMm,
+        thicknessMm: isCurtain ? 200 : state.draftWallThicknessMm,
+        color: isCurtain ? "#38bdf8" : "#d6d3d1",
+        isCurtainWall: isCurtain,
+        wallTypeId: isCurtain ? "curtain-wall" : undefined,
+        curtainGrid: isCurtain ? {
+          verticalSpacingMm: 1200,
+          horizontalSpacingMm: 1500,
+          mullionWidthMm: 50,
+          mullionDepthMm: 150,
+          panelMaterial: "glass",
+        } : undefined,
+        createdAt,
+      }));
+      await idbPutDrawingShape("wall", walls);
       if (get().projectId !== state.projectId) return;
       const nextWalls = [...get().walls, ...walls];
       const slabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
@@ -4559,6 +4577,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedRoomId: primary?.kind === "room" ? primary.id : null,
       selectedStairId: primary?.kind === "stair" ? primary.id : null,
       selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedDuctId: primary?.kind === "duct" ? primary.id : null,
@@ -4617,6 +4636,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedStairId: null,
       selectedRampId: null,
       selectedDuctId: null,

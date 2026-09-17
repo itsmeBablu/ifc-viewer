@@ -3215,6 +3215,7 @@ export default class LayoutSceneLayer {
     | { kind: "pipe"; id: string }
     | { kind: "cabletray"; id: string }
     | { kind: "equipment"; id: string }
+    | { kind: "room"; id: string }
     | { kind: "underlay"; id: string; point: THREE.Vector3; uv?: THREE.Vector2 }
     | { kind: "ground"; point: THREE.Vector3 }
     | null {
@@ -3353,6 +3354,8 @@ export default class LayoutSceneLayer {
             return { kind: "stair", id: o.userData.layoutStairId as string };
           if (o.userData.layoutRampId)
             return { kind: "ramp", id: o.userData.layoutRampId as string };
+          if (o.userData.layoutRoomId)
+            return { kind: "room", id: o.userData.layoutRoomId as string };
         }
 
         if (o.userData.isSectionHandle && o.userData.sectionId) {
@@ -7349,7 +7352,12 @@ export default class LayoutSceneLayer {
       const tagY = baseElevM + (planMode ? 0.06 : heightM / 2);
 
       const div = document.createElement("div");
-      div.className = "room-space-tag pointer-events-none select-none text-center";
+      div.className = "room-space-tag pointer-events-auto cursor-pointer select-none text-center transition-transform hover:scale-105 active:scale-95";
+      div.onclick = (e) => {
+        e.stopPropagation();
+        useLayoutDrawingStore.getState().selectRoom(room.id);
+        useAppStore.getState().setRightPanelOpen(true);
+      };
       div.style.cssText = `
         background: ${isSelected ? "rgba(79, 70, 229, 0.88)" : "rgba(15, 23, 42, 0.85)"};
         border: 1px solid ${isSelected ? "#facc15" : "rgba(99, 102, 241, 0.4)"};

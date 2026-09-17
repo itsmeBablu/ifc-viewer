@@ -162,11 +162,11 @@ export default function ToolOptionsBar() {
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
         <MepPlacementControls />
         {!armedLayoutTool && !slabBoundaryEdit && <ModifyTools />}
-        {/* WALL TOOL OPTIONS */}
-        {armedLayoutTool === "wall" && (
+        {/* WALL & CURTAIN WALL TOOL OPTIONS */}
+        {(armedLayoutTool === "wall" || armedLayoutTool === "curtain-wall") && (
           <div className="flex items-center gap-3">
-            <span className="font-bold text-amber-500 flex items-center gap-1">
-              <span>Wall:</span>
+            <span className={`font-bold flex items-center gap-1 ${armedLayoutTool === "curtain-wall" ? "text-cyan-400" : "text-amber-500"}`}>
+              <span>{armedLayoutTool === "curtain-wall" ? "Curtain Wall:" : "Wall:"}</span>
             </span>
 
             {/* Draw Mode: Straight Line vs Arc / Curve */}

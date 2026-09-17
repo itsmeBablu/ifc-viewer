@@ -860,23 +860,7 @@ export default function DesktopIsland() {
 
     if (id === "space") {
       clearSelection();
-      const layout = useLayoutDrawingStore.getState();
-      const existingCount = (layout.layoutRooms || []).length;
-      const roomNum = `${101 + existingCount}`;
-      layout.addRoom({
-        name: `Space ${existingCount + 1}`,
-        number: roomNum,
-        areaSqM: 24.0,
-        heightMm: 2800,
-        spaceType: "office",
-        boundaryPoints: [
-          { xMm: -2500, yMm: -2500 },
-          { xMm: 2500, yMm: -2500 },
-          { xMm: 2500, yMm: 2500 },
-          { xMm: -2500, yMm: 2500 },
-        ],
-        tagPosMm: { xMm: 0, yMm: 0 },
-      });
+      useLayoutDrawingStore.getState().setArmedLayoutTool("space");
       useAppStore.getState().setRightPanelOpen(true);
       return;
     }
