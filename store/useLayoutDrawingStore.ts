@@ -53,6 +53,7 @@ import {
   trimWallPair,
   getEquipmentConnectors,
   computeArcFromThreePoints,
+  calculateSpaceThermalMetrics,
   type CableTrayType,
   type DuctShape,
   type DuctSystemType,
@@ -101,6 +102,7 @@ import {
   idbDeleteMepEquipment,
   idbDeletePipe,
   idbDeleteRamp,
+  idbDeleteRoom,
   idbDeleteSlab,
   idbDeleteStair,
   idbDeleteUnderlay,
@@ -329,7 +331,7 @@ type LayoutDrawingState = {
   activeSectionId: string | null;
   draftSectionStart: { xMm: number; yMm: number } | null;
   draftDrawMode: "line" | "arc";
-  commitDrawingSegments: (kind: "wall" | "lines", levelId: string, segments: DrawingSegment[]) => Promise<void>;
+  commitDrawingSegments: (kind: "wall" | "curtain-wall" | "lines", levelId: string, segments: DrawingSegment[]) => Promise<void>;
   armedLayoutTool: LayoutToolId | null;
   wallDraw: WallDrawState;
   stairDraw: StairDrawState;
@@ -351,6 +353,7 @@ type LayoutDrawingState = {
   selectedSlabId: string | null;
   selectedStairId: string | null;
   selectedRampId: string | null;
+  selectedRoomId: string | null;
   slabBoundaryEdit: {
     slabId: string;
     phase: "selected" | "editing";
@@ -519,9 +522,10 @@ type LayoutDrawingState = {
   deleteLevel: (id: string) => Promise<void>;
   setDrawingScale: (scale: "1:20" | "1:50" | "1:100" | "1:200" | "1:500") => void;
   setUnitSystem: (system: "metric" | "imperial") => void;
-  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "levelId" | "createdAt">) => void;
+  addRoom: (room: Omit<LayoutRoom, "id" | "projectId" | "createdAt"> & { levelId?: string }) => LayoutRoom;
   updateRoom: (id: string, patch: Partial<LayoutRoom>) => void;
   deleteRoom: (id: string) => void;
+  selectRoom: (id: string | null) => void;
   addSectionLine: (line: Omit<LayoutSectionLine, "id">) => LayoutSectionLine;
   updateSectionLine: (id: string, patch: Partial<LayoutSectionLine>) => void;
   deleteSectionLine: (id: string) => void;
@@ -593,6 +597,8 @@ type LayoutDrawingState = {
         | "material"
         | "wallTypeId"
         | "layers"
+        | "isCurtainWall"
+        | "curtainGrid"
       >
     >,
   ) => Promise<void>;
@@ -919,18 +925,21 @@ async function persistPresets(projectId: string, presets: LayoutPresets) {
   await idbPutPresets(projectId, presets);
 }
 
-function wallRegionAtPoint(
+export function wallRegionAtPoint(
   walls: LayoutWall[],
   levelId: string,
   point: { xMm: number; yMm: number },
 ) {
-  const loops = detectLoopsFromSegments(
-    walls.filter((wall) => wall.levelId === levelId && !wall.curved),
-    140,
-  ).closedLoops;
-  return loops
-    .filter((loop) => isPointInsidePolygon(point, loop.points))
-    .sort((a, b) => a.areaSqMm - b.areaSqMm)[0] ?? null;
+  const levelWalls = walls.filter((wall) => (!levelId || wall.levelId === levelId) && !wall.curved);
+  const candidateWalls = levelWalls.length > 0 ? levelWalls : walls.filter((wall) => !wall.curved);
+  for (const tol of [140, 350, 600]) {
+    const loops = detectLoopsFromSegments(candidateWalls, tol).closedLoops;
+    const match = loops
+      .filter((loop) => isPointInsidePolygon(point, loop.points))
+      .sort((a, b) => a.areaSqMm - b.areaSqMm)[0];
+    if (match) return match;
+  }
+  return null;
 }
 
 function refreshAutoSlabBoundaries(
@@ -963,6 +972,7 @@ function refreshAutoSlabBoundaries(
 
 export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   projectId: null,
+  selectedRoomId: null,
   isEmptyProject: false,
   lastMutatedAt: 0,
   levels: [],
@@ -1740,6 +1750,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedUnderlayId: null,
       calibrateUnderlayId: null,
       calibratePoints: [],
@@ -1926,31 +1937,101 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     }
   },
   addRoom: (r) => {
-    const activeLevelId = get().levels[0]?.id || "default-level";
-    const room: LayoutRoom = {
+    const activeLevelId = r.levelId || get().levels[0]?.id || "default-level";
+    const level = get().levels.find((l) => l.id === activeLevelId) ?? get().levels[0];
+    const heightMm = r.heightMm ?? level?.heightMm ?? 2800;
+    const volumeM3 = Number((r.areaSqM * (heightMm / 1000)).toFixed(2));
+    const baseRoom: LayoutRoom = {
       id: newLayoutId("rm"),
       projectId: get().projectId || "default",
       levelId: activeLevelId,
       name: r.name,
       number: r.number,
       areaSqM: r.areaSqM,
+      heightMm,
+      volumeM3,
+      spaceType: r.spaceType ?? "office",
       boundaryPoints: r.boundaryPoints,
       tagPosMm: r.tagPosMm,
+      indoorTempC: r.indoorTempC ?? 20,
+      outdoorDesignTempC: r.outdoorDesignTempC ?? -12,
+      uValueWall: r.uValueWall ?? 0.24,
+      uValueWindow: r.uValueWindow ?? 1.1,
+      uValueDoor: r.uValueDoor ?? 1.3,
       createdAt: Date.now(),
     };
-    set((s) => ({ layoutRooms: [...(s.layoutRooms || []), room] }));
+    const metrics = calculateSpaceThermalMetrics(baseRoom);
+    const room: LayoutRoom = { ...baseRoom, ...metrics };
+    pushWerkzeugHistory();
+    void idbPutRoom(room);
+    set((s) => ({
+      layoutRooms: [...(s.layoutRooms || []), room],
+      selectedRoomId: room.id,
+      selectedElements: [{ kind: "room", id: room.id }],
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      lastMutatedAt: Date.now(),
+    }));
+    return room;
   },
   updateRoom: (id, patch) => {
+    const existing = (get().layoutRooms || []).find((r) => r.id === id);
+    if (!existing) return;
+    const heightMm = patch.heightMm ?? existing.heightMm ?? 2800;
+    const areaSqM = patch.areaSqM ?? existing.areaSqM;
+    const volumeM3 = Number((areaSqM * (heightMm / 1000)).toFixed(2));
+    const merged: LayoutRoom = {
+      ...existing,
+      ...patch,
+      heightMm,
+      volumeM3,
+    };
+    const metrics = calculateSpaceThermalMetrics(merged);
+    const nextRoom: LayoutRoom = { ...merged, ...metrics };
+    pushWerkzeugHistory();
+    void idbPutRoom(nextRoom);
     set((s) => ({
       layoutRooms: (s.layoutRooms || []).map((r) =>
-        r.id === id ? { ...r, ...patch } : r
+        r.id === id ? nextRoom : r
       ),
+      lastMutatedAt: Date.now(),
     }));
   },
   deleteRoom: (id) => {
+    pushWerkzeugHistory();
+    void idbDeleteRoom(id);
     set((s) => ({
       layoutRooms: (s.layoutRooms || []).filter((r) => r.id !== id),
+      selectedRoomId: s.selectedRoomId === id ? null : s.selectedRoomId,
+      selectedElements: s.selectedElements.filter((e) => e.id !== id),
+      lastMutatedAt: Date.now(),
     }));
+  },
+  selectRoom: (id) => {
+    if (!id) {
+      set({
+        selectedRoomId: null,
+        selectedElements: get().selectedElements.filter((e) => e.kind !== "room"),
+      });
+      return;
+    }
+    set({
+      selectedRoomId: id,
+      selectedWallId: null,
+      selectedDoorId: null,
+      selectedWindowId: null,
+      selectedSlabId: null,
+      selectedStairId: null,
+      selectedRampId: null,
+      selectedDuctId: null,
+      selectedPipeId: null,
+      selectedCableTrayId: null,
+      selectedEquipmentId: null,
+      selectedWireId: null,
+      selectedElements: [{ kind: "room", id }],
+    });
   },
 
   setArmedLayoutTool: (tool) => {
@@ -2009,6 +2090,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       tool === "workplane";
     const isArchTool =
       tool === "wall" ||
+      tool === "curtain-wall" ||
+      tool === "space" ||
       tool === "door" ||
       tool === "window" ||
       tool === "floor" ||
@@ -2029,11 +2112,12 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedUnderlayId: null,
       mepModeActive: isArchTool ? false : isMepTool ? true : s.mepModeActive,
     }));
     if (
-      (tool === "wall" || tool === "door" || tool === "window") &&
+      (tool === "wall" || tool === "curtain-wall" || tool === "door" || tool === "window") &&
       typeof window !== "undefined"
     ) {
       void import("@/lib/opencvLoader")
@@ -2370,10 +2454,28 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     } else {
       const base = state.levels.find(level => level.id === levelId);
       const top = state.levels.find(level => level.id === state.draftWallTopLevelId);
-      const walls: LayoutWall[] = segments.map(segment => ({ ...segment, id: newLayoutId("wall"), projectId: state.projectId!, levelId,
-        topLevelId: top?.id, heightMm: top && base && top.elevationMm > base.elevationMm ? top.elevationMm - base.elevationMm : state.draftWallHeightMm,
-        thicknessMm: state.draftWallThicknessMm, color: "#d6d3d1", createdAt }));
-      await idbPutDrawingShape(kind, walls);
+      const isCurtain = kind === "curtain-wall" || state.armedLayoutTool === "curtain-wall" || state.draftWallTypeId === "curtain-wall";
+      const walls: LayoutWall[] = segments.map(segment => ({
+        ...segment,
+        id: newLayoutId("wall"),
+        projectId: state.projectId!,
+        levelId,
+        topLevelId: top?.id,
+        heightMm: top && base && top.elevationMm > base.elevationMm ? top.elevationMm - base.elevationMm : state.draftWallHeightMm,
+        thicknessMm: isCurtain ? 200 : state.draftWallThicknessMm,
+        color: isCurtain ? "#38bdf8" : "#d6d3d1",
+        isCurtainWall: isCurtain,
+        wallTypeId: isCurtain ? "curtain-wall" : undefined,
+        curtainGrid: isCurtain ? {
+          verticalSpacingMm: 1200,
+          horizontalSpacingMm: 1500,
+          mullionWidthMm: 50,
+          mullionDepthMm: 150,
+          panelMaterial: "glass",
+        } : undefined,
+        createdAt,
+      }));
+      await idbPutDrawingShape("wall", walls);
       if (get().projectId !== state.projectId) return;
       const nextWalls = [...get().walls, ...walls];
       const slabs = refreshAutoSlabBoundaries(nextWalls, get().slabs);
@@ -2506,6 +2608,19 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
         heightMm,
         color: "#d6d3d1",
         createdAt: Date.now(),
+      };
+    }
+
+    const isCurtainWall = get().armedLayoutTool === "curtain-wall";
+    if (isCurtainWall) {
+      wall.isCurtainWall = true;
+      wall.wallTypeId = "curtain-wall";
+      wall.curtainGrid = {
+        verticalSpacingMm: 1200,
+        horizontalSpacingMm: 1500,
+        mullionWidthMm: 50,
+        mullionDepthMm: 150,
+        panelMaterial: "glass",
       };
     }
 
@@ -3947,6 +4062,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedSketchLineId: null,
       selectedUnderlayId: null,
     }),
@@ -4471,6 +4587,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedRoomId: primary?.kind === "room" ? primary.id : null,
       selectedStairId: primary?.kind === "stair" ? primary.id : null,
       selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedDuctId: primary?.kind === "duct" ? primary.id : null,
@@ -4510,6 +4627,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: primary?.kind === "door" ? primary.id : null,
       selectedWindowId: primary?.kind === "window" ? primary.id : null,
       selectedSlabId: primary?.kind === "slab" ? primary.id : null,
+      selectedRoomId: primary?.kind === "room" ? primary.id : null,
       selectedStairId: primary?.kind === "stair" ? primary.id : null,
       selectedRampId: primary?.kind === "ramp" ? primary.id : null,
       selectedDuctId: primary?.kind === "duct" ? primary.id : null,
@@ -4528,6 +4646,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedStairId: null,
       selectedRampId: null,
       selectedDuctId: null,
@@ -4561,6 +4680,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     const equipIds = new Set(sel.filter((e) => e.kind === "equipment").map((e) => e.id));
     const gridIds = new Set(sel.filter((e) => e.kind === "grid").map((e) => e.id));
     const lineIds = new Set(sel.filter((e) => e.kind === "line").map((e) => e.id));
+    const roomIds = new Set(sel.filter((e) => e.kind === "room").map((e) => e.id));
 
     // Also delete child openings of deleted walls
     for (const d of get().doors) {
@@ -4584,6 +4704,7 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
     for (const id of equipIds) await idbDeleteMepEquipment(id);
     for (const id of gridIds) await idbDeleteGridLine(id);
     for (const id of lineIds) await idbDeleteSketchLine(id);
+    for (const id of roomIds) await idbDeleteRoom(id);
 
     set((s) => ({
       walls: s.walls.filter((w) => !wallIds.has(w.id)),
@@ -4600,11 +4721,13 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
       mepEquipment: s.mepEquipment.filter((eq) => !equipIds.has(eq.id)),
       gridLines: s.gridLines.filter((g) => !gridIds.has(g.id)),
       sketchLines: s.sketchLines.filter((l) => !lineIds.has(l.id)),
+      layoutRooms: (s.layoutRooms || []).filter((rm) => !roomIds.has(rm.id)),
       selectedElements: [],
       selectedWallId: null,
       selectedDoorId: null,
       selectedWindowId: null,
       selectedSlabId: null,
+      selectedRoomId: null,
       selectedStairId: null,
       selectedRampId: null,
       selectedDuctId: null,

@@ -162,11 +162,11 @@ export default function ToolOptionsBar() {
       <div className="flex items-center gap-4 overflow-x-auto thin-scroll">
         <MepPlacementControls />
         {!armedLayoutTool && !slabBoundaryEdit && <ModifyTools />}
-        {/* WALL TOOL OPTIONS */}
-        {armedLayoutTool === "wall" && (
+        {/* WALL & CURTAIN WALL TOOL OPTIONS */}
+        {(armedLayoutTool === "wall" || armedLayoutTool === "curtain-wall") && (
           <div className="flex items-center gap-3">
-            <span className="font-bold text-amber-500 flex items-center gap-1">
-              <span>Wall:</span>
+            <span className={`font-bold flex items-center gap-1 ${armedLayoutTool === "curtain-wall" ? "text-cyan-400" : "text-amber-500"}`}>
+              <span>{armedLayoutTool === "curtain-wall" ? "Curtain Wall:" : "Wall:"}</span>
             </span>
 
             {/* Draw Mode: Straight Line vs Arc / Curve */}
@@ -182,6 +182,11 @@ export default function ToolOptionsBar() {
                 onChange={(e) => {
                   const typeId = e.target.value;
                   setDraftWallTypeId(typeId);
+                  if (typeId === "curtain-wall") {
+                    setArmedLayoutTool("curtain-wall");
+                  } else if (armedLayoutTool === "curtain-wall") {
+                    setArmedLayoutTool("wall");
+                  }
                   const customTypes = (useLayoutDrawingStore.getState() as any).customElementTypes || {};
                   const tDef = customTypes[typeId] || DEFAULT_ELEMENT_TYPES[typeId];
                   if (tDef?.thicknessMm) setDraftWallThicknessMm(tDef.thicknessMm);

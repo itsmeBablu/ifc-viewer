@@ -1,12 +1,14 @@
 import { expect,it } from "vitest";
 import { sketchRooms,sketchActions,validateSketches } from "./sketch";
-import { resizeSketchLine,circularOutline,arcSegments } from "./sketchEditing";
+import { resizeSketchLine,circularOutline,arcSegments,lineAngleDeg,rotateSketchLine } from "./sketchEditing";
 import { residentialParametersSchema } from "./brief";
 import { polygonArea } from "./footprint";
 import { validatePlan } from "../validate";
 import { arrangeRoom,furnitureBounds } from "./roomFurniture";
 import type { FloorSketch } from "./allocation";
+import { RESIDENTIAL_PRESETS } from "./allocation";
 const points=[{xMm:0,yMm:0},{xMm:14000,yMm:0},{xMm:14000,yMm:14000},{xMm:0,yMm:14000}];
+it("offers compact apartment and villa/duplex starting styles",()=>{expect(RESIDENTIAL_PRESETS.length).toBeGreaterThanOrEqual(8);expect(RESIDENTIAL_PRESETS.some(p=>p.label.includes("Courtyard"))).toBe(true);});
 const manual:FloorSketch={points,lines:[{start:{xMm:0,yMm:5000},end:{xMm:14000,yMm:5000}},{start:{xMm:7000,yMm:0},end:{xMm:7000,yMm:5000}}]};
 it("length edits keep rectangular corners aligned and move attached interior endpoints",()=>{
   const edited=resizeSketchLine(manual,0,false,16000);
@@ -42,6 +44,14 @@ it("uses room names for furniture and wet-room ventilation, retaining drawn gard
   expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="extras-tree-flowering")).toBe(true);
   expect(()=>validateSketches([{...labeled,labels:[{point:{xMm:16000,yMm:16000},name:"Outside",use:"study"}]}])).toThrow(/inside a closed/);
 });
+it("keeps furniture and MEP drafting layers out of walls while compiling their native actions",()=>{
+  const layered:FloorSketch={points,lines:[{start:{xMm:0,yMm:7000},end:{xMm:14000,yMm:7000}}],wallTypes:[{index:0,interior:true,type:"fire"}],furnitureLines:[{start:{xMm:2500,yMm:2500},end:{xMm:4300,yMm:2500}}],mepLines:[{start:{xMm:1000,yMm:12000},end:{xMm:12000,yMm:12000}}]};
+  const actions=sketchActions({variant:"villa",bedrooms:1,sketches:[layered],garage:"none",gardenAreaM2:0},"layers","l",0,3000,200);
+  expect(actions.filter(a=>a.kind==="wall")).toHaveLength(5);
+  expect(actions.find(a=>a.kind==="wall"&&a.id.endsWith(":wall:4"))).toMatchObject({wallType:"fire"});
+  expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="furniture-line-marker")).toBe(true);
+  expect(actions.some(a=>a.kind==="pipe"&&a.id.includes("mep-sketch"))).toBe(true);
+});
 it("recovers rooms at T-junctions without losing the drawn partitions",()=>{
   const rooms=sketchRooms(manual);expect(rooms).toHaveLength(3);
   expect(rooms.reduce((s,p)=>s+polygonArea(p),0)).toBeCloseTo(196e6);
@@ -68,4 +78,12 @@ it("places a coherent lounge and kitchen without overlaps or door intrusion",()=
   expect(table.x).toBe(sofa.x);expect(table.y).toBeGreaterThan(sofa.y);
   const cabinets=pieces.filter(p=>p.family.startsWith("kitchen-"));expect(cabinets).toHaveLength(4);expect(cabinets.every(p=>p.rotation===180)).toBe(true);
   for(let i=0;i<pieces.length;i++)for(let j=i+1;j<pieces.length;j++){const a=pieces[i],b=pieces[j],as=furnitureBounds(a.family,a.rotation),bs=furnitureBounds(b.family,b.rotation);expect(Math.abs(a.x-b.x)>=(as.w+bs.w)/2||Math.abs(a.y-b.y)>=(as.d+bs.d)/2).toBe(true);}
+});
+it("calculates line angles and rotates line endpoints around the start point",()=>{
+  const l={start:{xMm:0,yMm:0},end:{xMm:5000,yMm:0}};
+  expect(lineAngleDeg(l.start,l.end)).toBe(0);
+  const rotated=rotateSketchLine({points:[],lines:[l]},0,true,90);
+  expect(rotated.lines[0].end.xMm).toBe(0);
+  expect(rotated.lines[0].end.yMm).toBe(5000);
+  expect(lineAngleDeg(rotated.lines[0].start,rotated.lines[0].end)).toBe(90);
 });

@@ -45,6 +45,24 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const selectedCount = useLayoutDrawingStore(s => s.selectedElements.length);
   const levelCount = useLayoutDrawingStore(s => s.levels.length);
   const modelInventory = useLayoutDrawingStore(s => `${s.walls.length} walls · ${s.doors.length} doors · ${s.windows.length} windows · ${s.slabs.length} floors/roofs · ${s.mepEquipment.length} furniture/equipment · ${s.pipes.length} pipes · ${s.ducts.length} ducts · ${s.cableTrays.length} trays · ${s.columns.length} columns · ${s.beams.length} beams`);
+  // Sketch summary for AI context
+  const sketchSummary = useLayoutDrawingStore(s => {
+    const params = (s as { residentialParameters?: { sketches?: Array<{ points: Array<{xMm:number;yMm:number}>; lines: Array<{start:{xMm:number;yMm:number};end:{xMm:number;yMm:number}}>; labels?: Array<{name:string;use:string}> }> } }).residentialParameters;
+    const sketches = params?.sketches;
+    if (!sketches?.length) return "";
+    const parts: string[] = [`Sketch drawing: ${sketches.length} floor(s)`];
+    sketches.forEach((sk, fi) => {
+      const lvl = s.levels[fi];
+      const floorLabel = lvl ? `${lvl.name} (${(lvl.elevationMm/1000).toFixed(1)}m)` : `Floor ${fi}`;
+      const totalLines = sk.points.length + sk.lines.length;
+      const allPts = [...sk.points, ...sk.lines.flatMap(l => [l.start, l.end])];
+      const maxX = allPts.length ? Math.max(...allPts.map(p => p.xMm)) : 0;
+      const maxY = allPts.length ? Math.max(...allPts.map(p => p.yMm)) : 0;
+      const rooms = sk.labels?.map(l => `${l.name} (${l.use})`).join(", ") ?? "";
+      parts.push(`  ${floorLabel}: ${totalLines} wall segments, approx ${(maxX/1000).toFixed(1)}m × ${(maxY/1000).toFixed(1)}m${rooms ? `, rooms: ${rooms}` : ""}`);
+    });
+    return parts.join("\n");
+  });
   const [conversationKey,setConversationKey]=useState(0);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
@@ -247,7 +265,10 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: submittedText, model, mode, discipline: mepModeActive ? "mep" : "arch", context, ...(mode === "build" && submittedResidential && !submittedAttachments.length ? { residential:submittedResidential } : {}), ...(submittedAttachments.length && drawingReference ? { drawingReference } : {}), attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
+      const commandWithSketch = sketchSummary
+        ? `${submittedText}\n\n[2D Sketch context]\n${sketchSummary}`
+        : submittedText;
+      const body = JSON.stringify({ command: commandWithSketch, model, mode, discipline: mepModeActive ? "mep" : "arch", context, ...(mode === "build" && submittedResidential && !submittedAttachments.length ? { residential:submittedResidential } : {}), ...(submittedAttachments.length && drawingReference ? { drawingReference } : {}), attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
       if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const remainingHeader = response.headers.get("X-AI-Remaining");
@@ -310,8 +331,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     finally { busyRef.current = false; setBusy(false); }
   }
   return (
-    <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
-      {busy && <div className="fixed inset-x-0 top-3 z-[9999] pointer-events-none flex justify-center" role="status"><span className="rounded-xl bg-black/80 text-white px-4 py-2 text-sm">AI is working in 3D · Editing is locked</span></div>}
+      <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
       <div
         ref={historyRef}
         className="ai-chat-history flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"

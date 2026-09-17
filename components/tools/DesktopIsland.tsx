@@ -145,6 +145,7 @@ const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "wall", label: "Wall", hint: "Choose a wall type and draw (W)", icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" />, hasDropdown: true },
   { id: "window", label: "Window", hint: "Choose a window type and place it", icon: <IconMarkupWindow className="h-3.5 w-3.5 text-sky-400 shrink-0" />, hasDropdown: true },
   { id: "door", label: "Door", hint: "Choose a door type and place it (D)", icon: <LuDoorOpen className="h-3 w-3 text-orange-500 shrink-0" />, hasDropdown: true },
+  { id: "space", label: "Space", hint: "Place Revit-style space to compute area, volume & heating/cooling load", icon: <LuBox className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
   { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
@@ -320,8 +321,10 @@ export default function DesktopIsland() {
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const walls = useLayoutDrawingStore((s) => s.walls);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
+  const selectedRoomId = useLayoutDrawingStore((s) => s.selectedRoomId);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const modifyTool = useModifyStore(s => s.tool);
   const boundaryEdit = useLayoutDrawingStore(s => s.slabBoundaryEdit);
@@ -417,7 +420,8 @@ export default function DesktopIsland() {
       Boolean(selectedWindowId) ||
       Boolean(selectedSlabId) ||
       Boolean(selectedStairId) ||
-      Boolean(selectedRampId)
+      Boolean(selectedRampId) ||
+      Boolean(selectedRoomId)
     );
   }, [
     selectedElements,
@@ -427,6 +431,7 @@ export default function DesktopIsland() {
     selectedSlabId,
     selectedStairId,
     selectedRampId,
+    selectedRoomId,
     slabs,
   ]);
 
@@ -543,7 +548,12 @@ export default function DesktopIsland() {
 
   /* ── modify title label ──────────────────────────────── */
   const modifyTitle = useMemo(() => {
-    if (selectedWallId) return "Modify · Wall";
+    if (selectedRoomId) return "Modify · Space";
+    if (selectedWallId) {
+      const wall = walls.find((w) => w.id === selectedWallId);
+      if (wall?.isCurtainWall || wall?.wallTypeId === "curtain-wall") return "Modify · Curtain Wall";
+      return "Modify · Wall";
+    }
     if (selectedDoorId) return "Modify · Door";
     if (selectedWindowId) return "Modify · Window";
     if (selectedSlabId) {
@@ -564,6 +574,9 @@ export default function DesktopIsland() {
     selectedSlabId,
     selectedStairId,
     selectedRampId,
+    selectedRoomId,
+    walls,
+    slabs,
   ]);
 
   /* ── active capsules list ────────────────────────────── */
@@ -837,14 +850,20 @@ export default function DesktopIsland() {
       if (!useViewDisplayStore.getState().renderPreview) enterRenderView();
       return;
     }
-    if (id === "render-capture") {
-      setSnapshotModalOpen(true);
+    if (id === "space") {
+      clearSelection();
+      useLayoutDrawingStore.getState().setArmedLayoutTool("space");
+      useAppStore.getState().setRightPanelOpen(true);
       return;
     }
 
-
     clearSelection();
-    useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
+    if (id === "wall") {
+      const draftId = useLayoutDrawingStore.getState().draftWallTypeId;
+      useLayoutDrawingStore.getState().setArmedLayoutTool(draftId === "curtain-wall" ? "curtain-wall" : "wall");
+    } else {
+      useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);
+    }
     useAppStore.getState().setRightPanelOpen(true);
   };
 
@@ -856,14 +875,23 @@ export default function DesktopIsland() {
       layout.setDraftWallTypeId(typeDef.id);
       if (typeDef.thicknessMm) layout.setDraftWallThicknessMm(typeDef.thicknessMm);
       if (typeDef.heightMm) layout.setDraftWallHeightMm(typeDef.heightMm);
+      if (typeDef.id === "curtain-wall") {
+        layout.setArmedLayoutTool("curtain-wall");
+      } else {
+        layout.setArmedLayoutTool("wall");
+      }
     } else if (toolId === "door" && typeDef.widthMm && typeDef.heightMm) {
       layout.setDraftDoorSize(typeDef.widthMm, typeDef.heightMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     } else if (toolId === "window" && typeDef.widthMm && typeDef.heightMm) {
       layout.setDraftWindowSize(typeDef.widthMm, typeDef.heightMm, typeDef.sillHeightMm ?? layout.draftWindowSillMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     } else if ((toolId === "floor" || toolId === "roof") && typeDef.thicknessMm) {
       layout.setDraftSlabThicknessMm(typeDef.thicknessMm);
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
+    } else {
+      layout.setArmedLayoutTool(toolId as LayoutToolId);
     }
-    layout.setArmedLayoutTool(toolId as LayoutToolId);
     useAppStore.getState().setRightPanelOpen(true);
     useToolMarkupStore.getState().setArmedTool(null);
     setTypeMenu(null);
@@ -892,6 +920,7 @@ export default function DesktopIsland() {
     if (id === "roofs-texture") return textureMenu?.category === "roofs";
     if (id === "floors-texture") return textureMenu?.category === "floors";
     if (id === "select") return !measureMode && armed === null && armedMarkupTool === null;
+    if (id === "wall") return armed === "wall" || armed === "curtain-wall";
     return armed === id;
   };
 

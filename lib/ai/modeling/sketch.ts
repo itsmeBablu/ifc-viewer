@@ -10,12 +10,33 @@ import { validateBoundary } from "../validate";
 type Segment={start:SketchPoint;end:SketchPoint};
 const cross=(a:SketchPoint,b:SketchPoint)=>a.xMm*b.yMm-a.yMm*b.xMm;
 const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
+const pointSegmentDistance=(p:SketchPoint,a:SketchPoint,b:SketchPoint)=>{const dx=b.xMm-a.xMm,dy=b.yMm-a.yMm,t=Math.max(0,Math.min(1,((p.xMm-a.xMm)*dx+(p.yMm-a.yMm)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.xMm-(a.xMm+t*dx),p.yMm-(a.yMm+t*dy));};
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
+export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
+  if (s.points.length >= 3) return s;
+  if (!s.lines.length) return s;
+  const xs = s.lines.flatMap(l => [l.start.xMm, l.end.xMm]);
+  const ys = s.lines.flatMap(l => [l.start.yMm, l.end.yMm]);
+  const pad = 1000;
+  const minX = Math.max(0, Math.min(...xs) - pad), maxX = Math.min(80000, Math.max(...xs) + pad);
+  const minY = Math.max(0, Math.min(...ys) - pad), maxY = Math.min(80000, Math.max(...ys) + pad);
+  return {
+    ...s,
+    points: [
+      { xMm: minX, yMm: minY },
+      { xMm: maxX, yMm: minY },
+      { xMm: maxX, yMm: maxY },
+      { xMm: minX, yMm: maxY },
+    ]
+  };
+}
+
 export function validateSketches(sketches:FloorSketch[]){
-  if(!sketches.length||sketches.length>4)throw new Error("Choose one to four floors.");
-  for(const [floor,s] of sketches.entries()){
-    validateBoundary(s.points);
+  if(!sketches.length||sketches.length>8)throw new Error("Choose one to eight floors.");
+  for(const [floor,rawS] of sketches.entries()){
+    const s = ensureSketchBoundary(rawS);
+    if (s.points.length >= 3) validateBoundary(s.points);
     for(const garden of s.gardens??[])validateBoundary(garden);
     const rooms=sketchRooms(s);
     for(const label of s.labels??[])if(!rooms.some(r=>insidePolygon(label.point,r)))throw new Error(`Floor ${floor}: room name ${label.name} must be inside a closed room.`);
@@ -32,7 +53,7 @@ export function validateSketches(sketches:FloorSketch[]){
     for(const l of s.lines){
       if(Math.hypot(l.end.xMm-l.start.xMm,l.end.yMm-l.start.yMm)<300)throw new Error(`Floor ${floor}: interior lines need at least 0.3 m.`);
       const cuts=[0,1,...sketchSegments({...s,lines:[]}).flatMap(edge=>{const i=intersection(l,edge);return i?[i.t]:[];})].sort((a,b)=>a-b);
-      for(const t of [...cuts,...cuts.slice(1).map((t,i)=>(t+cuts[i])/2)])if(!insidePolygon({xMm:l.start.xMm+(l.end.xMm-l.start.xMm)*t,yMm:l.start.yMm+(l.end.yMm-l.start.yMm)*t},s.points))throw new Error(`Floor ${floor}: an interior line extends outside the outline.`);
+      for(const t of [...cuts,...cuts.slice(1).map((t,i)=>(t+cuts[i])/2)]){const point={xMm:l.start.xMm+(l.end.xMm-l.start.xMm)*t,yMm:l.start.yMm+(l.end.yMm-l.start.yMm)*t};if(!insidePolygon(point,s.points)&&Math.min(...s.points.map((p,i)=>pointSegmentDistance(point,p,s.points[(i+1)%s.points.length])))>300)throw new Error(`Floor ${floor}: an interior line extends outside the outline.`);}
     }
   }
 }
@@ -64,7 +85,7 @@ export function sketchRooms(s:FloorSketch):SketchPoint[][]{
 }
 
 export function sketchActions(input:ResidentialParameters,id:string,groundId:string,baseElevation:number,height:number,thickness:number,x=0):AiAction[]{
-  const sketches=input.sketches!;validateSketches(sketches);
+  const sketches=(input.sketches??[]).map(ensureSketchBoundary);validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
     if(s.lines.length||s.labels?.length)return null;
@@ -99,7 +120,10 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
       layout=applyFootprint(layout,s.points,x,0,thickness,height,levelId,prefix);actions.push(...layout.filter(a=>a.kind!=="floor"));
     }else{
       const edges=sketchSegments(s);
-      edges.forEach((l,i)=>actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:i<s.points.length?thickness:150,heightMm:height}));
+      edges.forEach((l,i)=>{const interior=i>=s.points.length,logicalIndex=interior?i-s.points.length:i,type=s.wallTypes?.find(w=>w.index===logicalIndex&&w.interior===interior)?.type;actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:interior?150:thickness,heightMm:height,...(type?{wallType:type}:{})});});
+      (s.furnitureLines??[]).forEach((l,i)=>{const dx=l.end.xMm-l.start.xMm,dy=l.end.yMm-l.start.yMm,len=Math.hypot(dx,dy);actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture-sketch:${i}`,levelId,familyId:"furniture-line-marker",xMm:x+(l.start.xMm+l.end.xMm)/2,yMm:(l.start.yMm+l.end.yMm)/2,rotationDeg:Math.atan2(dy,dx)*180/Math.PI,elevationMm:0,widthMm:Math.max(100,len),depthMm:100,heightMm:50});});
+      (s.mepLines??[]).forEach((l,i)=>actions.push({kind:"pipe",operation:"create",id:`${prefix}:mep-sketch:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,diameterMm:28,elevationOffsetMm:-120,slopePercent:0,systemType:"hydronic_supply"}));
+      (s.openings??[]).forEach((opening,i)=>{const edge=s.points.map((start,j)=>({start,end:s.points[(j+1)%s.points.length]})).map((edge,j)=>{const dx=edge.end.xMm-edge.start.xMm,dy=edge.end.yMm-edge.start.yMm,len=Math.hypot(dx,dy),t=Math.max(0,Math.min(1,((opening.point.xMm-edge.start.xMm)*dx+(opening.point.yMm-edge.start.yMm)*dy)/(len*len||1))),p={xMm:edge.start.xMm+t*dx,yMm:edge.start.yMm+t*dy};return {j,t,len,d:Math.hypot(p.xMm-opening.point.xMm,p.yMm-opening.point.yMm)};}).sort((a,b)=>a.d-b.d)[0];if(!edge)return;const wallId=`${prefix}:wall:${edge.j}`,positionMm=edge.t*edge.len;if(opening.kind==="window")actions.push({kind:"window",operation:"create",id:`${prefix}:sketch-window:${i}`,wallId,positionMm,widthMm:opening.widthMm,heightMm:1200,sillHeightMm:900,operationType:"casement"});else actions.push({kind:"door",operation:"create",id:`${prefix}:sketch-door:${i}`,wallId,positionMm,widthMm:opening.widthMm,heightMm:2200,hinge:"start",swing:1,style:opening.kind==="doubleDoor"?"double":"wood"});});
       const rooms=sketchRooms(s).sort((a,b)=>polygonArea(b)-polygonArea(a)),doors:SketchPoint[]=[];
       const roomLabel=(room:SketchPoint[])=>(s.labels??[]).find(l=>insidePolygon(l.point,room));
       const livingIndex=Math.max(0,rooms.findIndex(r=>roomLabel(r)?.use==="living"));
@@ -148,6 +172,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
     const pieces=floor&&stairRect?polygonAroundOpening(boundary,{...stairRect,x:stairRect.x+x}):[boundary];
     pieces.forEach((boundary,i)=>actions.push({kind:"floor",operation:"create",id:`${prefix}:slab:${i}`,levelId,boundary,thicknessMm:200,elevationOffsetMm:0,roofPreset:"flat",pitchDeg:0}));
     if(floor===floors-1&&input.variant!=="apartment")actions.push({kind:"roof",operation:"create",id:`${id}:roof`,levelId,boundary,thicknessMm:200,elevationOffsetMm:height,roofPreset:"flat",pitchDeg:0});
+    if(floor===floors-1&&input.variant!=="apartment")actions.push({kind:"equipment",operation:"create",id:`${prefix}:roof-window`,levelId,familyId:"extras-roof-window",xMm:x+(Math.min(...s.points.map(p=>p.xMm))+Math.max(...s.points.map(p=>p.xMm)))/2,yMm:(Math.min(...s.points.map(p=>p.yMm))+Math.max(...s.points.map(p=>p.yMm)))/2,rotationDeg:0,elevationMm:height+150,widthMm:1000,depthMm:1200,heightMm:120});
     if(floor<floors-1&&stairRect){
       const push=(sx:number,sy:number,w:number,d:number,top:number,j:string)=>actions.push({kind:"floor",operation:"create",id:`${prefix}:stair:${j}`,levelId,thicknessMm:top,elevationOffsetMm:top,roofPreset:"flat",pitchDeg:0,boundary:[{xMm:x+sx,yMm:sy},{xMm:x+sx+w,yMm:sy},{xMm:x+sx+w,yMm:sy+d},{xMm:x+sx,yMm:sy+d}]});
       for(let i=0;i<stairs.flightSteps-1;i++){push(stairRect.x,stairRect.y+i*stairs.treadMm,1200,stairs.treadMm,(i+1)*stairs.riserMm,`a${i}`);push(stairRect.x+1350,stairRect.y+(stairs.flightSteps-2-i)*stairs.treadMm,1200,stairs.treadMm,(stairs.flightSteps+i+1)*stairs.riserMm,`b${i}`);}

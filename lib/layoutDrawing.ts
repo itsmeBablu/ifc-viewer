@@ -33,6 +33,18 @@ export type LayoutLevel = {
   createdAt: number;
 };
 
+export type CurtainGridConfig = {
+  panelMaterial?: string;
+  horizontalSpacingMm?: number;
+  verticalSpacingMm?: number;
+  horizontalCount?: number;
+  verticalCount?: number;
+  mullionWidthMm?: number;
+  mullionDepthMm?: number;
+  panelType?: "clear_glass" | "tinted_glass" | "low_e_glass" | "frosted_glass" | "spandrel";
+  glassThicknessMm?: number;
+};
+
 export type LayoutWall = {
   attachedTopRoofId?: string;
   attachedBaseRoofId?: string;
@@ -68,6 +80,9 @@ export type LayoutWall = {
   // -- Layered Wall Assemblies -------------------------------------------
   wallTypeId?: string;
   layers?: WallLayer[];
+  // -- Curtain Wall Grid & Mullions -------------------------------------
+  isCurtainWall?: boolean;
+  curtainGrid?: CurtainGridConfig;
 };
 
 export type LayoutDoor = {
@@ -1083,7 +1098,8 @@ export type SelectedElementRef = {
     | "cabletray"
     | "equipment"
     | "wire"
-    | "section";
+    | "section"
+    | "room";
   id: string;
 };
 
@@ -1101,6 +1117,7 @@ export type LayoutGroup = {
 
 export type LayoutToolId =
   | "wall"
+  | "curtain-wall"
   | "door"
   | "window"
   | "floor"
@@ -1114,6 +1131,7 @@ export type LayoutToolId =
   | "stair"
   | "ramp"
   | "section"
+  | "space"
   | "duct"
   | "flex_duct"
   | "mep_placeholder"
@@ -2585,11 +2603,64 @@ export type LayoutRoom = {
   name: string;
   number: string;
   areaSqM: number;
+  heightMm?: number;
+  volumeM3?: number;
   boundaryPoints: { xMm: number; yMm: number }[];
   tagPosMm: { xMm: number; yMm: number };
   ventilation?: LayoutRoomVentilation;
+  spaceType?: "living" | "bedroom" | "office" | "kitchen" | "bath" | "corridor" | "conference" | "storage";
+  designHeatingLoadWatts?: number;
+  designCoolingLoadWatts?: number;
+  designAirflowM3h?: number;
+  targetAirChangesPerHour?: number;
+  indoorTempC?: number;
+  outdoorDesignTempC?: number;
+  uValueWall?: number;
+  uValueWindow?: number;
+  uValueDoor?: number;
   createdAt: number;
 };
+
+export function calculateSpaceThermalMetrics(room: LayoutRoom): {
+  volumeM3: number;
+  heizlastWatts: number;
+  lueftungM3h: number;
+  kuehllastWatts: number;
+  specificHeizlastWm2: number;
+} {
+  const heightM = (room.heightMm ?? DEFAULT_LEVEL_HEIGHT_MM) / 1000;
+  const volumeM3 = room.volumeM3 ?? Math.round(room.areaSqM * heightM * 10) / 10;
+  const ti = room.indoorTempC ?? 20;
+  const te = room.outdoorDesignTempC ?? -12;
+  const deltaT = Math.max(1, ti - te);
+
+  const uWall = room.uValueWall ?? 0.24;
+  const uWindow = room.uValueWindow ?? 1.1;
+  const perimeterM = Math.sqrt(Math.max(1, room.areaSqM)) * 4;
+  const wallAreaM2 = perimeterM * heightM * 0.7;
+  const windowAreaM2 = perimeterM * heightM * 0.3;
+  const roofAreaM2 = room.areaSqM;
+  const qTransWatts = (wallAreaM2 * uWall + windowAreaM2 * uWindow + roofAreaM2 * 0.18) * deltaT;
+
+  const ach = room.targetAirChangesPerHour ?? 0.5;
+  const lueftungM3h = room.designAirflowM3h ?? Math.round(volumeM3 * ach);
+  const qVentWatts = (lueftungM3h / 3600) * 1200 * deltaT;
+
+  const heizlastWatts = Math.round(qTransWatts + qVentWatts);
+  const specificHeizlastWm2 = Math.round((heizlastWatts / Math.max(1, room.areaSqM)) * 10) / 10;
+
+  const qInternalWatts = room.areaSqM * (room.spaceType === "office" || room.spaceType === "conference" ? 35 : 18);
+  const qSolarWatts = windowAreaM2 * 80;
+  const kuehllastWatts = Math.round(qInternalWatts + qSolarWatts);
+
+  return {
+    volumeM3,
+    heizlastWatts,
+    lueftungM3h,
+    kuehllastWatts,
+    specificHeizlastWm2,
+  };
+}
 
 /**
  * Propose recommended airflow (m³/h) and flow role based on room name or type

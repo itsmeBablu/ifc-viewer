@@ -5,6 +5,7 @@ import { buildMepJointGeometry } from "./MepJointGeometry";
 import { applyPlanViewDisplay } from "./PlanViewDisplay";
 import { applyViewVisibility, applyRenderPresentation, isObjectVisibleInView } from "@/lib/viewVisibility";
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
+import type { LayoutRoom } from "@/lib/layoutDrawing";
 
 import { alignKitchenPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
 import { componentPreset } from "@/lib/componentCatalog";
@@ -102,7 +103,7 @@ import {
 } from "@/lib/werkzeugHistory";
 import LayoutSceneLayer from "@/components/tools/LayoutSceneLayer";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { useLayoutDrawingStore, wallRegionAtPoint } from "@/store/useLayoutDrawingStore";
 import { MATERIAL_DRAG_MIME, useMaterialStore } from "@/store/materialStore";
 import { getHatchCanvasTexture } from "@/lib/hatchPatterns";
 import {
@@ -3003,6 +3004,13 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         planMode: isPlanView,
         ...visOpts,
       });
+      layer.syncRooms(s.layoutRooms || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedRoomId: s.selectedRoomId,
+        showAllLevels,
+        planMode: isPlanView,
+        ...visOpts,
+      });
       const jointInputs = [s.ducts, s.pipes, s.cableTrays, s.wires, s.levels, markupFloor, showAllLevels, s.hiddenElementIds, s.hiddenCategories, s.isolatedElementIds, s.revealHiddenMode];
       if (!jointDisplay || jointInputs.some((input, i) => input !== jointSources[i])) {
         jointDisplay?.dispose();
@@ -3309,6 +3317,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
           layout.tracePreview &&
           layout.tracePreview.candidates.length > 1 &&
           (layout.armedLayoutTool === "wall" ||
+            layout.armedLayoutTool === "curtain-wall" ||
             layout.armedLayoutTool === "door" ||
             layout.armedLayoutTool === "window")
         ) {
@@ -5822,6 +5831,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         // Tier 2: hover auto-trace preview for wall / door / window
         if (
           (layoutStore.armedLayoutTool === "wall" ||
+            layoutStore.armedLayoutTool === "curtain-wall" ||
             layoutStore.armedLayoutTool === "door" ||
             layoutStore.armedLayoutTool === "window") &&
           !layoutStore.wallDraw &&
@@ -6431,7 +6441,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
               return { xMm: toMm(p.x), yMm: toMm(p.z) };
             };
 
-            if (layoutStore.armedLayoutTool === "wall") {
+            if (layoutStore.armedLayoutTool === "wall" || layoutStore.armedLayoutTool === "curtain-wall") {
               // Tier 2: confirm hover candidate
               if (
                 !layoutStore.wallDraw &&
@@ -6504,6 +6514,90 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                   }
                   return;
                 }
+              }
+            }
+
+            if (layoutStore.armedLayoutTool === "space") {
+              let plan: { xMm: number; yMm: number } | null = null;
+              if (layoutHit && "point" in layoutHit && (layoutHit as any).point) {
+                plan = planPointFromHit((layoutHit as any).point);
+              } else {
+                const roots: THREE.Object3D[] = [layoutLayer.group];
+                if (shellCloneRef.current) roots.push(shellCloneRef.current);
+                const surface = pickMarkupSurface(raycaster.current, roots);
+                if (surface) plan = planPointFromHit(surface.point);
+              }
+              if (!plan) {
+                plan = planMmFromPointer(e.clientX, e.clientY);
+              }
+              if (!plan) {
+                const levelId = markupStore.markupFloorId ?? layoutStore.levels[0]?.id ?? "default-level";
+                const level = layoutStore.levels.find((l) => l.id === levelId) ?? layoutStore.levels[0];
+                const elevM = fromMm(level?.elevationMm ?? 0);
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -elevM);
+                const hitPt = new THREE.Vector3();
+                if (raycaster.current.ray.intersectPlane(plane, hitPt)) {
+                  plan = { xMm: Math.round(toMm(hitPt.x)), yMm: Math.round(toMm(hitPt.z)) };
+                }
+              }
+              if (plan) {
+                const levelId =
+                  markupStore.markupFloorId ??
+                  layoutStore.levels[0]?.id ??
+                  (layoutStore.walls[0]?.levelId ?? "default-level");
+                const level = layoutStore.levels.find((l) => l.id === levelId) ?? layoutStore.levels[0];
+                const heightMm = level?.heightMm ?? 2800;
+                const region = wallRegionAtPoint(layoutStore.walls, levelId, plan);
+                const existingCount = (layoutStore.layoutRooms || []).length;
+                const roomNum = `${101 + existingCount}`;
+
+                let createdRoom: LayoutRoom | null = null;
+                if (region && region.points && region.points.length >= 3) {
+                  const areaSqM = Math.round((region.areaSqMm / 1e6) * 100) / 100;
+                  const volumeM3 = Math.round((areaSqM * (heightMm / 1000)) * 100) / 100;
+                  createdRoom = layoutStore.addRoom({
+                    levelId,
+                    name: `Space ${existingCount + 1}`,
+                    number: roomNum,
+                    areaSqM,
+                    heightMm,
+                    volumeM3,
+                    spaceType: "office",
+                    boundaryPoints: region.points,
+                    tagPosMm: plan,
+                  });
+                } else {
+                  const half = 2000;
+                  const boundaryPoints = [
+                    { xMm: plan.xMm - half, yMm: plan.yMm - half },
+                    { xMm: plan.xMm + half, yMm: plan.yMm - half },
+                    { xMm: plan.xMm + half, yMm: plan.yMm + half },
+                    { xMm: plan.xMm - half, yMm: plan.yMm + half },
+                  ];
+                  const areaSqM = 16.0;
+                  const volumeM3 = Math.round((areaSqM * (heightMm / 1000)) * 100) / 100;
+                  createdRoom = layoutStore.addRoom({
+                    levelId,
+                    name: `Space ${existingCount + 1}`,
+                    number: roomNum,
+                    areaSqM,
+                    heightMm,
+                    volumeM3,
+                    spaceType: "office",
+                    boundaryPoints,
+                    tagPosMm: plan,
+                  });
+                }
+                if (createdRoom) {
+                  layoutStore.selectRoom(createdRoom.id);
+                  useAppStore.getState().setRightPanelOpen(true);
+                }
+                useToolMarkupStore.getState().setDragSnapHint({
+                  text: `Space ${roomNum} Placed ✦`,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+                return;
               }
             }
 
@@ -7218,7 +7312,36 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
                 }
                 return;
               }
+              if (layoutHit.kind === "room") {
+                layoutStore.selectRoom(layoutHit.id);
+                useAppStore.getState().setRightPanelOpen(true);
+                return;
+              }
               if (layoutHit.kind === "wall") {
+                if (layoutStore.armedLayoutTool === "curtain-wall") {
+                  const wall = layoutStore.walls.find((w) => w.id === layoutHit.id);
+                  if (wall) {
+                    void layoutStore.updateWall(wall.id, {
+                      isCurtainWall: true,
+                      wallTypeId: "curtain-wall",
+                      color: "#38bdf8",
+                      curtainGrid: wall.curtainGrid ?? {
+                        verticalSpacingMm: 1200,
+                        horizontalSpacingMm: 1500,
+                        mullionWidthMm: 50,
+                        mullionDepthMm: 150,
+                        panelMaterial: "glass",
+                      },
+                    });
+                    layoutStore.selectWall(wall.id);
+                    useToolMarkupStore.getState().setDragSnapHint({
+                      text: "Curtain Wall Embedded ✦",
+                      clientX: e.clientX,
+                      clientY: e.clientY,
+                    });
+                    return;
+                  }
+                }
                 if ((markupStore.armedTool as string) === "note") {
                   const wall = layoutStore.walls.find(
                     (w) => w.id === layoutHit.id,

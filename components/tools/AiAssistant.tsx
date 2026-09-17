@@ -158,6 +158,7 @@ function PanelResizeHandles({ onKeyDown }: { onKeyDown: (event: ReactKeyboardEve
 function usePanelMorphAnimation(
   panelRef: React.RefObject<HTMLElement | null>,
   capRef: React.RefObject<HTMLElement | null>,
+  triggerRef: React.RefObject<HTMLElement | null>,
   getTriggerRect: () => DOMRect | null,
   onCloseComplete: () => void
 ) {
@@ -173,12 +174,22 @@ function usePanelMorphAnimation(
     readyRef.current = false;
     endGesture();
     const panel = panelRef.current;
-    if (panel) delete panel.dataset.aiReady;
+    const triggerEl = triggerRef.current;
+    if (panel) {
+      panel.style.overflow = "hidden";
+      delete panel.dataset.aiReady;
+    }
     if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (triggerEl) {
+        gsap.set(triggerEl, { opacity: 1, pointerEvents: "auto", clearProps: "opacity,pointerEvents" });
+      }
       onCloseComplete();
       return;
     }
     timelineRef.current?.kill();
+    gsap.killTweensOf(panel);
+    if (triggerEl) gsap.killTweensOf(triggerEl);
+
     const rect = panel.getBoundingClientRect();
     const trigger = getTriggerRect() ?? rect;
     const inner = panel.querySelector<HTMLElement>(".ai-chat-inner");
@@ -191,18 +202,67 @@ function usePanelMorphAnimation(
     // Width/height must not move a right/bottom-anchored shell as it shrinks.
     gsap.set(panel, { left: rect.left, top: rect.top, right: "auto", bottom: "auto", x: 0, y: 0,
       width: rect.width, height: rect.height });
-    timelineRef.current = gsap.timeline({ onComplete: onCloseComplete })
-      .to(panel.querySelectorAll("[data-ai-stagger]"), { autoAlpha: 0, duration: .12 }, 0)
-      .to(panel, { left: trigger.left, top: trigger.top, width: trigger.width, height: trigger.height,
-        borderRadius: trigger.width / 2, "--ai-glass-fill": "rgba(255,255,255,.32)", "--ai-glass-tint": 1,
-        duration: .5, ease: "power3.inOut" }, .04);
+
+    const isMep = panel.getAttribute("data-discipline") === "mep" || (typeof document !== "undefined" && document.body.classList.contains("mep-mode-active"));
+    const targetBoxShadow = isMep
+      ? "inset 0 1px 0 rgba(255,255,255,.72), 0 6px 18px rgba(56,189,248,.3)"
+      : "inset 0 1px 0 rgba(255,255,255,.72), inset 0 -1px 0 rgba(180,83,9,.12), 0 6px 18px rgba(251,191,36,.2)";
+
+    const fadeOutElements = [
+      ...Array.from(panel.querySelectorAll<HTMLElement>(".ai-resize-handle, .ai-light-beam, .ai-account-menu, [data-ai-stagger]")),
+      ...Array.from(panel.querySelectorAll<HTMLElement>(".ai-chat-header button, .ai-chat-header h2, .ai-chat-header p")),
+      ...Array.from(panel.querySelectorAll<HTMLElement>(".ai-chat-inner > *:not(.ai-chat-header)"))
+    ].filter(el => el !== icon && !icon?.contains(el));
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        if (triggerEl) {
+          gsap.set(triggerEl, { opacity: 1, pointerEvents: "auto", clearProps: "opacity,pointerEvents" });
+        }
+        onCloseComplete();
+      },
+    });
+    timelineRef.current = tl;
+
+    tl.to(fadeOutElements, { autoAlpha: 0, duration: 0.12, ease: "power2.out" }, 0)
+      .to(panel, {
+        left: trigger.left,
+        top: trigger.top,
+        width: trigger.width,
+        height: trigger.height,
+        borderRadius: trigger.width / 2,
+        "--ai-glass-fill": "rgba(255,255,255,.32)",
+        "--ai-glass-tint": 1,
+        boxShadow: targetBoxShadow,
+        duration: 0.46,
+        ease: "power3.inOut",
+      }, 0.02);
+
     if (icon && iconRect) {
-      timelineRef.current.to(icon, {
-        x: Number(gsap.getProperty(icon, "x")) + trigger.width / 2 - (iconRect.left + iconRect.width / 2 - rect.left),
-        y: Number(gsap.getProperty(icon, "y")) + trigger.height / 2 - (iconRect.top + iconRect.height / 2 - rect.top),
-        duration: .5, ease: "power3.inOut",
-      }, .04);
+      const targetRelX = (trigger.width - iconRect.width) / 2;
+      const currentRelX = iconRect.left - rect.left;
+      const targetRelY = (trigger.height - iconRect.height) / 2;
+      const currentRelY = iconRect.top - rect.top;
+      tl.to(icon, {
+        x: Number(gsap.getProperty(icon, "x")) + (targetRelX - currentRelX),
+        y: Number(gsap.getProperty(icon, "y")) + (targetRelY - currentRelY),
+        duration: 0.46,
+        ease: "power3.inOut",
+      }, 0.02);
     }
+
+    if (triggerEl) {
+      tl.fromTo(triggerEl,
+        { opacity: 0, pointerEvents: "none" },
+        { opacity: 1, pointerEvents: "auto", duration: 0.14, ease: "power2.out" },
+        0.30
+      );
+    }
+    tl.to(panel, {
+      autoAlpha: 0,
+      duration: 0.14,
+      ease: "power2.in",
+    }, 0.32);
   };
 
   useLayoutEffect(() => {
@@ -220,7 +280,7 @@ function usePanelMorphAnimation(
       const icon = capRef.current;
       const iconRect = icon?.getBoundingClientRect();
       gsap.set(inner, { width: panel.clientWidth, height: panel.clientHeight });
-      gsap.set(panel, { left: trigger.left, top: trigger.top, right: "auto", bottom: "auto",
+      gsap.set(panel, { autoAlpha: 1, left: trigger.left, top: trigger.top, right: "auto", bottom: "auto",
         width: trigger.width, height: trigger.height, borderRadius: trigger.width / 2,
         "--ai-glass-fill": "rgba(255,255,255,.32)", "--ai-glass-tint": 1 });
       if (icon && iconRect) {
@@ -233,9 +293,10 @@ function usePanelMorphAnimation(
           onComplete: () => {
             // Return sizing to CSS so viewport changes continue to reflow the chat.
             if (!panel.dataset.aiPositioned) {
-              gsap.set(panel, { clearProps: "left,top,right,bottom,width,height,borderRadius" });
+              gsap.set(panel, { clearProps: "left,top,right,bottom,width,height,borderRadius,overflow" });
             } else {
               gsap.set(panel, fitPanelBox(rect));
+              panel.style.overflow = "";
             }
             gsap.set(inner, { clearProps: "width,height" });
             readyRef.current = true;
@@ -246,16 +307,23 @@ function usePanelMorphAnimation(
       if (icon) timelineRef.current.to(icon, { x: 0, y: 0, duration: .58, ease: "power3.inOut" }, 0);
       gsap.to(panel.querySelector(".ai-light-beam"), { "--ai-beam-angle": "360deg", duration: 6, repeat: -1, ease: "none" });
     }, panelRef);
-    return () => { timelineRef.current?.kill(); ctx.revert(); };
-  }, [panelRef, capRef, getTriggerRect]);
+    return () => {
+      timelineRef.current?.kill();
+      if (panelRef.current) gsap.killTweensOf(panelRef.current);
+      if (triggerRef.current) gsap.killTweensOf(triggerRef.current);
+      ctx.revert();
+    };
+  }, [panelRef, capRef, triggerRef, getTriggerRect]);
 
   return { handleClose, windowEvents, onWindowKeyDown };
 }
 
 function AssistantPanel({
+  triggerRef,
   getTriggerRect,
   onCloseComplete,
 }: {
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
   getTriggerRect: () => DOMRect | null;
   onCloseComplete: () => void;
 }) {
@@ -268,7 +336,7 @@ function AssistantPanel({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const { handleClose, windowEvents, onWindowKeyDown } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
+  const { handleClose, windowEvents, onWindowKeyDown } = usePanelMorphAnimation(panelRef, capRef, triggerRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -446,16 +514,18 @@ function AssistantPanel({
 }
 
 function UnconfiguredPanel({
+  triggerRef,
   getTriggerRect,
   onCloseComplete,
 }: {
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
   getTriggerRect: () => DOMRect | null;
   onCloseComplete: () => void;
 }) {
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const panelRef = useRef<HTMLElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
-  const { handleClose, windowEvents, onWindowKeyDown } = usePanelMorphAnimation(panelRef, capRef, getTriggerRect, onCloseComplete);
+  const { handleClose, windowEvents, onWindowKeyDown } = usePanelMorphAnimation(panelRef, capRef, triggerRef, getTriggerRect, onCloseComplete);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -537,13 +607,17 @@ export default function AiAssistant() {
   const handleOpen = () => {
     if (triggerRef.current) {
       triggerRectRef.current = triggerRef.current.getBoundingClientRect();
+      gsap.killTweensOf(triggerRef.current);
     }
     if (configured !== null) setOpen(true);
   };
 
   const handleCloseComplete = useCallback(() => {
     setOpen(false);
-    triggerRef.current?.focus({ preventScroll: true });
+    if (triggerRef.current) {
+      gsap.set(triggerRef.current, { clearProps: "opacity,pointerEvents" });
+      triggerRef.current.focus({ preventScroll: true });
+    }
   }, []);
 
   const getTriggerRect = useCallback(() => {
@@ -566,7 +640,6 @@ export default function AiAssistant() {
         style={{
           opacity: open ? 0 : 1,
           pointerEvents: open ? "none" : "auto",
-          transition: "opacity 0.08s ease",
         }}
         className="ai-orb-trigger fixed bottom-4 right-4 z-[100] items-center justify-center rounded-full shadow-xl flex"
       >
@@ -577,6 +650,7 @@ export default function AiAssistant() {
       {open && configured !== false && (
         <SessionProvider>
           <AssistantPanel
+            triggerRef={triggerRef}
             getTriggerRect={getTriggerRect}
             onCloseComplete={handleCloseComplete}
           />
@@ -585,6 +659,7 @@ export default function AiAssistant() {
 
       {open && configured === false && (
         <UnconfiguredPanel
+          triggerRef={triggerRef}
           getTriggerRect={getTriggerRect}
           onCloseComplete={handleCloseComplete}
         />

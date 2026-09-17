@@ -46,6 +46,9 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     }
     box(0, h * .24, d * .48, w * .48, h * .09, .03, dark);
     if(id.endsWith("sport")){box(0,h*.63,-d*.38,w*.92,h*.04,d*.1,paint);for(const side of[-1,1])box(side*w*.34,h*.55,-d*.38,w*.04,h*.16,d*.03,dark);}
+  } else if (id === "extras-roof-window") {
+    box(0, h * .15, 0, w, h * .3, d, dark);
+    box(0, h * .34, 0, w * .86, h * .04, d * .86, glass);
   } else if (id === "extras-lawn") {
     box(0, h / 2, 0, w, h, d, new THREE.MeshStandardMaterial({ color: item.color ?? "#6b9b45", roughness: 1 }));
   } else if (id.startsWith("extras-")) {

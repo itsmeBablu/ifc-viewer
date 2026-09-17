@@ -45,7 +45,7 @@ export function installDrawingInteractionController(options: Options) {
   const activePointers = new Set<number>();
   const enabled = () => {
     const s = useLayoutDrawingStore.getState();
-    return (!s.slabBoundaryEdit || Boolean(s.editingSlabId)) && (s.armedLayoutTool === "wall" || s.armedLayoutTool === "lines" || Boolean(mepRunKind(s.armedLayoutTool)));
+    return (!s.slabBoundaryEdit || Boolean(s.editingSlabId)) && (s.armedLayoutTool === "wall" || s.armedLayoutTool === "curtain-wall" || s.armedLayoutTool === "lines" || Boolean(mepRunKind(s.armedLayoutTool)));
   };
   const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
   const clear = () => { svg.replaceChildren(); hud.style.display = "none"; };
@@ -225,7 +225,7 @@ export function installDrawingInteractionController(options: Options) {
     }
     const segments = shape === "pick-edge" || shape === "pick-face" ? result.picked : drawingSegments(shape, next);
     if (!segments.length) { useDrawingInteractionStore.setState({ message: "No valid geometry here. Pick another point or edge." }); return; }
-    const kind = result.layout.armedLayoutTool; if (kind !== "wall" && kind !== "lines") return;
+    const kind = result.layout.armedLayoutTool; if (kind !== "wall" && kind !== "curtain-wall" && kind !== "lines") return;
     const token = generation;
     useDrawingInteractionStore.setState({ busy: true, message: null });
     try {
