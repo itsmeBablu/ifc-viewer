@@ -1,34 +1,18 @@
-import { componentPreset } from "../../componentCatalog";
-import { defaultFurnitureParameters,evaluateFurniture } from "../../parametricFurniture";
+import { arrangeRoom } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import type { ResidentialParameters, allocateResidential } from "./allocation";
 
 type Allocation = ReturnType<typeof allocateResidential>;
 type Rect = { x:number;y:number;w:number;d:number };
-const overlaps=(a:Rect,b:Rect)=>a.x<b.x+b.w+100&&a.x+a.w+100>b.x&&a.y<b.y+b.d+100&&a.y+a.d+100>b.y;
-export function furnishFloor(input:ResidentialParameters, a:Allocation, id:string,levelId:string,xMm:number,yMm:number,t:number,heightMm:number,actualBedrooms:number,upper=false):AiAction[]{
+export function furnishFloor(input:ResidentialParameters, a:Allocation, id:string,levelId:string,xMm:number,yMm:number,t:number,heightMm:number,actualBedrooms:number,upper=false,stairOverride?:Rect):AiAction[]{
   const actions:AiAction[]=[];let index=0;
   const add=(familyId:string,x:number,y:number,rotationDeg=0,elevationMm=0)=>actions.push({kind:"equipment",operation:"create",id:`${id}:component:${index++}`,levelId,familyId,xMm:xMm+x,yMm:yMm+y,rotationDeg,elevationMm});
-  const place=(familyId:string,zone:Rect,occupied:Rect[])=>{
-    const p=componentPreset(familyId)!;
-    const parameters=defaultFurnitureParameters(familyId),evaluated=parameters?evaluateFurniture(parameters):null;
-    const dimensions=evaluated?{widthMm:Math.max(evaluated.widthMm,...evaluated.parts.map(part=>Math.abs(part.xMm)*2+(Math.abs(part.rotationDeg??0)%180===90?part.depthMm:part.widthMm))),depthMm:Math.max(evaluated.depthMm,...evaluated.parts.map(part=>Math.abs(part.yMm)*2+(Math.abs(part.rotationDeg??0)%180===90?part.widthMm:part.depthMm)))}:p;
-    for(const rotation of [0,90]){
-      const w=rotation?dimensions.depthMm:dimensions.widthMm,d=rotation?dimensions.widthMm:dimensions.depthMm;
-      for(let y=zone.y+50;y+d<=zone.y+zone.d-50;y+=150)for(let x=zone.x+50;x+w<=zone.x+zone.w-50;x+=150){
-        const rect={x,y,w,d};if(occupied.some(o=>overlaps(o,rect)))continue;
-        occupied.push(rect);add(familyId,x+w/2,y+d/2,rotation);return true;
-      }
-    }
-    return false;
-  };
   for(let i=0;i<a.bays;i++){
     const start=t/2+i*(a.roomWidthMm+150);
     const room={x:start,y:t/2,w:a.roomWidthMm,d:a.roomDepthMm};
     if(input.furnished!==false){
       const occupied:Rect[]=[{x:start+a.roomWidthMm/2-600,y:t/2+a.roomDepthMm-1000,w:1200,d:1000}];
-      if(i<actualBedrooms){place(a.roomWidthMm>=2800?"bed-double":"bed-single",room,occupied);place("wardrobe",room,occupied);place("bedside",room,occupied);}
-      else{place("desk",room,occupied);place("office-chair",room,occupied);}
+      arrangeRoom(i<actualBedrooms?"bedroom":"study",room,occupied,add);
     }
     if(input.underfloorHeating){
       const left=start+350,right=start+a.roomWidthMm-350,front=t/2+350,rear=t/2+a.roomDepthMm-350;
@@ -41,13 +25,11 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
   if(input.furnished!==false){
     const bath={x:t/2,y:serviceY,w:a.bathroomWidthMm,d:a.bathroomDepthMm};
     const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:950}];
-    place("bath-shower",bath,occupied);place("bath-toilet",bath,occupied);place("bath-vanity",bath,occupied);
+    arrangeRoom("bathroom",bath,occupied,add);
     const zone={x:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
     const used:Rect[]=[{x:a.widthMm-t/2-1550,y:serviceY,w:1100,d:1000}];
-    if(input.variant==="duplex")used.push({x:t/2+a.bathroomWidthMm+300,y:serviceY+1200,w:a.stair.widthMm,d:a.stair.runMm+a.stair.landingMm});
-    place("kitchen-sink",zone,used);place("kitchen-hob",zone,used);place("kitchen-base",zone,used);place("kitchen-fridge",zone,used);
-    place("sofa-2",zone,used);place("coffee-table",zone,used);
-    place("dining-table",zone,used);place("tv-cabinet",zone,used);
+    if(input.variant==="duplex")used.push(stairOverride??{x:t/2+a.bathroomWidthMm+300,y:serviceY+1200,w:a.stair.widthMm,d:a.stair.runMm+a.stair.landingMm});
+    arrangeRoom("living",zone,used,add);
   }
   const corridorY=(a.bedroomEndMm+a.corridorEndMm)/2;
   if(input.underfloorHeating){
@@ -92,11 +74,16 @@ export function outdoorActions(input:ResidentialParameters,id:string,levelId:str
     actions.push({kind:"equipment",operation:"create",id:`${id}:garage:car`,levelId,familyId:"extras-car-sedan",xMm:gx+w/2,yMm:gy+d/2,rotationDeg:0,elevationMm:0,color:"#2563eb"});
   }
   const area=input.gardenAreaM2??0;
-  if(area>0){
-    const gd=area*1e6/width,gy=y+depth+1000;
-    actions.push({kind:"equipment",operation:"create",id:`${id}:garden:lawn`,levelId,familyId:"extras-lawn",xMm:x+width/2,yMm:gy+gd/2,widthMm:width,depthMm:gd,heightMm:50,rotationDeg:0,elevationMm:-100});
-    if(gd>=1000){const crown=Math.min(3200,gd-200,width/3);for(const [i,px]of([x+crown/2+100,x+width-crown/2-100].entries()))actions.push({kind:"equipment",operation:"create",id:`${id}:garden:tree:${i}`,levelId,familyId:"extras-tree",xMm:px,yMm:gy+gd-crown/2-100,widthMm:crown,depthMm:crown,heightMm:Math.max(2500,crown*1.6),rotationDeg:0,elevationMm:-50});}
-    if(gd>=1000)for(let i=0;i<3;i++)actions.push({kind:"equipment",operation:"create",id:`${id}:garden:plant:${i}`,levelId,familyId:"extras-shrub",xMm:x+width*(i+1)/4,yMm:gy+500,rotationDeg:0,elevationMm:-50});
+  if(area>0)actions.push(...gardenActions(id,levelId,x,y+depth+1000,width,area*1e6/width));
+  return actions;
+}
+
+export function gardenActions(id:string,levelId:string,x:number,y:number,width:number,depth:number):AiAction[]{
+  const actions:AiAction[]=[{kind:"equipment",operation:"create",id:`${id}:garden:lawn`,levelId,familyId:"extras-lawn",xMm:x+width/2,yMm:y+depth/2,widthMm:width,depthMm:depth,heightMm:50,rotationDeg:0,elevationMm:-100}];
+  if(depth>=1000&&width>=1000){
+    const crown=Math.min(3200,depth-200,width/3);
+    for(const [i,px]of([x+crown/2+100,x+width-crown/2-100].entries()))actions.push({kind:"equipment",operation:"create",id:`${id}:garden:tree:${i}`,levelId,familyId:i?"extras-tree-flowering":"extras-tree",xMm:px,yMm:y+depth-crown/2-100,widthMm:crown,depthMm:crown,heightMm:Math.max(2500,crown*1.6),rotationDeg:0,elevationMm:-50,color:i?"#f9a8d4":"#38834b"});
+    for(let i=0;i<3;i++)actions.push({kind:"equipment",operation:"create",id:`${id}:garden:plant:${i}`,levelId,familyId:i===1?"extras-flower-bed":"extras-shrub",xMm:x+width*(i+1)/4,yMm:y+450,widthMm:Math.min(900,width/5),depthMm:Math.min(700,depth/3),heightMm:i===1?450:700,rotationDeg:0,elevationMm:-50,color:["#65a30d","#fb7185","#a855f7"][i]});
   }
   return actions;
 }

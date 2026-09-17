@@ -5,7 +5,7 @@ import { residentialOptions } from "./brief";
 import { allocateBuilding, applyFootprint } from "./footprint";
 import { furnishFloor } from "./furnishing";
 
-export const apartmentSchema = z.object({
+const apartmentRecipeSchema = z.object({
   kind: z.literal("apartment_layout"), id: z.string().min(1).max(100), levelId: z.string().min(1),
   bedrooms: z.number().int().min(1).max(6).default(2),
   bedroomAreaM2: z.number().min(7.5).max(100).default(20),
@@ -16,6 +16,8 @@ export const apartmentSchema = z.object({
   thicknessMm: z.number().min(100).max(500).default(200),
   ...residentialOptions,
 }).strict().describe("Furnished concept apartment: 1–6 bedrooms (default 20 m² clear each), 1.2 m corridor, living/open kitchen, 8 m² bathroom, slab, doors/windows. Code computes geometry. Optional footprint rectangle/l/u/drawn, widthM/lengthM (internal spans), normalized footprintPoints for drawn. Fixed room areas preserved; extra wings are open living. Optional underfloorHeating, piping none/underfloor/ceiling, ducts none/ceiling. furnished false omits furniture. No roof. IDs id:wall:0 onwards for automatic rectangle only.");
+
+export const apartmentSchema = apartmentRecipeSchema.omit({sketches:true});
 
 export function apartmentActions(item: z.infer<typeof apartmentSchema>, options: { allocation?: ReturnType<typeof allocateResidential>; entrance?: boolean } = {}): AiAction[] {
   const building = options.allocation ? null : allocateBuilding({ ...item, variant: "apartment" }, item.heightMm, item.thicknessMm);

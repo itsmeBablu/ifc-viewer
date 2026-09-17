@@ -37,7 +37,7 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     const paint = new THREE.MeshStandardMaterial({ color: item.color ?? "#2563eb", roughness: 0.28, metalness: 0.55 });
     const tire = new THREE.MeshStandardMaterial({ color: "#18181b", roughness: 0.9 });
     box(0, h * .34, 0, w, h * .32, d * .94, paint);
-    box(0, h * .65, -d * .07, w * .84, h * .38, d * (id.endsWith("suv") ? .65 : .48), paint);
+    box(0, h * .65, -d * .07, w * .84, h * .38, d * (id.endsWith("suv") ? .65 : id.endsWith("compact") ? .6 : .48), paint);
     box(0, h * .7, -d * .07, w * .86, h * .22, d * .4, dark);
     for (const side of [-1, 1]) for (const end of [-1, 1]) {
       const wheel = cylinder(side * w * .48, h * .19, end * d * .31, h * .19, w * .1, tire);
@@ -45,17 +45,22 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
       box(side * w * .31, h * .4, end * d * .475, w * .22, h * .09, .025, end > 0 ? white : fabric);
     }
     box(0, h * .24, d * .48, w * .48, h * .09, .03, dark);
+    if(id.endsWith("sport")){box(0,h*.63,-d*.38,w*.92,h*.04,d*.1,paint);for(const side of[-1,1])box(side*w*.34,h*.55,-d*.38,w*.04,h*.16,d*.03,dark);}
   } else if (id === "extras-lawn") {
     box(0, h / 2, 0, w, h, d, new THREE.MeshStandardMaterial({ color: item.color ?? "#6b9b45", roughness: 1 }));
   } else if (id.startsWith("extras-")) {
-    const leaf = new THREE.MeshStandardMaterial({ color: item.color ?? "#38834b", roughness: 1 });
-    const tree = id === "extras-tree" || id === "extras-palm";
+    const leaf = new THREE.MeshStandardMaterial({ color: item.color ?? (id==="extras-tree-flowering"?"#f9a8d4":id==="extras-lavender"?"#a78bfa":"#38834b"), roughness: 1 });
+    const tree = id.startsWith("extras-tree") || id === "extras-palm";
     if (id === "extras-planter") cylinder(0, h * .15, 0, w * .42, h * .3, wood);
     if (tree) cylinder(0, h * .4, 0, w * .045, h * .8, wood);
     const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), leaf);
     crown.position.y = tree ? h * .74 : h * .64;
     crown.scale.set(w * .5, h * (tree ? .26 : .36), d * .5);
     group.add(crown);
+    if(id==="extras-flower-bed"||id==="extras-lavender"||id==="extras-tree-flowering"){
+      const colors=id==="extras-tree-flowering"?[item.color??"#f9a8d4","#fce7f3","#fb7185"]:id==="extras-lavender"?[item.color??"#a78bfa","#c4b5fd"]:[item.color??"#fb7185","#facc15","#c084fc","#fda4af"];
+      for(let i=0;i<12;i++){const angle=i*Math.PI*2/12,flower=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.min(w,d)*.065,1),new THREE.MeshStandardMaterial({color:colors[i%colors.length],roughness:1}));flower.position.set(Math.cos(angle)*w*.35,h*(tree?.8:.85)+(i%3)*h*.035,Math.sin(angle)*d*.35);group.add(flower);}
+    }
     if (id === "extras-palm") for (let i = 0; i < 8; i++) {
       const frond = box(0, h * .83, 0, w * .9, h * .025, d * .12, leaf);
       frond.rotation.y = i * Math.PI / 4;

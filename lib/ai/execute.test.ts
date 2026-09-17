@@ -6,6 +6,7 @@ import { clearWerkzeugHistory, undoWerkzeug, redoWerkzeug } from "@/lib/werkzeug
 import { idbApplyAiChanges, idbListWalls } from "@/lib/layoutDrawingDb";
 import { aiFingerprint, applyAiPlan, prepareAiChanges } from "./execute";
 import { expandModelPlan } from "./recipes";
+import { sketchActions } from "./modeling/sketch";
 import type { AiPlan } from "./schema";
 
 const plan: AiPlan = { summary: "Wall and door", assumptions: [], actions: [
@@ -18,6 +19,14 @@ beforeEach(() => {
   clearWerkzeugHistory();
 });
 describe("AI batch persistence", () => {
+  it("applies custom floor drawings and undoes their furniture and stair geometry together",async()=>{
+    const points=[{xMm:0,yMm:0},{xMm:14000,yMm:0},{xMm:14000,yMm:14000},{xMm:0,yMm:14000}];
+    const actions=sketchActions({variant:"duplex",bedrooms:5,sketches:[{points,lines:[]},{points,lines:[]},{points,lines:[]}],garage:"none",gardenAreaM2:0},"sketch","l",0,3000,200);
+    await applyAiPlan({summary:"Drawn home",assumptions:[],actions},aiFingerprint(),true);
+    expect(useLayoutDrawingStore.getState().levels).toHaveLength(3);
+    expect(useLayoutDrawingStore.getState().mepEquipment.filter(e=>e.familyId?.startsWith("bed-"))).toHaveLength(5);
+    await undoWerkzeug();expect(useLayoutDrawingStore.getState().levels).toHaveLength(1);expect(useLayoutDrawingStore.getState().mepEquipment).toHaveLength(0);expect(useLayoutDrawingStore.getState().slabs).toHaveLength(0);
+  });
   it("applies a duplex with hosted openings and stair slabs and undoes both floors together", async () => {
     const duplex = expandModelPlan({ summary: "Five-bedroom duplex", assumptions: [], actions: [{ kind: "house_layout", id: "home", levelId: "l", variant: "duplex", bedrooms: 5 }] });
     await applyAiPlan(duplex, aiFingerprint(), true);
