@@ -16,6 +16,7 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
 
 type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "room" | "garden" | "pan";
+type DrawMode = "walls" | "furniture" | "mep";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
 const colors: Record<RoomUse, string> = {
@@ -79,7 +80,7 @@ export default function AiSketchWorkspace({
   const totalFloors = Math.max(parameters.sketches?.length ?? 1, 1);
   const sketches = parameters.sketches ?? Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed);
 
-  const [floor, setFloor] = useState(0),
+  const [floor, setFloor] = useState(0), [drawMode, setDrawMode] = useState<DrawMode>("walls"),
         [tool, setTool] = useState<Tool>("wall"),
         [below, setBelow] = useState(true),
         [anchors, setAnchors] = useState<SketchPoint[]>([]),
@@ -87,6 +88,7 @@ export default function AiSketchWorkspace({
         [hover, setHover] = useState<string | null>(null),
         [length, setLength] = useState(""),
         [angleInput, setAngleInput] = useState(""),
+        [wallType, setWallType] = useState<"exterior"|"partition"|"fire"|"curtain">("partition"),
         [error, setError] = useState(""),
         [pickLayer, setPickLayer] = useState<Pick["source"]>("current"),
         [projectVisible, setProjectVisible] = useState(true),
@@ -140,6 +142,7 @@ export default function AiSketchWorkspace({
     onChange({ ...parameters, variant, sketches: next });
   };
   const replace = (s: FloorSketch) => change(sketches.map((old, i) => i === floor ? s : old));
+  const addDetailLine = (line: {start:SketchPoint;end:SketchPoint}) => replace({...current,[drawMode === "mep" ? "mepLines" : "furnitureLines"]:[...(current[drawMode === "mep" ? "mepLines" : "furnitureLines"]??[]),line]});
   const resetSelection = () => { setSelected(null); setAnchors([]); setGardenAnchors([]); setRoomPoint(null); };
 
   const doUndo = () => {
@@ -217,6 +220,7 @@ export default function AiSketchWorkspace({
     setSelected(pick);
     setLength((Math.hypot(l.end.xMm - l.start.xMm, l.end.yMm - l.start.yMm) / 1000).toFixed(2));
     setAngleInput(lineAngleDeg(l.start, l.end).toFixed(1));
+    setWallType(current.wallTypes?.find(w=>w.index===index&&w.interior===interior)?.type??(interior?"partition":"exterior"));
     setRoomPoint(null);
   };
 
@@ -357,7 +361,7 @@ export default function AiSketchWorkspace({
           return;
         }
         const newLine = { start: a, end: point };
-        replace({ ...current, lines: [...current.lines, newLine] });
+        if(drawMode === "walls") replace({ ...current, lines: [...current.lines, newLine] }); else addDetailLine(newLine);
         // AutoCAD continuous polyline: anchor to new point
         setAnchors([point]);
         return;
@@ -365,7 +369,7 @@ export default function AiSketchWorkspace({
 
       if (tool === "arc") {
         const additions = arcSegments(a, anchors[1], point);
-        replace({ ...current, lines: [...current.lines, ...additions] });
+        if(drawMode === "walls") replace({ ...current, lines: [...current.lines, ...additions] }); else additions.forEach(addDetailLine);
         setAnchors([]);
         return;
       }
@@ -444,7 +448,7 @@ export default function AiSketchWorkspace({
         }
         if (simplified.length >= 2) {
           const newLines = simplified.slice(1).map((end, i) => ({ start: simplified[i], end }));
-          replace({ ...current, lines: [...current.lines, ...newLines] });
+          if(drawMode === "walls") replace({ ...current, lines: [...current.lines, ...newLines] }); else newLines.forEach(addDetailLine);
         }
       }
       setFreehandStroke([]);
@@ -675,6 +679,8 @@ export default function AiSketchWorkspace({
       })}
       {s.points.map((a, i) => segment(a, s.points[(i + 1) % s.points.length], i, false, src))}
       {s.lines.map((l, i) => segment(l.start, l.end, i, true, src))}
+      {src === "current" && (s.furnitureLines ?? []).map((l, i) => <line key={`f${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#f97316" strokeWidth={span*.004} opacity={.9} pointerEvents="none" />)}
+      {src === "current" && (s.mepLines ?? []).map((l, i) => <line key={`m${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#14b8a6" strokeWidth={span*.003} strokeDasharray={`${span*.009} ${span*.006}`} opacity={.95} pointerEvents="none" />)}
       {src === "current" && s.points.map((p, i) => <circle key={`p${i}`} cx={p.xMm} cy={p.yMm} r={span * .005} fill="#38bdf8" pointerEvents="none" />)}
       {/* Garden polygons with draggable vertices */}
       {(s.gardens ?? []).map((g, gi) => {
@@ -1025,12 +1031,19 @@ export default function AiSketchWorkspace({
 
           {/* Right sidebar */}
           <aside>
+            <section className="ai-sketch-card ai-sketch-mode-card">
+              <h3>Drafting mode</h3>
+              <div className="ai-sketch-mode-tabs">
+                {(["walls","furniture","mep"] as const).map(mode => <button key={mode} type="button" aria-pressed={drawMode===mode} onClick={()=>{setDrawMode(mode);setTool(mode==="walls"?"wall":"freehand");resetSelection();}}><span className={`ai-sketch-mode-dot ai-sketch-mode-${mode}`}/>{mode === "mep" ? "MEP lines" : mode[0].toUpperCase()+mode.slice(1)}</button>)}
+              </div>
+              <p>{drawMode === "walls" ? "Outer lines become walls; interior lines become partitions. Add doors, windows and room tags." : drawMode === "furniture" ? "Draw furniture footprints as orange reference lines. They are kept separate from walls." : "Draw MEP runs as teal dashed lines. They are kept separate from walls and rooms."}</p>
+            </section>
             {/* Tool palette */}
             <section className="ai-sketch-card">
               <h3>Drawing tools</h3>
               <div className="ai-sketch-toolbox">
                 {tools.map(t => (
-                  <button key={t.id} type="button" disabled={disabled} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
+                  <button key={t.id} type="button" disabled={disabled || drawMode !== "walls" && ["rectangle","circle","room","garden"].includes(t.id)} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
                     {t.icon}<span>{t.name}</span>
                   </button>
                 ))}
@@ -1079,6 +1092,7 @@ export default function AiSketchWorkspace({
                 {/* Lock / delete / copy */}
                 {selected.source === "current" ? (
                   <>
+                    <div className="ai-sketch-field"><label htmlFor="sk-wall-type">Wall type</label><select id="sk-wall-type" aria-label="Selected wall type" value={wallType} onChange={e=>{const type=e.target.value as typeof wallType;setWallType(type);replace({...current,wallTypes:[...(current.wallTypes??[]).filter(w=>w.index!==selected.index||w.interior!==selected.interior),{index:selected.index,interior:selected.interior,type}]});}}><option value="exterior">Exterior wall</option><option value="partition">Partition wall</option><option value="fire">Fire-rated wall</option><option value="curtain">Curtain wall</option></select></div>
                     <button type="button" aria-pressed={!!locked} className={locked ? "btn-v-yellow" : undefined} onClick={() => {
                       const l = lineFor(selected)!;
                       replace({

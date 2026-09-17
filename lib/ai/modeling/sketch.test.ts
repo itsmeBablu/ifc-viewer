@@ -42,6 +42,14 @@ it("uses room names for furniture and wet-room ventilation, retaining drawn gard
   expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="extras-tree-flowering")).toBe(true);
   expect(()=>validateSketches([{...labeled,labels:[{point:{xMm:16000,yMm:16000},name:"Outside",use:"study"}]}])).toThrow(/inside a closed/);
 });
+it("keeps furniture and MEP drafting layers out of walls while compiling their native actions",()=>{
+  const layered:FloorSketch={points,lines:[{start:{xMm:0,yMm:7000},end:{xMm:14000,yMm:7000}}],wallTypes:[{index:0,interior:true,type:"fire"}],furnitureLines:[{start:{xMm:2500,yMm:2500},end:{xMm:4300,yMm:2500}}],mepLines:[{start:{xMm:1000,yMm:12000},end:{xMm:12000,yMm:12000}}]};
+  const actions=sketchActions({variant:"villa",bedrooms:1,sketches:[layered],garage:"none",gardenAreaM2:0},"layers","l",0,3000,200);
+  expect(actions.filter(a=>a.kind==="wall")).toHaveLength(5);
+  expect(actions.find(a=>a.kind==="wall"&&a.id.endsWith(":wall:4"))).toMatchObject({wallType:"fire"});
+  expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="furniture-line-marker")).toBe(true);
+  expect(actions.some(a=>a.kind==="pipe"&&a.id.includes("mep-sketch"))).toBe(true);
+});
 it("recovers rooms at T-junctions without losing the drawn partitions",()=>{
   const rooms=sketchRooms(manual);expect(rooms).toHaveLength(3);
   expect(rooms.reduce((s,p)=>s+polygonArea(p),0)).toBeCloseTo(196e6);

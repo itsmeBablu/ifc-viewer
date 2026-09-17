@@ -120,7 +120,9 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
       layout=applyFootprint(layout,s.points,x,0,thickness,height,levelId,prefix);actions.push(...layout.filter(a=>a.kind!=="floor"));
     }else{
       const edges=sketchSegments(s);
-      edges.forEach((l,i)=>actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:i<s.points.length?thickness:150,heightMm:height}));
+      edges.forEach((l,i)=>{const interior=i>=s.points.length,logicalIndex=interior?i-s.points.length:i,type=s.wallTypes?.find(w=>w.index===logicalIndex&&w.interior===interior)?.type;actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:interior?150:thickness,heightMm:height,...(type?{wallType:type}:{})});});
+      (s.furnitureLines??[]).forEach((l,i)=>{const dx=l.end.xMm-l.start.xMm,dy=l.end.yMm-l.start.yMm,len=Math.hypot(dx,dy);actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture-sketch:${i}`,levelId,familyId:"furniture-line-marker",xMm:x+(l.start.xMm+l.end.xMm)/2,yMm:(l.start.yMm+l.end.yMm)/2,rotationDeg:Math.atan2(dy,dx)*180/Math.PI,elevationMm:0,widthMm:Math.max(100,len),depthMm:100,heightMm:50});});
+      (s.mepLines??[]).forEach((l,i)=>actions.push({kind:"pipe",operation:"create",id:`${prefix}:mep-sketch:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,diameterMm:28,elevationOffsetMm:-120,slopePercent:0,systemType:"hydronic_supply"}));
       const rooms=sketchRooms(s).sort((a,b)=>polygonArea(b)-polygonArea(a)),doors:SketchPoint[]=[];
       const roomLabel=(room:SketchPoint[])=>(s.labels??[]).find(l=>insidePolygon(l.point,room));
       const livingIndex=Math.max(0,rooms.findIndex(r=>roomLabel(r)?.use==="living"));
