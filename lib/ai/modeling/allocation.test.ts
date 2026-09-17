@@ -52,6 +52,11 @@ it("refresh seeds produce distinct editable bedroom subdivisions", () => {
   const wallsB = b.filter(x => x.kind === "wall").map(x => x.kind === "wall" ? `${x.startXmm}:${x.endXmm}` : "").join(",");
   expect(wallsA).not.toBe(wallsB);
 });
+it("supports mixed bedroom counts per apartment floor", () => {
+  const plan = expandModelPlan({ summary: "Mixed block", assumptions: [], actions: [{ kind: "apartment_block", id: "mix", levelId: "l", floors: 2, unitsPerFloor: 3, bedroomsPerUnit: 2, bedroomDistribution: [1, 2, 3] }] });
+  expect(plan.actions.filter(a => a.kind === "equipment" && a.familyId === "extras-lift")).toHaveLength(2);
+  expect(plan.actions.filter(a => a.kind === "wall").length).toBeGreaterThan(20);
+});
 it.each([
   ["create a 2 bedroom apartment with total area 110 m2 and bedrooms 24 m2 each", { variant: "apartment", bedrooms: 2, totalAreaM2: 110, bedroomAreaM2: 24 }],
   ["create a villa with living room 40 square meters and kitchen 15 sqm", { variant: "villa", bedrooms: 3, livingAreaM2: 40, kitchenAreaM2: 15 }],
