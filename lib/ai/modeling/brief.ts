@@ -29,6 +29,9 @@ export function defaultResidentialBrief(command: string) {
   const styleMatch = text.match(/\b(courtyard|corner|split|central|linear)(?:\s+(?:footprint|plan))?\b/);
   const layoutStyle = styleMatch?.[1] as ResidentialParameters["layoutStyle"] | undefined;
   if (styleMatch) text = text.replace(styleMatch[0], "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
+  const cultureStyle = /vastu/i.test(command) ? "vastu" as const : /german|mansard|satteldach|gable roof/i.test(command) ? "german" as const : undefined;
+  const roofStyle = /mansard/i.test(command) ? "mansard" as const : /gable|satteldach/i.test(command) ? "german-gable" as const : /hip roof/i.test(command) ? "german-hip" as const : undefined;
+  text = text.replace(/\b(?:vastu|german|mansard|satteldach|gable roof|hip roof)\b/gi, "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
   const block = text.match(/^(?:multi[- ]storey|multistorey|multi floor|apartment block|apartment building)?\s*(\d+)\s* floors?\s*(?:with\s*)?(\d+)\s*(?:apartments?|homes?|units?)\s*(?:per floor)?\s*(?:and\s*)?(\d+)\s*[- ]*bed(?:room|rooms?)?\s*apartments?$/);
   if(block){const b=Number(block[3]);if(Number.isInteger(b)&&b>=1&&b<=3)return {...areas,variant:"apartment",bedrooms:b,bedroomsPerApartment:b as 1|2|3,apartmentFloors:Number(block[1]),apartmentsPerFloor:Number(block[2])} as ResidentialParameters;}
   const prefix = text.match(new RegExp(`^${count}[- ]*${bedroom} (apartment|flat|villa|duplex(?: house)?|house|bungalow)$`));
@@ -40,7 +43,7 @@ export function defaultResidentialBrief(command: string) {
   const value = prefix?.[1] ?? suffix?.[2];
   const bedrooms = value ? numbers[value] ?? Number(value) : variant === "apartment" ? 2 : variant === "duplex" ? 5 : 3;
   const footprint = layoutStyle === "courtyard" || layoutStyle === "central" ? "u" : layoutStyle === "corner" ? "l" : undefined;
-  return { variant, bedrooms, ...areas, ...(layoutStyle ? { layoutStyle, ...(footprint ? { footprint } : {}) } : {}) } as ResidentialParameters;
+  return { variant, bedrooms, ...areas, ...(layoutStyle ? { layoutStyle, ...(footprint ? { footprint } : {}) } : {}), ...(cultureStyle ? { cultureStyle } : {}), ...(roofStyle ? { roofStyle } : {}) } as ResidentialParameters;
 }
 const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
@@ -51,6 +54,7 @@ export const residentialOptions = {
   gardenAreaM2: z.number().min(0).max(2000).optional(),
   apartmentFloors:z.number().int().min(1).max(12).optional(), apartmentsPerFloor:z.number().int().min(2).max(10).optional(), bedroomsPerApartment:z.union([z.literal(1),z.literal(2),z.literal(3)]).optional(),
   layoutStyle:z.enum(["linear","courtyard","corner","split","central"]).optional(),
+  cultureStyle:z.enum(["standard","vastu","german"]).optional(), roofStyle:z.enum(["german-gable","german-hip","mansard","modern-flat"]).optional(),
   separateKitchen:z.boolean().optional(), ensuiteBathrooms:z.boolean().optional(),
   footprint: z.enum(["rectangle", "l", "u", "drawn"]).optional(), widthM: z.number().min(4).max(80).optional(), lengthM: z.number().min(4).max(80).optional(),
   footprintPoints: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).strict()).min(3).max(16).optional(),

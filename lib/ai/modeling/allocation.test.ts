@@ -41,6 +41,10 @@ it("round-trips creative layout styles into distinct footprints", () => {
   expect(defaultResidentialBrief(residentialCommand({ variant: "apartment", bedrooms: 2, layoutStyle: "courtyard" }))).toMatchObject({ layoutStyle: "courtyard", footprint: "u" });
   expect(defaultResidentialBrief(residentialCommand({ variant: "apartment", bedrooms: 3, layoutStyle: "corner" }))).toMatchObject({ layoutStyle: "corner", footprint: "l" });
 });
+it("parses Vastu planning and German roof presets", () => {
+  expect(defaultResidentialBrief("3 bedroom Vastu apartment")).toMatchObject({ cultureStyle: "vastu", bedrooms: 3 });
+  expect(defaultResidentialBrief("German mansard villa")).toMatchObject({ cultureStyle: "german", roofStyle: "mansard" });
+});
 it.each([
   ["create a 2 bedroom apartment with total area 110 m2 and bedrooms 24 m2 each", { variant: "apartment", bedrooms: 2, totalAreaM2: 110, bedroomAreaM2: 24 }],
   ["create a villa with living room 40 square meters and kitchen 15 sqm", { variant: "villa", bedrooms: 3, livingAreaM2: 40, kitchenAreaM2: 15 }],
