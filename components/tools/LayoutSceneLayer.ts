@@ -5383,10 +5383,21 @@ export default class LayoutSceneLayer {
         const innerH = Math.max(0.01, h - frameThick);
         const panelCount = 4;
         const panelH = innerH / panelCount;
+        const radius = Math.min(.3, innerH * .15);
+        const lift = Math.max(0,Math.min(1,(door?.openingAngleDeg??0)/90)) * (innerH + radius * Math.PI / 2);
+        const facing = door?.swing ?? 1;
         for (let i = 0; i < panelCount; i++) {
           const slat = new THREE.Mesh(new THREE.BoxGeometry(innerW, panelH - 0.01, panelThick), panelMat);
-          slat.position.set(0, (i + 0.5) * panelH, 0);
+          slat.name = `garage-panel-${i}`;
+          const travel=(i+.5)*panelH+lift,turnStart=innerH-radius,turnEnd=turnStart+radius*Math.PI/2;
+          if(travel<=turnStart)slat.position.set(0,travel,0);
+          else if(travel<turnEnd){const angle=(travel-turnStart)/radius;slat.position.set(0,turnStart+radius*Math.sin(angle),facing*radius*(1-Math.cos(angle)));slat.rotation.x=facing*angle;}
+          else{slat.position.set(0,innerH,facing*(radius+travel-turnEnd));slat.rotation.x=facing*Math.PI/2;}
           boxGroup.add(slat);
+        }
+        for(const side of [-1,1]){
+          const track=new THREE.Mesh(new THREE.BoxGeometry(.035,.035,innerH+.5),frameMat);
+          track.position.set(side*(innerW/2+.03),innerH+.04,facing*(innerH+.5)/2);boxGroup.add(track);
         }
       } else {
         const panelShape = inner.clone();
@@ -6381,6 +6392,12 @@ export default class LayoutSceneLayer {
 
   private buildEquipmentModel(item: LayoutMepEquipment, w: number, h: number, d: number): THREE.Group {
     const grp = new THREE.Group();
+        if(item.familyId==="mep-heating-manifold"){
+          const metal=new THREE.MeshStandardMaterial({color:0xb8bdc5,metalness:.8,roughness:.3});
+          for(const y of [h*.3,h*.7]){const rail=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,w,12),metal);rail.rotation.z=Math.PI/2;rail.position.y=y;grp.add(rail);}
+          for(let i=0;i<6;i++){const branch=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,h*.8,12),metal);branch.position.set((i-2.5)*w/6,h*.4,0);grp.add(branch);const valve=new THREE.Mesh(new THREE.BoxGeometry(.035,.035,d*.7),new THREE.MeshStandardMaterial({color:i%2?0x3b82f6:0xef4444}));valve.position.set(branch.position.x,h*.7,d*.15);grp.add(valve);}
+          return grp;
+        }
         const isToilet = item.category === "toilet" || item.familyId === "bath-toilet" || item.familyId?.includes("toilet");
         if (!isToilet && (item.category === "furniture" || isArchitecturalComponent(item.familyId))) {
           grp.add(createFurniture(item));

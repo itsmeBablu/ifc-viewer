@@ -26,6 +26,16 @@ describe("opening visibility", () => {
       expect(Array.from(line.geometry.attributes.position.array)).toEqual(Array.from(openLines[index].geometry.attributes.position.array));
     });
   });
+  it("raises garage panels from vertical to horizontal overhead tracks", () => {
+    for(const openingAngleDeg of [0,45,90]){
+      const garage=new THREE.Group();
+      harness().placeOpening(garage,wall,2000,2500,2200,0,0,{...door,widthMm:2500,style:"garage",openingAngleDeg});
+      const panel=garage.getObjectByName("garage-panel-0")!;
+      expect(panel).toBeTruthy();
+      if(openingAngleDeg===0)expect(panel.rotation.x).toBe(0);
+      if(openingAngleDeg===90){expect(Math.abs(panel.rotation.x)).toBeCloseTo(Math.PI/2);expect(panel.position.y).toBeGreaterThan(2);expect(Math.abs(panel.position.z)).toBeGreaterThan(.3);}
+    }
+  });
   it("rotates double-door leaves around separate jambs", () => {
     const group = new THREE.Group();
     harness().placeOpening(group, wall, 2000, 1800, 2100, 0, 0, { ...door, widthMm: 1800, style: "double", openingAngleDeg: 90 });

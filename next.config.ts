@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
   ],
   // LibreDWG WASM is loaded only via dynamic import (API + client DWG path).
   serverExternalPackages: ["@mlightcad/libredwg-web"],
+  outputFileTracingIncludes: { "/api/pdf-worker": ["./node_modules/pdfjs-dist/build/pdf.worker.min.mjs"] },
   // Case normalization lives in proxy.ts. Config redirects match without
   // case sensitivity, so /Werkzeug -> /werkzeug redirects to itself forever.
 };

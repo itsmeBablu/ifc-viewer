@@ -15,6 +15,10 @@ import AiPlanPreview from "./AiPlanPreview";
 import AiVoiceInput from "./AiVoiceInput";
 import AiModelControls from "./AiModelControls";
 import AiMessageContent from "./AiMessageContent";
+import AiBuildingPresets from "./AiBuildingPresets";
+import AiDrawingAttachments from "./AiDrawingAttachments";
+import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
+import type { DrawingReference } from "@/lib/ai/drawing";
 import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2, LuZap } from "react-icons/lu";
 
 function savedPreference(key: string) {
@@ -40,8 +44,15 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const [mode, setMode] = useState<AiMode>(() => { const saved = savedPreference("ai-assistant-mode"); return isAiMode(saved) ? saved : "build"; });
   const selectedCount = useLayoutDrawingStore(s => s.selectedElements.length);
   const levelCount = useLayoutDrawingStore(s => s.levels.length);
+  const modelInventory = useLayoutDrawingStore(s => `${s.walls.length} walls · ${s.doors.length} doors · ${s.windows.length} windows · ${s.slabs.length} floors/roofs · ${s.mepEquipment.length} furniture/equipment · ${s.pipes.length} pipes · ${s.ducts.length} ducts · ${s.cableTrays.length} trays · ${s.columns.length} columns · ${s.beams.length} beams`);
+  const [conversationKey,setConversationKey]=useState(0);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [attachments, setAttachments] = useState<AiAttachment[]>([]);
+  const [sourceFiles, setSourceFiles] = useState<File[]>([]);
+  const [residential, setResidential] = useState<ResidentialParameters | undefined>();
+  const [drawingReference, setDrawingReference] = useState<DrawingReference | undefined>();
+  const wallHeightMm = useLayoutDrawingStore(s => s.draftWallHeightMm);
+  const wallThicknessMm = useLayoutDrawingStore(s => s.draftWallThicknessMm);
   const [includeAttachments, setIncludeAttachments] = useState(true);
   const [reading, setReading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -143,9 +154,11 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   };
 
   const clearHistory = () => {
+    setConversationKey(k=>k+1);
     setUsage(null);
     setHistory([]);
     setAttachments([]);
+    setSourceFiles([]); setResidential(undefined); setDrawingReference(undefined);
     setPending(null);
     setFailedCommand(null);
     setText("");
@@ -164,7 +177,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       const container = historyRef.current;
       if (container) {
         container.scrollTo({
-          top: container.scrollHeight,
+          top: history.length ? container.scrollHeight : 0,
           behavior: "smooth",
         });
       }
@@ -182,7 +195,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     const container = historyRef.current;
     if (!container) return;
     const observer = new ResizeObserver(() => {
-      container.scrollTop = container.scrollHeight;
+      if (!container.querySelector(".ai-building-options[open]")) container.scrollTop = container.scrollHeight;
     });
     observer.observe(container);
     return () => observer.disconnect();
@@ -200,19 +213,33 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     return () => window.clearInterval(timer);
   }, [busy, mode]);
   async function attach(files: File[]) {
+    if (busyRef.current || reading) return;
     setReading(true); setError("");
-    try { const added = await readAttachments(files); setAttachments(attachmentsSchema.parse([...attachments, ...added])); setIncludeAttachments(true); }
-    catch (e) { setError(e instanceof Error && !e.name.includes("Zod") ? e.message : "Choose up to 3 PDF or image files, 2.5 MB total."); }
+    try {
+      if (attachments.length + files.length > 3) throw new Error("Choose up to 3 drawings. Remove one before adding another.");
+      const added = await readAttachments(files); setAttachments(attachmentsSchema.parse([...attachments, ...added])); setSourceFiles([...sourceFiles, ...files]); setIncludeAttachments(true); setResidential(undefined); setDrawingReference(undefined);
+      if (!text.trim()) setText("Create a layout from the uploaded floor plan.");
+      if (model === "ollama-local") { setModel(DEFAULT_AI_MODEL); setStatus("Gemini selected for this drawing; Ollama supports text only."); }
+    }
+    catch (e) { setError(e instanceof Error && !e.name.includes("Zod") ? e.message : "Choose up to 3 PDF or image drawings, 20 MB each."); }
     finally { setReading(false); }
   }
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (busyRef.current || reading || !historyLoaded || !text.trim()) return;
+  async function changePdfPage(index: number, page: number) {
+    if (busyRef.current || reading || !sourceFiles[index]) return;
+    setReading(true); setError("");
+    try { const [file] = await readAttachments([sourceFiles[index]], page); setAttachments(attachmentsSchema.parse(attachments.map((old, i) => i === index ? file : old))); setDrawingReference(undefined); setIncludeAttachments(true); }
+    catch (e) { setError(e instanceof Error ? e.message : "Could not read that PDF page."); }
+    finally { setReading(false); }
+  }
+  async function submit(event?: React.FormEvent, template?: {command:string;parameters:ResidentialParameters}) {
+    event?.preventDefault();
+    if (busyRef.current || reading || !historyLoaded || !(template?.command??text).trim()) return;
     useToolMarkupStore.getState().setQuadView(false);
     useToolMarkupStore.getState().setViewPreset("free");
-    const submittedText = text.trim();
+    const submittedText = (template?.command??text).trim();
+    const submittedResidential=template?.parameters??residential;
     const submittedAttachments = includeAttachments ? attachments : [];
-    setText(""); setFailedCommand(null); setIncludeAttachments(false);
+    setText(""); setResidential(undefined); setFailedCommand(null); setIncludeAttachments(false);
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
     pushHistory({ role: "user", text: submittedText });
     const controller = new AbortController(); requestRef.current = controller;
@@ -220,7 +247,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      const body = JSON.stringify({ command: submittedText, model, mode, discipline: mepModeActive ? "mep" : "arch", context, attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
+      const body = JSON.stringify({ command: submittedText, model, mode, discipline: mepModeActive ? "mep" : "arch", context, ...(mode === "build" && submittedResidential && !submittedAttachments.length ? { residential:submittedResidential } : {}), ...(submittedAttachments.length && drawingReference ? { drawingReference } : {}), attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
       if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
       const remainingHeader = response.headers.get("X-AI-Remaining");
@@ -254,6 +281,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       } else if ((result.kind === "clarification" || result.kind === "advice") && typeof result.message === "string" && result.message.trim()) message = result.message;
       else throw new Error("The AI response was not recognized.");
       pushHistory({ role: "assistant", text: message, model: responseModel, mode });
+      if (result.kind !== "plan" && submittedAttachments.length) setIncludeAttachments(true);
       setStatus(result.kind === "plan" ? "Changes saved. You can undo the complete AI batch." : "");
     } catch (e) {
       if (!mountedRef.current) return;
@@ -282,7 +310,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     finally { busyRef.current = false; setBusy(false); }
   }
   return (
-    <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden">
+    <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
       {busy && <div className="fixed inset-x-0 top-3 z-[9999] pointer-events-none flex justify-center" role="status"><span className="rounded-xl bg-black/80 text-white px-4 py-2 text-sm">AI is working in 3D · Editing is locked</span></div>}
       <div
         ref={historyRef}
@@ -298,9 +326,11 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             <div>
               <p className="text-sm font-semibold">Your design workspace</p>
               <p className="text-xs ai-text-muted">Describe a brief, review your layout, or ask how to model it.</p>
+              <p className="text-xs ai-text-muted">Existing model · {levelCount} levels · {modelInventory}</p>
             </div>
           </div>
         )}
+        {mode === "build" && !attachments.length && <AiBuildingPresets key={`${projectId}:${conversationKey}`} disabled={busy || reading || !historyLoaded} heightMm={wallHeightMm} thicknessMm={wallThicknessMm} onChoose={(command, parameters) => { setText(command); setResidential(parameters); }} onCreate={(command,parameters)=>void submit(undefined,{command,parameters})} />}
         {history.map((turn, i) => (
           <div
             key={i}
@@ -353,9 +383,9 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || (pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved)} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
           </div>
         )}
-        {history.length === 0 && (
+        {history.length === 0 && mode !== "build" && (
           <div className="ai-suggestion-row pt-1">
-            {(mode === "build" ? ["Plan a three-bedroom house", "Furnish the living room"] : mode === "review" ? ["Review circulation and opening placement", "Check the selected elements"] : ["How do I turn a floor plan into 3D?", "Explain levels, walls and openings"]).map(suggestion => (
+            {(mode === "review" ? ["Review circulation and opening placement", "Check the selected elements"] : ["How do I turn a floor plan into 3D?", "Explain levels, walls and openings"]).map(suggestion => (
               <button key={suggestion} type="button" disabled={busy || !historyLoaded} onClick={() => { setText(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
             ))}
           </div>
@@ -368,23 +398,17 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
       </div>
 
       <div className="ai-command-bottom shrink-0 pt-2 space-y-2">
-        <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
+        <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
         {attachments.length > 0 && (
           <div className="ai-attachments">
-            {attachments.map((file, index) => (
-              <div className="ai-attachment" key={`${index}:${file.name}`}>
-                <span aria-hidden="true">{file.mimeType === "application/pdf" ? "PDF" : "IMG"}</span>
-                <span className="truncate">{file.name}</span>
-                <button type="button" aria-label={`Remove ${file.name}`} disabled={busy || reading} onClick={() => setAttachments(items => items.filter((_, i) => i !== index))}>×</button>
-              </div>
-            ))}
-            {reading && <p className="text-xs ai-text-muted">Reading files…</p>}
+            <AiDrawingAttachments key={attachments.map(a => `${a.name}:${a.pageNumber}`).join("|")} files={attachments} disabled={busy || reading} onPage={(index, page) => void changePdfPage(index, page)} onRemove={index => { setAttachments(items => items.filter((_, i) => i !== index)); setSourceFiles(items => items.filter((_, i) => i !== index)); setDrawingReference(undefined); }} onReference={setDrawingReference} />
             <label className="flex items-center gap-2 text-xs ai-text-muted">
               <input type="checkbox" checked={includeAttachments} disabled={busy || reading} onChange={e => setIncludeAttachments(e.target.checked)} />
               Include files with next message
             </label>
           </div>
         )}
+        {reading && <p role="status" className="text-xs ai-text-muted">Preparing drawing preview…</p>}
 
         {/* Live Quota & Token Slider Bar — Single Line Layout */}
         {(() => {
@@ -450,7 +474,8 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             </div>
           );
         })()}
-        {usage && <p className="ai-text-muted text-[10px] px-1" title="Actual token counts reported by Gemini for the last successful request.">Last Gemini request: {usage.inputTokens.toLocaleString()} input · {usage.outputTokens.toLocaleString()} output{usage.thinkingTokens > 0 ? ` · ${usage.thinkingTokens.toLocaleString()} thinking` : ""} tokens</p>}
+        {usage && <p className="ai-text-muted text-[10px] px-1">{usage.inputTokens === 0 && usage.outputTokens === 0 ? "Created from a template · 0 AI tokens" : `Last request: ${usage.inputTokens.toLocaleString()} input · ${usage.outputTokens.toLocaleString()} output${usage.thinkingTokens > 0 ? ` · ${usage.thinkingTokens.toLocaleString()} thinking` : ""} tokens`}</p>}
+
 
         <form onSubmit={submit} className="ai-composer">
           <AiModelControls
@@ -465,7 +490,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             ref={inputRef}
             id="ai-command"
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={e => { setText(e.target.value); setResidential(undefined); }}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }}
             maxLength={4000}
             rows={2}
@@ -476,7 +501,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             <button type="button" className="ai-composer-add" title="Attach PDF or image" aria-label="Attach PDF or image" disabled={busy || reading || !historyLoaded} onClick={() => fileRef.current?.click()}>
               <LuCirclePlus />
             </button>
-            <AiVoiceInput compact disabled={busy || !historyLoaded} onText={transcript => { if (!busyRef.current) setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); }} />
+          <AiVoiceInput compact disabled={busy || !historyLoaded} onText={transcript => { if (!busyRef.current) { setResidential(undefined); setText(value => `${value}${value ? " " : ""}${transcript}`.slice(0, 4000)); } }} />
             <span className="ai-composer-spacer" />
             <button type="button" className="ai-undo-conversation" title="Start new conversation" disabled={busy || reading || !historyLoaded} onClick={clearHistory}>
               <LuUndo2 />

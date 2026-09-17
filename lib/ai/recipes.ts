@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { actionSchema, planSchema, wallFields, equipmentFields, windowFields, type AiAction } from "./schema";
+import { apartmentSchema, apartmentActions } from "./modeling/apartment";
+import { houseSchema, houseActions } from "./modeling/house";
 
 const id = z.string().min(1).max(160);
 const coordinate = z.number().min(-1_000_000).max(1_000_000);
@@ -8,6 +10,8 @@ const count = z.number().int().min(1).max(150);
 const wallSize = { thicknessMm: wallFields.thicknessMm, heightMm: wallFields.heightMm };
 
 export const recipeSchema = z.discriminatedUnion("kind", [
+  apartmentSchema,
+  houseSchema,
   z.object({
     kind: z.literal("rectangular_shell"), id, levelId: wallFields.levelId,
     xMm: coordinate, yMm: coordinate,
@@ -58,11 +62,13 @@ export function expandModelPlan(value: unknown) {
   const plan = modelPlanSchema.parse(value);
   const actions: AiAction[] = [];
   const append = (action: AiAction) => {
-    if (actions.length >= 150) throw new Error("This build exceeds 150 elements. Split it into smaller batches.");
+    if (actions.length >= 400) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
     actions.push(action);
   };
   for (const item of plan.actions) {
     switch (item.kind) {
+      case "apartment_layout": apartmentActions(item).forEach(append); break;
+      case "house_layout": houseActions(item).forEach(append); break;
       case "rectangular_shell": {
         const { xMm: x, yMm: y, widthMm: w, depthMm: d } = item;
         const points = [{ xMm: x, yMm: y }, { xMm: x + w, yMm: y }, { xMm: x + w, yMm: y + d }, { xMm: x, yMm: y + d }];
@@ -88,7 +94,7 @@ export function expandModelPlan(value: unknown) {
         break;
       }
       case "equipment_grid": {
-        if (item.rows * item.columns > 150 - actions.length) throw new Error("This build exceeds 150 elements. Split it into smaller batches.");
+        if (item.rows * item.columns > 400 - actions.length) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
         if (item.columns > 1 && item.stepXmm === 0 || item.rows > 1 && item.stepYmm === 0) throw new Error("Repeated items need nonzero spacing.");
         for (let row = 0; row < item.rows; row++) for (let column = 0; column < item.columns; column++) {
           append({ kind: "equipment", operation: "create", id: `${item.id}:item:${row * item.columns + column}`, familyId: item.familyId, levelId: item.levelId, xMm: item.xMm + column * item.stepXmm, yMm: item.yMm + row * item.stepYmm, rotationDeg: item.rotationDeg, elevationMm: item.elevationMm });

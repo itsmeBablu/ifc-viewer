@@ -3,8 +3,9 @@ import type { CommandRequest } from "../protocol";
 import { architectureGuide } from "./architecture";
 import { equipmentGuide } from "./equipment";
 import { mepGuide } from "./mep";
+import { defaultResidentialBrief } from "../modeling/brief";
 
-const architectureKinds = ["level", "wall", "wall_path", "rectangular_shell", "door", "window", "window_row", "floor", "roof", "column", "beam", "equipment", "equipment_grid"];
+const architectureKinds = ["house_layout", "apartment_layout", "level", "wall", "wall_path", "rectangular_shell", "door", "window", "window_row", "floor", "roof", "column", "beam", "equipment", "equipment_grid"];
 const mepKinds = ["level", "duct", "duct_run", "pipe", "pipe_run", "cabletray", "equipment", "equipment_grid"];
 
 function guideEntry(guide: { id: string; instructions: string[]; example?: { actions: { kind: string }[] } }, kinds: Set<string>) {
@@ -20,7 +21,7 @@ export function creationPlaybook(input: CommandRequest) {
   const add = (values: string[], guide: "architecture" | "mep" | "equipment") => {
     values.forEach(kind => kinds.add(kind)); guides.add(guide);
   };
-  const complex = input.attachments.length > 0 || /\b(house|home|building|layout|floor\s?plan|apartment|bungalow|haus|wohnung|grundriss)\b/.test(text);
+  const complex = input.attachments.length > 0 || /\b(house|home|building|layout|floor\s?plan|villa|duplex|apartment|appartement|apartemtnt|flat|bedroom|bungalow|haus|wohnung|grundriss)\b/.test(text);
   if (complex) add(architectureKinds, "architecture");
   if (/\b(shell|outline|walls?|partitions?|wand|wände|hülle)\b/.test(text)) add(["wall", "wall_path", "rectangular_shell"], "architecture");
   if (/\b(doors?|tür|türen)\b/.test(text)) add(["door", "wall", "wall_path"], "architecture");
@@ -40,6 +41,16 @@ export function creationPlaybook(input: CommandRequest) {
   // Unknown, referential or multilingual briefs retain the complete tool vocabulary.
   const full = kinds.size === 1 || /\b(delete|remove|edit|update|change|move|resize|replace|undo|löschen|ändern|verschieben)\b/.test(text);
   if (full) { add(architectureKinds, "architecture"); add(mepKinds, "mep"); kinds.add("delete"); }
+  // Only the complete standalone grammar can safely restrict creation to one recipe.
+  const residential = defaultResidentialBrief(input.command);
+  const standalone = residential && !input.attachments.length && !input.history.length && !input.context.selection.length;
+  if (standalone) {
+    kinds.clear(); kinds.add("level");
+    kinds.add(residential?.variant && residential.variant !== "apartment" ? "house_layout" : "apartment_layout");
+    guides.clear(); guides.add("architecture");
+  }
+  // Reference drawings need their visible topology, rather than a generic house recipe.
+  if (input.attachments.length) { kinds.delete("apartment_layout"); kinds.delete("house_layout"); }
   const catalog = kinds.has("equipment")
     ? (!complex && !full && matched.length ? matched : COMPONENT_CATALOG)
     : [];

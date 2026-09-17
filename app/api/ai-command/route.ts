@@ -5,6 +5,7 @@ import { generateOllamaCommand } from "@/lib/ai/ollama";
 import { limitAiUser } from "@/lib/ai/rateLimit";
 import { MAX_REQUEST_BYTES } from "@/lib/ai/attachments";
 import { GeminiError } from "@/lib/ai/providerError";
+import { defaultModelingPlan } from "@/lib/ai/modeling";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   } catch {
     limit = { success: true, remaining: 1500, reset: Date.now() + 24 * 3600 * 1000, total: 1500 };
   }
-  try { return reply(await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
+  try { return reply(defaultModelingPlan(input) ?? await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
     const message = error instanceof Error && error.name === "TimeoutError"

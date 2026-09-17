@@ -15,8 +15,9 @@ export default function OpeningOrientationControls({ kind, draft = false }: { ki
       else void store.updateWindow(item.id, patch);
     }
   };
+  const garage=kind==="door"&&(draft?store.draftElementTypes.door?.doorStyle:item&&"style"in item?item.style:undefined)==="garage";
   const supportsAngle = kind === "door"
-    ? !["sliding", "garage"].includes((draft ? store.draftElementTypes.door?.doorStyle : store.doors.find(d => d.id === item?.id)?.style) ?? "wood")
+    ? (draft ? store.draftElementTypes.door?.doorStyle : store.doors.find(d => d.id === item?.id)?.style) !== "sliding"
     : (draft ? store.draftElementTypes.window?.windowOperation : store.windows.find(w => w.id === item?.id)?.operation) === "casement";
   return <div className={draft ? "flex items-center gap-2 whitespace-nowrap text-[10px]" : "rounded border border-[var(--panel-divider)] p-2 text-[10px] space-y-1.5"}>
     <p className="font-semibold">{openingOrientationLabel(value)}</p>
@@ -25,11 +26,11 @@ export default function OpeningOrientationControls({ kind, draft = false }: { ki
       <button type="button" className="rounded border border-[var(--panel-divider)] px-2 py-1" onClick={() => update({ hinge: value.hinge === "end" ? "start" : "end" })}>Flip left / right</button>
     </div>
     {supportsAngle && <label className={draft ? "flex items-center gap-2" : "flex flex-col gap-1.5 border-t border-[var(--panel-divider)] pt-2"}>
-      <span className="flex items-center justify-between font-semibold"><span>3D opening angle</span><span>{value.openingAngleDeg ?? 0}°</span></span>
+      <span className="flex items-center justify-between font-semibold"><span>{garage?"Garage opening":"3D opening angle"}</span><span>{garage?`${Math.round((value.openingAngleDeg??0)/90*100)}%`:`${value.openingAngleDeg??0}°`}</span></span>
       <div className="flex items-center gap-2">
-        <input className="min-w-0 flex-1" aria-label={`${kind} opening angle`} type="range" min={0} max={120} step={5} value={value.openingAngleDeg ?? 0} onChange={e => update({ openingAngleDeg: Number(e.target.value) })} />
-        <input className="w-14 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right" aria-label={`${kind} opening angle degrees`} type="number" min={0} max={120} step={5} value={value.openingAngleDeg ?? 0} onChange={e => update({ openingAngleDeg: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })} />
-        <span>°</span>
+        <input className="min-w-0 flex-1" aria-label={garage?"Garage opening percentage":`${kind} opening angle`} type="range" min={0} max={garage?100:120} step={5} value={garage?(value.openingAngleDeg??0)/90*100:value.openingAngleDeg??0} onChange={e => update({ openingAngleDeg: Number(e.target.value)*(garage?.9:1) })} />
+        <input className="w-14 rounded border border-[var(--panel-divider)] bg-[var(--surface-overlay)] px-1 py-0.5 text-right" aria-label={garage?"Garage opening percent":`${kind} opening angle degrees`} type="number" min={0} max={garage?100:120} step={5} value={garage?(value.openingAngleDeg??0)/90*100:value.openingAngleDeg??0} onChange={e => update({ openingAngleDeg: Math.max(0, Math.min(garage?100:120, Number(e.target.value) || 0))*(garage?.9:1) })} />
+        <span>{garage?"%":"°"}</span>
       </div>
     </label>}
     <p className="text-[var(--text-muted)]">{draft ? "Space: cycle" : "Space cycles facing and hinge. Inside/outside follows the wall direction."}</p>
