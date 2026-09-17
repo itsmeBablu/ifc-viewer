@@ -37,6 +37,10 @@ it("preserves explicit living, kitchen and bathroom areas", () => {
   expect(budget.livingTotalM2).toBe(30); expect(budget.kitchenTotalM2).toBe(12); expect(budget.bathroomTotalM2).toBe(6);
   expect(defaultResidentialBrief(residentialCommand(parameters))).toEqual(parameters);
 });
+it("round-trips creative layout styles into distinct footprints", () => {
+  expect(defaultResidentialBrief(residentialCommand({ variant: "apartment", bedrooms: 2, layoutStyle: "courtyard" }))).toMatchObject({ layoutStyle: "courtyard", footprint: "u" });
+  expect(defaultResidentialBrief(residentialCommand({ variant: "apartment", bedrooms: 3, layoutStyle: "corner" }))).toMatchObject({ layoutStyle: "corner", footprint: "l" });
+});
 it.each([
   ["create a 2 bedroom apartment with total area 110 m2 and bedrooms 24 m2 each", { variant: "apartment", bedrooms: 2, totalAreaM2: 110, bedroomAreaM2: 24 }],
   ["create a villa with living room 40 square meters and kitchen 15 sqm", { variant: "villa", bedrooms: 3, livingAreaM2: 40, kitchenAreaM2: 15 }],
