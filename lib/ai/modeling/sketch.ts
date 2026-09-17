@@ -2,7 +2,7 @@ import type { FloorSketch,ResidentialParameters,SketchPoint } from "./allocation
 import { conceptStair } from "./allocation";
 import { allocateBuilding,applyFootprint,insidePolygon,inscribedRectangle,offsetPolygon,polygonArea,polygonAroundOpening } from "./footprint";
 import { apartmentActions,apartmentSchema } from "./apartment";
-import { furnishFloor,outdoorActions } from "./furnishing";
+import { furnishFloor,outdoorActions,gardenActions } from "./furnishing";
 import { arrangeRoom,type FurnitureRect } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import { validateBoundary } from "../validate";
@@ -16,6 +16,11 @@ export function validateSketches(sketches:FloorSketch[]){
   if(!sketches.length||sketches.length>4)throw new Error("Choose one to four floors.");
   for(const [floor,s] of sketches.entries()){
     validateBoundary(s.points);
+    for(const garden of s.gardens??[])validateBoundary(garden);
+    const rooms=sketchRooms(s);
+    for(const label of s.labels??[])if(!rooms.some(r=>insidePolygon(label.point,r)))throw new Error(`Floor ${floor}: room name ${label.name} must be inside a closed room.`);
+    for(const lock of s.locks??[]){const a=lock.interior?s.lines[lock.index]?.start:s.points[lock.index],b=lock.interior?s.lines[lock.index]?.end:s.points[(lock.index+1)%s.points.length];if(!a||!b||Math.abs(Math.hypot(b.xMm-a.xMm,b.yMm-a.yMm)-lock.lengthMm)>1)throw new Error(`Floor ${floor}: a locked line has changed length.`);}
+
     const all=sketchSegments(s);
     for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++){
       if(j<s.points.length)continue;
@@ -62,7 +67,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
   const sketches=input.sketches!;validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
-    if(s.lines.length)return null;
+    if(s.lines.length||s.labels?.length)return null;
     const minX=Math.min(...s.points.map(p=>p.xMm)),minY=Math.min(...s.points.map(p=>p.yMm)),w=Math.max(...s.points.map(p=>p.xMm))-minX,d=Math.max(...s.points.map(p=>p.yMm))-minY;
     const bedrooms=Math.ceil(input.bedrooms/floors);
     return {minX,minY,brief:{...input,sketches:undefined,variant:floors>1?"duplex"as const:"apartment"as const,bedrooms,footprint:"drawn"as const,footprintPoints:s.points.map(p=>({x:(p.xMm-minX)/w,y:(p.yMm-minY)/d})),widthM:w/1000,lengthM:d/1000,totalAreaM2:undefined},building:allocateBuilding({...input,variant:floors>1?"duplex":"apartment",bedrooms,footprint:"drawn",footprintPoints:s.points.map(p=>({x:(p.xMm-minX)/w,y:(p.yMm-minY)/d})),widthM:w/1000,lengthM:d/1000,totalAreaM2:undefined},height,thickness)};
@@ -96,9 +101,11 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
       const edges=sketchSegments(s);
       edges.forEach((l,i)=>actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:i<s.points.length?thickness:150,heightMm:height}));
       const rooms=sketchRooms(s).sort((a,b)=>polygonArea(b)-polygonArea(a)),doors:SketchPoint[]=[];
+      const roomLabel=(room:SketchPoint[])=>(s.labels??[]).find(l=>insidePolygon(l.point,room));
+      const livingIndex=Math.max(0,rooms.findIndex(r=>roomLabel(r)?.use==="living"));
       let doorIndex=0;
       const door=(edge:number,position:number)=>{const l=edges[edge],length=Math.hypot(l.end.xMm-l.start.xMm,l.end.yMm-l.start.yMm);actions.push({kind:"door",operation:"create",id:`${prefix}:door:${doorIndex++}`,wallId:`${prefix}:wall:${edge}`,positionMm:position,widthMm:900,heightMm:2100,hinge:"start",swing:1,style:"wood"});doors.push({xMm:l.start.xMm+(l.end.xMm-l.start.xMm)*position/length,yMm:l.start.yMm+(l.end.yMm-l.start.yMm)*position/length});};
-      const entry=edges.findIndex((l,i)=>i<s.points.length&&rooms[0]&&insidePolygon({xMm:(l.start.xMm+l.end.xMm)/2,yMm:(l.start.yMm+l.end.yMm)/2},rooms[0]));
+      const entry=edges.findIndex((l,i)=>i<s.points.length&&rooms[livingIndex]&&insidePolygon({xMm:(l.start.xMm+l.end.xMm)/2,yMm:(l.start.yMm+l.end.yMm)/2},rooms[livingIndex]));
       const links:{edge:number;position:number;a:number;b:number}[]=[];
       edges.forEach((l,i)=>{
         const dx=l.end.xMm-l.start.xMm,dy=l.end.yMm-l.start.yMm,length=Math.hypot(dx,dy);if(length<1500)return;
@@ -113,27 +120,27 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
           if(a>=0&&b>=0&&a!==b)links.push({edge:i,position,a,b});
         }
       });
-      const connected=new Set([0]);let added=true;
+      const connected=new Set([livingIndex]);let added=true;
       while(added){added=false;for(const link of links)if(connected.has(link.a)!==connected.has(link.b)){door(link.edge,link.position);connected.add(link.a);connected.add(link.b);added=true;}}
       if(connected.size<rooms.length)throw new Error(`Floor ${floor}: some rooms need a partition segment at least 1.5 m long to provide door access.`);
       if(input.furnished!==false){
-        let beds=bedrooms,index=0;
+        let beds=Math.max(0,bedrooms-rooms.filter(r=>roomLabel(r)?.use==="bedroom").length),index=0;
         rooms.forEach((room,i)=>{
           const b=inscribedRectangle(room),zone={x:b.xMm+thickness/2,y:b.yMm+thickness/2,w:b.widthMm-thickness,d:b.depthMm-thickness};
           const reserved:FurnitureRect[]=doors.filter(p=>insidePolygon(p,room)).map(p=>({x:p.xMm-650,y:p.yMm-1000,w:1300,d:2000}));
           if(stairRect)reserved.push(stairRect);
-          const type=i===0?"living":beds&&polygonArea(room)>=11e6?(beds--,"bedroom"):"bathroom";
+          const type=roomLabel(room)?.use??(i===livingIndex?"living":beds&&polygonArea(room)>=11e6?(beds--,"bedroom"):"bathroom");
           arrangeRoom(type,zone,reserved,(familyId,px,py,rotationDeg)=>actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture:${index++}`,levelId,familyId,xMm:x+px,yMm:py,rotationDeg,elevationMm:0}));
         });
-        if(beds)throw new Error(`Floor ${floor}: draw enough enclosed rooms of at least 11 m² for ${bedrooms} bedrooms plus living space, or remove inside lines for an automatic layout.`);
+        if(beds&&!s.labels?.length)throw new Error(`Floor ${floor}: draw enough enclosed rooms of at least 11 m² for ${bedrooms} bedrooms plus living space, or remove inside lines for an automatic layout.`);
       }
       if(input.underfloorHeating||input.piping&&input.piping!=="none"||input.ducts==="ceiling"){
         sketchRooms(s).forEach((room,ri)=>{
           const b=inscribedRectangle(room),left=b.xMm+350,right=b.xMm+b.widthMm-350,front=b.yMm+350,rear=b.yMm+b.depthMm-350;
           if(right<=left||rear<=front)return;
-          if(input.underfloorHeating){const path=[[left,rear],[left,front],[right,front],[right,rear]];for(let j=0;j<3;j++)actions.push({kind:"pipe",operation:"create",id:`${prefix}:heat:${ri}:${j}`,levelId,startXmm:x+path[j][0],startYmm:path[j][1],endXmm:x+path[j+1][0],endYmm:path[j+1][1],diameterMm:16,elevationOffsetMm:-80,slopePercent:0,systemType:j===2?"hydronic_return":"hydronic_supply"});}
-          if(input.piping&&input.piping!=="none")for(const [j,systemType]of(["domestic_cold","domestic_hot"]as const).entries())actions.push({kind:"pipe",operation:"create",id:`${prefix}:water:${ri}:${j}`,levelId,startXmm:x+left,startYmm:rear-j*100,endXmm:x+right,endYmm:rear-j*100,diameterMm:22,elevationOffsetMm:input.piping==="underfloor"?-120:height-600,slopePercent:0,systemType});
-          if(input.ducts==="ceiling"){const cx=(left+right)/2,cy=(front+rear)/2;actions.push({kind:"duct",operation:"create",id:`${prefix}:duct:${ri}`,levelId,startXmm:x+left,startYmm:cy,endXmm:x+cx,endYmm:cy,shape:"rectangular",widthMm:150,heightMm:150,elevationOffsetMm:height-450,systemType:"supply"},{kind:"equipment",operation:"create",id:`${prefix}:diffuser:${ri}`,levelId,familyId:"mep-diffuser_supply",xMm:x+cx,yMm:cy,rotationDeg:0,elevationMm:height-550});}
+          if(input.underfloorHeating&&!["garage","corridor"].includes(roomLabel(room)?.use??"")){const path=[[left,rear],[left,front],[right,front],[right,rear]];for(let j=0;j<3;j++)actions.push({kind:"pipe",operation:"create",id:`${prefix}:heat:${ri}:${j}`,levelId,startXmm:x+path[j][0],startYmm:path[j][1],endXmm:x+path[j+1][0],endYmm:path[j+1][1],diameterMm:16,elevationOffsetMm:-80,slopePercent:0,systemType:j===2?"hydronic_return":"hydronic_supply"});}
+          if(input.piping&&input.piping!=="none"&&(!s.labels?.length||["bathroom","kitchen","living"].includes(roomLabel(room)?.use??"")))for(const [j,systemType]of(["domestic_cold","domestic_hot"]as const).entries())actions.push({kind:"pipe",operation:"create",id:`${prefix}:water:${ri}:${j}`,levelId,startXmm:x+left,startYmm:rear-j*100,endXmm:x+right,endYmm:rear-j*100,diameterMm:22,elevationOffsetMm:input.piping==="underfloor"?-120:height-600,slopePercent:0,systemType});
+          if(input.ducts==="ceiling"){const cx=(left+right)/2,cy=(front+rear)/2,exhaust=["bathroom","kitchen","garage"].includes(roomLabel(room)?.use??"");actions.push({kind:"duct",operation:"create",id:`${prefix}:duct:${ri}`,levelId,startXmm:x+left,startYmm:cy,endXmm:x+cx,endYmm:cy,shape:"rectangular",widthMm:150,heightMm:150,elevationOffsetMm:height-450,systemType:exhaust?"exhaust":"supply"},{kind:"equipment",operation:"create",id:`${prefix}:diffuser:${ri}`,levelId,familyId:exhaust?"mep-diffuser_extract":"mep-diffuser_supply",xMm:x+cx,yMm:cy,rotationDeg:0,elevationMm:height-550});}
         });
       }
     }
@@ -148,6 +155,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
     }
   }
   const ground=sketches[0].points;
-  if(input.variant!=="apartment")actions.push(...outdoorActions({...input,garage:input.garage??"enclosed",gardenAreaM2:input.gardenAreaM2??40},id,groundId,x,0,Math.max(...ground.map(p=>p.xMm)),Math.max(...ground.map(p=>p.yMm)),height));
+  for(const [i,polygon]of(sketches[0].gardens??[]).entries()){const b=inscribedRectangle(polygon);actions.push(...gardenActions(`${id}:drawn-garden:${i}`,groundId,x+b.xMm,b.yMm,b.widthMm,b.depthMm));}
+  if(input.variant!=="apartment")actions.push(...outdoorActions({...input,garage:input.garage??"enclosed",gardenAreaM2:sketches[0].gardens?.length?0:input.gardenAreaM2??40},id,groundId,x,0,Math.max(...ground.map(p=>p.xMm)),Math.max(...ground.map(p=>p.yMm)),height));
   return actions;
 }

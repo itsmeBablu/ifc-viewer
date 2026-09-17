@@ -2,6 +2,7 @@
 import { FOOTPRINTS } from "@/lib/ai/modeling/footprint";
 import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
 import { useCallback,useState } from "react";
+import { FiMaximize2 } from "react-icons/fi";
 import AiSketchWorkspace from "./AiSketchWorkspace";
 type Point={x:number;y:number};
 export default function AiFootprintCanvas({parameters,onChange,disabled,building}:{parameters:ResidentialParameters;onChange:(p:ResidentialParameters)=>void;disabled:boolean;building?:ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding>|null}){
@@ -22,7 +23,7 @@ export default function AiFootprintCanvas({parameters,onChange,disabled,building
   const w=building?.polygon?Math.max(...building.polygon.map(p=>p.xMm)):allocation?.internalWidthMm??1,d=building?.polygon?Math.max(...building.polygon.map(p=>p.yMm)):allocation?.internalDepthMm??1;
   const bx=building?.block?.xMm??0,by=building?.block?.yMm??0;
   return <div className="ai-footprint-chooser">
-    <button type="button" className="ai-expand-sketch" disabled={disabled} onClick={()=>setExpanded(true)}>Expand drawing workspace</button>
+    <button type="button" className="ai-expand-sketch" disabled={disabled} onClick={()=>setExpanded(true)} aria-label="Expand drawing workspace" title="Expand drawing workspace"><FiMaximize2/> Expand</button>
     {expanded&&<AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled}/>}
     <div className="ai-suggestion-row">{(["rectangle","l","u","drawn"]as const).map(s=><button key={s} type="button" disabled={disabled} aria-pressed={shape===s} onClick={()=>onChange({...parameters,footprint:s,sketches:undefined})}>{s==="rectangle"?"Rectangle":s==="l"?"L shape":s==="u"?"U shape":"Draw outline"}</button>)}</div>
     <svg className="ai-footprint-canvas" viewBox="0 0 120 120" role="img" aria-label={shape==="drawn"?"Draw building footprint by clicking corners":"Building footprint preview"} onClick={add}>

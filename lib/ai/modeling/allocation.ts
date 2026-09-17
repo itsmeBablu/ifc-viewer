@@ -1,6 +1,7 @@
 export type ResidentialVariant = "apartment" | "villa" | "duplex";
 export type SketchPoint = { xMm: number; yMm: number };
-export type FloorSketch = { points: SketchPoint[]; lines: { start: SketchPoint; end: SketchPoint }[] };
+export type RoomUse = "bedroom" | "living" | "kitchen" | "dining" | "study" | "bathroom" | "corridor" | "garage";
+export type FloorSketch = { points: SketchPoint[]; lines: { start: SketchPoint; end: SketchPoint }[]; labels?: { point:SketchPoint; name:string; use:RoomUse }[]; locks?: { index:number; interior:boolean; lengthMm:number }[]; gardens?: SketchPoint[][] };
 export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
 export const RESIDENTIAL_PRESETS = [
   { label: "2-bedroom apartment", variant: "apartment", bedrooms: 2 },

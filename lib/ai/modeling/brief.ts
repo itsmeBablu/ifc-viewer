@@ -36,8 +36,9 @@ export function defaultResidentialBrief(command: string) {
   const bedrooms = value ? numbers[value] ?? Number(value) : variant === "apartment" ? 2 : variant === "duplex" ? 5 : 3;
   return { variant, bedrooms, ...areas } as ResidentialParameters;
 }
+const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
-  sketches: z.array(z.object({ points:z.array(z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()).min(3).max(32), lines:z.array(z.object({start:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict(),end:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()}).strict()).max(30) }).strict()).min(1).max(4).optional(),
+  sketches: z.array(z.object({ points:z.array(z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()).min(3).max(32), lines:z.array(z.object({start:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict(),end:z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict()}).strict()).max(30), labels:z.array(z.object({point:sketchPoint,name:z.string().trim().min(1).max(60),use:z.enum(["bedroom","living","kitchen","dining","study","bathroom","corridor","garage"])}).strict()).max(30).optional(), locks:z.array(z.object({index:z.number().int().min(0).max(31),interior:z.boolean(),lengthMm:z.number().min(300).max(80000)}).strict()).max(62).optional(), gardens:z.array(z.array(sketchPoint).min(3).max(32)).max(8).optional() }).strict()).min(1).max(4).optional(),
   furnished: z.boolean().optional(), underfloorHeating: z.boolean().optional(),
   piping: z.enum(["none", "underfloor", "ceiling"]).optional(), ducts: z.enum(["none", "ceiling"]).optional(),
   garage: z.enum(["none", "open", "enclosed"]).optional(), garageWidthM: z.number().min(3).max(12).optional(), garageDepthM: z.number().min(5.5).max(15).optional(),

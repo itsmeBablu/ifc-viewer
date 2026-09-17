@@ -1,6 +1,7 @@
 import { expect,it } from "vitest";
 import { sketchRooms,sketchActions,validateSketches } from "./sketch";
-import { resizeSketchLine } from "./sketchEditing";
+import { resizeSketchLine,circularOutline,arcSegments } from "./sketchEditing";
+import { residentialParametersSchema } from "./brief";
 import { polygonArea } from "./footprint";
 import { validatePlan } from "../validate";
 import { arrangeRoom,furnitureBounds } from "./roomFurniture";
@@ -12,6 +13,34 @@ it("length edits keep rectangular corners aligned and move attached interior end
   expect(edited.points[1].xMm).toBe(16000);expect(edited.points[2].xMm).toBe(16000);
   expect(edited.lines[0].end.xMm).toBe(16000);
   expect(()=>resizeSketchLine(manual,0,false,0)).toThrow();
+});
+it("preserves room metadata and prevents coupled edits from changing locked lengths",()=>{
+  const labeled:FloorSketch={...manual,labels:[{point:{xMm:3500,yMm:2000},name:"Bedroom",use:"bedroom"}],locks:[{index:0,interior:false,lengthMm:14000}]};
+  expect(()=>resizeSketchLine(labeled,0,false,16000)).toThrow(/locked/);
+  const resized=resizeSketchLine(labeled,1,false,15000);
+  expect(resized.labels).toEqual(labeled.labels);expect(resized.locks).toEqual(labeled.locks);
+  expect(()=>validateSketches([{...labeled,points:resizeSketchLine(manual,0,false,16000).points}])).toThrow(/locked/);
+});
+it("creates bounded circular outlines and three-point arcs through the chosen bend",()=>{
+  const circle=circularOutline({xMm:12000,yMm:12000},10000);
+  validateSketches([{points:circle,lines:[]}]);expect(circle).toHaveLength(24);
+  const arc=arcSegments({xMm:2000,yMm:2000},{xMm:8000,yMm:2000},{xMm:5000,yMm:5000});
+  expect(arc[0].start).toEqual({xMm:2000,yMm:2000});expect(arc.at(-1)!.end).toEqual({xMm:8000,yMm:2000});
+  expect(Math.max(...arc.flatMap(l=>[l.start.yMm,l.end.yMm]))).toBeCloseTo(5000);
+  expect(()=>arcSegments({xMm:0,yMm:0},{xMm:1000,yMm:0},{xMm:500,yMm:0})).toThrow(/bend/);
+});
+it("uses room names for furniture and wet-room ventilation, retaining drawn gardens",()=>{
+  const labeled:FloorSketch={...manual,labels:[{point:{xMm:3500,yMm:2000},name:"Office",use:"study"},{point:{xMm:10500,yMm:2000},name:"Kitchen",use:"kitchen"},{point:{xMm:7000,yMm:10000},name:"Living",use:"living"}],gardens:[[{xMm:0,yMm:16000},{xMm:8000,yMm:16000},{xMm:8000,yMm:20000},{xMm:0,yMm:20000}]]};
+  const input=residentialParametersSchema.parse({variant:"villa",bedrooms:2,sketches:[labeled],garage:"none",piping:"ceiling",ducts:"ceiling"});
+  const actions=sketchActions(input,"named","l",0,3000,200);
+  expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="desk")).toBe(true);
+  expect(actions.some(a=>a.kind==="equipment"&&a.familyId.startsWith("bed-"))).toBe(false);
+  expect(actions.filter(a=>a.kind==="pipe")).toHaveLength(4);
+  expect(actions.filter(a=>a.kind==="duct"&&a.systemType==="exhaust")).toHaveLength(1);
+  const lawn=actions.find(a=>a.kind==="equipment"&&a.familyId==="extras-lawn")!;
+  expect(lawn).toMatchObject({xMm:4000,yMm:18000,widthMm:8000,depthMm:4000});
+  expect(actions.some(a=>a.kind==="equipment"&&a.familyId==="extras-tree-flowering")).toBe(true);
+  expect(()=>validateSketches([{...labeled,labels:[{point:{xMm:16000,yMm:16000},name:"Outside",use:"study"}]}])).toThrow(/inside a closed/);
 });
 it("recovers rooms at T-junctions without losing the drawn partitions",()=>{
   const rooms=sketchRooms(manual);expect(rooms).toHaveLength(3);

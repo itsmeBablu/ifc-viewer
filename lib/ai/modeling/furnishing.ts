@@ -74,11 +74,16 @@ export function outdoorActions(input:ResidentialParameters,id:string,levelId:str
     actions.push({kind:"equipment",operation:"create",id:`${id}:garage:car`,levelId,familyId:"extras-car-sedan",xMm:gx+w/2,yMm:gy+d/2,rotationDeg:0,elevationMm:0,color:"#2563eb"});
   }
   const area=input.gardenAreaM2??0;
-  if(area>0){
-    const gd=area*1e6/width,gy=y+depth+1000;
-    actions.push({kind:"equipment",operation:"create",id:`${id}:garden:lawn`,levelId,familyId:"extras-lawn",xMm:x+width/2,yMm:gy+gd/2,widthMm:width,depthMm:gd,heightMm:50,rotationDeg:0,elevationMm:-100});
-    if(gd>=1000){const crown=Math.min(3200,gd-200,width/3);for(const [i,px]of([x+crown/2+100,x+width-crown/2-100].entries()))actions.push({kind:"equipment",operation:"create",id:`${id}:garden:tree:${i}`,levelId,familyId:"extras-tree",xMm:px,yMm:gy+gd-crown/2-100,widthMm:crown,depthMm:crown,heightMm:Math.max(2500,crown*1.6),rotationDeg:0,elevationMm:-50});}
-    if(gd>=1000)for(let i=0;i<3;i++)actions.push({kind:"equipment",operation:"create",id:`${id}:garden:plant:${i}`,levelId,familyId:"extras-shrub",xMm:x+width*(i+1)/4,yMm:gy+500,rotationDeg:0,elevationMm:-50});
+  if(area>0)actions.push(...gardenActions(id,levelId,x,y+depth+1000,width,area*1e6/width));
+  return actions;
+}
+
+export function gardenActions(id:string,levelId:string,x:number,y:number,width:number,depth:number):AiAction[]{
+  const actions:AiAction[]=[{kind:"equipment",operation:"create",id:`${id}:garden:lawn`,levelId,familyId:"extras-lawn",xMm:x+width/2,yMm:y+depth/2,widthMm:width,depthMm:depth,heightMm:50,rotationDeg:0,elevationMm:-100}];
+  if(depth>=1000&&width>=1000){
+    const crown=Math.min(3200,depth-200,width/3);
+    for(const [i,px]of([x+crown/2+100,x+width-crown/2-100].entries()))actions.push({kind:"equipment",operation:"create",id:`${id}:garden:tree:${i}`,levelId,familyId:i?"extras-tree-flowering":"extras-tree",xMm:px,yMm:y+depth-crown/2-100,widthMm:crown,depthMm:crown,heightMm:Math.max(2500,crown*1.6),rotationDeg:0,elevationMm:-50,color:i?"#f9a8d4":"#38834b"});
+    for(let i=0;i<3;i++)actions.push({kind:"equipment",operation:"create",id:`${id}:garden:plant:${i}`,levelId,familyId:i===1?"extras-flower-bed":"extras-shrub",xMm:x+width*(i+1)/4,yMm:y+450,widthMm:Math.min(900,width/5),depthMm:Math.min(700,depth/3),heightMm:i===1?450:700,rotationDeg:0,elevationMm:-50,color:["#65a30d","#fb7185","#a855f7"][i]});
   }
   return actions;
 }
