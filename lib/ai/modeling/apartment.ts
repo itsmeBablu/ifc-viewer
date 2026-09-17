@@ -76,6 +76,14 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   window(entry, d - (corridorEnd + p / 2 + allocation.bathroomDepthMm / 2));
   window(rear, (w - t - bathroomWidthMm - p) / 2 + t / 2);
   actions.push({ kind: "floor", operation: "create", id: `${item.id}:floor`, levelId: item.levelId, boundary: [{ xMm: item.xMm-t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm+d+t/2 }, { xMm: item.xMm-t/2, yMm: item.yMm+d+t/2 }], thicknessMm: 200, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
+  // A usable front balcony makes the generated plan read as a complete residential project.
+  // It is a separate slab with low parapet walls, so it remains editable like native CAD geometry.
+  const balconyDepth = 1500, balconyWidth = Math.min(7000, Math.max(4200, w * .62));
+  const balconyLeft = item.xMm + (w - balconyWidth) / 2;
+  const balconyY = item.yMm - t / 2 - balconyDepth;
+  actions.push({ kind: "floor", operation: "create", id: `${item.id}:balcony:floor`, levelId: item.levelId, boundary: [{ xMm: balconyLeft, yMm: balconyY }, { xMm: balconyLeft + balconyWidth, yMm: balconyY }, { xMm: balconyLeft + balconyWidth, yMm: item.yMm - t / 2 }, { xMm: balconyLeft, yMm: item.yMm - t / 2 }], thicknessMm: 180, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
+  const railHeight = 1100;
+  [[balconyLeft, balconyY, balconyLeft + balconyWidth, balconyY], [balconyLeft, balconyY, balconyLeft, item.yMm - t / 2], [balconyLeft + balconyWidth, balconyY, balconyLeft + balconyWidth, item.yMm - t / 2]].forEach(([x1,y1,x2,y2], i) => actions.push({ kind: "wall", operation: "create", id: `${item.id}:balcony:rail:${i}`, levelId: item.levelId, startXmm: x1, startYmm: y1, endXmm: x2, endYmm: y2, thicknessMm: 80, heightMm: railHeight, wallType: "curtain" }));
   actions.push(...furnishFloor({ ...item, variant: "apartment" },allocation,item.id,item.levelId,item.xMm,item.yMm,t,item.heightMm,item.bedrooms));
   return building?.polygon ? applyFootprint(actions,building.polygon,original.xMm,original.yMm,t,item.heightMm,item.levelId,item.id) : actions;
 }
