@@ -15,7 +15,7 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
 
-type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "room" | "garden" | "pan";
+type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
 type DrawMode = "walls" | "furniture" | "mep";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
@@ -30,6 +30,8 @@ const tools: { id: Tool; name: string; icon: React.ReactNode }[] = [
   { id: "arc", name: "Arc", icon: <span aria-hidden="true" className="ai-arc-icon"/> },
   { id: "rectangle", name: "Rectangle", icon: <FiSquare/> },
   { id: "circle", name: "Circle", icon: <FiCircle/> },
+  { id: "door", name: "Double door", icon: <span aria-hidden="true">↔</span> },
+  { id: "window", name: "Window", icon: <span aria-hidden="true">▥</span> },
   { id: "garden", name: "Garden", icon: <span aria-hidden="true">&#127793;</span> },
   { id: "room", name: "Room name", icon: <FiType/> },
   { id: "pan", name: "Pan", icon: <FiMove/> }
@@ -41,6 +43,8 @@ const help: Record<Tool, string> = {
   arc: "Click start → click end → move cursor to bend the live arc, then click to place.",
   rectangle: "Click two opposite corners to draw a rectangular outline.",
   circle: "Click the centre, then click to set the radius.",
+  door: "Click a wall to place a double entrance door. The nearest wall is used.",
+  window: "Click a wall to place a standard window.",
   garden: "Click corner by corner to define a garden boundary. Double-click the last point to close the polygon.",
   room: "Click inside a fully enclosed room area to add a name and use tag.",
   pan: "Drag to pan the view. Scroll wheel or +/− to zoom, or click Fit to reset."
@@ -314,6 +318,12 @@ export default function AiSketchWorkspace({
     const { point } = resolvePoint(raw, true);
 
     try {
+      if (tool === "door" || tool === "window") {
+        const edges = current.points.map((start, i) => ({start, end: current.points[(i + 1) % current.points.length]}));
+        const nearest = edges.map((edge, i) => { const dx=edge.end.xMm-edge.start.xMm,dy=edge.end.yMm-edge.start.yMm,t=Math.max(0,Math.min(1,((point.xMm-edge.start.xMm)*dx+(point.yMm-edge.start.yMm)*dy)/(dx*dx+dy*dy||1))),p={xMm:edge.start.xMm+t*dx,yMm:edge.start.yMm+t*dy};return {i,p,d:Math.hypot(p.xMm-point.xMm,p.yMm-point.yMm)};}).sort((a,b)=>a.d-b.d)[0];
+        if(!nearest||nearest.d>Math.max(700,span*.04))throw new Error("Click near an outside wall to place the opening.");
+        replace({...current,openings:[...(current.openings??[]),{point:nearest.p,kind:tool==="door"?"doubleDoor":"window",widthMm:tool==="door"?1800:1200}]});setError("");return;
+      }
       if (tool === "room") {
         const room = sketchRooms(current).find(r => insidePolygon(point, r));
         if (!room) throw new Error("Click inside an enclosed room.");
@@ -679,6 +689,7 @@ export default function AiSketchWorkspace({
       })}
       {s.points.map((a, i) => segment(a, s.points[(i + 1) % s.points.length], i, false, src))}
       {s.lines.map((l, i) => segment(l.start, l.end, i, true, src))}
+      {src === "current" && (s.openings ?? []).map((o,i)=><g key={`opening${i}`} transform={`translate(${o.point.xMm} ${o.point.yMm})`} pointerEvents="none"><circle r={span*.008} fill={o.kind === "window" ? "#38bdf8" : "#facc15"} stroke="#111827" strokeWidth={span*.001}/><text y={span*.018} textAnchor="middle" fontSize={span*.011} fill="currentColor">{o.kind === "window" ? "W" : "DD"}</text></g>)}
       {src === "current" && (s.furnitureLines ?? []).map((l, i) => <line key={`f${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#f97316" strokeWidth={span*.004} opacity={.9} pointerEvents="none" />)}
       {src === "current" && (s.mepLines ?? []).map((l, i) => <line key={`m${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#14b8a6" strokeWidth={span*.003} strokeDasharray={`${span*.009} ${span*.006}`} opacity={.95} pointerEvents="none" />)}
       {src === "current" && s.points.map((p, i) => <circle key={`p${i}`} cx={p.xMm} cy={p.yMm} r={span * .005} fill="#38bdf8" pointerEvents="none" />)}
@@ -1043,7 +1054,7 @@ export default function AiSketchWorkspace({
               <h3>Drawing tools</h3>
               <div className="ai-sketch-toolbox">
                 {tools.map(t => (
-                  <button key={t.id} type="button" disabled={disabled || drawMode !== "walls" && ["rectangle","circle","room","garden"].includes(t.id)} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
+                  <button key={t.id} type="button" disabled={disabled || drawMode !== "walls" && ["rectangle","circle","room","garden","door","window"].includes(t.id)} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
                     {t.icon}<span>{t.name}</span>
                   </button>
                 ))}
