@@ -40,3 +40,25 @@ export function arcSegments(start:SketchPoint,end:SketchPoint,bulge:SketchPoint)
   if(points.some(p=>p.xMm<0||p.yMm<0||p.xMm>80000||p.yMm>80000))throw new Error("Arc extends outside the workspace.");
   return points.slice(1).map((end,i)=>({start:points[i],end}));
 }
+
+export function lineAngleDeg(start: SketchPoint, end: SketchPoint): number {
+  const rad = Math.atan2(end.yMm - start.yMm, end.xMm - start.xMm);
+  return ((rad * 180 / Math.PI) + 360) % 360;
+}
+
+export function rotateSketchLine(sketch: FloorSketch, index: number, interior: boolean, angleDeg: number): FloorSketch {
+  if (!Number.isFinite(angleDeg)) throw new Error("Invalid angle.");
+  const a = interior ? sketch.lines[index]?.start : sketch.points[index];
+  const b = interior ? sketch.lines[index]?.end : sketch.points[(index + 1) % sketch.points.length];
+  if (!a || !b) throw new Error("Select a line first.");
+  const len = Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
+  if (len < 1) throw new Error("Line has no length.");
+  const rad = angleDeg * Math.PI / 180;
+  const end = { xMm: Math.round(a.xMm + len * Math.cos(rad)), yMm: Math.round(a.yMm + len * Math.sin(rad)) };
+  if (end.xMm < 0 || end.yMm < 0 || end.xMm > 80000 || end.yMm > 80000) throw new Error("Rotated line endpoint moves outside workspace.");
+  if (interior) {
+    return { ...sketch, lines: sketch.lines.map((l, i) => i === index ? { ...l, end } : l) };
+  } else {
+    return { ...sketch, points: sketch.points.map((p, i) => i === (index + 1) % sketch.points.length ? end : p) };
+  }
+}

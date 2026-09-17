@@ -143,8 +143,10 @@ export const SHAPE_ITEMS: Array<{
 const ARCH_BUILD_ITEMS: CapsuleItem[] = [
   { id: "select", label: "Select", hint: "Select elements in 3D viewport (Esc)", icon: <LuMousePointer2 className="h-3 w-3 text-amber-400 shrink-0" /> },
   { id: "wall", label: "Wall", hint: "Choose a wall type and draw (W)", icon: <IconMarkupWall className="h-3.5 w-3.5 text-amber-500 shrink-0" />, hasDropdown: true },
+  { id: "curtain-wall", label: "Curtain Wall", hint: "Draw curtain wall with customizable grid frames & mullions", icon: <LuGrid2X2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" /> },
   { id: "window", label: "Window", hint: "Choose a window type and place it", icon: <IconMarkupWindow className="h-3.5 w-3.5 text-sky-400 shrink-0" />, hasDropdown: true },
   { id: "door", label: "Door", hint: "Choose a door type and place it (D)", icon: <LuDoorOpen className="h-3 w-3 text-orange-500 shrink-0" />, hasDropdown: true },
+  { id: "space", label: "Space", hint: "Place Revit-style space to compute area, volume & heating/cooling load", icon: <LuBox className="h-3.5 w-3.5 text-indigo-400 shrink-0" /> },
   { id: "floor", label: "Floor", hint: "Choose a floor type and sketch its boundary", icon: <IconMarkupFloor className="h-3.5 w-3.5 text-emerald-400 shrink-0" />, hasDropdown: true },
   { id: "roof", label: "Roof", hint: "Choose a roof type and sketch its boundary", icon: <IconMarkupRoof className="h-3.5 w-3.5 text-violet-400 shrink-0" />, hasDropdown: true },
   { id: "lines", label: "Lines", hint: "Draw detail & sketch lines (L)", icon: <LuPencil className="h-3 w-3 text-blue-400 shrink-0" /> },
@@ -320,8 +322,10 @@ export default function DesktopIsland() {
   const selectedWindowId = useLayoutDrawingStore((s) => s.selectedWindowId);
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const slabs = useLayoutDrawingStore((s) => s.slabs);
+  const walls = useLayoutDrawingStore((s) => s.walls);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
+  const selectedRoomId = useLayoutDrawingStore((s) => s.selectedRoomId);
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen);
   const modifyTool = useModifyStore(s => s.tool);
   const boundaryEdit = useLayoutDrawingStore(s => s.slabBoundaryEdit);
@@ -417,7 +421,8 @@ export default function DesktopIsland() {
       Boolean(selectedWindowId) ||
       Boolean(selectedSlabId) ||
       Boolean(selectedStairId) ||
-      Boolean(selectedRampId)
+      Boolean(selectedRampId) ||
+      Boolean(selectedRoomId)
     );
   }, [
     selectedElements,
@@ -427,6 +432,7 @@ export default function DesktopIsland() {
     selectedSlabId,
     selectedStairId,
     selectedRampId,
+    selectedRoomId,
     slabs,
   ]);
 
@@ -543,7 +549,12 @@ export default function DesktopIsland() {
 
   /* ── modify title label ──────────────────────────────── */
   const modifyTitle = useMemo(() => {
-    if (selectedWallId) return "Modify · Wall";
+    if (selectedRoomId) return "Modify · Space";
+    if (selectedWallId) {
+      const wall = walls.find((w) => w.id === selectedWallId);
+      if (wall?.isCurtainWall || wall?.wallTypeId === "curtain-wall") return "Modify · Curtain Wall";
+      return "Modify · Wall";
+    }
     if (selectedDoorId) return "Modify · Door";
     if (selectedWindowId) return "Modify · Window";
     if (selectedSlabId) {
@@ -564,6 +575,9 @@ export default function DesktopIsland() {
     selectedSlabId,
     selectedStairId,
     selectedRampId,
+    selectedRoomId,
+    walls,
+    slabs,
   ]);
 
   /* ── active capsules list ────────────────────────────── */
@@ -837,11 +851,35 @@ export default function DesktopIsland() {
       if (!useViewDisplayStore.getState().renderPreview) enterRenderView();
       return;
     }
-    if (id === "render-capture") {
-      setSnapshotModalOpen(true);
+    if (id === "curtain-wall") {
+      clearSelection();
+      useLayoutDrawingStore.getState().setArmedLayoutTool("curtain-wall");
+      useAppStore.getState().setRightPanelOpen(true);
       return;
     }
 
+    if (id === "space") {
+      clearSelection();
+      const layout = useLayoutDrawingStore.getState();
+      const existingCount = (layout.layoutRooms || []).length;
+      const roomNum = `${101 + existingCount}`;
+      layout.addRoom({
+        name: `Space ${existingCount + 1}`,
+        number: roomNum,
+        areaSqM: 24.0,
+        heightMm: 2800,
+        spaceType: "office",
+        boundaryPoints: [
+          { xMm: -2500, yMm: -2500 },
+          { xMm: 2500, yMm: -2500 },
+          { xMm: 2500, yMm: 2500 },
+          { xMm: -2500, yMm: 2500 },
+        ],
+        tagPosMm: { xMm: 0, yMm: 0 },
+      });
+      useAppStore.getState().setRightPanelOpen(true);
+      return;
+    }
 
     clearSelection();
     useLayoutDrawingStore.getState().setArmedLayoutTool(id as LayoutToolId);

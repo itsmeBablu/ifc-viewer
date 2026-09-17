@@ -77,6 +77,8 @@ export default function LayoutPropertiesPanel({
   const selectedSlabId = useLayoutDrawingStore((s) => s.selectedSlabId);
   const selectedStairId = useLayoutDrawingStore((s) => s.selectedStairId);
   const selectedRampId = useLayoutDrawingStore((s) => s.selectedRampId);
+  const selectedRoomId = useLayoutDrawingStore((s) => s.selectedRoomId);
+  const layoutRooms = useLayoutDrawingStore((s) => s.layoutRooms);
   const selectedElements = useLayoutDrawingStore((s) => s.selectedElements);
   const updateWall = useLayoutDrawingStore((s) => s.updateWall);
   const updateDoor = useLayoutDrawingStore((s) => s.updateDoor);
@@ -86,6 +88,7 @@ export default function LayoutPropertiesPanel({
   const updateBeam = useLayoutDrawingStore((s) => s.updateBeam);
   const updateStair = useLayoutDrawingStore((s) => s.updateStair);
   const updateRamp = useLayoutDrawingStore((s) => s.updateRamp);
+  const updateRoom = useLayoutDrawingStore((s) => s.updateRoom);
   const updateDuct = useLayoutDrawingStore((s) => s.updateDuct);
   const updatePipe = useLayoutDrawingStore((s) => s.updatePipe);
   const updateCableTray = useLayoutDrawingStore((s) => s.updateCableTray);
@@ -98,6 +101,7 @@ export default function LayoutPropertiesPanel({
   const deleteBeam = useLayoutDrawingStore((s) => s.deleteBeam);
   const deleteStair = useLayoutDrawingStore((s) => s.deleteStair);
   const deleteRamp = useLayoutDrawingStore((s) => s.deleteRamp);
+  const deleteRoom = useLayoutDrawingStore((s) => s.deleteRoom);
   const deleteDuct = useLayoutDrawingStore((s) => s.deleteDuct);
   const deletePipe = useLayoutDrawingStore((s) => s.deletePipe);
   const deleteCableTray = useLayoutDrawingStore((s) => s.deleteCableTray);
@@ -135,13 +139,14 @@ export default function LayoutPropertiesPanel({
   const pipe = pipes.find((p) => p.id === selectedPipeId) ?? null;
   const tray = cableTrays.find((t) => t.id === selectedCableTrayId) ?? null;
   const wire = useLayoutDrawingStore(s => s.wires.find(w => w.id === (s.selectedWireId ?? s.selectedElements.find(e => e.kind === "wire")?.id)));
-  const equip = mepEquipment.find((eq) => eq.id === selectedEquipmentId) ?? null;
+   const equip = mepEquipment.find((eq) => eq.id === selectedEquipmentId) ?? null;
+  const selectedRoom = (layoutRooms || []).find((r) => r.id === (selectedRoomId ?? selectedElements.find((e) => e.kind === "room")?.id)) ?? null;
 
   if (selectedElements.length > 1) {
     return <MultiSelectionPanel className={className} />;
   }
 
-  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip && !wire) return <ViewPropertiesPanel />;
+  if (!wall && !door && !win && !slab && !column && !beam && !stair && !ramp && !duct && !pipe && !tray && !equip && !wire && !selectedRoom) return <ViewPropertiesPanel />;
 
   const len = wall ? Math.round(wallLengthMm(wall)) : 0;
   const ang = wall ? Math.round(wallAngleDeg(wall) * 10) / 10 : 0;
@@ -161,12 +166,144 @@ export default function LayoutPropertiesPanel({
         <>
           <div className="flex items-center justify-between gap-2">
             <p className="text-[10px] font-bold tracking-wide text-[var(--text-strong)] uppercase">
-              {t(uiLanguage, "layoutWall")}
+              {wall.isCurtainWall || wall.wallTypeId === "curtain-wall" ? "Curtain Wall System" : t(uiLanguage, "layoutWall")}
             </p>
-            <span className="rounded-md bg-[var(--surface-muted)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)]">
-              {t(uiLanguage, "layoutWallStraight")}
+            <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+              wall.isCurtainWall || wall.wallTypeId === "curtain-wall"
+                ? "bg-cyan-500/20 text-cyan-400"
+                : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
+            }`}>
+              {wall.isCurtainWall || wall.wallTypeId === "curtain-wall" ? "Curtain Grid" : t(uiLanguage, "layoutWallStraight")}
             </span>
           </div>
+
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                const isCW = !Boolean(wall.isCurtainWall || wall.wallTypeId === "curtain-wall");
+                void updateWall(wall.id, {
+                  isCurtainWall: isCW,
+                  wallTypeId: isCW ? "curtain-wall" : undefined,
+                  curtainGrid: isCW ? (wall.curtainGrid ?? {
+                    verticalSpacingMm: 1200,
+                    horizontalSpacingMm: 1500,
+                    mullionWidthMm: 50,
+                    mullionDepthMm: 150,
+                    panelMaterial: "glass",
+                  }) : undefined,
+                });
+              }}
+              className={`flex-1 rounded-lg px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                wall.isCurtainWall || wall.wallTypeId === "curtain-wall"
+                  ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20"
+                  : "bg-[var(--surface-muted)]/60 text-[var(--text-muted)] border-[var(--panel-divider)] hover:bg-[var(--surface-overlay)]"
+              }`}
+            >
+              {wall.isCurtainWall || wall.wallTypeId === "curtain-wall" ? "✓ Curtain Wall Grid Active" : "Convert to Curtain Wall"}
+            </button>
+          </div>
+
+          {/* Curtain Wall Grid & Frame Mullions */}
+          {(wall.isCurtainWall || wall.wallTypeId === "curtain-wall") && (
+            <Section defaultOpen title="Curtain Grid & Frames (Mullions)">
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <MmInput
+                    label="Vertical Grid (mm)"
+                    value={wall.curtainGrid?.verticalSpacingMm ?? 1200}
+                    onCommit={(v) => {
+                      const grid = {
+                        verticalSpacingMm: v,
+                        horizontalSpacingMm: wall.curtainGrid?.horizontalSpacingMm ?? 1500,
+                        mullionWidthMm: wall.curtainGrid?.mullionWidthMm ?? 50,
+                        mullionDepthMm: wall.curtainGrid?.mullionDepthMm ?? 150,
+                        panelMaterial: wall.curtainGrid?.panelMaterial ?? "glass",
+                      };
+                      void updateWall(wall.id, { isCurtainWall: true, curtainGrid: grid });
+                    }}
+                  />
+                  <MmInput
+                    label="Horizontal Grid (mm)"
+                    value={wall.curtainGrid?.horizontalSpacingMm ?? 1500}
+                    onCommit={(v) => {
+                      const grid = {
+                        verticalSpacingMm: wall.curtainGrid?.verticalSpacingMm ?? 1200,
+                        horizontalSpacingMm: v,
+                        mullionWidthMm: wall.curtainGrid?.mullionWidthMm ?? 50,
+                        mullionDepthMm: wall.curtainGrid?.mullionDepthMm ?? 150,
+                        panelMaterial: wall.curtainGrid?.panelMaterial ?? "glass",
+                      };
+                      void updateWall(wall.id, { isCurtainWall: true, curtainGrid: grid });
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <MmInput
+                    label="Mullion Width (mm)"
+                    value={wall.curtainGrid?.mullionWidthMm ?? 50}
+                    onCommit={(v) => {
+                      const grid = {
+                        verticalSpacingMm: wall.curtainGrid?.verticalSpacingMm ?? 1200,
+                        horizontalSpacingMm: wall.curtainGrid?.horizontalSpacingMm ?? 1500,
+                        mullionWidthMm: v,
+                        mullionDepthMm: wall.curtainGrid?.mullionDepthMm ?? 150,
+                        panelMaterial: wall.curtainGrid?.panelMaterial ?? "glass",
+                      };
+                      void updateWall(wall.id, { isCurtainWall: true, curtainGrid: grid });
+                    }}
+                  />
+                  <MmInput
+                    label="Mullion Depth (mm)"
+                    value={wall.curtainGrid?.mullionDepthMm ?? 150}
+                    onCommit={(v) => {
+                      const grid = {
+                        verticalSpacingMm: wall.curtainGrid?.verticalSpacingMm ?? 1200,
+                        horizontalSpacingMm: wall.curtainGrid?.horizontalSpacingMm ?? 1500,
+                        mullionWidthMm: wall.curtainGrid?.mullionWidthMm ?? 50,
+                        mullionDepthMm: v,
+                        panelMaterial: wall.curtainGrid?.panelMaterial ?? "glass",
+                      };
+                      void updateWall(wall.id, { isCurtainWall: true, curtainGrid: grid });
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Panel Infill</span>
+                    <select
+                      value={wall.curtainGrid?.panelMaterial ?? "glass"}
+                      onChange={(e) => {
+                        const grid = {
+                          verticalSpacingMm: wall.curtainGrid?.verticalSpacingMm ?? 1200,
+                          horizontalSpacingMm: wall.curtainGrid?.horizontalSpacingMm ?? 1500,
+                          mullionWidthMm: wall.curtainGrid?.mullionWidthMm ?? 50,
+                          mullionDepthMm: wall.curtainGrid?.mullionDepthMm ?? 150,
+                          panelMaterial: e.target.value,
+                        };
+                        void updateWall(wall.id, { isCurtainWall: true, curtainGrid: grid });
+                      }}
+                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-semibold text-cyan-500"
+                    >
+                      <option value="glass">Clear Double Glazing</option>
+                      <option value="glass_tinted">Tinted Solar Glass</option>
+                      <option value="opaque_spandrel">Insulated Spandrel Panel</option>
+                      <option value="louver">Aluminum Ventilation Louvers</option>
+                    </select>
+                  </label>
+
+                  <div className="flex flex-col justify-end text-[10px] text-[var(--text-muted)] font-mono pb-2">
+                    <span>
+                      Grid: {Math.max(1, Math.floor(len / (wall.curtainGrid?.verticalSpacingMm ?? 1200)))} vert ×{" "}
+                      {Math.max(1, Math.floor(wall.heightMm / (wall.curtainGrid?.horizontalSpacingMm ?? 1500)))} horiz
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Section>
+          )}
 
           {/* Dimensions */}
           <Section defaultOpen title={t(uiLanguage, "layoutEditDimensions")}>
@@ -1798,6 +1935,210 @@ export default function LayoutPropertiesPanel({
           </>
         );
       })())}
+
+      {/* -- SPACE / ROOM INSPECTOR --------------------------------------- */}
+      {selectedRoom && (() => {
+        const heightM = (selectedRoom.heightMm ?? 2800) / 1000;
+        const areaM2 = selectedRoom.areaSqM;
+        const volumeM3 = selectedRoom.volumeM3 ?? Number((areaM2 * heightM).toFixed(2));
+
+        return (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                <p className="text-[10px] font-bold tracking-wide text-indigo-400 uppercase">
+                  Revit Space · Room
+                </p>
+              </div>
+              <span className="rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold text-indigo-400 uppercase">
+                {selectedRoom.spaceType ?? "Space"}
+              </span>
+            </div>
+
+            {/* Identification */}
+            <Section defaultOpen title="Identity Data">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Room Number</span>
+                  <input
+                    type="text"
+                    defaultValue={selectedRoom.number}
+                    onBlur={(e) => void updateRoom(selectedRoom.id, { number: e.target.value })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-mono font-bold text-[var(--text-strong)]"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Room Name</span>
+                  <input
+                    type="text"
+                    defaultValue={selectedRoom.name}
+                    onBlur={(e) => void updateRoom(selectedRoom.id, { name: e.target.value })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-semibold text-[var(--text-strong)]"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Space Type</span>
+                  <select
+                    value={selectedRoom.spaceType ?? "office"}
+                    onChange={(e) => void updateRoom(selectedRoom.id, { spaceType: e.target.value as any })}
+                    className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1.5 text-[11px] outline-none font-semibold text-indigo-500"
+                  >
+                    <option value="office">Office / Büro</option>
+                    <option value="residential_living">Living Room / Wohnen</option>
+                    <option value="residential_bedroom">Bedroom / Schlafen</option>
+                    <option value="kitchen">Kitchen / Küche</option>
+                    <option value="bathroom">Bathroom / Bad</option>
+                    <option value="corridor">Corridor / Flur</option>
+                    <option value="storage">Storage / Lager</option>
+                    <option value="meeting">Meeting Room / Besprechung</option>
+                    <option value="classroom">Classroom / Unterricht</option>
+                  </select>
+                </label>
+
+                <LevelSelect
+                  label="Level"
+                  value={selectedRoom.levelId}
+                  levels={levels}
+                  onChange={(levelId) => void updateRoom(selectedRoom.id, { levelId })}
+                />
+              </div>
+            </Section>
+
+            {/* Geometry: Area, Height, Volume */}
+            <Section defaultOpen title="Dimensions & Volume (Revit Metrics)">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-2">
+                  <div className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Area (m²)</div>
+                  <div className="font-mono font-bold text-sm text-[var(--text-strong)]">
+                    {areaM2.toFixed(2)} m²
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-[var(--panel-divider)] bg-[var(--surface-overlay)] p-2">
+                  <div className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Calculated Volume</div>
+                  <div className="font-mono font-bold text-sm text-indigo-400">
+                    {volumeM3.toFixed(2)} m³
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <MmInput
+                  label="Unbounded Height"
+                  value={selectedRoom.heightMm ?? 2800}
+                  onCommit={(v) => void updateRoom(selectedRoom.id, { heightMm: v })}
+                />
+                <div className="flex flex-col justify-end text-[10px] text-[var(--text-muted)] font-mono pb-2">
+                  <span>Height: {heightM.toFixed(2)} m</span>
+                </div>
+              </div>
+            </Section>
+
+            {/* Thermal Loads & Building Services (Heizlast, Lüftung, Kühllast) */}
+            <Section defaultOpen title="Energy & MEP Loads (DIN/EN 12831)">
+              <div className="flex flex-col gap-2">
+                {/* 3 Metric cards: Heizlast, Lüftung, Kühllast */}
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-1.5">
+                    <div className="text-[8px] font-bold text-red-500 uppercase tracking-tight">Heizlast (Φ)</div>
+                    <div className="font-mono font-extrabold text-xs text-red-600 dark:text-red-400">
+                      {selectedRoom.designHeatingLoadWatts ?? Math.round(areaM2 * 45)} W
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-1.5">
+                    <div className="text-[8px] font-bold text-cyan-500 uppercase tracking-tight">Lüftung (V̇)</div>
+                    <div className="font-mono font-extrabold text-xs text-cyan-600 dark:text-cyan-400">
+                      {selectedRoom.designAirflowM3h ?? Math.round(volumeM3 * 1.5)} m³/h
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-1.5">
+                    <div className="text-[8px] font-bold text-blue-500 uppercase tracking-tight">Kühllast (Q̇)</div>
+                    <div className="font-mono font-extrabold text-xs text-blue-600 dark:text-blue-400">
+                      {selectedRoom.designCoolingLoadWatts ?? Math.round(areaM2 * 35)} W
+                    </div>
+                  </div>
+                </div>
+
+                {/* Thermal Design Parameters */}
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Indoor Temp (°C)</span>
+                    <input
+                      type="number"
+                      step={0.5}
+                      defaultValue={selectedRoom.indoorTempC ?? 20}
+                      onBlur={(e) => void updateRoom(selectedRoom.id, { indoorTempC: Number(e.target.value) })}
+                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1 text-[11px] outline-none font-mono"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold text-[var(--text-muted)] uppercase">Outdoor Design Temp (°C)</span>
+                    <input
+                      type="number"
+                      step={0.5}
+                      defaultValue={selectedRoom.outdoorDesignTempC ?? -12}
+                      onBlur={(e) => void updateRoom(selectedRoom.id, { outdoorDesignTempC: Number(e.target.value) })}
+                      className="rounded-lg border border-[var(--panel-divider)] bg-white/70 px-2 py-1 text-[11px] outline-none font-mono"
+                    />
+                  </label>
+                </div>
+
+                {/* Component U-Values */}
+                <div className="rounded-lg bg-[var(--surface-overlay)] p-2 flex flex-col gap-1.5">
+                  <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Component U-Values (W/m²K)</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-[var(--text-muted)]">Wall U</span>
+                      <input
+                        type="number"
+                        step={0.01}
+                        defaultValue={selectedRoom.uValueWall ?? 0.24}
+                        onBlur={(e) => void updateRoom(selectedRoom.id, { uValueWall: Number(e.target.value) })}
+                        className="rounded border border-[var(--panel-divider)] bg-white/70 px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-[var(--text-muted)]">Window U</span>
+                      <input
+                        type="number"
+                        step={0.01}
+                        defaultValue={selectedRoom.uValueWindow ?? 1.1}
+                        onBlur={(e) => void updateRoom(selectedRoom.id, { uValueWindow: Number(e.target.value) })}
+                        className="rounded border border-[var(--panel-divider)] bg-white/70 px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-[var(--text-muted)]">Door U</span>
+                      <input
+                        type="number"
+                        step={0.01}
+                        defaultValue={selectedRoom.uValueDoor ?? 1.3}
+                        onBlur={(e) => void updateRoom(selectedRoom.id, { uValueDoor: Number(e.target.value) })}
+                        className="rounded border border-[var(--panel-divider)] bg-white/70 px-1.5 py-0.5 text-[10px] font-mono outline-none"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </Section>
+
+            {/* Actions: Delete */}
+            <div className="flex gap-1.5 mt-2">
+              <button
+                type="button"
+                onClick={() => void deleteRoom(selectedRoom.id)}
+                className="flex-1 rounded-xl bg-red-500/10 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/15"
+              >
+                {t(uiLanguage, "markupDelete")}
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

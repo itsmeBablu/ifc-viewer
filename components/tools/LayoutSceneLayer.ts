@@ -25,6 +25,7 @@ import {
   type LayoutGridLine,
   type LayoutLevel,
   type LayoutRamp,
+  type LayoutRoom,
   type LayoutSlab,
   type LayoutSketchLine,
   type LayoutStair,
@@ -39,7 +40,6 @@ import {
   type WallCenterlineMm,
   type WallMiterOffsets,
   type WallLayer,
-  type WallLayerFunction,
   calculateRampMetrics,
   calculateStairMetrics,
   deriveRiseMm,
@@ -90,6 +90,7 @@ export default class LayoutSceneLayer {
   private cableTrayMeshes = new Map<string, THREE.Mesh>();
   private equipmentMeshes = new Map<string, THREE.Group>();
   private wireMeshes = new Map<string, THREE.Group>();
+  private roomMeshes = new Map<string, THREE.Group>();
   private workPlaneGroup = new THREE.Group();
   private previewLine: THREE.Group | null = null;
   private openingPreview: THREE.Group | null = null;
@@ -5084,58 +5085,129 @@ export default class LayoutSceneLayer {
     grp.userData.geometryKey = geometryKey;
     this.clearGroupContents(grp);
 
-    const layers = this.resolveWallLayers(wall);
     const totalThickMm = wall.thicknessMm || 200;
     const totalThickM = fromMm(totalThickMm);
 
-    let currentOffsetM = 0;
-    for (let i = 0; i < layers.length; i++) {
-      const layer = layers[i];
-      const layerThickMm = layer.thicknessMm || (totalThickMm / layers.length);
-      const layerThickM = fromMm(layerThickMm);
+    if (wall.isCurtainWall || wall.wallTypeId === "curtain-wall") {
+      const dx = cl.endXmm - cl.startXmm;
+      const dy = cl.endYmm - cl.startYmm;
+      const wallLenMm = Math.max(50, Math.hypot(dx, dy));
+      const wallHeightMm = wall.heightMm || 3000;
+      const lenM = fromMm(wallLenMm);
+      const heightM = fromMm(wallHeightMm);
+      const grid = wall.curtainGrid ?? {
+        verticalSpacingMm: 1200,
+        horizontalSpacingMm: 1500,
+        mullionWidthMm: 50,
+        mullionDepthMm: 150,
+        panelMaterial: "glass",
+      };
 
-      const geo = this.buildWallLayerGeometry(
-        wall,
-        cl,
-        doors,
-        windows,
-        miter,
-        currentOffsetM,
-        layerThickM,
-        totalThickM,
-      );
+      const mullionWM = fromMm(grid.mullionWidthMm || 50);
+      const mullionDM = fromMm(grid.mullionDepthMm || 150);
+      const glassThickM = 0.024;
 
-      const mat = new THREE.MeshPhysicalMaterial({
-        roughness: 0.85,
-        metalness: 0.05,
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.45,
+        roughness: 0.1,
+        metalness: 0.1,
+        transmission: 0.8,
+        ior: 1.5,
+        depthWrite: false,
       });
 
-      this.applyWallLayerMaterial(mat, layer, wall, false, this.currentRenderMode);
+      const mullionMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.85,
+        roughness: 0.25,
+      });
 
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.name = `layer-${layer.id || i}`;
-      mesh.userData.layoutWallId = wall.id;
-      mesh.userData.isWallLayer = true;
-      mesh.userData.layerId = layer.id;
-      mesh.userData.layerFunction = layer.function;
-      mesh.userData.layerMaterial = layer.material;
-      mesh.userData.layerColor = layer.color;
+      // Glass panel
+      const glassGeo = new THREE.BoxGeometry(lenM, heightM, glassThickM);
+      const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+      glassMesh.name = "curtain-glass";
+      glassMesh.userData.isWallLayer = true;
+      glassMesh.userData.layoutWallId = wall.id;
+      grp.add(glassMesh);
 
-      grp.add(mesh);
-      currentOffsetM += layerThickM;
+      // Vertical mullions
+      const vSpacingMm = Math.max(300, grid.verticalSpacingMm || 1200);
+      const vCount = Math.max(1, Math.floor(wallLenMm / vSpacingMm));
+      for (let i = 0; i <= vCount; i++) {
+        const xOffsetM = (i / vCount) * lenM - lenM / 2;
+        const vMullionGeo = new THREE.BoxGeometry(mullionWM, heightM, mullionDM);
+        const vMullionMesh = new THREE.Mesh(vMullionGeo, mullionMat);
+        vMullionMesh.position.set(xOffsetM, 0, 0);
+        vMullionMesh.userData.isWallLayer = true;
+        vMullionMesh.userData.layoutWallId = wall.id;
+        grp.add(vMullionMesh);
+      }
+
+      // Horizontal transoms
+      const hSpacingMm = Math.max(300, grid.horizontalSpacingMm || 1500);
+      const hCount = Math.max(1, Math.floor(wallHeightMm / hSpacingMm));
+      for (let j = 0; j <= hCount; j++) {
+        const yOffsetM = (j / hCount) * heightM - heightM / 2;
+        const hMullionGeo = new THREE.BoxGeometry(lenM, mullionWM, mullionDM);
+        const hMullionMesh = new THREE.Mesh(hMullionGeo, mullionMat);
+        hMullionMesh.position.set(0, yOffsetM, 0);
+        hMullionMesh.userData.isWallLayer = true;
+        hMullionMesh.userData.layoutWallId = wall.id;
+        grp.add(hMullionMesh);
+      }
+    } else {
+      const layers = this.resolveWallLayers(wall);
+      let currentOffsetM = 0;
+      for (let i = 0; i < layers.length; i++) {
+        const layer = layers[i];
+        const layerThickMm = layer.thicknessMm || (totalThickMm / layers.length);
+        const layerThickM = fromMm(layerThickMm);
+
+        const geo = this.buildWallLayerGeometry(
+          wall,
+          cl,
+          doors,
+          windows,
+          miter,
+          currentOffsetM,
+          layerThickM,
+          totalThickM,
+        );
+
+        const mat = new THREE.MeshPhysicalMaterial({
+          roughness: 0.85,
+          metalness: 0.05,
+        });
+
+        this.applyWallLayerMaterial(mat, layer, wall, false, this.currentRenderMode);
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.name = `layer-${layer.id || i}`;
+        mesh.userData.layoutWallId = wall.id;
+        mesh.userData.isWallLayer = true;
+        mesh.userData.layerId = layer.id;
+        mesh.userData.layerFunction = layer.function;
+        mesh.userData.layerMaterial = layer.material;
+        mesh.userData.layerColor = layer.color;
+
+        grp.add(mesh);
+        currentOffsetM += layerThickM;
+      }
+
+      // One outer envelope prevents construction-layer interfaces appearing as wall edges.
+      const envelope = new THREE.Mesh(
+        this.buildWallLayerGeometry(wall, cl, doors, windows, miter, 0, totalThickM, totalThickM),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      envelope.name = "wall-wireframe-envelope";
+      envelope.userData.isWireframeEnvelope = true;
+      envelope.userData.layoutWallId = wall.id;
+      envelope.visible = false;
+      envelope.raycast = () => {};
+      grp.add(envelope);
     }
-
-    // One outer envelope prevents construction-layer interfaces appearing as wall edges.
-    const envelope = new THREE.Mesh(
-      this.buildWallLayerGeometry(wall, cl, doors, windows, miter, 0, totalThickM, totalThickM),
-      new THREE.MeshBasicMaterial({ visible: false }),
-    );
-    envelope.name = "wall-wireframe-envelope";
-    envelope.userData.isWireframeEnvelope = true;
-    envelope.userData.layoutWallId = wall.id;
-    envelope.visible = false;
-    envelope.raycast = () => {};
-    grp.add(envelope);
 
     if (
       wall.curved &&
@@ -7145,6 +7217,159 @@ export default class LayoutSceneLayer {
 
     for (const collection of architectureCollections) {
       for (const object of collection) dimObject(object, 0.35);
+    }
+  }
+
+  syncRooms(
+    rooms: LayoutRoom[],
+    levels: LayoutLevel[],
+    opts: {
+      hiddenElementIds?: Set<string>;
+      hiddenCategories?: Set<string>;
+      isolatedElementIds?: Set<string> | null;
+      revealHiddenMode?: boolean;
+      activeLevelId: string | null;
+      selectedRoomId: string | null;
+      showAllLevels: boolean;
+      planMode?: boolean;
+    },
+  ) {
+    const keep = new Set(rooms.map((r) => r.id));
+    for (const [id, grp] of this.roomMeshes) {
+      if (!keep.has(id)) {
+        this.disposeGroup(grp);
+        this.group.remove(grp);
+        this.roomMeshes.delete(id);
+      }
+    }
+
+    const planMode = Boolean(opts.planMode ?? this.isPlanModeActive);
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+
+    for (const room of rooms) {
+      const isSelected = room.id === opts.selectedRoomId;
+      const level = levelById.get(room.levelId);
+      const isVisible =
+        opts.showAllLevels ||
+        opts.activeLevelId == null ||
+        room.levelId === opts.activeLevelId;
+
+      let grp = this.roomMeshes.get(room.id);
+      const geometryKey = JSON.stringify([room, isSelected, planMode, level?.elevationMm]);
+      const rebuild = !grp || grp.userData.geometryKey !== geometryKey;
+
+      if (grp && rebuild) {
+        this.clearGroupContents(grp);
+      } else if (!grp) {
+        grp = new THREE.Group();
+        grp.name = `room-${room.id}`;
+        grp.userData.layoutRoomId = room.id;
+        grp.userData.kind = "room";
+        this.roomMeshes.set(room.id, grp);
+        this.group.add(grp);
+      }
+
+      if (rebuild) {
+        this.buildRoomGeometry(grp, room, level, isSelected, planMode);
+        grp.userData.geometryKey = geometryKey;
+      }
+
+      const vis = this.checkElementVisibility(room.id, "rooms", opts);
+      grp.visible = isVisible && vis.showMesh;
+      this.applyGhostMaterial(grp, vis.isGhosted);
+    }
+  }
+
+  private buildRoomGeometry(
+    root: THREE.Group,
+    room: LayoutRoom,
+    level: LayoutLevel | undefined,
+    isSelected: boolean,
+    planMode: boolean,
+  ) {
+    const baseElevM = fromMm(level?.elevationMm ?? 0);
+    const heightMm = room.heightMm ?? level?.heightMm ?? 2800;
+    const heightM = fromMm(heightMm);
+    const pts = room.boundaryPoints || [];
+    if (pts.length < 3) return;
+
+    // Build 2D polygon shape in plan mm (X, Y=Z)
+    const shape = new THREE.Shape();
+    shape.moveTo(fromMm(pts[0].xMm), fromMm(pts[0].yMm));
+    for (let i = 1; i < pts.length; i++) {
+      shape.lineTo(fromMm(pts[i].xMm), fromMm(pts[i].yMm));
+    }
+    shape.closePath();
+
+    const extrudeSettings = {
+      depth: planMode ? 0.05 : heightM,
+      bevelEnabled: false,
+    };
+    const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    geo.rotateX(-Math.PI / 2);
+    geo.computeVertexNormals();
+
+    const color = isSelected ? 0x818cf8 : 0x6366f1;
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      transparent: true,
+      opacity: planMode ? (isSelected ? 0.35 : 0.15) : (isSelected ? 0.38 : 0.16),
+      roughness: 0.4,
+      metalness: 0.1,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, baseElevM + 0.02, 0);
+    mesh.userData.layoutRoomId = room.id;
+    mesh.userData.isRoomVolume = true;
+    root.add(mesh);
+
+    // Outline perimeter
+    const linePts: THREE.Vector3[] = [];
+    for (const p of pts) {
+      linePts.push(new THREE.Vector3(fromMm(p.xMm), baseElevM + (planMode ? 0.04 : 0.05), fromMm(p.yMm)));
+    }
+    linePts.push(linePts[0]);
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: isSelected ? 0xfacc15 : 0x4f46e5,
+      linewidth: isSelected ? 2 : 1,
+      depthTest: false,
+    });
+    const lineMesh = new THREE.Line(lineGeo, lineMat);
+    lineMesh.renderOrder = 105;
+    root.add(lineMesh);
+
+    // HTML Label tag in plan or 3D view
+    if (typeof document !== "undefined") {
+      const tagX = room.tagPosMm ? fromMm(room.tagPosMm.xMm) : pts.reduce((sum, p) => sum + fromMm(p.xMm), 0) / pts.length;
+      const tagZ = room.tagPosMm ? fromMm(room.tagPosMm.yMm) : pts.reduce((sum, p) => sum + fromMm(p.yMm), 0) / pts.length;
+      const tagY = baseElevM + (planMode ? 0.06 : heightM / 2);
+
+      const div = document.createElement("div");
+      div.className = "room-space-tag pointer-events-none select-none text-center";
+      div.style.cssText = `
+        background: ${isSelected ? "rgba(79, 70, 229, 0.88)" : "rgba(15, 23, 42, 0.85)"};
+        border: 1px solid ${isSelected ? "#facc15" : "rgba(99, 102, 241, 0.4)"};
+        border-radius: 8px;
+        padding: 4px 8px;
+        color: #ffffff;
+        font-family: system-ui, sans-serif;
+        font-size: 10px;
+        line-height: 1.25;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+        backdrop-filter: blur(4px);
+      `;
+      div.innerHTML = `
+        <div style="font-weight: 800; font-size: 11px; color: ${isSelected ? "#fef08a" : "#c7d2fe"};">${room.name}</div>
+        <div style="font-size: 9px; opacity: 0.8; font-family: monospace;">No. ${room.number}</div>
+        <div style="font-weight: 700; margin-top: 2px;">${room.areaSqM.toFixed(1)} m² · ${(room.volumeM3 ?? (room.areaSqM * heightM)).toFixed(1)} m³</div>
+      `;
+      const label2D = new CSS2DObject(div);
+      label2D.position.set(tagX, tagY, tagZ);
+      root.add(label2D);
     }
   }
 

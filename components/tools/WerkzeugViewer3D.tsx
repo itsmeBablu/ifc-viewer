@@ -3003,6 +3003,13 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         planMode: isPlanView,
         ...visOpts,
       });
+      layer.syncRooms(s.layoutRooms || [], s.levels, {
+        activeLevelId: markupFloor,
+        selectedRoomId: s.selectedRoomId,
+        showAllLevels,
+        planMode: isPlanView,
+        ...visOpts,
+      });
       const jointInputs = [s.ducts, s.pipes, s.cableTrays, s.wires, s.levels, markupFloor, showAllLevels, s.hiddenElementIds, s.hiddenCategories, s.isolatedElementIds, s.revealHiddenMode];
       if (!jointDisplay || jointInputs.some((input, i) => input !== jointSources[i])) {
         jointDisplay?.dispose();

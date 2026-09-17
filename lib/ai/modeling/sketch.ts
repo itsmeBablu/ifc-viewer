@@ -12,10 +12,30 @@ const cross=(a:SketchPoint,b:SketchPoint)=>a.xMm*b.yMm-a.yMm*b.xMm;
 const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
+export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
+  if (s.points.length >= 3) return s;
+  if (!s.lines.length) return s;
+  const xs = s.lines.flatMap(l => [l.start.xMm, l.end.xMm]);
+  const ys = s.lines.flatMap(l => [l.start.yMm, l.end.yMm]);
+  const pad = 1000;
+  const minX = Math.max(0, Math.min(...xs) - pad), maxX = Math.min(80000, Math.max(...xs) + pad);
+  const minY = Math.max(0, Math.min(...ys) - pad), maxY = Math.min(80000, Math.max(...ys) + pad);
+  return {
+    ...s,
+    points: [
+      { xMm: minX, yMm: minY },
+      { xMm: maxX, yMm: minY },
+      { xMm: maxX, yMm: maxY },
+      { xMm: minX, yMm: maxY },
+    ]
+  };
+}
+
 export function validateSketches(sketches:FloorSketch[]){
   if(!sketches.length||sketches.length>4)throw new Error("Choose one to four floors.");
-  for(const [floor,s] of sketches.entries()){
-    validateBoundary(s.points);
+  for(const [floor,rawS] of sketches.entries()){
+    const s = ensureSketchBoundary(rawS);
+    if (s.points.length >= 3) validateBoundary(s.points);
     for(const garden of s.gardens??[])validateBoundary(garden);
     const rooms=sketchRooms(s);
     for(const label of s.labels??[])if(!rooms.some(r=>insidePolygon(label.point,r)))throw new Error(`Floor ${floor}: room name ${label.name} must be inside a closed room.`);
@@ -64,7 +84,7 @@ export function sketchRooms(s:FloorSketch):SketchPoint[][]{
 }
 
 export function sketchActions(input:ResidentialParameters,id:string,groundId:string,baseElevation:number,height:number,thickness:number,x=0):AiAction[]{
-  const sketches=input.sketches!;validateSketches(sketches);
+  const sketches=(input.sketches??[]).map(ensureSketchBoundary);validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
     if(s.lines.length||s.labels?.length)return null;

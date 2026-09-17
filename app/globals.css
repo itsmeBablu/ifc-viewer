@@ -5347,6 +5347,12 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
 .ai-sketch-view-controls { display:flex; align-items:center; gap:5px; margin-left:auto; }
 .ai-sketch-view-controls span { min-width:36px; text-align:center; }
 .ai-sketch-drawing { position:relative; border:1px solid var(--panel-divider); }
+.ai-sketch-top-actions { display:flex; align-items:center; gap:8px; }
+.ai-sketch-top-actions button { padding:6px 12px; font-size:12px; }
+.ai-sketch-angle-presets { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.ai-sketch-angle-presets button { padding:4px 7px; font-size:10px; border-radius:5px; }
+.ai-sketch-tool-wall svg, .ai-sketch-tool-freehand svg, .ai-sketch-tool-arc svg, .ai-sketch-tool-rectangle svg, .ai-sketch-tool-circle svg, .ai-sketch-tool-garden svg { cursor:crosshair; }
+.ai-sketch-live-hud { pointer-events:none; }
 .ai-sketch-drawing svg { width:100%; height:100%; max-height:100%; aspect-ratio:auto; }
 .ai-sketch-tool-select svg { cursor:default; }
 .ai-sketch-line-hover { cursor:pointer; }

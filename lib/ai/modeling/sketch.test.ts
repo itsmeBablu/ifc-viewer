@@ -1,6 +1,6 @@
 import { expect,it } from "vitest";
 import { sketchRooms,sketchActions,validateSketches } from "./sketch";
-import { resizeSketchLine,circularOutline,arcSegments } from "./sketchEditing";
+import { resizeSketchLine,circularOutline,arcSegments,lineAngleDeg,rotateSketchLine } from "./sketchEditing";
 import { residentialParametersSchema } from "./brief";
 import { polygonArea } from "./footprint";
 import { validatePlan } from "../validate";
@@ -68,4 +68,12 @@ it("places a coherent lounge and kitchen without overlaps or door intrusion",()=
   expect(table.x).toBe(sofa.x);expect(table.y).toBeGreaterThan(sofa.y);
   const cabinets=pieces.filter(p=>p.family.startsWith("kitchen-"));expect(cabinets).toHaveLength(4);expect(cabinets.every(p=>p.rotation===180)).toBe(true);
   for(let i=0;i<pieces.length;i++)for(let j=i+1;j<pieces.length;j++){const a=pieces[i],b=pieces[j],as=furnitureBounds(a.family,a.rotation),bs=furnitureBounds(b.family,b.rotation);expect(Math.abs(a.x-b.x)>=(as.w+bs.w)/2||Math.abs(a.y-b.y)>=(as.d+bs.d)/2).toBe(true);}
+});
+it("calculates line angles and rotates line endpoints around the start point",()=>{
+  const l={start:{xMm:0,yMm:0},end:{xMm:5000,yMm:0}};
+  expect(lineAngleDeg(l.start,l.end)).toBe(0);
+  const rotated=rotateSketchLine({points:[],lines:[l]},0,true,90);
+  expect(rotated.lines[0].end.xMm).toBe(0);
+  expect(rotated.lines[0].end.yMm).toBe(5000);
+  expect(lineAngleDeg(rotated.lines[0].start,rotated.lines[0].end)).toBe(90);
 });
