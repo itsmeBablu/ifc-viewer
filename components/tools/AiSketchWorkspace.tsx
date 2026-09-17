@@ -16,7 +16,6 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
 
 type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
-type DrawMode = "walls" | "furniture" | "mep";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
 const colors: Record<RoomUse, string> = {
@@ -84,7 +83,7 @@ export default function AiSketchWorkspace({
   const totalFloors = Math.max(parameters.sketches?.length ?? 1, 1);
   const sketches = parameters.sketches ?? Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed);
 
-  const [floor, setFloor] = useState(0), [drawMode, setDrawMode] = useState<DrawMode>("walls"),
+  const [floor, setFloor] = useState(0),
         [tool, setTool] = useState<Tool>("wall"),
         [below, setBelow] = useState(true),
         [anchors, setAnchors] = useState<SketchPoint[]>([]),
@@ -107,6 +106,7 @@ export default function AiSketchWorkspace({
         [busy, setBusy] = useState(false),
         [past, setPast] = useState<FloorSketch[][]>([]),
         [future, setFuture] = useState<FloorSketch[][]>([]);
+  const [endpointDrag, setEndpointDrag] = useState<{ index: number; interior: boolean; endpoint: "start" | "end" } | null>(null);
 
   // Inline length edit state (for selected line foreignObject input)
   const [inlineLen, setInlineLen] = useState("");
@@ -146,7 +146,6 @@ export default function AiSketchWorkspace({
     onChange({ ...parameters, variant, sketches: next });
   };
   const replace = (s: FloorSketch) => change(sketches.map((old, i) => i === floor ? s : old));
-  const addDetailLine = (line: {start:SketchPoint;end:SketchPoint}) => replace({...current,[drawMode === "mep" ? "mepLines" : "furnitureLines"]:[...(current[drawMode === "mep" ? "mepLines" : "furnitureLines"]??[]),line]});
   const resetSelection = () => { setSelected(null); setAnchors([]); setGardenAnchors([]); setRoomPoint(null); };
 
   const doUndo = () => {
@@ -178,7 +177,7 @@ export default function AiSketchWorkspace({
         if (gardenAnchors.length) { setGardenAnchors([]); return; }
         if (anchors.length) { setAnchors([]); setCursorPoint(null); return; }
         if (selected) { resetSelection(); return; }
-        // Do NOT call onClose() — user must click "Done"
+        onClose(); // Close after cancelling active gestures — user must click "Done"
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
@@ -269,6 +268,21 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerMoveCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (endpointDrag) {
+      const raw = getCanvasPoint(event);
+      if (!raw) return;
+      const { point, snap } = resolvePoint(raw, false);
+      const line = lineFor({ ...endpointDrag, source: "current" });
+      if (line) {
+        const nextLine = { ...line, [endpointDrag.endpoint]: point };
+        const next = endpointDrag.interior
+          ? { ...current, lines: current.lines.map((v, i) => i === endpointDrag.index ? nextLine : v) }
+          : { ...current, points: current.points.map((v, i) => i === endpointDrag.index ? point : v) };
+        onChange({ ...parameters, sketches: sketches.map((s, i) => i === floor ? next : s) });
+      }
+      setSnapPoint(snap);
+      return;
+    }
     // Handle garden vertex drag
     if (gardenDrag) {
       const raw = getCanvasPoint(event);
@@ -371,7 +385,7 @@ export default function AiSketchWorkspace({
           return;
         }
         const newLine = { start: a, end: point };
-        if(drawMode === "walls") replace({ ...current, lines: [...current.lines, newLine] }); else addDetailLine(newLine);
+        replace({ ...current, lines: [...current.lines, newLine] });
         // AutoCAD continuous polyline: anchor to new point
         setAnchors([point]);
         return;
@@ -379,7 +393,7 @@ export default function AiSketchWorkspace({
 
       if (tool === "arc") {
         const additions = arcSegments(a, anchors[1], point);
-        if(drawMode === "walls") replace({ ...current, lines: [...current.lines, ...additions] }); else additions.forEach(addDetailLine);
+        replace({ ...current, lines: [...current.lines, ...additions] });
         setAnchors([]);
         return;
       }
@@ -433,6 +447,7 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerUpCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (endpointDrag) { setPast(v => [...v.slice(-29), sketches]); setFuture([]); setEndpointDrag(null); return; }
     // Commit garden vertex drag
     if (gardenDrag) {
       setGardenDrag(null);
@@ -458,7 +473,7 @@ export default function AiSketchWorkspace({
         }
         if (simplified.length >= 2) {
           const newLines = simplified.slice(1).map((end, i) => ({ start: simplified[i], end }));
-          if(drawMode === "walls") replace({ ...current, lines: [...current.lines, ...newLines] }); else newLines.forEach(addDetailLine);
+          replace({ ...current, lines: [...current.lines, ...newLines] });
         }
       }
       setFreehandStroke([]);
@@ -663,6 +678,13 @@ export default function AiSketchWorkspace({
               ref={inlineLenRef}
             />
           </foreignObject>
+        )}
+
+        {active && source === "current" && !isLocked && !curvedPath && (
+          <>
+            <circle cx={a.xMm} cy={a.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); setEndpointDrag({ index, interior, endpoint: "start" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
+            <circle cx={b.xMm} cy={b.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); setEndpointDrag({ index, interior, endpoint: "end" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
+          </>
         )}
 
         {canPick && (curvedPath ? (
@@ -952,7 +974,8 @@ export default function AiSketchWorkspace({
             change([...sketches, { points: current.points, lines: [] }], "duplex");
             setFloor(sketches.length);
             resetSelection();
-            if (levels[sketches.length]) setProjectLevel(levels[sketches.length].id);
+            const levelStore = useLayoutDrawingStore.getState();
+            void levelStore.addLevel({ name: `Floor ${sketches.length}`, elevationMm: (levels[levels.length - 1]?.elevationMm ?? 0) + (levels[levels.length - 1]?.heightMm ?? 3000) + 200, heightMm: levels[levels.length - 1]?.heightMm ?? 3000 }).then(level => { if (level) setProjectLevel(level.id); });
           }}>
             <FiPlus/> Add floor
           </button>
@@ -978,6 +1001,7 @@ export default function AiSketchWorkspace({
               onPointerDown={onPointerDownCanvas}
               onPointerMove={onPointerMoveCanvas}
               onPointerUp={onPointerUpCanvas}
+              onWheel={e => { e.preventDefault(); setZoom(v => Math.max(.5, Math.min(4, v * (e.deltaY < 0 ? 1.1 : .9)))); }}
               onPointerCancel={() => { drag.current = null; setIsFreehandDragging(false); setFreehandStroke([]); setGardenDrag(null); }}
               aria-label="Editable 2D floor drawing"
               role="img"
@@ -1043,18 +1067,15 @@ export default function AiSketchWorkspace({
           {/* Right sidebar */}
           <aside>
             <section className="ai-sketch-card ai-sketch-mode-card">
-              <h3>Drafting mode</h3>
-              <div className="ai-sketch-mode-tabs">
-                {(["walls","furniture","mep"] as const).map(mode => <button key={mode} type="button" aria-pressed={drawMode===mode} onClick={()=>{setDrawMode(mode);setTool(mode==="walls"?"wall":"freehand");resetSelection();}}><span className={`ai-sketch-mode-dot ai-sketch-mode-${mode}`}/>{mode === "mep" ? "MEP lines" : mode[0].toUpperCase()+mode.slice(1)}</button>)}
-              </div>
-              <p>{drawMode === "walls" ? "Outer lines become walls; interior lines become partitions. Add doors, windows and room tags." : drawMode === "furniture" ? "Draw furniture footprints as orange reference lines. They are kept separate from walls." : "Draw MEP runs as teal dashed lines. They are kept separate from walls and rooms."}</p>
+              <h3>Wall drafting</h3>
+              <p>Draw simple outside and inside lines. Closed outlines become walls and rooms; furniture and requested MEP are added automatically when you create the layout.</p>
             </section>
             {/* Tool palette */}
             <section className="ai-sketch-card">
               <h3>Drawing tools</h3>
               <div className="ai-sketch-toolbox">
                 {tools.map(t => (
-                  <button key={t.id} type="button" disabled={disabled || drawMode !== "walls" && ["rectangle","circle","room","garden","door","window"].includes(t.id)} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
+                  <button key={t.id} type="button" disabled={disabled} aria-pressed={tool === t.id} onClick={() => { setTool(t.id); resetSelection(); setGardenAnchors([]); }}>
                     {t.icon}<span>{t.name}</span>
                   </button>
                 ))}
