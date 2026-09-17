@@ -2,6 +2,7 @@ import { z } from "zod";
 import { actionSchema, planSchema, wallFields, equipmentFields, windowFields, type AiAction } from "./schema";
 import { apartmentSchema, apartmentActions } from "./modeling/apartment";
 import { houseSchema, houseActions } from "./modeling/house";
+import { multiApartmentActions } from "./modeling/multiApartment";
 
 const id = z.string().min(1).max(160);
 const coordinate = z.number().min(-1_000_000).max(1_000_000);
@@ -12,6 +13,7 @@ const wallSize = { thicknessMm: wallFields.thicknessMm, heightMm: wallFields.hei
 export const recipeSchema = z.discriminatedUnion("kind", [
   apartmentSchema,
   houseSchema,
+  z.object({kind:z.literal("apartment_block"),id,levelId:wallFields.levelId,floors:z.number().int().min(1).max(12),unitsPerFloor:z.number().int().min(2).max(10),bedroomsPerUnit:z.union([z.literal(1),z.literal(2),z.literal(3)]),totalAreaM2:z.number().min(30).max(20000).optional(),heightMm:wallFields.heightMm.default(3000),thicknessMm:wallFields.thicknessMm.default(200),furnished:z.boolean().default(true),underfloorHeating:z.boolean().optional(),piping:z.enum(["none","underfloor","ceiling"]).optional(),ducts:z.enum(["none","ceiling"]).optional()}).strict().describe("Create a multi-storey apartment block with repeated independent homes, shared lift and stairs."),
   z.object({
     kind: z.literal("rectangular_shell"), id, levelId: wallFields.levelId,
     xMm: coordinate, yMm: coordinate,
@@ -61,14 +63,16 @@ export const modelPlanSchema = planSchema.extend({
 export function expandModelPlan(value: unknown) {
   const plan = modelPlanSchema.parse(value);
   const actions: AiAction[] = [];
+  const expandedLimit = plan.actions.some(item => item.kind === "apartment_block") ? 5000 : 400;
   const append = (action: AiAction) => {
-    if (actions.length >= 400) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
+    if (actions.length >= expandedLimit) throw new Error(`This build exceeds ${expandedLimit} elements. Split it into smaller batches.`);
     actions.push(action);
   };
   for (const item of plan.actions) {
     switch (item.kind) {
       case "apartment_layout": apartmentActions(item).forEach(append); break;
       case "house_layout": houseActions(item).forEach(append); break;
+      case "apartment_block": multiApartmentActions({variant:"apartment",bedrooms:item.bedroomsPerUnit,apartmentFloors:item.floors,apartmentsPerFloor:item.unitsPerFloor,bedroomsPerApartment:item.bedroomsPerUnit,totalAreaM2:item.totalAreaM2,furnished:item.furnished,underfloorHeating:item.underfloorHeating,piping:item.piping,ducts:item.ducts},item.id,item.levelId,0,item.heightMm,item.thicknessMm).forEach(append); break;
       case "rectangular_shell": {
         const { xMm: x, yMm: y, widthMm: w, depthMm: d } = item;
         const points = [{ xMm: x, yMm: y }, { xMm: x + w, yMm: y }, { xMm: x + w, yMm: y + d }, { xMm: x, yMm: y + d }];
@@ -94,7 +98,7 @@ export function expandModelPlan(value: unknown) {
         break;
       }
       case "equipment_grid": {
-        if (item.rows * item.columns > 400 - actions.length) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
+        if (item.rows * item.columns > expandedLimit - actions.length) throw new Error(`This build exceeds ${expandedLimit} elements. Split it into smaller batches.`);
         if (item.columns > 1 && item.stepXmm === 0 || item.rows > 1 && item.stepYmm === 0) throw new Error("Repeated items need nonzero spacing.");
         for (let row = 0; row < item.rows; row++) for (let column = 0; column < item.columns; column++) {
           append({ kind: "equipment", operation: "create", id: `${item.id}:item:${row * item.columns + column}`, familyId: item.familyId, levelId: item.levelId, xMm: item.xMm + column * item.stepXmm, yMm: item.yMm + row * item.stepYmm, rotationDeg: item.rotationDeg, elevationMm: item.elevationMm });
@@ -132,5 +136,5 @@ export function expandModelPlan(value: unknown) {
     }
   }
   // Check computed coordinates and the expanded cap before downstream validation.
-  return planSchema.parse({ ...plan, actions });
+  return planSchema.extend({ actions: z.array(actionSchema).min(1).max(expandedLimit) }).parse({ ...plan, actions });
 }

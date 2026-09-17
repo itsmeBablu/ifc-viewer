@@ -5,6 +5,11 @@ import { expandModelPlan } from "../recipes";
 import { validatePlan } from "../validate";
 
 const context = { projectId: "p", activeLevelId: "l", selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 }, elements: [{ kind: "level" as const, id: "l", properties: {} }] };
+it("parses and expands a multi-storey block with repeated 2-bedroom homes",()=>{
+  expect(defaultResidentialBrief("4 floors with 6 apartments per floor and 2 bedroom apartments")).toMatchObject({apartmentFloors:4,apartmentsPerFloor:6,bedroomsPerApartment:2});
+  const plan=expandModelPlan({summary:"Block",assumptions:[],actions:[{kind:"apartment_block",id:"block",levelId:"l",floors:4,unitsPerFloor:6,bedroomsPerUnit:2,totalAreaM2:3000}]});
+  expect(plan.actions.filter(a=>a.kind==="level")).toHaveLength(3);expect(plan.actions.filter(a=>a.kind==="equipment"&&a.familyId==="extras-lift")).toHaveLength(4);expect(plan.actions.filter(a=>a.kind==="wall").length).toBeGreaterThan(20);
+});
 it.each(["apartment", "villa", "duplex"] as const)("accounts for every square metre of a %s and generates the matching footprint", variant => {
   const parameters = { variant, bedrooms: variant === "duplex" ? 5 : 2, bedroomAreaM2: 22 };
   const allocation = allocateResidential(parameters);
