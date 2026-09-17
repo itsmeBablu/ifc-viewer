@@ -5087,6 +5087,7 @@ export default class LayoutSceneLayer {
 
     const totalThickMm = wall.thicknessMm || 200;
     const totalThickM = fromMm(totalThickMm);
+    const layers = this.resolveWallLayers(wall);
 
     if (wall.isCurtainWall || wall.wallTypeId === "curtain-wall") {
       const dx = cl.endXmm - cl.startXmm;
@@ -5158,7 +5159,6 @@ export default class LayoutSceneLayer {
         grp.add(hMullionMesh);
       }
     } else {
-      const layers = this.resolveWallLayers(wall);
       let currentOffsetM = 0;
       for (let i = 0; i < layers.length; i++) {
         const layer = layers[i];
