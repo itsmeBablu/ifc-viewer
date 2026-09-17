@@ -17,7 +17,7 @@ export function multiApartmentActions(input:ResidentialParameters,id:string,grou
     if(floor>0)actions.push({kind:"level",operation:"create",id:levelId,name:`Apartment floor ${floor+1}`,elevationMm:baseElevationMm+floor*(heightMm+200),heightMm});
     for(let unitIndex=0;unitIndex<units;unitIndex++){
       const x=unitIndex*unitWidth;
-      const item=apartmentSchema.parse({kind:"apartment_layout",id:`${id}:floor:${floor}:unit:${unitIndex}`,levelId,bedrooms:beds,bedroomAreaM2:unit.bedroomAreaM2,livingAreaM2:input.livingAreaM2,kitchenAreaM2:input.kitchenAreaM2,bathroomAreaM2:input.bathroomAreaM2,heightMm,thicknessMm,xMm:x,yMm:0,furnished:input.furnished!==false,underfloorHeating:input.underfloorHeating,piping:input.piping,ducts:input.ducts});
+      const item=apartmentSchema.parse({kind:"apartment_layout",id:`${id}:floor:${floor}:unit:${unitIndex}`,levelId,bedrooms:beds,bedroomAreaM2:unit.bedroomAreaM2,livingAreaM2:input.livingAreaM2,kitchenAreaM2:input.kitchenAreaM2,bathroomAreaM2:input.bathroomAreaM2,heightMm,thicknessMm,xMm:x,yMm:0,furnished:input.furnished!==false,separateKitchen:input.separateKitchen??true,ensuiteBathrooms:input.ensuiteBathrooms??true,underfloorHeating:input.underfloorHeating,piping:input.piping,ducts:input.ducts});
       actions.push(...apartmentActions(item,{allocation:unit,entrance:unitIndex===0}).filter(a=>a.kind!=="floor"&&a.kind!=="roof"));
     }
     actions.push({kind:"floor",operation:"create",id:`${id}:floor:${floor}`,levelId,boundary:[{xMm:0,yMm:0},{xMm:totalWidth,yMm:0},{xMm:totalWidth,yMm:depth},{xMm:0,yMm:depth}],thicknessMm:200,elevationOffsetMm:0,roofPreset:"flat",pitchDeg:0});

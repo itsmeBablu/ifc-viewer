@@ -47,6 +47,25 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
     window(front, start + roomW / 2);
     if (i) wall(start - p / 2, 0, start - p / 2, bedroomEnd);
   }
+  // Modern plans can isolate the kitchen and give each sleeping bay a compact ensuite.
+  if (item.separateKitchen) {
+    const kitchenStart = Math.max(t / 2 + bathroomWidthMm + p, w - 4200);
+    const kitchenWall = wall(kitchenStart, corridorEnd, kitchenStart, d);
+    door(kitchenWall, Math.min(1100, d - corridorEnd - 700));
+  }
+  if (item.ensuiteBathrooms) {
+    for (let i = 0; i < bays; i++) {
+      const start = t / 2 + i * (roomW + p);
+      const ensuiteW = Math.min(1800, Math.max(1400, roomW * .38));
+      const ensuiteD = Math.min(2200, Math.max(1800, bedroomEnd - 500));
+      const left = start + roomW - ensuiteW;
+      const top = Math.max(300, bedroomEnd - ensuiteD);
+      const ensuiteDoorWall = wall(left, top, left + ensuiteW, top);
+      wall(left, top, left, bedroomEnd);
+      wall(left + ensuiteW, top, left + ensuiteW, bedroomEnd);
+      door(ensuiteDoorWall, ensuiteW / 2);
+    }
+  }
   // Group the bathroom beside the open kitchen/living zone, accessed from the corridor.
   const bathroomEnd = corridorEnd + p / 2 + allocation.bathroomDepthMm + p / 2;
   wall(t / 2 + bathroomWidthMm + p / 2, corridorEnd, t / 2 + bathroomWidthMm + p / 2, allocation.bathroomEnclosed ? bathroomEnd : d);

@@ -51,6 +51,7 @@ export const residentialOptions = {
   gardenAreaM2: z.number().min(0).max(2000).optional(),
   apartmentFloors:z.number().int().min(1).max(12).optional(), apartmentsPerFloor:z.number().int().min(2).max(10).optional(), bedroomsPerApartment:z.union([z.literal(1),z.literal(2),z.literal(3)]).optional(),
   layoutStyle:z.enum(["linear","courtyard","corner","split","central"]).optional(),
+  separateKitchen:z.boolean().optional(), ensuiteBathrooms:z.boolean().optional(),
   footprint: z.enum(["rectangle", "l", "u", "drawn"]).optional(), widthM: z.number().min(4).max(80).optional(), lengthM: z.number().min(4).max(80).optional(),
   footprintPoints: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).strict()).min(3).max(16).optional(),
 };
