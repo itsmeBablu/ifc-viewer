@@ -10,7 +10,7 @@ import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 export function ComponentLibrary({ item, onChoose }: { item?: LayoutMepEquipment; onChoose?: () => void }) {
   const store = useLayoutDrawingStore();
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState(()=>componentPreset(item?.familyId??store.draftComponentId)?.room==="Extras"?"Extras":"All");
 
   const isFurniture = item
     ? (item.category === "furniture" || isArchitecturalComponent(item.familyId))
@@ -173,7 +173,8 @@ export default function ComponentProperties({ item }: { item?: LayoutMepEquipmen
         )}
       </div>
 
-      <ComponentLibrary item={item} />
+      <ComponentLibrary key={preset?.room==="Extras"?"extras":"components"} item={item} />
+      {item && <label className={labelCls}>Component color<input aria-label="Component color" type="color" className={field} value={item.color ?? "#2563eb"} onChange={e => update({ color: e.target.value })} /></label>}
       {parameterError && <p role="alert" className="text-xs text-red-500">{parameterError}</p>}
       {parameters && <div className="space-y-2 border-t border-[var(--panel-divider)] pt-2">
         <strong className="text-xs">Assembly parameters</strong>

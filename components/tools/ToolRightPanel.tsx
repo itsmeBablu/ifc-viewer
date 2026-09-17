@@ -1009,7 +1009,7 @@ export default function ToolRightPanel({
                             </PropRow>
                             <div className="mt-2 space-y-1.5 border-t border-[var(--panel-divider)] pt-2">
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-[var(--text-muted)]">Opening Angle</span>
+                                <span className="text-[var(--text-muted)]">{selectedDoor.style==="garage"?"Garage opening (0 closed · 90 open)":"Opening Angle"}</span>
                                 <div className="flex items-center gap-1">
                                   <input
                                     type="number"

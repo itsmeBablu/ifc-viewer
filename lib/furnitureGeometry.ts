@@ -33,7 +33,35 @@ export function createFurniture(item: Pick<LayoutMepEquipment, "familyId" | "wid
     mesh.position.set(x, y, z); group.add(mesh); return mesh;
   };
   const legs = (top: number) => { for (const x of [-1, 1]) for (const z of [-1, 1]) box(x * w * 0.4, top / 2, z * d * 0.4, w * 0.065, top, d * 0.065, dark); };
-  if (id === "parametric-countertop") { box(0, h / 2, 0, w, h, d, white); }
+  if (id.startsWith("extras-car-")) {
+    const paint = new THREE.MeshStandardMaterial({ color: item.color ?? "#2563eb", roughness: 0.28, metalness: 0.55 });
+    const tire = new THREE.MeshStandardMaterial({ color: "#18181b", roughness: 0.9 });
+    box(0, h * .34, 0, w, h * .32, d * .94, paint);
+    box(0, h * .65, -d * .07, w * .84, h * .38, d * (id.endsWith("suv") ? .65 : .48), paint);
+    box(0, h * .7, -d * .07, w * .86, h * .22, d * .4, dark);
+    for (const side of [-1, 1]) for (const end of [-1, 1]) {
+      const wheel = cylinder(side * w * .48, h * .19, end * d * .31, h * .19, w * .1, tire);
+      wheel.rotation.z = Math.PI / 2;
+      box(side * w * .31, h * .4, end * d * .475, w * .22, h * .09, .025, end > 0 ? white : fabric);
+    }
+    box(0, h * .24, d * .48, w * .48, h * .09, .03, dark);
+  } else if (id === "extras-lawn") {
+    box(0, h / 2, 0, w, h, d, new THREE.MeshStandardMaterial({ color: item.color ?? "#6b9b45", roughness: 1 }));
+  } else if (id.startsWith("extras-")) {
+    const leaf = new THREE.MeshStandardMaterial({ color: item.color ?? "#38834b", roughness: 1 });
+    const tree = id === "extras-tree" || id === "extras-palm";
+    if (id === "extras-planter") cylinder(0, h * .15, 0, w * .42, h * .3, wood);
+    if (tree) cylinder(0, h * .4, 0, w * .045, h * .8, wood);
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), leaf);
+    crown.position.y = tree ? h * .74 : h * .64;
+    crown.scale.set(w * .5, h * (tree ? .26 : .36), d * .5);
+    group.add(crown);
+    if (id === "extras-palm") for (let i = 0; i < 8; i++) {
+      const frond = box(0, h * .83, 0, w * .9, h * .025, d * .12, leaf);
+      frond.rotation.y = i * Math.PI / 4;
+      frond.rotation.z = .18;
+    }
+  } else if (id === "parametric-countertop") { box(0, h / 2, 0, w, h, d, white); }
   else if (id.startsWith("sofa") || id === "armchair") {
     legs(h * 0.18); box(0, h * 0.32, 0, w, h * 0.28, d, fabric);
     box(0, h * 0.7, -d * 0.4, w, h * 0.6, d * 0.2, fabric);

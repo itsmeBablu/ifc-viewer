@@ -9,6 +9,14 @@ const furniture = (id: string, name: string, room: string, widthMm: number, dept
 const mep = (id: MepEquipmentCategory, name: string, room: string, widthMm: number, depthMm: number, heightMm: number, elevationMm = 0): ComponentPreset => ({ id: `mep-${id}`, name, room, category: id, widthMm, depthMm, heightMm, elevationMm });
 
 export const COMPONENT_CATALOG: ComponentPreset[] = [
+  { ...mep("generic_component", "Underfloor heating manifold", "Heating", 600, 150, 450, 200), id:"mep-heating-manifold" },
+  furniture("extras-car-sedan", "Sedan · editable body color", "Extras", 1850, 4600, 1450),
+  furniture("extras-car-suv", "SUV · editable body color", "Extras", 2000, 4800, 1750),
+  furniture("extras-tree", "Garden tree", "Extras", 3200, 3200, 5000),
+  furniture("extras-palm", "Palm tree", "Extras", 2800, 2800, 5500),
+  furniture("extras-shrub", "Garden shrub", "Extras", 1000, 1000, 900),
+  furniture("extras-planter", "Plant in pot", "Extras", 650, 650, 1200),
+  furniture("extras-lawn", "Garden lawn patch", "Extras", 3000, 3000, 50),
   { ...mep("generic_component", "Air handling unit (AHU)", "HVAC", BIM_DEFAULTS.mep.ahu.widthMm, BIM_DEFAULTS.mep.ahu.depthMm, BIM_DEFAULTS.mep.ahu.heightMm), id: "mep-ahu" },
   { ...mep("generic_component", "Inline fan", "HVAC", 500, 500, 500, BIM_DEFAULTS.mep.ductElevationMm), id: "mep-fan" },
   { ...mep("generic_component", "Pipe valve", "Plumbing", 100, 100, 150, BIM_DEFAULTS.mep.pipeElevationMm), id: "mep-valve" },

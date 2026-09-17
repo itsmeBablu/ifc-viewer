@@ -3,16 +3,25 @@ import { contextSchema } from "./schema";
 import { attachmentsSchema } from "./attachments";
 import { expandModelPlan, modelPlanSchema } from "./recipes";
 import { AI_MODEL_IDS, type AiMode } from "./models";
+import { residentialParametersSchema } from "./modeling/brief";
+import { drawingReferenceSchema } from "./drawing";
 
 export const commandRequestSchema = z.object({
   command: z.string().trim().min(1).max(4000),
   model: z.enum(AI_MODEL_IDS).optional(),
   mode: z.enum(["build", "review", "guide"]).optional(),
+  residential: residentialParametersSchema.optional().describe("Explicit new-building template parameters; independent of conversation history."),
+  drawingReference: drawingReferenceSchema.optional(),
   context: contextSchema,
   discipline: z.enum(["arch", "mep"]).optional(),
   attachments: attachmentsSchema.default([]),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(8000) }).strict()).max(12).default([]),
-}).strict();
+}).strict().superRefine((input, ctx) => {
+  const line = input.drawingReference?.line;
+  if (line && (!input.attachments[line.attachmentIndex] || line.pageNumber !== undefined && line.pageNumber !== input.attachments[line.attachmentIndex].pageNumber)) {
+    ctx.addIssue({ code: "custom", path: ["drawingReference", "line"], message: "Reference points must belong to an attached drawing and its selected page." });
+  }
+});
 
 export type CommandRequest = z.infer<typeof commandRequestSchema>;
 
@@ -26,7 +35,7 @@ export const functionDeclarations = [{
   parameters: { type: "OBJECT", properties: { answer: { type: "STRING" } }, required: ["answer"] },
 }, {
   name: "propose_model",
-  description: "Propose one batch for preview, at most 150 expanded elements. Prefer rectangular_shell, wall_path, window_row and equipment_grid to avoid repeating coordinates. Mix recipes with explicit actions; order levels before walls, walls before openings. Generated recipe IDs can be referenced by later actions. Use explicit actions for edits/deletes. Never execute directly.",
+  description: "Propose one batch for preview, at most 150 proposed actions and 400 expanded elements. Prefer residential and repeated-element recipes to avoid repeating coordinates. Mix recipes with explicit actions; order levels before walls, walls before openings. Generated recipe IDs can be referenced by later actions. Use explicit actions for edits/deletes. Never execute directly.",
   parametersJsonSchema: z.toJSONSchema(modelPlanSchema, { target: "draft-7" }),
 }];
 

@@ -39,8 +39,9 @@ describe("deterministic modeling recipes", () => {
 
   it("bounds expanded counts and computed coordinates before application", () => {
     expect(expandModelPlan(plan([{ ...grid, columns: 15 }])).actions).toHaveLength(150);
-    expect(() => expandModelPlan(plan([{ ...grid, columns: 16 }]))).toThrow(/150/);
-    expect(() => expandModelPlan(plan([shell, { ...grid, columns: 15 }]))).toThrow(/150/);
+    expect(expandModelPlan(plan([{ ...grid, columns: 40 }])).actions).toHaveLength(400);
+    expect(() => expandModelPlan(plan([{ ...grid, columns: 41 }]))).toThrow(/400/);
+    expect(() => expandModelPlan(plan([shell, { ...grid, columns: 40 }]))).toThrow(/400/);
     expect(() => expandModelPlan(plan([{ ...grid, xMm: 999999 }]))).toThrow();
     expect(() => expandModelPlan(plan([{ ...grid, stepXmm: 0 }]))).toThrow(/spacing/);
     expect(() => expandModelPlan(plan([{ ...grid, columns: 1.5 }]))).toThrow();

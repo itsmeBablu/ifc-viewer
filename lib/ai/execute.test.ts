@@ -27,10 +27,15 @@ describe("AI batch persistence", () => {
     expect(state.walls.every(w => levelIds.has(w.levelId))).toBe(true);
     expect(state.doors.every(d => state.walls.some(w => w.id === d.wallId))).toBe(true);
     expect(state.slabs.length).toBeGreaterThan(20);
+    expect(state.mepEquipment.filter(e=>e.familyId?.startsWith("bed-"))).toHaveLength(5);
+    expect(state.mepEquipment.find(e=>e.familyId==="extras-car-sedan")?.color).toBe("#2563eb");
+    const lawn=state.mepEquipment.find(e=>e.familyId==="extras-lawn")!;
+    expect(lawn.widthMm!*lawn.depthMm!/1e6).toBeCloseTo(40);
     await undoWerkzeug();
     expect(useLayoutDrawingStore.getState().levels).toHaveLength(1);
     expect(useLayoutDrawingStore.getState().walls).toHaveLength(0);
     expect(useLayoutDrawingStore.getState().slabs).toHaveLength(0);
+    expect(useLayoutDrawingStore.getState().mepEquipment).toHaveLength(0);
   });
   it("reveals a committed live batch and undoes it as one operation", async () => {
     await applyAiPlan(plan, aiFingerprint(), true);

@@ -5152,6 +5152,40 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
 .ai-suggestion-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .ai-suggestion-row button { flex: 0 0 auto; border-radius: 999px; padding: 5px 9px; font-size: 10px; transition: border-color .18s ease, background .18s ease, color .18s ease; }
 .ai-suggestion-row button:hover:not(:disabled) { border-color: var(--ai-accent); color: var(--ai-accent-ink); background: var(--ai-accent-bg); }
+.ai-suggestion-row button[aria-pressed="true"] { color: var(--ai-accent-ink); background: var(--ai-accent-bg); border: 1px solid var(--ai-accent); }
+.ai-command-bottom { max-height: calc(100% - 48px); overflow-y: auto; overflow-x:hidden; scrollbar-width: thin; }
+.ai-building-options { margin-top: 7px; padding: 8px; border: 1px solid var(--glass-border); border-radius: 12px; }
+.ai-footprint-canvas { display:block; width: min(100%,180px); height: 180px; margin: 7px auto; background: var(--glass-bg); border-radius: 8px; color: var(--text-strong); cursor: crosshair; }
+.ai-footprint-chooser { margin-top: 8px; }
+.ai-layout-toggle { display: flex; align-items: center; gap: 7px; font-size: 11px; margin: 8px 0; }
+.ai-area-fields select { display: block; width: 100%; padding: 5px; border: 1px solid var(--glass-border); border-radius: 7px; background: var(--surface-card); color: var(--text-strong); }
+.ai-area-fields input[aria-invalid="true"] { border-color: #ef4444; background: #ef444415; color: #ef4444; }
+.ai-create-layout { width: 100%; margin-top: 9px; padding: 8px; border: 1px solid var(--ai-accent); border-radius: 8px; background: var(--ai-accent-bg); font-weight: 600; font-size: 12px; }
+.ai-create-layout:disabled { opacity: .4; }
+.ai-building-options summary { cursor: pointer; font-size: 11px; font-weight: 600; }
+.ai-building-options summary span { float: right; color: var(--text-muted); }
+.ai-area-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; margin-top: 8px; }
+.ai-area-fields label { min-width: 0; font-size: 10px; color: var(--text-muted); }
+.ai-area-fields input, .ai-pdf-page input { display: block; width: 100%; margin-top: 3px; padding: 5px 7px; border: 1px solid var(--glass-border); border-radius: 7px; color: var(--text-strong); background: var(--glass-bg); font-size: 12px; }
+.ai-area-fields input:focus-visible, .ai-pdf-page input:focus-visible { outline: 2px solid var(--ai-accent, #facc15); outline-offset: 1px; }
+.ai-building-options > p, .ai-drawing-attachments > p { font-size: 10px; line-height: 1.4; margin-top: 7px; }
+.ai-area-summary { font-size: 10px; margin-top: 7px; }
+.ai-area-summary p { margin-top: 4px; line-height: 1.4; }
+.ai-area-bar { display: flex; height: 5px; margin-top: 5px; border-radius: 6px; overflow: hidden; background: var(--glass-border); }
+.ai-area-bar span { flex-shrink: 0; transition: width .2s ease; }
+.ai-drawing-attachments { width: 100%; max-height: 290px; overflow-y: auto; scrollbar-width: thin; }
+.ai-drawing-tabs { display: flex; gap: 5px; align-items: center; font-size: 10px; margin-bottom: 5px; }
+.ai-drawing-tabs button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 6px; border-radius: 6px; }
+.ai-drawing-tabs button[aria-pressed="true"] { background: var(--ai-accent-bg); color: var(--ai-accent-ink); }
+.ai-drawing-tabs button:last-child { margin-left: auto; flex-shrink: 0; }
+.ai-drawing-viewport { display: flex; justify-content: center; background: white; border-radius: 8px; overflow: hidden; }
+.ai-drawing-canvas { position: relative; padding: 0; border: 0; max-width: 100%; cursor: crosshair; }
+.ai-drawing-canvas img { display: block; width: auto; max-width: 100%; max-height: 180px; }
+.ai-reference-point { position: absolute; z-index: 1; transform: translate(-50%, -50%); display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; color: white; background: #2563eb; font-size: 10px; box-shadow: 0 0 0 2px white; pointer-events: none; }
+.ai-reference-line { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ai-reference-line line { stroke: #2563eb; stroke-width: 2; }
+.ai-pdf-page { display: flex; align-items: center; gap: 6px; font-size: 10px; margin-top: 6px; }
+.ai-pdf-page input { width: 48px; margin: 0; }
 .ai-apply-button { border-radius: 11px; padding: 9px 12px; color: #09090b; background: var(--ai-accent, #facc15); font-size: 12px; font-weight: 650; }
 .ai-text-button { color: var(--text-body); font-size: 12px; }
 .ai-status-line { min-height: 16px; color: var(--ai-muted); font-size: 11px; }

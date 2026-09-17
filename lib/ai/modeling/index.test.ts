@@ -15,22 +15,32 @@ it("creates a complete validated default apartment without provider tokens", () 
   const result = defaultModelingPlan(input)!;
   expect(result.usage.inputTokens).toBe(0);
   expect(result.plan.actions.filter(a => a.kind === "door")).toHaveLength(5);
-  expect(result.plan.actions.filter(a => a.kind === "window")).toHaveLength(3);
+  expect(result.plan.actions.filter(a => a.kind === "window")).toHaveLength(4);
   expect(result.plan.actions.some(a => a.kind === "floor")).toBe(true);
 });
 it.each([1, 2, 3, 4])("validates %i bedroom layouts and exact bedroom clear areas", bedrooms => {
   const context = { ...input.context, activeLevelId: "l", elements: [{ id: "l", kind: "level" as const, properties: {} }] };
   const plan = validatePlan(expandModelPlan({ summary: "Apartment", assumptions: [], actions: [{ kind: "apartment_layout", id: "a", levelId: "l", bedrooms }] }), context);
   const partition = plan.actions.find(a => a.id === "a:wall:4")!;
-  expect(partition.kind === "wall" && (partition.startYmm - 100 - 75) * 4000 / 1e6).toBe(20);
+  const exterior = plan.actions.find(a => a.id === "a:wall:0")!;
+  expect(partition.kind).toBe("wall"); expect(exterior.kind).toBe("wall");
+  if (partition.kind !== "wall" || exterior.kind !== "wall") throw new Error("Missing walls");
+  const roomWidth = (exterior.endXmm - exterior.startXmm - 200 - (bedrooms-1)*150) / bedrooms;
+  expect((partition.startYmm - 100 - 75) * roomWidth / 1e6).toBeCloseTo(20, 6);
   expect(plan.actions.length).toBeLessThan(150);
 });
-it.each(["create a 2 bedroom apartment 80 m²", "create a 2 bedroom apartment with no windows", "review a 2 bedroom apartment", "create a 2 bedroom apartment and add pipes"])("does not discard custom intent: %s", command => {
+it.each(["create a 2 bedroom apartment with no windows", "review a 2 bedroom apartment", "create a 2 bedroom apartment and add pipes"])("does not discard custom intent: %s", command => {
   expect(defaultModelingPlan({ ...input, command })).toBeNull();
 });
 it("preserves review, attachments and conversation interpretation", () => {
   expect(defaultModelingPlan({ ...input, mode: "review" })).toBeNull();
   expect(defaultModelingPlan({ ...input, history: [{ role: "user", text: "Use 100 m²" }] })).toBeNull();
+});
+it("uses explicit template parameters independently of earlier conversation", () => {
+  const result = defaultModelingPlan({ ...input, residential: { variant: "apartment", bedrooms: 2, totalAreaM2: 120, bedroomAreaM2: 24, livingAreaM2: 30 }, history: [{ role: "user", text: "Earlier unrelated room" }] })!;
+  expect(result.plan.summary).toContain("120 m²");
+  expect(result.plan.summary).toContain("24 m² per bedroom");
+  expect(result.usage.outputTokens).toBe(0);
 });
 it.each([
   ["three bedroom appartement", "apartment", 3],
@@ -48,7 +58,7 @@ it.each([
   expect(result.usage.inputTokens).toBe(0);
   expect(result.plan.summary).toContain(`${bedrooms}-bedroom`);
   expect(result.plan.actions.filter(a => a.kind === "level")).toHaveLength(variant === "duplex" ? 2 : 1);
-  expect(result.plan.actions.filter(a => a.kind === "roof")).toHaveLength(variant === "apartment" ? 0 : 1);
+  expect(result.plan.actions.filter(a => a.kind === "roof")).toHaveLength(variant === "apartment" ? 0 : 2);
 });
 it.each(["a villa with a pool", "a duplex house with 5 bedrooms and garage", "a villa 12 m by 15 m", "create a 2 unit duplex", "create a seven bedroom apartment", "do not create a villa", "create a villa and remove existing walls"])("keeps custom brief for provider interpretation: %s", command => {
   expect(defaultResidentialBrief(command)).toBeNull();

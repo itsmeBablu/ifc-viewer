@@ -49,6 +49,8 @@ export function creationPlaybook(input: CommandRequest) {
     kinds.add(residential?.variant && residential.variant !== "apartment" ? "house_layout" : "apartment_layout");
     guides.clear(); guides.add("architecture");
   }
+  // Reference drawings need their visible topology, rather than a generic house recipe.
+  if (input.attachments.length) { kinds.delete("apartment_layout"); kinds.delete("house_layout"); }
   const catalog = kinds.has("equipment")
     ? (!complex && !full && matched.length ? matched : COMPONENT_CATALOG)
     : [];

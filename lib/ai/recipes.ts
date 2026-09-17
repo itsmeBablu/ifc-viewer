@@ -62,7 +62,7 @@ export function expandModelPlan(value: unknown) {
   const plan = modelPlanSchema.parse(value);
   const actions: AiAction[] = [];
   const append = (action: AiAction) => {
-    if (actions.length >= 150) throw new Error("This build exceeds 150 elements. Split it into smaller batches.");
+    if (actions.length >= 400) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
     actions.push(action);
   };
   for (const item of plan.actions) {
@@ -94,7 +94,7 @@ export function expandModelPlan(value: unknown) {
         break;
       }
       case "equipment_grid": {
-        if (item.rows * item.columns > 150 - actions.length) throw new Error("This build exceeds 150 elements. Split it into smaller batches.");
+        if (item.rows * item.columns > 400 - actions.length) throw new Error("This build exceeds 400 elements. Split it into smaller batches.");
         if (item.columns > 1 && item.stepXmm === 0 || item.rows > 1 && item.stepYmm === 0) throw new Error("Repeated items need nonzero spacing.");
         for (let row = 0; row < item.rows; row++) for (let column = 0; column < item.columns; column++) {
           append({ kind: "equipment", operation: "create", id: `${item.id}:item:${row * item.columns + column}`, familyId: item.familyId, levelId: item.levelId, xMm: item.xMm + column * item.stepXmm, yMm: item.yMm + row * item.stepYmm, rotationDeg: item.rotationDeg, elevationMm: item.elevationMm });
