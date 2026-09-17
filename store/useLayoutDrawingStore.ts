@@ -1698,6 +1698,17 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
             void idbPutWall(w);
           }
         }
+        // Keep persisted furniture and MEP attached to the retained level too.
+        for (const item of mepEquipment) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutMepEquipment(item); }
+        for (const item of ducts) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutDuct(item); }
+        for (const item of pipes) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutPipe(item); }
+        for (const item of cableTrays) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutCableTray(item); }
+        for (const item of wires) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutWire(item); }
+        for (const item of columns) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutColumn(item); }
+        for (const item of beams) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutBeam(item); }
+        for (const item of stairs) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutStair(item); }
+        for (const item of ramps) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutRamp(item); }
+        for (const item of slabs) if (item.levelId === discarded.id) { item.levelId = retained.id; void idbPutSlab(item); }
         void idbDeleteLevel(discarded.id);
       }
     }

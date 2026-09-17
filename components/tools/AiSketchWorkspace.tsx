@@ -178,7 +178,7 @@ export default function AiSketchWorkspace({
         if (gardenAnchors.length) { setGardenAnchors([]); return; }
         if (anchors.length) { setAnchors([]); setCursorPoint(null); return; }
         if (selected) { resetSelection(); return; }
-        onClose(); // Close after cancelling active gestures — user must click "Done"
+        // Escape cancels the current CAD action; keep the workspace open.
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
