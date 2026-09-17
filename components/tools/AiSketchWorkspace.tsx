@@ -601,6 +601,8 @@ export default function AiSketchWorkspace({
       strokeWidth: span * (source === "below" ? .005 : .003),
       strokeDasharray: source === "below" ? `${span * .012} ${span * .008}` : undefined,
       fill: "none",
+      strokeLinecap: "butt" as const,
+      strokeLinejoin: "round" as const,
       pointerEvents: "none" as const
     };
     const midX = (a.xMm + b.xMm) / 2;
@@ -711,10 +713,11 @@ export default function AiSketchWorkspace({
         );
       })}
       {s.points.map((a, i) => segment(a, s.points[(i + 1) % s.points.length], i, false, src))}
-      {s.lines.map((l, i) => segment(l.start, l.end, i, true, src))}
-      {src === "current" && (s.openings ?? []).map((o,i)=><g key={`opening${i}`} transform={`translate(${o.point.xMm} ${o.point.yMm})`} pointerEvents="none"><circle r={span*.008} fill={o.kind === "window" ? "#38bdf8" : "#facc15"} stroke="#111827" strokeWidth={span*.001}/><text y={span*.018} textAnchor="middle" fontSize={span*.011} fill="currentColor">{o.kind === "window" ? "W" : "DD"}</text></g>)}
-      {src === "current" && (s.furnitureLines ?? []).map((l, i) => <line key={`f${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#f97316" strokeWidth={span*.004} opacity={.9} pointerEvents="none" />)}
-      {src === "current" && (s.mepLines ?? []).map((l, i) => <line key={`m${i}`} x1={l.start.xMm} y1={l.start.yMm} x2={l.end.xMm} y2={l.end.yMm} stroke="#14b8a6" strokeWidth={span*.003} strokeDasharray={`${span*.009} ${span*.006}`} opacity={.95} pointerEvents="none" />)}
+      {s.lines.map((l, i) => {
+        const duplicate = s.points.some((a, j) => { const b = s.points[(j + 1) % s.points.length]; return (Math.hypot(a.xMm-l.start.xMm,a.yMm-l.start.yMm)<20 && Math.hypot(b.xMm-l.end.xMm,b.yMm-l.end.yMm)<20) || (Math.hypot(a.xMm-l.end.xMm,a.yMm-l.end.yMm)<20 && Math.hypot(b.xMm-l.start.xMm,b.yMm-l.start.yMm)<20); });
+        return duplicate ? null : segment(l.start, l.end, i, true, src);
+      })}
+      {src === "current" && (s.openings ?? []).map((o,i)=><g key={`opening${i}`} transform={`translate(${o.point.xMm} ${o.point.yMm})`} pointerEvents="none"><path d={o.kind === "window" ? "M-500 0H500" : "M-700 0Q0 700 700 0"} fill="none" stroke={o.kind === "window" ? "#38bdf8" : "#facc15"} strokeWidth={span*.003}/>{o.kind === "doubleDoor" && <path d="M-700 0Q-350 700 0 0M700 0Q350 700 0 0" fill="none" stroke="#facc15" strokeWidth={span*.002}/>}</g>)}
       {src === "current" && s.points.map((p, i) => <circle key={`p${i}`} cx={p.xMm} cy={p.yMm} r={span * .005} fill="#38bdf8" pointerEvents="none" />)}
       {/* Garden polygons with draggable vertices */}
       {(s.gardens ?? []).map((g, gi) => {
