@@ -258,6 +258,22 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     const submittedResidential=template?.parameters??residential;
     const submittedAttachments = includeAttachments ? attachments : [];
     setText(""); setResidential(undefined); setFailedCommand(null); setIncludeAttachments(false);
+    busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
+    pushHistory({ role: "user", text: submittedText });
+    const controller = new AbortController(); requestRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 240_000);
+    try {
+      const context = currentAiContext();
+      const fingerprint = aiFingerprint();
+      const commandWithSketch = sketchSummary
+        ? `${submittedText}\n\n[2D Sketch context]\n${sketchSummary}`
+        : submittedText;
+      const body = JSON.stringify({ command: commandWithSketch, model, mode, discipline: mepModeActive ? "mep" : "arch", context, ...(mode === "build" && submittedResidential && !submittedAttachments.length ? { residential:submittedResidential } : {}), ...(submittedAttachments.length && drawingReference ? { drawingReference } : {}), attachments: submittedAttachments, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
+      if (new TextEncoder().encode(body).length > MAX_REQUEST_BYTES) throw new Error("This request is too large. Remove a file or use a smaller project.");
+      const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: controller.signal });
+      const remainingHeader = response.headers.get("X-AI-Remaining");
+      const resetHeader = response.headers.get("X-AI-Reset");
+      const totalHeader = response.headers.get("X-AI-Total");
       const remaining = Number(remainingHeader);
       const reset = Number(resetHeader);
       const total = Number(totalHeader);
@@ -315,8 +331,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     finally { busyRef.current = false; setBusy(false); }
   }
   return (
-    <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
-      {busy && <div className="fixed inset-x-0 top-3 z-[9999] pointer-events-none flex justify-center" role="status"><span className="rounded-xl bg-black/80 text-white px-4 py-2 text-sm">AI is working in 3D · Editing is locked</span></div>}
+      <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
       <div
         ref={historyRef}
         className="ai-chat-history flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
