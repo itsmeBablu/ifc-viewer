@@ -5,10 +5,14 @@ export type SketchSegment = { start: SketchPoint; end: SketchPoint };
 export type FloorSketch = { points: SketchPoint[]; lines: SketchSegment[]; furnitureLines?: SketchSegment[]; mepLines?: SketchSegment[]; labels?: { point:SketchPoint; name:string; use:RoomUse }[]; locks?: { index:number; interior:boolean; lengthMm:number }[]; wallTypes?: { index:number; interior:boolean; type:"exterior"|"partition"|"fire"|"curtain" }[]; openings?: { point:SketchPoint; kind:"door"|"doubleDoor"|"window"; widthMm:number }[]; gardens?: SketchPoint[][] };
 export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
 export const RESIDENTIAL_PRESETS = [
+  { label: "1-bedroom starter apartment", variant: "apartment", bedrooms: 1 },
   { label: "2-bedroom apartment", variant: "apartment", bedrooms: 2 },
   { label: "3-bedroom apartment", variant: "apartment", bedrooms: 3 },
+  { label: "4-bedroom family apartment", variant: "apartment", bedrooms: 4 },
   { label: "Villa", variant: "villa", bedrooms: 3 },
+  { label: "Courtyard villa", variant: "villa", bedrooms: 4 },
   { label: "5-bedroom duplex", variant: "duplex", bedrooms: 5 },
+  { label: "6-bedroom duplex", variant: "duplex", bedrooms: 6 },
 ] as const;
 
 export function conceptStair(heightMm: number) {

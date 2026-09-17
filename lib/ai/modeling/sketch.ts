@@ -33,7 +33,7 @@ export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
 }
 
 export function validateSketches(sketches:FloorSketch[]){
-  if(!sketches.length||sketches.length>4)throw new Error("Choose one to four floors.");
+  if(!sketches.length||sketches.length>8)throw new Error("Choose one to eight floors.");
   for(const [floor,rawS] of sketches.entries()){
     const s = ensureSketchBoundary(rawS);
     if (s.points.length >= 3) validateBoundary(s.points);

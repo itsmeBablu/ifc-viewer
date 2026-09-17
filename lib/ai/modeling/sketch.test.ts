@@ -6,7 +6,9 @@ import { polygonArea } from "./footprint";
 import { validatePlan } from "../validate";
 import { arrangeRoom,furnitureBounds } from "./roomFurniture";
 import type { FloorSketch } from "./allocation";
+import { RESIDENTIAL_PRESETS } from "./allocation";
 const points=[{xMm:0,yMm:0},{xMm:14000,yMm:0},{xMm:14000,yMm:14000},{xMm:0,yMm:14000}];
+it("offers compact apartment and villa/duplex starting styles",()=>{expect(RESIDENTIAL_PRESETS.length).toBeGreaterThanOrEqual(8);expect(RESIDENTIAL_PRESETS.some(p=>p.label.includes("Courtyard"))).toBe(true);});
 const manual:FloorSketch={points,lines:[{start:{xMm:0,yMm:5000},end:{xMm:14000,yMm:5000}},{start:{xMm:7000,yMm:0},end:{xMm:7000,yMm:5000}}]};
 it("length edits keep rectangular corners aligned and move attached interior endpoints",()=>{
   const edited=resizeSketchLine(manual,0,false,16000);
