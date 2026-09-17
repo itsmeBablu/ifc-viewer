@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { actionSchema, planSchema, wallFields, equipmentFields, windowFields, type AiAction } from "./schema";
 import { apartmentSchema, apartmentActions } from "./modeling/apartment";
+import { houseSchema, houseActions } from "./modeling/house";
 
 const id = z.string().min(1).max(160);
 const coordinate = z.number().min(-1_000_000).max(1_000_000);
@@ -10,6 +11,7 @@ const wallSize = { thicknessMm: wallFields.thicknessMm, heightMm: wallFields.hei
 
 export const recipeSchema = z.discriminatedUnion("kind", [
   apartmentSchema,
+  houseSchema,
   z.object({
     kind: z.literal("rectangular_shell"), id, levelId: wallFields.levelId,
     xMm: coordinate, yMm: coordinate,
@@ -66,6 +68,7 @@ export function expandModelPlan(value: unknown) {
   for (const item of plan.actions) {
     switch (item.kind) {
       case "apartment_layout": apartmentActions(item).forEach(append); break;
+      case "house_layout": houseActions(item).forEach(append); break;
       case "rectangular_shell": {
         const { xMm: x, yMm: y, widthMm: w, depthMm: d } = item;
         const points = [{ xMm: x, yMm: y }, { xMm: x + w, yMm: y }, { xMm: x + w, yMm: y + d }, { xMm: x, yMm: y + d }];

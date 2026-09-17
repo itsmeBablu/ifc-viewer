@@ -10,6 +10,17 @@ const input: CommandRequest = { command: "Create an 8 m by 6 m shell", attachmen
     elements: [{ id: "ground", kind: "level", properties: { name: "Ground", elevationMm: 0, heightMm: 3000 } }] } };
 
 describe("runtime creation playbooks", () => {
+  it.each(["a villa", "a duplex house with five bedrooms"])("keeps %s tools compact", command => {
+    const playbook = creationPlaybook({ ...input, command });
+    expect(playbook.kinds).toEqual(["level", "house_layout"]);
+    expect(playbook.catalog).toEqual([]);
+  });
+  it("retains explicit geometry tools for custom residential constraints", () => {
+    const playbook = creationPlaybook({ ...input, command: "Create a two bedroom apartment with basic sizes and no windows" });
+    expect(playbook.kinds).toContain("wall");
+    expect(playbook.kinds).toContain("floor");
+    expect(playbook.kinds.length).toBeGreaterThan(2);
+  });
   it("offers only the compact layout recipe for standard apartment requests", () => {
     const playbook = creationPlaybook({ ...input, command: "Create a two bedroom apartment with default sizes" });
     expect(playbook.kinds).toEqual(["level", "apartment_layout"]);

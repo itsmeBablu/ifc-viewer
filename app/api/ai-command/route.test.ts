@@ -9,10 +9,18 @@ import { limitAiUser } from "@/lib/ai/rateLimit";
 import { POST } from "./route";
 import { GeminiError } from "@/lib/ai/providerError";
 
-const body = { command: "Build a house", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } } };
+const body = { command: "Build a house on a 12 m by 15 m footprint", context: { projectId: "p", activeLevelId: null, elements: [], selection: [], defaults: { wallHeightMm: 3000, wallThicknessMm: 200 } } };
 const request = (data: unknown = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
 beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("AUTH_URL", "http://localhost:3000"); vi.mocked(limitAiUser).mockResolvedValue({ success: true, remaining: 9, reset: Date.now() + 60_000, total: 1500 }); });
 describe("AI command authorization", () => {
+  it("returns a default duplex plan without calling Gemini after authorization and quota checks", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    const response = await POST(request({ ...body, command: "Create a duplex house with 5 bedrooms" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ kind: "plan", usage: { inputTokens: 0, outputTokens: 0 } });
+    expect(generateCommand).not.toHaveBeenCalled();
+    expect(limitAiUser).toHaveBeenCalledWith("google-123");
+  });
   it("rejects anonymous requests before calling Gemini", async () => {
     expect((await POST(request())).status).toBe(401);
     expect(generateCommand).not.toHaveBeenCalled();

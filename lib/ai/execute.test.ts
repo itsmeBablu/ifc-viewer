@@ -18,6 +18,20 @@ beforeEach(() => {
   clearWerkzeugHistory();
 });
 describe("AI batch persistence", () => {
+  it("applies a duplex with hosted openings and stair slabs and undoes both floors together", async () => {
+    const duplex = expandModelPlan({ summary: "Five-bedroom duplex", assumptions: [], actions: [{ kind: "house_layout", id: "home", levelId: "l", variant: "duplex", bedrooms: 5 }] });
+    await applyAiPlan(duplex, aiFingerprint(), true);
+    const state = useLayoutDrawingStore.getState();
+    expect(state.levels).toHaveLength(2);
+    const levelIds = new Set(state.levels.map(l => l.id));
+    expect(state.walls.every(w => levelIds.has(w.levelId))).toBe(true);
+    expect(state.doors.every(d => state.walls.some(w => w.id === d.wallId))).toBe(true);
+    expect(state.slabs.length).toBeGreaterThan(20);
+    await undoWerkzeug();
+    expect(useLayoutDrawingStore.getState().levels).toHaveLength(1);
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(0);
+    expect(useLayoutDrawingStore.getState().slabs).toHaveLength(0);
+  });
   it("reveals a committed live batch and undoes it as one operation", async () => {
     await applyAiPlan(plan, aiFingerprint(), true);
     expect(useLayoutDrawingStore.getState().walls).toHaveLength(1);

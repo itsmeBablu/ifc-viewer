@@ -1,6 +1,7 @@
 import type { CommandRequest } from "../protocol";
 import { expandModelPlan } from "../recipes";
 import { validatePlan } from "../validate";
+import { defaultResidentialBrief } from "./brief";
 
 /** Only standalone, explicitly default briefs bypass language-model interpretation. */
 export function defaultModelingPlan(input: CommandRequest) {
@@ -23,19 +24,20 @@ export function defaultModelingPlan(input: CommandRequest) {
     ] });
     return { kind: "plan" as const, plan: validatePlan(plan, input.context), model: input.model ?? "gemini-3.1-flash-lite", mode: "build" as const, usage: { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 } };
   }
-  const match = input.command.trim().toLowerCase().match(/^(?:please\s+)?(?:create|build|make|model)\s+(?:a|an)?\s*(?:(one|two|three|four|[1-4])[-\s]*(?:bedroom|bed room)\s+(?:apartment|appartement|flat))(?:\s+(?:with|using))?(?:\s+(?:default|standard|basic)(?:\s+sizes?)?)?[.!]?$/);
-  if (!match) return null;
-  const bedrooms = Number(match[1]) || ({ one: 1, two: 2, three: 3, four: 4 }[match[1]] ?? 2);
-  const id = `apartment-${crypto.randomUUID()}`;
+  const brief = defaultResidentialBrief(input.command);
+  if (!brief) return null;
+  const { bedrooms, variant } = brief;
+  const id = `${variant}-${crypto.randomUUID()}`;
   const levelId = input.context.activeLevelId ?? `${id}:level`;
   const existingWalls = input.context.elements.filter(e => e.kind === "wall" && e.levelId === levelId);
   const ends = existingWalls.flatMap(e => [e.properties.startXmm, e.properties.endXmm]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const xMm = ends.length ? Math.max(...ends) + 2000 : 0;
-  const plan = expandModelPlan({ summary: `${bedrooms}-bedroom concept apartment with 20 m² bedrooms, a corridor, bathroom and open living/kitchen area.`,
-    assumptions: ["Concept defaults: each bedroom 4 × 5 m clear; bathroom 2 × 4 m; corridor 1.2 m clear.", "Project wall height and exterior thickness; 150 mm partitions; 200 mm floor.", "Unfurnished layout; no roof or engineered MEP design.", ...(ends.length ? ["Placed 2 m to the right of existing wall extents."] : ["Origin at 0,0 on the active or new ground level."])],
+  const baseElevationMm = Number(input.context.elements.find(e => e.id === levelId && e.kind === "level")?.properties.elevationMm ?? 0);
+  const plan = expandModelPlan({ summary: `${bedrooms}-bedroom concept ${variant} with 20 m² bedrooms, circulation, bathroom and open living/kitchen area.`,
+    assumptions: ["Concept defaults: each bedroom 4 × 5 m clear; corridor 1.2 m clear.", "Project wall height and exterior thickness; 150 mm partitions; 200 mm floor.", variant === "apartment" ? "One storey, 8 m² bathroom; unfurnished, no roof or engineered MEP." : variant === "villa" ? "Single-storey villa with a spacious living/kitchen zone, bathroom and flat roof; unfurnished, no engineered MEP." : "Duplex means one two-storey dwelling; bedrooms split across floors, bathroom on each, flat roof. Unused sleeping-zone bays are studies.", ...(variant === "duplex" ? [`${Math.floor(bedrooms / 2)} bedrooms downstairs and ${Math.ceil(bedrooms / 2)} upstairs.`, "Concept stair uses slab solids with an upper-floor opening; railings and stair detailing remain."] : []), ...(ends.length ? ["Placed 2 m to the right of existing wall extents."] : ["Origin at 0,0 on the active or new ground level."])],
     actions: [...(input.context.activeLevelId ? [] : [{ kind: "level", operation: "create", id: levelId, name: "Ground", elevationMm: 0, heightMm: input.context.defaults.wallHeightMm }]),
-      { kind: "apartment_layout", id, levelId, bedrooms, xMm, heightMm: input.context.defaults.wallHeightMm, thicknessMm: input.context.defaults.wallThicknessMm }] });
+      { kind: variant === "apartment" ? "apartment_layout" : "house_layout", ...(variant === "apartment" ? {} : { variant, baseElevationMm }), id, levelId, bedrooms, xMm, heightMm: input.context.defaults.wallHeightMm, thicknessMm: input.context.defaults.wallThicknessMm }] });
   return { kind: "plan" as const, plan: validatePlan(plan, input.context), model: input.model ?? "gemini-3.1-flash-lite", mode: "build" as const, usage: { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 } };
 }
 
-export const MODELING_DEFAULT_GUIDE = "For routine creation, assume a single active/ground level and concept dimensions; do not ask for routine sizes. Bedrooms 20 m² (4×5 m), living 24 m², kitchen 10 m², bathroom 8 m², corridor 1200 mm. Use apartment_layout for 1–4 bedroom apartments without a bespoke footprint: supply id, levelId, bedrooms and optional bedroomAreaM2/origin/project wall sizes; code creates partitions, circulation, doors, windows and floor. For bespoke footprints use existing recipes and actions. Columns 300×300 mm at project wall height; beams 200×400 mm at ceiling; cable trays 200×50 mm at 2500 mm; water pipes 22 mm, waste 108 mm at 1% slope, heating 28 mm; ducts 300×200 mm at 2600 mm. Use catalogue dimensions for furniture/equipment. Choose simple concept routes only for new standalone systems; existing connections need evidence. Honor explicit dimensions, disclose assumptions, and ask only about ambiguous edits/connections or constraints that prevent a coherent layout. No code-compliance or performance claims.";
+export const MODELING_DEFAULT_GUIDE = "Create routine residential briefs automatically without asking for routine dimensions. Understand number words and apartment spelling variants. Use apartment_layout for 1–6 bedroom apartments (default two); house_layout variant villa for villas, houses and bungalows (default three bedrooms, one storey), variant duplex for a single two-storey dwelling (default five bedrooms). Set bedrooms from the request; for house_layout supply baseElevationMm from the ground level. Code computes rooms, circulation, doors, windows, slabs and house flat roof; duplex also creates the upper level, concept stair solids and floor opening. Never repeat generated geometry. Bedrooms default 20 m², corridor 1200 mm, project wall sizes. Extra house sleeping-zone bays are studies. Disclose these assumptions; do not ask whether defaults are acceptable. For explicit footprints/storeys, twin-unit duplexes or bespoke layouts, use suitable explicit actions/recipes honoring those constraints. Columns 300×300 mm at project wall height; beams 200×400 mm at ceiling; cable trays 200×50 mm at 2500 mm; water pipes 22 mm, waste 108 mm at 1% slope, heating 28 mm; ducts 300×200 mm at 2600 mm. Use catalogue dimensions for equipment. Choose simple concept routes for new standalone systems; existing connections need evidence. Ask only about ambiguous edits/connections or conflicting constraints. No compliance or performance claims. Stair solids are concept geometry without native stair semantics or railings.";
