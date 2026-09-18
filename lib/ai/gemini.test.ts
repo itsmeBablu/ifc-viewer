@@ -11,11 +11,12 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs();
 
 it("asks Gemini for a residential arrangement while preserving the user's shape and dimensions", async () => {
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "propose_residential_design", args: { layoutSeed: 91234, layoutStyle: "courtyard", reasoning: "Place bedrooms away from shared living; courtyard wings remain open shared space." } } }] } }] }));
-  const result = await generateCommand({ ...input, intent: "layout", mode: "build", residential: { variant: "villa", bedrooms: 3, footprint: "u", bedroomAreaM2: 18 } });
+  const result = await generateCommand({ ...input, history: [{ role: "user", text: "Keep the kids rooms together." }, { role: "assistant", text: "I will group them near the common bathroom." }], intent: "layout", mode: "build", residential: { variant: "villa", bedrooms: 3, footprint: "u", bedroomAreaM2: 18 } });
   expect(result).toMatchObject({ kind: "layout", parameters: { footprint: "u", bedrooms: 3, bedroomAreaM2: 18, layoutSeed: 91234 } });
   const request = JSON.parse(fetchMock.mock.calls[0][1].body);
   expect(request.tools[0].functionDeclarations[0].name).toBe("propose_residential_design");
   expect(request.toolConfig.functionCallingConfig.mode).toBe("ANY");
+  expect(request.contents.slice(0, 2)).toEqual([{ role: "user", parts: [{ text: "Keep the kids rooms together." }] }, { role: "model", parts: [{ text: "I will group them near the common bathroom." }] }]);
 });
 
 it("accepts a line-only Gemini layout inside the current outline and sends a compact planning prompt", async () => {

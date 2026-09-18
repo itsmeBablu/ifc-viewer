@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { 
-  FiMaximize2, FiMousePointer, FiSquare, FiCircle, FiType, FiLock, FiUnlock, 
-  FiLayers, FiGrid, FiTrash2, FiCornerUpLeft, FiCornerUpRight, FiMove, FiPlus, 
-  FiZoomIn, FiZoomOut, FiCheck, FiEdit2, FiEdit3, FiRotateCw, FiX
+import {
+  FiMaximize2, FiMousePointer, FiSquare, FiCircle, FiType, FiLock, FiUnlock,
+  FiGrid, FiTrash2, FiCornerUpLeft, FiCornerUpRight, FiMove, FiPlus,
+  FiZoomIn, FiZoomOut, FiCheck, FiEdit2, FiEdit3, FiRotateCw
 } from "react-icons/fi";
 import type { FloorSketch, ResidentialParameters, RoomUse, SketchPoint } from "@/lib/ai/modeling/allocation";
 import { FOOTPRINTS, insidePolygon, inscribedRectangle, polygonArea } from "@/lib/ai/modeling/footprint";
@@ -14,14 +14,13 @@ import { sketchRooms, normalizeSketchJunctions, clipSketchLines, ensureSketchBou
 import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
-import { componentPreset } from "@/lib/componentCatalog";
 import { modelDetails, type AiModelId } from "@/lib/ai/models";
 
 type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "room" | "garden" | "pan";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
 const colors: Record<RoomUse, string> = {
-  bedroom: "#60a5fa", living: "#facc15", kitchen: "#fb923c", dining: "#fbbf24", 
+  bedroom: "#60a5fa", living: "#facc15", kitchen: "#fb923c", dining: "#fbbf24",
   study: "#818cf8", bathroom: "#c084fc", corridor: "#94a3b8", garage: "#64748b"
 };
 const tools: { id: Tool; name: string; icon: React.ReactNode }[] = [
@@ -48,25 +47,18 @@ const help: Record<Tool, string> = {
 };
 
 export default function AiSketchWorkspace({
-  parameters, onChange, onClose, disabled, building, model, preferences, onPreferences, onRefresh
+  parameters, onChange, onClose, disabled, building, model, preferences, onPreferences, onRefresh, chat
 }: {
-  parameters: ResidentialParameters; 
-  onChange: (p: ResidentialParameters) => void; 
-  onClose: () => void; 
+  parameters: ResidentialParameters;
+  onChange: (p: ResidentialParameters) => void;
+  onClose: () => void;
   disabled: boolean;
-  model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
+  chat?: Array<{role: "user" | "assistant"; text: string}>; model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
   building?: ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding> | null;
 }) {
   const levels = useLayoutDrawingStore(s => s.levels),
         walls = useLayoutDrawingStore(s => s.walls),
-        equipment = useLayoutDrawingStore(s => s.mepEquipment),
-        slabs = useLayoutDrawingStore(s => s.slabs),
-        columns = useLayoutDrawingStore(s => s.columns),
-        ducts = useLayoutDrawingStore(s => s.ducts),
-        pipes = useLayoutDrawingStore(s => s.pipes),
-        doors = useLayoutDrawingStore(s => s.doors),
-        windows = useLayoutDrawingStore(s => s.windows),
-        roomsInProject = useLayoutDrawingStore(s => s.layoutRooms);
+        projectId = useLayoutDrawingStore(s => s.projectId);
   const activeLevel = useToolMarkupStore(s => s.markupFloorId);
 
   const source = parameters.footprint === "drawn" ? parameters.footprintPoints ?? [] : FOOTPRINTS[parameters.footprint ?? "rectangle"];
@@ -98,7 +90,7 @@ export default function AiSketchWorkspace({
         [wallType, setWallType] = useState<"exterior"|"partition"|"fire"|"curtain">("partition"),
         [error, setError] = useState(""),
         [pickLayer, setPickLayer] = useState<Pick["source"]>("current"),
-        [projectVisible, setProjectVisible] = useState(walls.length > 0),
+        [projectVisible, setProjectVisible] = useState(false),
         [projectLevel, setProjectLevel] = useState(activeLevel ?? levels[0]?.id ?? ""),
         [zoom, setZoom] = useState(1),
         [pan, setPan] = useState({ x: 0, y: 0 }),
@@ -136,7 +128,7 @@ export default function AiSketchWorkspace({
   const currentRooms = sketchRooms(current);
   const projectWalls = walls.filter(w => w.levelId === projectLevel);
   const projectPoints = projectVisible ? projectWalls.flatMap(w => [{ xMm: w.startXmm, yMm: w.startYmm }, { xMm: w.endXmm, yMm: w.endYmm }]) : [];
-  const allPoints = [...sketches.flatMap(s => [...s.points, ...s.lines.flatMap(l => [l.start, l.end]), ...(s.gardens ?? []).flat()]), ...projectPoints];
+  const allPoints = [{xMm:(parameters.plotWidthM ?? 0)*1000,yMm:(parameters.plotLengthM ?? 0)*1000}, ...sketches.flatMap(s => [...s.points, ...s.lines.flatMap(l => [l.start, l.end]), ...(s.gardens ?? []).flat()]), ...projectPoints];
   const minX = Math.min(0, ...allPoints.map(p => p.xMm)) - 1000,
         minY = Math.min(0, ...allPoints.map(p => p.yMm)) - 1000;
   const extent = Math.max(16000, Math.max(0, ...allPoints.map(p => p.xMm)) - minX, Math.max(0, ...allPoints.map(p => p.yMm)) - minY) + 1500,
@@ -212,10 +204,10 @@ export default function AiSketchWorkspace({
     }
     const s = pick.source === "below" ? previous : current;
     if (!s) return null;
-    return pick.interior 
-      ? s.lines[pick.index] 
-      : s.points[pick.index] 
-        ? { start: s.points[pick.index], end: s.points[(pick.index + 1) % s.points.length] } 
+    return pick.interior
+      ? s.lines[pick.index]
+      : s.points[pick.index]
+        ? { start: s.points[pick.index], end: s.points[(pick.index + 1) % s.points.length] }
         : null;
   };
 
@@ -249,13 +241,15 @@ export default function AiSketchWorkspace({
       xMm: Math.max(0, Math.min(80000, Math.round(raw.xMm / 250) * 250)),
       yMm: Math.max(0, Math.min(80000, Math.round(raw.yMm / 250) * 250))
     };
+    const axis = withOrtho && orthogonal && anchors.length && (tool === "wall" || tool === "arc") ? anchors[anchors.length - 1] : null;
+    if (axis) pt = Math.abs(pt.xMm - axis.xMm) > Math.abs(pt.yMm - axis.yMm) ? { ...pt, yMm: axis.yMm } : { ...pt, xMm: axis.xMm };
     const candidates = [
       ...current.points,
       ...current.lines.flatMap(l => [l.start, l.end]),
       ...(below && previous ? [...previous.points, ...previous.lines.flatMap(l => [l.start, l.end])] : []),
       ...projectPoints
     ];
-    const snap = candidates.reduce<SketchPoint | null>((best, p) =>
+    const snap = candidates.filter(p => !axis || (pt.xMm === axis.xMm ? p.xMm === axis.xMm : p.yMm === axis.yMm)).reduce<SketchPoint | null>((best, p) =>
       Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) < span * 0.02 && (!best || Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) < Math.hypot(best.xMm - raw.xMm, best.yMm - raw.yMm))
         ? p : best,
       null
@@ -264,7 +258,7 @@ export default function AiSketchWorkspace({
       return { point: snap, snap };
     }
     const wallSnap = snapSketchEndpoint(current, raw, { xMm: -100000, yMm: -100000 }, Math.min(180, span * .012));
-    if (Math.hypot(wallSnap.xMm - raw.xMm, wallSnap.yMm - raw.yMm) > .01) return { point: wallSnap, snap: wallSnap };
+    if ((!axis || (pt.xMm === axis.xMm ? wallSnap.xMm === axis.xMm : wallSnap.yMm === axis.yMm)) && Math.hypot(wallSnap.xMm - raw.xMm, wallSnap.yMm - raw.yMm) > .01) return { point: wallSnap, snap: wallSnap };
     if (withOrtho && orthogonal && anchors.length && (tool === "wall" || tool === "arc")) {
       const a = anchors[anchors.length - 1];
       pt = Math.abs(pt.xMm - a.xMm) > Math.abs(pt.yMm - a.yMm) ? { ...pt, yMm: a.yMm } : { ...pt, xMm: a.xMm };
@@ -439,7 +433,8 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerDownCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (tool === "pan") {
+    if (tool === "pan" || event.button === 2 || event.button === 1) {
+      event.preventDefault(); suppressClickRef.current = true;
       drag.current = { x: event.clientX, y: event.clientY, pan };
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -752,10 +747,8 @@ export default function AiSketchWorkspace({
       {src === "current" && s.labels?.map((label, i) => {
         const room = currentRooms.find(r => insidePolygon(label.point, r));
         return (
-          <g key={`room${i}`} pointerEvents="none">
-            {room && <polygon points={room.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill={`${colors[label.use]}25`} />}
-            <text x={label.point.xMm} y={label.point.yMm} fontSize={span * .02} textAnchor="middle" fill="currentColor" fontWeight="600">{label.name}</text>
-            {room && <text x={label.point.xMm} y={label.point.yMm + span * .025} fontSize={span * .014} fill="currentColor" textAnchor="middle">{(polygonArea(room) / 1e6).toFixed(1)} m² · {label.use}</text>}
+          <g key={`room${i}`} onDoubleClick={e => { e.stopPropagation(); setRoomPoint(label.point); setRoomName(label.name); setRoomUse(label.use); setTool("room"); }}>
+            {room && <polygon points={room.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill="transparent" stroke="none"><title>{label.name} · {(polygonArea(room) / 1e6).toFixed(1)} m² · Double-click to edit room type</title></polygon>}
           </g>
         );
       })}
@@ -764,54 +757,11 @@ export default function AiSketchWorkspace({
         const duplicate = s.points.some((a, j) => { const b = s.points[(j + 1) % s.points.length]; return (Math.hypot(a.xMm-l.start.xMm,a.yMm-l.start.yMm)<20 && Math.hypot(b.xMm-l.end.xMm,b.yMm-l.end.yMm)<20) || (Math.hypot(a.xMm-l.end.xMm,a.yMm-l.end.yMm)<20 && Math.hypot(b.xMm-l.start.xMm,b.yMm-l.start.yMm)<20); });
         return duplicate ? null : segment(l.start, l.end, i, true, src);
       })}
-      {src === "current" && (s.openings ?? []).map((o,i)=><g key={`opening${i}`} transform={`translate(${o.point.xMm} ${o.point.yMm})`} pointerEvents="none"><path d={o.kind === "window" ? "M-500 0H500" : "M-700 0Q0 700 700 0"} fill="none" stroke={o.kind === "window" ? "#38bdf8" : "#facc15"} strokeWidth={span*.003}/>{o.kind === "doubleDoor" && <path d="M-700 0Q-350 700 0 0M700 0Q350 700 0 0" fill="none" stroke="#facc15" strokeWidth={span*.002}/>}</g>)}
-      {src === "current" && s.points.map((p, i) => <circle key={`p${i}`} cx={p.xMm} cy={p.yMm} r={span * .005} fill="#38bdf8" pointerEvents="none" />)}
-      {/* Garden polygons with draggable vertices */}
-      {(s.gardens ?? []).map((g, gi) => {
-        const b = inscribedRectangle(g);
-        return (
-          <g key={`garden${gi}`}>
-            <polygon
-              points={g.map(p => `${p.xMm},${p.yMm}`).join(" ")}
-              fill="#22c55e28"
-              stroke="#16a34a"
-              strokeWidth={span * .002}
-              strokeDasharray={`${span * .008} ${span * .004}`}
-              pointerEvents="none"
-            />
-            <text x={b.xMm + b.widthMm / 2} y={b.yMm + b.depthMm / 2} textAnchor="middle" fill="#16a34a" fontSize={span * .018} fontWeight="600" pointerEvents="none">
-              🌱 {(polygonArea(g) / 1e6).toFixed(1)} m²
-            </text>
-            {/* Draggable garden vertices */}
-            {src === "current" && g.map((vert, vi) => (
-              <circle
-                key={`gv${gi}-${vi}`}
-                cx={vert.xMm}
-                cy={vert.yMm}
-                r={span * .008}
-                fill="#16a34a"
-                stroke="#fff"
-                strokeWidth={span * .002}
-                style={{ cursor: "grab" }}
-                onPointerDown={e => {
-                  e.stopPropagation();
-                  setGardenDrag({ gardenIdx: gi, vertIdx: vi });
-                  (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId);
-                }}
-              />
-            ))}
-          </g>
-        );
-      })}
     </g>
   );
 
   const projectDrawing = (
     <g className="ai-sketch-project">
-      {slabs.filter(s => s.levelId === projectLevel).map(s => <polygon key={s.id} points={(s.boundary ?? []).map(p => `${p.xMm},${p.yMm}`).join(" ")} fill="#94a3b808" stroke="#94a3b8" strokeWidth={span * .001} pointerEvents="none" />)}
-      {equipment.filter(e => e.levelId === projectLevel).map(e => <g key={e.id} transform={`translate(${e.xMm} ${e.yMm}) rotate(${e.rotationDeg ?? 0})`} pointerEvents="none"><rect x={-(e.widthMm ?? 600) / 2} y={-(e.depthMm ?? 600) / 2} width={e.widthMm ?? 600} height={e.depthMm ?? 600} fill={`${e.color ?? "#94a3b8"}22`} stroke={e.color ?? "#94a3b8"} strokeWidth={span * .001} /><text fontSize={span * .009} textAnchor="middle" fill="currentColor">{componentPreset(e.familyId ?? "")?.name ?? e.category}</text></g>)}
-      {columns.filter(c => c.levelId === projectLevel).map(c => <rect key={c.id} x={c.xMm - c.widthMm / 2} y={c.yMm - c.depthMm / 2} width={c.widthMm} height={c.depthMm} fill="#64748b" pointerEvents="none" />)}
-      {[...ducts, ...pipes].filter(e => e.levelId === projectLevel).map(e => <line key={e.id} x1={e.startXmm} y1={e.startYmm} x2={e.endXmm} y2={e.endYmm} stroke={"diameterMm" in e ? "#14b8a6" : "#fb923c"} strokeWidth={span * .002} pointerEvents="none" />)}
       {projectWalls.map((w, i) => {
         const a = { xMm: w.startXmm, yMm: w.startYmm }, b = { xMm: w.endXmm, yMm: w.endYmm };
         let path: string | undefined;
@@ -825,11 +775,6 @@ export default function AiSketchWorkspace({
         }
         return segment(a, b, i, false, "project", path);
       })}
-      {[...doors, ...windows].filter(o => projectWalls.some(w => w.id === o.wallId)).map(o => {
-        const w = projectWalls.find(w => w.id === o.wallId)!, len = Math.hypot(w.endXmm - w.startXmm, w.endYmm - w.startYmm), t = o.positionMm / len;
-        return <circle key={o.id} cx={w.startXmm + (w.endXmm - w.startXmm) * t} cy={w.startYmm + (w.endYmm - w.startYmm) * t} r={span * .005} fill={"sillHeightMm" in o ? "#38bdf8" : "#fb923c"} pointerEvents="none" />;
-      })}
-      {roomsInProject?.filter(r => r.levelId === projectLevel).map(r => <text key={r.id} x={r.tagPosMm.xMm} y={r.tagPosMm.yMm} fontSize={span * .016} textAnchor="middle" fill="#94a3b8" pointerEvents="none">{r.name}</text>)}
     </g>
   );
 
@@ -995,7 +940,7 @@ export default function AiSketchWorkspace({
           </div>
         </header>
 
-        {onRefresh && <div className="ai-sketch-ai-controls"><label><span>{model ? modelDetails(model).label : "Gemini"} · Layout preferences</span><textarea aria-label="Drawing AI preferences" rows={1} maxLength={1500} value={preferences ?? ""} disabled={disabled} onChange={e => onPreferences?.(e.target.value)} placeholder="Arrange rooms inside this outline…" /></label><button type="button" className="btn-v-yellow" disabled={disabled} onClick={onRefresh}>{disabled ? "Planning…" : "Refresh with AI"}</button><small>Only outline, room labels and wall lines are used to plan your layout.</small></div>}
+        {onRefresh && <div className="ai-sketch-ai-controls"><div className="ai-home-layout-chat" aria-label="Drawing Gemini conversation">{chat?.map((turn, i) => <p key={i} className={`ai-home-layout-message is-${turn.role}`}><strong>{turn.role === "user" ? "You" : "Gemini"}</strong>{turn.text}</p>)}</div><label><span>{model ? modelDetails(model).label : "Gemini"} · Layout preferences</span><textarea aria-label="Drawing AI preferences" rows={1} maxLength={1500} value={preferences ?? ""} disabled={disabled} onChange={e => onPreferences?.(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onRefresh(); } }} placeholder="Arrange rooms inside this outline…" /></label><button type="button" className="btn-v-yellow" disabled={disabled} onClick={onRefresh}>{disabled ? "Planning…" : "Refresh with AI"}</button><small>Only outline, room labels and wall lines are used to plan your layout.</small></div>}
 
         {/* Toolbar */}
         <div className="ai-sketch-toolbar">
@@ -1051,6 +996,7 @@ export default function AiSketchWorkspace({
               viewBox={`${viewX} ${viewY} ${span} ${span}`}
               onClick={click}
               onDoubleClick={onDoubleClick}
+              onContextMenu={e => e.preventDefault()}
               onPointerDown={onPointerDownCanvas}
               onPointerMove={onPointerMoveCanvas}
               onPointerUp={onPointerUpCanvas}
@@ -1069,6 +1015,7 @@ export default function AiSketchWorkspace({
               </defs>
               <rect x={viewX} y={viewY} width={span} height={span} fill={grid ? "url(#ai-sketch-grid)" : "transparent"} />
               {grid && <rect x={viewX} y={viewY} width={span} height={span} fill="url(#ai-sketch-grid-major)" />}
+              {parameters.plotWidthM && parameters.plotLengthM && <rect x={-200} y={-200} width={parameters.plotWidthM*1000} height={parameters.plotLengthM*1000} fill="none" stroke="#94a3b8" strokeWidth={span*.001} strokeDasharray={`${span*.007} ${span*.004}`} pointerEvents="none"/>}
               {projectVisible && projectDrawing}
               {below && previous && drawing(previous, "below")}
               {drawing(current, "current")}
@@ -1144,7 +1091,7 @@ export default function AiSketchWorkspace({
             {selected && (
               <section className="ai-sketch-card ai-sketch-card-selected">
                 <h3>{selected.source === "project" ? "Existing project wall" : selected.source === "below" ? "Reference line below" : "Selected line"}</h3>
-                
+
                 {/* Length */}
                 <div className="ai-sketch-field">
                   <label htmlFor="sk-length">Length (m)</label>
@@ -1182,7 +1129,7 @@ export default function AiSketchWorkspace({
                       const l = lineFor(selected)!;
                       replace({
                         ...current,
-                        locks: locked 
+                        locks: locked
                           ? (current.locks ?? []).filter(v => v.index !== selected.index || v.interior !== selected.interior)
                           : [...(current.locks ?? []), { index: selected.index, interior: selected.interior, lengthMm: Math.hypot(l.end.xMm - l.start.xMm, l.end.yMm - l.start.yMm) }]
                       });
@@ -1224,8 +1171,8 @@ export default function AiSketchWorkspace({
                 </div>
                 <div className="ai-sketch-field">
                   <label htmlFor="sk-room-use">Room use</label>
-                  <select id="sk-room-use" aria-label="Closed room use" value={roomUse} onChange={e => setRoomUse(e.target.value as RoomUse)}>
-                    {uses.map(u => <option key={u} value={u}>{u[0].toUpperCase() + u.slice(1)}</option>)}
+                  <select id="sk-room-use" aria-label="Closed room use" value={roomUse === "bedroom" && /master/i.test(roomName) ? "master" : roomUse === "bedroom" && /kids/i.test(roomName) ? "kids" : roomUse} onChange={e => { const value=e.target.value; setRoomUse(value==="master"||value==="kids"?"bedroom":value as RoomUse); setRoomName(value==="master"?"Master bedroom":value==="kids"?"Kids room":value[0].toUpperCase()+value.slice(1)); }}>
+                    <option value="master">Master bedroom</option><option value="kids">Kids room</option>{uses.map(u => <option key={u} value={u}>{u[0].toUpperCase() + u.slice(1)}</option>)}
                   </select>
                 </div>
                 <button className="btn-v-yellow" type="button" disabled={disabled || !roomName.trim()} onClick={() => {

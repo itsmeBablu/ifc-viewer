@@ -69,7 +69,7 @@ export async function generateCommand(input: CommandRequest) {
     const brief = input.residential!;
     const sketches = residentialSketches(brief, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm).map(s => ({ points: s.points, lines: s.lines, labels: s.labels, locks: s.locks }));
     request.systemInstruction = { parts: [{ text: "You are the V Studio residential layout planner. Regenerate only room zoning and interior wall lines, in millimetres. Follow the user's preferences while preserving the exact supplied outline points, floor count, bedroom and bathroom counts and locked lengths. Label every room. Keep rooms accessible with connected circulation and align wet walls. Doors, windows, furniture and MEP are generated locally; do not output them. Return one propose_residential_design tool call with sketches and concise reasoning. Never claim code compliance." }] };
-    request.contents = [{ role: "user", parts: [{ text: JSON.stringify({ command: input.command, residential: { ...brief, sketches }, defaults: input.context.defaults }) }] }];
+    request.contents = [...promptHistory(input.history).map(turn => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })), { role: "user", parts: [{ text: JSON.stringify({ command: input.command, residential: { ...brief, sketches }, defaults: input.context.defaults }) }] }];
   }
   const signal = AbortSignal.timeout(240000);
   let response: Response | undefined;

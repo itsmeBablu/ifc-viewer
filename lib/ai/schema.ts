@@ -13,7 +13,7 @@ export const windowFields = { wallId: id, positionMm: doorFields.positionMm, wid
 export const slabFields = { levelId: id, boundary: z.array(point).min(3).max(64), thicknessMm: size, elevationOffsetMm: coordinate, roofPreset: z.enum(["flat", "hip", "gable", "shed"]), pitchDeg: z.number().min(0).max(60) };
 export const columnFields = { levelId: id, xMm: coordinate, yMm: coordinate, profile: z.enum(["rect", "circle", "i"]), widthMm: size, depthMm: size, heightMm: size };
 export const beamFields = { levelId: id, startXmm: coordinate, startYmm: coordinate, endXmm: coordinate, endYmm: coordinate, profile: z.enum(["rect", "i"]), widthMm: size, depthMm: size, elevationOffsetMm: coordinate };
-export const equipmentFields = { levelId: id, familyId: z.enum(COMPONENT_CATALOG.map(p => p.id) as [string, ...string[]]), xMm: coordinate, yMm: coordinate, rotationDeg: z.number().min(-360).max(360), elevationMm: coordinate, widthMm: size.optional(), depthMm: size.optional(), heightMm: size.optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() };
+export const equipmentFields = { levelId: id, connectedHostId: id.optional(), familyId: z.enum(COMPONENT_CATALOG.map(p => p.id) as [string, ...string[]]), xMm: coordinate, yMm: coordinate, rotationDeg: z.number().min(-360).max(360), elevationMm: coordinate, widthMm: size.optional(), depthMm: size.optional(), heightMm: size.optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() };
 export const ductFields = {
   levelId: id,
   startXmm: coordinate, startYmm: coordinate,

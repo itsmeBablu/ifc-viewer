@@ -18,12 +18,12 @@ export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map(
 export function clipSketchLines(s: FloorSketch): FloorSketch {
   if (s.points.length < 3) return s;
   const boundary = sketchSegments({ ...s, lines: [] });
-  const lines = s.lines.flatMap(line => {
+  const clipped = s.lines.flatMap(line => {
     const cuts = [...new Set([0, 1, ...boundary.flatMap(edge => {
       const hit = intersection(line, edge);
       return hit ? [Math.max(0, Math.min(1, hit.t))] : [];
     })])].sort((a, b) => a - b);
-    const at = (t: number) => ({ xMm: line.start.xMm + (line.end.xMm - line.start.xMm) * t, yMm: line.start.yMm + (line.end.yMm - line.start.yMm) * t });
+    const at = (t: number) => ({ xMm: Math.round((line.start.xMm + (line.end.xMm - line.start.xMm) * t) * 1e6) / 1e6, yMm: Math.round((line.start.yMm + (line.end.yMm - line.start.yMm) * t) * 1e6) / 1e6 });
     return cuts.slice(1).flatMap((end, i) => {
       const start = cuts[i], mid = at((start + end) / 2);
       if (!insidePolygon(mid, s.points) || boundary.some(edge => pointSegmentDistance(mid, edge.start, edge.end) < .01)) return [];
@@ -31,6 +31,19 @@ export function clipSketchLines(s: FloorSketch): FloorSketch {
       return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm) >= 300 ? [{ start: a, end: b }] : [];
     });
   });
+  // Subtract earlier collinear spans so drafting the same wall twice never adds meshes.
+  const lines: Segment[] = [];
+  for (const line of clipped) {
+    const dx=line.end.xMm-line.start.xMm,dy=line.end.yMm-line.start.yMm,length=Math.hypot(dx,dy);
+    let ranges=[[0,length]];
+    for (const other of lines) {
+      if(Math.abs(dx*(other.start.yMm-line.start.yMm)-dy*(other.start.xMm-line.start.xMm))>length*.01 || Math.abs(dx*(other.end.yMm-line.start.yMm)-dy*(other.end.xMm-line.start.xMm))>length*.01) continue;
+      const project=(p:SketchPoint)=>((p.xMm-line.start.xMm)*dx+(p.yMm-line.start.yMm)*dy)/length;
+      const from=Math.min(project(other.start),project(other.end)),to=Math.max(project(other.start),project(other.end));
+      ranges=ranges.flatMap(([a,b])=>to<=a||from>=b?[[a,b]]:[[a,Math.min(b,from)],[Math.max(a,to),b]].filter(([x,y])=>y-x>=300));
+    }
+    for(const [a,b] of ranges) lines.push(a===0&&b===length?line:{start:{xMm:line.start.xMm+dx*a/length,yMm:line.start.yMm+dy*a/length},end:{xMm:line.start.xMm+dx*b/length,yMm:line.start.yMm+dy*b/length}});
+  }
   // Remap metadata only for segments retained without splitting or trimming.
   const mapIndex = (index: number) => lines.findIndex(l => l.start.xMm === s.lines[index]?.start.xMm && l.start.yMm === s.lines[index]?.start.yMm && l.end.xMm === s.lines[index]?.end.xMm && l.end.yMm === s.lines[index]?.end.yMm);
   const remap = <T extends { interior: boolean; index: number }>(items: T[] | undefined) => items?.flatMap(item => {
@@ -212,7 +225,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
     const rectangular = s.points.length === 4 && s.points.every((p,i) => Math.abs(p.xMm-s.points[(i+1)%4].xMm)<1 || Math.abs(p.yMm-s.points[(i+1)%4].yMm)<1);
     const roofPreset = !rectangular || !input.roofStyle || input.roofStyle === "modern-flat" ? "flat" : input.roofStyle === "german-gable" ? "gable" : input.roofStyle === "german-hip" ? "hip" : "shed";
     if(floor===floors-1&&(input.variant!=="apartment"||input.roofStyle))actions.push({kind:"roof",operation:"create",id:`${id}:roof`,levelId,boundary,thicknessMm:200,elevationOffsetMm:height,roofPreset,pitchDeg:roofPreset === "flat" ? 0 : roofPreset === "gable" ? 35 : 25});
-    if(floor===floors-1&&input.variant!=="apartment")actions.push({kind:"equipment",operation:"create",id:`${prefix}:roof-window`,levelId,familyId:"extras-roof-window",xMm:x+(Math.min(...s.points.map(p=>p.xMm))+Math.max(...s.points.map(p=>p.xMm)))/2,yMm:(Math.min(...s.points.map(p=>p.yMm))+Math.max(...s.points.map(p=>p.yMm)))/2,rotationDeg:0,elevationMm:height+150,widthMm:1000,depthMm:1200,heightMm:120});
+    if(input.roofWindow && floor===floors-1){const zone=inscribedRectangle(s.points);const roof=actions.find(a=>a.kind==="roof"&&a.id===`${id}:roof`);actions.push({kind:"equipment",operation:"create",id:`${prefix}:roof-window`,levelId,connectedHostId:roof?`${id}:roof`:`${prefix}:slab:0`,familyId:"extras-roof-window",xMm:x+zone.xMm+zone.widthMm/2,yMm:zone.yMm+zone.depthMm/2,rotationDeg:0,elevationMm:roof?height+150:150,widthMm:1000,depthMm:1200,heightMm:120});}
     if(floor<floors-1&&stairRect){
       const push=(sx:number,sy:number,w:number,d:number,top:number,j:string)=>actions.push({kind:"floor",operation:"create",id:`${prefix}:stair:${j}`,levelId,thicknessMm:top,elevationOffsetMm:top,roofPreset:"flat",pitchDeg:0,boundary:[{xMm:x+sx,yMm:sy},{xMm:x+sx+w,yMm:sy},{xMm:x+sx+w,yMm:sy+d},{xMm:x+sx,yMm:sy+d}]});
       for(let i=0;i<stairs.flightSteps-1;i++){push(stairRect.x,stairRect.y+i*stairs.treadMm,1200,stairs.treadMm,(i+1)*stairs.riserMm,`a${i}`);push(stairRect.x+1350,stairRect.y+(stairs.flightSteps-2-i)*stairs.treadMm,1200,stairs.treadMm,(stairs.flightSteps+i+1)*stairs.riserMm,`b${i}`);}

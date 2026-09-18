@@ -3945,6 +3945,8 @@ export const useLayoutDrawingStore = create<LayoutDrawingState>((set, get) => ({
   },
 
   placeWindowOnWall: async (wallId, positionMm, opts) => {
+    const host = get().walls.find(w => w.id === wallId);
+    if (host?.wallType === "curtain" || host?.isCurtainWall) return null;
     pushWerkzeugHistory();
 
     const projectId = get().projectId;

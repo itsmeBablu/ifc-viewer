@@ -22,7 +22,7 @@ export const COMPONENT_CATALOG: ComponentPreset[] = [
   furniture("extras-shrub", "Garden shrub", "Extras", 1000, 1000, 900),
   furniture("extras-planter", "Plant in pot", "Extras", 650, 650, 1200),
   furniture("extras-lawn", "Garden lawn patch", "Extras", 3000, 3000, 50),
-  furniture("extras-roof-window", "Roof window / skylight", "Extras", 1000, 1200, 120),
+  furniture("extras-roof-window", "Roof window / skylight", "Windows", 1000, 1200, 120),
   furniture("extras-lift", "Passenger lift", "Circulation", 1800, 1800, 3000),
   furniture("furniture-line-marker", "Furniture sketch marker", "Furniture", 100, 100, 50),
   { ...mep("generic_component", "Air handling unit (AHU)", "HVAC", BIM_DEFAULTS.mep.ahu.widthMm, BIM_DEFAULTS.mep.ahu.depthMm, BIM_DEFAULTS.mep.ahu.heightMm), id: "mep-ahu" },

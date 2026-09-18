@@ -47,6 +47,11 @@ export function defaultResidentialBrief(command: string) {
 }
 const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
+  bedroomTypes: z.array(z.enum(["standard", "master", "kids"])).min(1).max(6).optional(),
+  bedroomEnsuites: z.array(z.boolean()).min(1).max(6).optional(),
+  guestBathroomShower: z.boolean().optional(),
+  gardenPosition: z.enum(["rear", "front", "parking"]).optional(),
+  roofWindow: z.boolean().optional(),
   bathroomCount: z.number().int().min(1).max(4).optional(),
   guestBathroom: z.boolean().optional(),
   bedroomAreasM2: z.array(z.number().min(7.5).max(100)).min(1).max(6).optional(),

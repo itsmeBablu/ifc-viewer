@@ -1,5 +1,5 @@
 export type ResidentialVariant = "apartment" | "villa" | "duplex";
-export type HomeDetails = { bathroomCount?: number; guestBathroom?: boolean; bedroomAreasM2?: number[]; curtainFacade?: boolean; layoutRevision?: number; doorStyle?: "wood" | "metal" | "glass" | "sliding"; doorHeightMm?: number; doubleEntranceDoor?: boolean; windowStyle?: "casement" | "fixed" | "sliding" | "single-hung" | "double-hung"; windowHeightMm?: number; bathFixture?: "shower" | "bathtub"; electrical?: boolean };
+export type HomeDetails = { bedroomTypes?: ("standard" | "master" | "kids")[]; bedroomEnsuites?: boolean[]; guestBathroomShower?: boolean; gardenPosition?: "rear" | "front" | "parking"; roofWindow?: boolean; bathroomCount?: number; guestBathroom?: boolean; bedroomAreasM2?: number[]; curtainFacade?: boolean; layoutRevision?: number; doorStyle?: "wood" | "metal" | "glass" | "sliding"; doorHeightMm?: number; doubleEntranceDoor?: boolean; windowStyle?: "casement" | "fixed" | "sliding" | "single-hung" | "double-hung"; windowHeightMm?: number; bathFixture?: "shower" | "bathtub"; electrical?: boolean };
 export type SketchPoint = { xMm: number; yMm: number };
 export type RoomUse = "bedroom" | "living" | "kitchen" | "dining" | "study" | "bathroom" | "corridor" | "garage";
 export type SketchSegment = { start: SketchPoint; end: SketchPoint };
@@ -96,7 +96,7 @@ export function allocateResidential(input: ResidentialParameters, wallHeightMm =
   const stair = conceptStair(wallHeightMm);
   const serviceMinimumMm = variant === "duplex" ? stair.runMm + stair.landingMm + 1800 : 2400;
   const stairFootprintM2 = variant === "duplex" ? stair.widthMm * (stair.runMm + stair.landingMm) / 1e6 : 0;
-  const bathroomTargetM2 = (input.bathroomAreaM2 ?? 8) * Math.max(1, Math.ceil((input.bathroomCount ?? floors) / floors)) + (input.guestBathroom ? 3 : 0);
+  const bathroomTargetM2 = (input.bathroomAreaM2 ?? 8) * Math.max(1, Math.ceil((input.bathroomCount ?? floors) / floors)) + (input.guestBathroom ? input.guestBathroomShower ? 5 : 3 : 0);
   const mainSharedMinimumM2 = (input.livingAreaM2 ?? (variant === "villa" ? 24 : 20)) + (input.kitchenAreaM2 ?? 8);
   const serviceBudget = (width: number, depth: number) => {
     let bathroomWidthMm = Math.max(1800, bathroomTargetM2 * 1e6 / depth);

@@ -50,3 +50,31 @@ it("clips courtyard crossings into separate wings and discards external draft li
   for (const l of s.lines) expect(insidePolygon({ xMm: (l.start.xMm + l.end.xMm) / 2, yMm: (l.start.yMm + l.end.yMm) / 2 }, points)).toBe(true);
   expect(() => validateSketches([s])).not.toThrow();
 });
+
+
+it("builds the displayed plan before expanding and preserves master and kids concepts", async () => {
+  const { homeBuildParameters } = await import("./preview");
+  const p = {variant:"villa" as const,bedrooms:2,bedroomAreasM2:[22,12],bedroomAreaM2:17,bedroomTypes:["master","kids"] as ("master"|"kids")[],bedroomEnsuites:[true,false],bathroomCount:1,guestBathroom:true,guestBathroomShower:true,garage:"none" as const,gardenAreaM2:0,curtainFacade:true,roofWindow:true,roofStyle:"modern-flat" as const};
+  const prepared = homeBuildParameters(p);
+  expect(prepared.sketches?.[0].labels?.filter(l=>l.use==="bedroom").map(l=>l.name)).toEqual(["Master bedroom","Kids room"]);
+  const actions = sketchActions(prepared,"home","ground",0,3000,200);
+  const curtainIds = new Set(actions.filter(a=>a.kind==="wall"&&a.wallType==="curtain").map(a=>a.id));
+  expect(actions.filter(a=>a.kind==="window").every(a=>a.kind==="window"&&!curtainIds.has(a.wallId))).toBe(true);
+  expect(actions.find(a=>a.kind==="equipment"&&a.familyId==="extras-roof-window")).toMatchObject({connectedHostId:"home:roof"});
+  expect(()=>validatePlan({summary:"Home",assumptions:[],actions},{projectId:"p",activeLevelId:"ground",defaults:{wallHeightMm:3000,wallThicknessMm:200},selection:[],elements:[{id:"ground",kind:"level",properties:{elevationMm:0,heightMm:3000}}]})).not.toThrow();
+});
+
+
+it("subtracts overlapping draft spans instead of creating duplicate walls",()=>{
+ const points=[{xMm:0,yMm:0},{xMm:10000,yMm:0},{xMm:10000,yMm:10000},{xMm:0,yMm:10000}];
+ const s=clipSketchLines({points,lines:[{start:{xMm:1000,yMm:5000},end:{xMm:6000,yMm:5000}},{start:{xMm:3000,yMm:5000},end:{xMm:9000,yMm:5000}},{start:{xMm:6000,yMm:5000},end:{xMm:1000,yMm:5000}}]});
+ expect(s.lines).toHaveLength(2);
+ expect(s.lines.reduce((n,l)=>n+Math.hypot(l.end.xMm-l.start.xMm,l.end.yMm-l.start.yMm),0)).toBe(8000);
+ expect(()=>validateSketches([s])).not.toThrow();
+});
+
+
+it("compiles each recommended 120 m² home without expanding",async()=>{
+ const {suggestHomes}=await import("./home"); const {homeBuildParameters}=await import("./preview"); const {defaultModelingPlan}=await import("./index"); const {residentialParametersSchema}=await import("./brief");
+ for(const thickness of [150,200]) for(const s of suggestHomes({areaM2:120},3000,thickness)) expect(()=>defaultModelingPlan({command:"Build home",model:"gemini-3.1-flash-lite",mode:"build",residential:residentialParametersSchema.parse(homeBuildParameters(s.parameters,3000,thickness)),context:{projectId:"p",activeLevelId:null,defaults:{wallHeightMm:3000,wallThicknessMm:thickness},selection:[],elements:[]},attachments:[],history:[]})).not.toThrow();
+});

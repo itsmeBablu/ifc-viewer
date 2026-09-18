@@ -1,3 +1,4 @@
+import { inscribedRectangle } from "./footprint";
 import type { AiAction } from "../schema";
 import type { ResidentialParameters } from "./allocation";
 
@@ -36,7 +37,15 @@ export function homeDetails(actions: AiAction[], p: ResidentialParameters): AiAc
         { kind: "equipment", operation: "create", id: `${a.id}:socket`, levelId: a.levelId, familyId: "mep-socket", xMm: nearest?.xMm ?? a.xMm, yMm: nearest?.yMm ?? a.yMm, rotationDeg: nearest?.rotationDeg ?? 0, elevationMm: 300 });
     }
   }
-  return result;
+  if (p.roofWindow && !result.some(a => a.kind === "equipment" && a.familyId === "extras-roof-window")) {
+    const roof = [...result].reverse().find(a => a.kind === "roof");
+    if (roof?.kind === "roof") {
+      const b = inscribedRectangle(roof.boundary);
+      result.push({kind:"equipment",operation:"create",id:`${roof.id}:window`,levelId:roof.levelId,connectedHostId:roof.id,familyId:"extras-roof-window",xMm:b.xMm+b.widthMm/2,yMm:b.yMm+b.depthMm/2,rotationDeg:0,elevationMm:roof.elevationOffsetMm+200,widthMm:1000,depthMm:1200,heightMm:120});
+    }
+  }
+  const curtainIds = new Set(result.flatMap(a => a.kind === "wall" && a.wallType === "curtain" ? [a.id] : []));
+  return result.filter(a => a.kind !== "window" || !curtainIds.has(a.wallId));
 }
 
 /** Alternate front/rear and left/right zoning without changing the requested envelope. */

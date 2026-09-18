@@ -1,7 +1,7 @@
 import { arrangeRoom } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import type { ResidentialParameters, allocateResidential } from "./allocation";
-import { bedroomBayWidths, bathroomZones } from "./rooms";
+import { bedroomBayWidths, bathroomZones, bedroomHasEnsuite, ensuiteZone } from "./rooms";
 
 type Allocation = ReturnType<typeof allocateResidential>;
 type Rect = { x:number;y:number;w:number;d:number };
@@ -14,6 +14,11 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
     const room={x:start,y:t/2,w:bayWidths[i],d:a.roomDepthMm};
     if(input.furnished!==false){
       const occupied:Rect[]=[{x:start+a.roomWidthMm/2-600,y:t/2+a.roomDepthMm-1000,w:1200,d:1000}];
+      if(i<actualBedrooms && bedroomHasEnsuite(input,i)) {
+        const bath=ensuiteZone(start,bayWidths[i],a.bedroomEndMm);
+        occupied.push(bath);
+        arrangeRoom("bathroom",bath,[{x:bath.x+bath.w/2-450,y:bath.y,w:900,d:700}],add,"shower");
+      }
       arrangeRoom(i<actualBedrooms?"bedroom":"study",room,occupied,add);
     }
     if(input.underfloorHeating){
@@ -29,7 +34,7 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
     const bathX=flipped?a.widthMm-t/2-a.bathroomWidthMm-75:t/2;
     for(const bath of bathroomZones(input,bathX,serviceY,a.bathroomWidthMm,a.bathroomDepthMm,upper)) {
       const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:Math.min(950,bath.d/3)}];
-      if(bath.guest){add("bath-toilet",bath.x+bath.w/2,bath.y+bath.d-350);add("bath-vanity",bath.x+400,bath.y+bath.d/2,90);}
+      if(bath.guest){add("bath-toilet",bath.x+bath.w-350,bath.y+bath.d-350);add("bath-vanity",bath.x+350,bath.y+bath.d/2,90);if(input.guestBathroomShower)add("bath-shower",bath.x+500,bath.y+bath.d-550);}
       else arrangeRoom("bathroom",bath,occupied,add,input.bathFixture);
     }
     const zone={x:flipped?t/2:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
@@ -80,7 +85,11 @@ export function outdoorActions(input:ResidentialParameters,id:string,levelId:str
     actions.push({kind:"equipment",operation:"create",id:`${id}:garage:car`,levelId,familyId:"extras-car-sedan",xMm:gx+w/2,yMm:gy+d/2,rotationDeg:0,elevationMm:0,color:"#2563eb"});
   }
   const area=input.gardenAreaM2??0;
-  if(area>0)actions.push(...gardenActions(id,levelId,x,y+depth+1000,width,area*1e6/width));
+  if(area>0) {
+    if(input.gardenPosition === "front") actions.push(...gardenActions(id,levelId,x,y-area*1e6/width-1000,width,area*1e6/width));
+    else if(input.gardenPosition === "parking") {const gardenWidth=(input.garageWidthM??3.5)*1000;actions.push(...gardenActions(id,levelId,x+width+800,y+(input.garageDepthM??6)*1000+1000,gardenWidth,area*1e6/gardenWidth));}
+    else actions.push(...gardenActions(id,levelId,x,y+depth+1000,width,area*1e6/width));
+  }
   return actions;
 }
 

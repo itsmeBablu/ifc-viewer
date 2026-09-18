@@ -1,3 +1,5 @@
+import { residentialSketches } from "./preview";
+import { sketchActions } from "./sketch";
 import { allocateBuilding } from "./footprint";
 import type { ResidentialParameters } from "./allocation";
 
@@ -29,6 +31,8 @@ export function suggestHomes(site: HomeSite, heightMm = 3000, thicknessMm = 200)
         const totalAreaM2 = building.allocation.totalAreaM2 + building.extraAreaM2;
         p.totalAreaM2 = totalAreaM2;
         if (!homeSiteFit(p, site, heightMm, thicknessMm).fits) continue;
+        // Offer plans that remain buildable after editing, including aligned stair access.
+        sketchActions({...p,sketches:residentialSketches(p,heightMm,thicknessMm)},"suggestion","ground",0,heightMm,thicknessMm);
         const floors = variant === "duplex" ? 2 : 1;
         suggestions.push({ id: `${variant}:${bedrooms}`, label: `${bedrooms}-bedroom ${variant === "villa" ? "single-storey home" : variant === "duplex" ? "two-storey home" : "compact home"}`, reason: `${floors === 2 ? "Bedrooms across two floors" : "All rooms on one floor"}; ${Math.round(footprintAreaM2)} m² building footprint, ${Math.floor(site.areaM2 - footprintAreaM2)} m² remaining outdoors.`, parameters: p, footprintAreaM2, totalAreaM2 });
       } catch { /* Do not offer a concept that fails dimensional checks. */ }
@@ -49,6 +53,7 @@ export function homeSiteFit(p: ResidentialParameters, site: HomeSite, heightMm =
   const parking = p.garage && p.garage !== "none" ? (p.garageWidthM ?? 3.5) * (p.garageDepthM ?? 6) : 0;
   const remainingAreaM2 = site.areaM2 - footprint - parking - (p.gardenAreaM2 ?? 0);
   const outdoorWidth = width + (parking ? 800 + (p.garageWidthM ?? 3.5) * 1000 : 0);
-  const outdoorDepth = Math.max(depth, parking ? (p.garageDepthM ?? 6) * 1000 : 0) + (p.gardenAreaM2 ? 1000 + p.gardenAreaM2 * 1e6 / width : 0);
+  const gardenDepth = p.gardenAreaM2 ? 1000 + p.gardenAreaM2 * 1e6 / (p.gardenPosition === "parking" ? (p.garageWidthM ?? 3.5) * 1000 : width) : 0;
+  const outdoorDepth = p.gardenPosition === "parking" ? Math.max(depth, (p.garageDepthM ?? 6) * 1000 + gardenDepth) : Math.max(depth, parking ? (p.garageDepthM ?? 6) * 1000 : 0) + gardenDepth;
   return { building, footprintAreaM2: footprint, remainingAreaM2, fits: remainingAreaM2 >= -.1 && (!site.widthM || outdoorWidth <= site.widthM * 1000 + 1) && (!site.lengthM || outdoorDepth <= site.lengthM * 1000 + 1) };
 }

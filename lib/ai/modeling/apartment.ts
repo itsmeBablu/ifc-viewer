@@ -5,7 +5,7 @@ import { residentialOptions } from "./brief";
 import { allocateBuilding, applyFootprint } from "./footprint";
 import { furnishFloor, outdoorActions } from "./furnishing";
 import { homeDetails, varyHomeLayout } from "./details";
-import { bedroomBayWidths, bathroomZones } from "./rooms";
+import { bedroomBayWidths, bathroomZones, bedroomHasEnsuite, ensuiteZone } from "./rooms";
 
 const apartmentRecipeSchema = z.object({
   kind: z.literal("apartment_layout"), id: z.string().min(1).max(100), levelId: z.string().min(1),
@@ -65,14 +65,12 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
     const kitchenWall = wall(kitchenStart, corridorEnd, kitchenStart, d);
     door(kitchenWall, Math.min(1100, d - corridorEnd - 700));
   }
-  if (item.ensuiteBathrooms) {
+  if (item.ensuiteBathrooms || item.bedroomEnsuites?.some(Boolean) || item.bedroomTypes?.includes("master")) {
     for (let i = 0; i < bays; i++) {
+      if (!bedroomHasEnsuite({ ...item, variant: "apartment" }, i)) continue;
       const start = t / 2 + bayWidths.slice(0, i).reduce((sum, value) => sum + value + p, 0);
       const bayWidth = bayWidths[i];
-      const ensuiteW = Math.min(1800, Math.max(1400, bayWidth * .38));
-      const ensuiteD = Math.min(2200, Math.max(1800, bedroomEnd - 500));
-      const left = start + bayWidth - ensuiteW;
-      const top = Math.max(300, bedroomEnd - ensuiteD);
+      const { x: left, y: top, w: ensuiteW } = ensuiteZone(start, bayWidth, bedroomEnd);
       const ensuiteDoorWall = wall(left, top, start + bayWidth + (i < bays - 1 ? p / 2 : t / 2), top);
       wall(left, top, left, bedroomEnd);
       door(ensuiteDoorWall, ensuiteW / 2);
