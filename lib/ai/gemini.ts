@@ -13,6 +13,7 @@ import { allocateBuilding } from "./modeling/footprint";
 import { residentialOptions } from "./modeling/brief";
 import { residentialSketches } from "./modeling/preview";
 import { clipSketchLines, validateSketches, sketchActions } from "./modeling/sketch";
+import { multiApartmentActions } from "./modeling/multiApartment";
 
 const layoutDesignSchema = z.object({
   layoutSeed: z.number().int().min(0).max(1000000),
