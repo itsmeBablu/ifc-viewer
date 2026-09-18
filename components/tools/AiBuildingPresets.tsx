@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { currentAiContext } from "@/lib/ai/execute";
+import { DEFAULT_AI_MODEL, type AiModelId } from "@/lib/ai/models";
+import { residentialParametersSchema } from "@/lib/ai/modeling/brief";
 import {
   residentialCommand,
   suggestResidentialTypes,
@@ -8,6 +11,8 @@ import {
   type TypologySuggestion,
 } from "@/lib/ai/modeling/allocation";
 import { allocateBuilding, polygonArea } from "@/lib/ai/modeling/footprint";
+import { allocateResidential } from "@/lib/ai/modeling/allocation";
+import { multiApartmentActions } from "@/lib/ai/modeling/multiApartment";
 import AiFootprintCanvas from "./AiFootprintCanvas";
 import { validateSketches } from "@/lib/ai/modeling/sketch";
 import {
@@ -24,12 +29,14 @@ import {
 
 export default function AiBuildingPresets({
   disabled,
+  model,
   heightMm,
   thicknessMm,
   onChoose,
   onCreate,
 }: {
   disabled: boolean;
+  model: AiModelId;
   heightMm: number;
   thicknessMm: number;
   onChoose: (command: string, p: ResidentialParameters) => void;
@@ -41,6 +48,10 @@ export default function AiBuildingPresets({
   const [plotWidth, setPlotWidth] = useState<number | undefined>(undefined);
   const [plotLength, setPlotLength] = useState<number | undefined>(undefined);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [designMessage, setDesignMessage] = useState("");
+  const [generationError, setGenerationError] = useState("");
+  const requestRef = useRef<AbortController | null>(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
   const [manualOverrideOpen, setManualOverrideOpen] = useState(false);
 
   const [p, setP] = useState<ResidentialParameters>({
@@ -58,9 +69,18 @@ export default function AiBuildingPresets({
     garageDepthM: 6,
     gardenAreaM2: 50,
     layoutSeed: 12345,
+    plotAreaM2: 180,
   });
 
-  const suggestions = useMemo(() => suggestResidentialTypes(plotArea), [plotArea]);
+  const suggestions = useMemo(() => suggestResidentialTypes(plotArea).map(s => {
+    if (s.apartmentFloors) {
+      const unit = allocateResidential({ variant: "apartment", bedrooms: s.bedrooms, bedroomAreaM2: 18 }, heightMm, thicknessMm);
+      return { ...s, label: "Small apartment building", reason: "3 floors, 2 homes per floor; compare family homes with a rental building.", apartmentsPerFloor: 2, estimatedAreaM2: Math.ceil(unit.totalAreaM2 * 6) };
+    }
+    const shape = s.layoutStyle === "courtyard" ? "u" : s.layoutStyle === "corner" ? "l" : "rectangle";
+    const building = allocateBuilding({ variant: s.variant, bedrooms: s.bedrooms, bedroomAreaM2: plotArea < 140 ? 11 : 18, footprint: shape }, heightMm, thicknessMm);
+    return { ...s, estimatedAreaM2: Math.ceil(building.allocation.totalAreaM2 + building.extraAreaM2) };
+  }), [plotArea, heightMm, thicknessMm]);
 
   const validate = (next: ResidentialParameters) => {
     if (
@@ -68,6 +88,8 @@ export default function AiBuildingPresets({
       next.apartmentsPerFloor !== undefined ||
       next.bedroomsPerApartment !== undefined
     ) {
+      const actions = multiApartmentActions(next, "check", "ground", 0, heightMm, thicknessMm);
+      if (actions.length > 399) throw new Error("This building needs more than one AI batch. Start with fewer floors or homes per floor.");
       return null;
     }
     if (next.sketches) {
@@ -90,6 +112,7 @@ export default function AiBuildingPresets({
   }
 
   const update = (next: ResidentialParameters) => {
+    setGenerationError("");
     setP(next);
     try {
       validate(next);
@@ -99,12 +122,24 @@ export default function AiBuildingPresets({
     }
   };
 
-  const handleShuffle = () => {
+  const handleShuffle = async () => {
+    if (isRefreshing || disabled) return;
     setIsRefreshing(true);
-    const newSeed = Math.floor(Math.random() * 1000000);
-    const next = { ...p, layoutSeed: newSeed };
-    update(next);
-    setTimeout(() => setIsRefreshing(false), 500);
+    setGenerationError("");
+    const controller = new AbortController(); requestRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 240000);
+    try {
+      const parameters = residentialParametersSchema.parse({ ...p, sketches: undefined });
+      const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ intent: "layout", mode: "build", model: model === "ollama-local" ? DEFAULT_AI_MODEL : model, residential: parameters, command: "Suggest a fresh residential layout for these requirements. Explain the best room arrangement and useful alternatives, preserving the selected outline and dimensions.", context: currentAiContext(), attachments: [], history: [] }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Layout generation failed. Please try again.");
+      if (result.kind !== "layout") throw new Error("Gemini did not return a layout. Please try again.");
+      const next = residentialParametersSchema.parse(result.parameters);
+      validate(next);
+      update(next); setDesignMessage(result.message); setStep(5);
+    } catch (e) { setGenerationError(controller.signal.aborted ? "Layout generation was cancelled or timed out. Your current drawing is preserved." : e instanceof Error && !e.name.includes("Zod") ? e.message : "Choose a complete outline and valid dimensions before generating."); }
+    finally { clearTimeout(timeout); requestRef.current = null; setIsRefreshing(false); }
   };
 
   const selectTypology = (sug: TypologySuggestion) => {
@@ -112,12 +147,15 @@ export default function AiBuildingPresets({
       ...p,
       variant: sug.variant,
       bedrooms: sug.bedrooms,
+      bedroomAreaM2: plotArea < 140 ? 11 : 18,
+      footprint: sug.layoutStyle === "courtyard" ? "u" : sug.layoutStyle === "corner" ? "l" : "rectangle",
+      sketches: undefined,
       layoutStyle: sug.layoutStyle ?? p.layoutStyle,
       apartmentFloors: sug.apartmentFloors,
       apartmentsPerFloor: sug.apartmentsPerFloor,
       bedroomsPerApartment: sug.bedroomsPerApartment,
       totalAreaM2: sug.estimatedAreaM2,
-      layoutSeed: Math.floor(Math.random() * 1000000),
+      layoutSeed: ((p.layoutSeed ?? 0) + 7919) % 1000001,
     };
     update(next);
   };
@@ -140,7 +178,7 @@ export default function AiBuildingPresets({
             type="button"
             className={`ai-wizard-tab ${step === s.num ? "is-active" : step > s.num ? "is-complete" : ""}`}
             onClick={() => setStep(s.num as 1 | 2 | 3 | 4 | 5)}
-            disabled={disabled}
+            disabled={disabled || isRefreshing}
           >
             <span className="ai-wizard-tab-num">{step > s.num ? <LuCheck /> : s.icon}</span>
             <span className="ai-wizard-tab-label">{s.label}</span>
@@ -156,7 +194,7 @@ export default function AiBuildingPresets({
               <LuMaximize2 className="text-amber-400" /> 1. Enter Plot / Site Area
             </h4>
             <p className="text-xs text-[var(--text-muted)]">
-              Specify your property or buildable site area. Real architectural site coverage (35%–60%) calculates realistic typologies.
+              Enter your site area to compare home concepts. Building footprint, garden and parking must fit within the available space.
             </p>
           </div>
 
@@ -220,7 +258,7 @@ export default function AiBuildingPresets({
                 onChange={(e) => {
                   const val = e.target.value ? Number(e.target.value) : undefined;
                   setPlotWidth(val);
-                  update({ ...p, widthM: val });
+                  update({ ...p, plotWidthM: val });
                 }}
               />
             </label>
@@ -236,7 +274,7 @@ export default function AiBuildingPresets({
                 onChange={(e) => {
                   const val = e.target.value ? Number(e.target.value) : undefined;
                   setPlotLength(val);
-                  update({ ...p, lengthM: val });
+                  update({ ...p, plotLengthM: val });
                 }}
               />
             </label>
@@ -263,7 +301,7 @@ export default function AiBuildingPresets({
               <LuHouse className="text-amber-400" /> 2. Realistic Typology for {plotArea} m² Site
             </h4>
             <p className="text-xs text-[var(--text-muted)]">
-              Based on architectural standards (DIN 18025 / Neufert), these building typologies fit your plot footprint:
+              Compare concept homes for your site. Areas below use room sizes that the layout generator can build.
             </p>
           </div>
 
@@ -529,7 +567,7 @@ export default function AiBuildingPresets({
                 roofStyle: "modern-flat",
               },
             ].map((style) => {
-              const isSelected = p.layoutStyle === style.layoutStyle && (style.cultureStyle === "standard" || p.cultureStyle === style.cultureStyle);
+              const isSelected = p.layoutStyle === style.layoutStyle && p.roofStyle === style.roofStyle && p.cultureStyle === style.cultureStyle;
               return (
                 <button
                   key={style.id}
@@ -545,7 +583,7 @@ export default function AiBuildingPresets({
                       layoutStyle: style.layoutStyle as any,
                       cultureStyle: style.cultureStyle as any,
                       roofStyle: style.roofStyle as any,
-                      footprint: style.layoutStyle === "courtyard" ? "u" : "rectangle",
+                      footprint: style.layoutStyle === "courtyard" ? "u" : "rectangle", sketches: undefined, totalAreaM2: undefined,
                     });
                   }}
                 >
@@ -569,7 +607,8 @@ export default function AiBuildingPresets({
             <button
               type="button"
               className="ai-create-layout flex items-center gap-1 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
-              onClick={() => setStep(5)}
+              disabled={disabled || isRefreshing || !!error}
+              onClick={() => { setStep(5); void handleShuffle(); }}
             >
               Generate Layout Plan <LuSparkles />
             </button>
@@ -600,7 +639,7 @@ export default function AiBuildingPresets({
 
           {/* Interactive 2D Layout Canvas */}
           <div className="mt-3 relative">
-            <AiFootprintCanvas parameters={p} onChange={update} disabled={disabled} building={result} />
+            <AiFootprintCanvas parameters={p} onChange={update} disabled={disabled || isRefreshing} building={result} heightMm={heightMm} thicknessMm={thicknessMm} />
           </div>
 
           {/* Room Area Summary */}
@@ -618,14 +657,27 @@ export default function AiBuildingPresets({
             </div>
           )}
 
-          {error && <p role="alert" className="ai-error mt-2">{error}</p>}
+          <details className="ai-layout-requirements mt-3">
+            <summary>Adjust rooms and building dimensions</summary>
+            <div className="ai-area-fields mt-2">
+              {([['Bedroom area', 'bedroomAreaM2', 11], ['Living area', 'livingAreaM2', 10], ['Kitchen area', 'kitchenAreaM2', 6], ['Bathroom area', 'bathroomAreaM2', 4], ['Building width (m)', 'widthM', 4], ['Building length (m)', 'lengthM', 4]] as const).map(([label, key, min]) => <label key={key}><span>{label}{key.endsWith('M2') ? ' (m²)' : ''}</span><input type="number" min={min} step={0.5} disabled={disabled || isRefreshing} value={p[key] ?? ''} placeholder="Automatic" onChange={e => update({ ...p, [key]: e.target.value ? Number(e.target.value) : undefined, sketches: undefined })} /></label>)}
+            </div>
+            <div className="ai-suggestion-row mt-2">
+              <label><input type="checkbox" checked={p.furnished !== false} disabled={disabled || isRefreshing} onChange={e => update({ ...p, furnished: e.target.checked })} /> Furnished</label>
+              <label><input type="checkbox" checked={p.separateKitchen !== false} disabled={disabled || isRefreshing} onChange={e => update({ ...p, separateKitchen: e.target.checked, sketches: undefined })} /> Separate kitchen</label>
+            </div>
+          </details>
+          {result && (result.allocation.totalAreaM2 + result.extraAreaM2) / result.allocation.floors + (p.gardenAreaM2 ?? 0) + (p.garage === 'none' ? 0 : (p.garageWidthM ?? 3.5) * (p.garageDepthM ?? 6)) > plotArea && <p className="ai-design-recommendation">This concept plus garden and parking exceeds your site area. Try a compact rectangle, fewer bedrooms, or a duplex with a smaller footprint.</p>}
+          {error && <><p role="alert" className="ai-error mt-2">{error}</p><button type="button" className="ai-secondary-button" disabled={disabled || isRefreshing} onClick={() => update({ ...p, totalAreaM2: undefined, widthM: undefined, lengthM: undefined })}>Suggest dimensions that fit these rooms</button></>}
+          {designMessage && <p className="ai-design-recommendation">{designMessage}</p>}
+          {isRefreshing && <div className="ai-thinking" role="status" aria-live="polite"><LuSparkles className="animate-pulse" /><span>Gemini is planning your rooms and checking the outline…</span><button type="button" onClick={() => requestRef.current?.abort()}>Cancel</button></div>}
 
           {/* ACTION BUTTONS: Refresh vs Create vs Back */}
           <div className="ai-layout-actions mt-4 flex items-center justify-between gap-2">
             <button
               type="button"
               className="ai-secondary-button flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-              disabled={disabled}
+              disabled={disabled || isRefreshing || !!error}
               onClick={handleShuffle}
               title="Generate a different valid room layout for these exact same inputs"
             >
@@ -636,7 +688,7 @@ export default function AiBuildingPresets({
             <button
               type="button"
               className="ai-create-layout flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl shadow-md transition-all active:scale-95"
-              disabled={disabled || !!error || (p.bedroomAreaM2 ?? 20) < 11}
+              disabled={disabled || isRefreshing || !!error || (p.bedroomAreaM2 ?? 20) < 11}
               onClick={() => onCreate(residentialCommand(p), p)}
             >
               <LuSparkles className="h-3.5 w-3.5" />
@@ -645,6 +697,7 @@ export default function AiBuildingPresets({
           </div>
         </div>
       )}
+      {generationError && <p role="alert" className="ai-error">{generationError}</p>}
     </section>
   );
 }

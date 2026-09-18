@@ -13,6 +13,22 @@ const body = { command: "Build a house on a 12 m by 15 m footprint", context: { 
 const request = (data: unknown = body, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/ai-command", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(data) });
 beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("AUTH_URL", "http://localhost:3000"); vi.mocked(limitAiUser).mockResolvedValue({ success: true, remaining: 9, reset: Date.now() + 60_000, total: 1500 }); });
 describe("AI command authorization", () => {
+  it("builds wizard requirements with site metadata and no balcony without schema errors", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    const response = await POST(request({ ...body, mode: "build", residential: { variant: "villa", bedrooms: 3, bedroomAreaM2: 18, plotAreaM2: 180, plotWidthM: 12, plotLengthM: 15, balcony: "none", separateKitchen: true, ensuiteBathrooms: true } }));
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.kind).toBe("plan");
+    expect(result.plan.actions.some((a: { id: string }) => a.id.includes(":balcony:"))).toBe(false);
+  });
+  it("sends wizard layout requests to Gemini instead of bypassing design interpretation", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
+    vi.mocked(generateCommand).mockResolvedValue({ kind: "layout", parameters: { variant: "villa", bedrooms: 3, footprint: "u", layoutSeed: 91234, layoutStyle: "courtyard" }, message: "Courtyard concept", model: "gemini-3.1-flash-lite", mode: "build" });
+    const response = await POST(request({ ...body, intent: "layout", mode: "build", residential: { variant: "villa", bedrooms: 3, footprint: "u", plotAreaM2: 180, balcony: "none" } }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ kind: "layout" });
+    expect(generateCommand).toHaveBeenCalledWith(expect.objectContaining({ intent: "layout" }));
+  });
   it("returns a default duplex plan without calling Gemini after authorization and quota checks", async () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
     const response = await POST(request({ ...body, command: "Create a duplex house with 5 bedrooms" }));

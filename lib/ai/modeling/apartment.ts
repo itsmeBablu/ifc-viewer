@@ -67,14 +67,14 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   }
   if (item.ensuiteBathrooms) {
     for (let i = 0; i < bays; i++) {
-      const start = t / 2 + i * (roomW + p);
-      const ensuiteW = Math.min(1800, Math.max(1400, roomW * .38));
+      const start = t / 2 + bayWidths.slice(0, i).reduce((sum, value) => sum + value + p, 0);
+      const bayWidth = bayWidths[i];
+      const ensuiteW = Math.min(1800, Math.max(1400, bayWidth * .38));
       const ensuiteD = Math.min(2200, Math.max(1800, bedroomEnd - 500));
-      const left = start + roomW - ensuiteW;
+      const left = start + bayWidth - ensuiteW;
       const top = Math.max(300, bedroomEnd - ensuiteD);
-      const ensuiteDoorWall = wall(left, top, left + ensuiteW, top);
+      const ensuiteDoorWall = wall(left, top, start + bayWidth + (i < bays - 1 ? p / 2 : t / 2), top);
       wall(left, top, left, bedroomEnd);
-      wall(left + ensuiteW, top, left + ensuiteW, bedroomEnd);
       door(ensuiteDoorWall, ensuiteW / 2);
     }
   }
@@ -93,12 +93,15 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   actions.push({ kind: "floor", operation: "create", id: `${item.id}:floor`, levelId: item.levelId, boundary: [{ xMm: item.xMm-t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm-t/2 }, { xMm: item.xMm+w+t/2, yMm: item.yMm+d+t/2 }, { xMm: item.xMm-t/2, yMm: item.yMm+d+t/2 }], thicknessMm: 200, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
   // A usable front balcony makes the generated plan read as a complete residential project.
   // It is a separate slab with low parapet walls, so it remains editable like native CAD geometry.
+  if (item.balcony !== "none") {
   const balconyDepth = 1500, balconyWidth = Math.min(7000, Math.max(4200, w * .62));
   const balconyLeft = item.xMm + (w - balconyWidth) / 2;
-  const balconyY = item.yMm - t / 2 - balconyDepth;
-  actions.push({ kind: "floor", operation: "create", id: `${item.id}:balcony:floor`, levelId: item.levelId, boundary: [{ xMm: balconyLeft, yMm: balconyY }, { xMm: balconyLeft + balconyWidth, yMm: balconyY }, { xMm: balconyLeft + balconyWidth, yMm: item.yMm - t / 2 }, { xMm: balconyLeft, yMm: item.yMm - t / 2 }], thicknessMm: 180, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
+  const facadeY = item.balcony === "terrace" ? item.yMm + d + t / 2 : item.yMm - t / 2;
+  const balconyY = facadeY + (item.balcony === "terrace" ? balconyDepth : -balconyDepth);
+  actions.push({ kind: "floor", operation: "create", id: `${item.id}:balcony:floor`, levelId: item.levelId, boundary: [{ xMm: balconyLeft, yMm: Math.min(balconyY, facadeY) }, { xMm: balconyLeft + balconyWidth, yMm: Math.min(balconyY, facadeY) }, { xMm: balconyLeft + balconyWidth, yMm: Math.max(balconyY, facadeY) }, { xMm: balconyLeft, yMm: Math.max(balconyY, facadeY) }], thicknessMm: 180, elevationOffsetMm: 0, roofPreset: "flat", pitchDeg: 0 });
   const railHeight = 1100;
-  [[balconyLeft, balconyY, balconyLeft + balconyWidth, balconyY], [balconyLeft, balconyY, balconyLeft, item.yMm - t / 2], [balconyLeft + balconyWidth, balconyY, balconyLeft + balconyWidth, item.yMm - t / 2]].forEach(([x1,y1,x2,y2], i) => actions.push({ kind: "wall", operation: "create", id: `${item.id}:balcony:rail:${i}`, levelId: item.levelId, startXmm: x1, startYmm: y1, endXmm: x2, endYmm: y2, thicknessMm: 80, heightMm: railHeight, wallType: "curtain" }));
+  [[balconyLeft, balconyY, balconyLeft + balconyWidth, balconyY], [balconyLeft, balconyY, balconyLeft, facadeY], [balconyLeft + balconyWidth, balconyY, balconyLeft + balconyWidth, facadeY]].forEach(([x1,y1,x2,y2], i) => actions.push({ kind: "wall", operation: "create", id: `${item.id}:balcony:rail:${i}`, levelId: item.levelId, startXmm: x1, startYmm: y1, endXmm: x2, endYmm: y2, thicknessMm: 80, heightMm: railHeight, wallType: "curtain" }));
+  }
   actions.push(...furnishFloor({ ...item, variant: "apartment" },allocation,item.id,item.levelId,item.xMm,item.yMm,t,item.heightMm,item.bedrooms));
   return building?.polygon ? applyFootprint(actions,building.polygon,original.xMm,original.yMm,t,item.heightMm,item.levelId,item.id) : actions;
 }

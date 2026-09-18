@@ -96,18 +96,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (!busy) return;
-    const block = (event: Event) => {
-      if (!event.isTrusted) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    };
-    const events = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "keydown", "keyup", "wheel", "touchstart", "touchmove", "submit"];
-    for (const name of events) window.addEventListener(name, block, { capture: true, passive: false });
-    return () => { for (const name of events) window.removeEventListener(name, block, true); };
-  }, [busy]);
-
-  useEffect(() => {
     try { localStorage.setItem("ai-assistant-model", model); localStorage.setItem("ai-assistant-mode", mode); } catch { /* Storage is optional. */ }
   }, [model, mode]);
 
@@ -257,7 +245,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     const submittedText = (template?.command??text).trim();
     const submittedResidential=template?.parameters??residential;
     const submittedAttachments = includeAttachments ? attachments : [];
-    setText(""); setResidential(undefined); setFailedCommand(null); setIncludeAttachments(false);
+    setText(""); setFailedCommand(null); setIncludeAttachments(false);
     busyRef.current = true; setBusy(true); setError(""); setStatus("Planning…"); setThinkingLabel("Reading your project"); setPending(null); setDeleteApproved(false); setAppliedFingerprint(null);
     pushHistory({ role: "user", text: submittedText });
     const controller = new AbortController(); requestRef.current = controller;
@@ -307,7 +295,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     } catch (e) {
       if (!mountedRef.current) return;
       const message = controller.signal.aborted
-        ? "AI took too long to formulate this complex plan. You can try again or divide into smaller tasks."
+        ? "Request cancelled or timed out. You can edit your requirements and try again."
         : e instanceof TypeError ? "AI could not connect. Check your connection and try again."
           : e instanceof Error && !e.name.includes("Zod") ? e.message : "AI could not produce a usable response. Try a smaller request.";
       pushHistory({ role: "assistant", text: message, model, mode });
@@ -350,7 +338,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             </div>
           </div>
         )}
-        {mode === "build" && !attachments.length && <AiBuildingPresets key={`${projectId}:${conversationKey}`} disabled={busy || reading || !historyLoaded} heightMm={wallHeightMm} thicknessMm={wallThicknessMm} onChoose={(command, parameters) => { setText(command); setResidential(parameters); }} onCreate={(command,parameters)=>void submit(undefined,{command,parameters})} />}
+        {mode === "build" && !attachments.length && <AiBuildingPresets key={`${projectId}:${conversationKey}`} disabled={busy || reading || !historyLoaded} model={model} heightMm={wallHeightMm} thicknessMm={wallThicknessMm} onChoose={(command, parameters) => { setText(command); setResidential(parameters); }} onCreate={(command,parameters)=>void submit(undefined,{command,parameters})} />}
         {history.map((turn, i) => (
           <div
             key={i}
@@ -390,6 +378,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             <span className="ai-thinking-avatar"><LuSparkles /></span>
             <span className="ai-thinking-copy"><strong>{thinkingLabel}</strong><small>{modelDetails(model).label}</small></span>
             <span className="ai-thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+            <button type="button" className="ai-text-button" onClick={() => requestRef.current?.abort()}>Cancel</button>
           </div>
         )}
         {pending && (

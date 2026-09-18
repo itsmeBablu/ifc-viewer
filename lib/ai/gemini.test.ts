@@ -7,6 +7,15 @@ const fetchMock = vi.fn();
 beforeEach(() => { vi.stubEnv("GEMINI_API_KEY", "test-key"); vi.stubEnv("GEMINI_MODEL", ""); vi.stubGlobal("fetch", fetchMock); fetchMock.mockReset(); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+it("asks Gemini for a residential arrangement while preserving the user's shape and dimensions", async () => {
+  fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ functionCall: { name: "propose_residential_design", args: { layoutSeed: 91234, layoutStyle: "courtyard", reasoning: "Place bedrooms away from shared living; courtyard wings remain open shared space." } } }] } }] }));
+  const result = await generateCommand({ ...input, intent: "layout", mode: "build", residential: { variant: "villa", bedrooms: 3, footprint: "u", bedroomAreaM2: 18 } });
+  expect(result).toMatchObject({ kind: "layout", parameters: { footprint: "u", bedrooms: 3, bedroomAreaM2: 18, layoutSeed: 91234 } });
+  const request = JSON.parse(fetchMock.mock.calls[0][1].body);
+  expect(request.tools[0].functionDeclarations[0].name).toBe("propose_residential_design");
+  expect(request.toolConfig.functionCallingConfig.mode).toBe("ANY");
+});
+
 it("defaults to Flash-Lite with minimal thinking and no automatic retry", async () => {
   fetchMock.mockResolvedValue(Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "How long should the wall be?" }] } }] }));
   expect(await generateCommand(input)).toEqual({ kind: "advice", message: "How long should the wall be?", model: "gemini-3.1-flash-lite", mode: "build" });

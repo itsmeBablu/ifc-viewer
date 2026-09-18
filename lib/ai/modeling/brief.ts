@@ -47,6 +47,10 @@ export function defaultResidentialBrief(command: string) {
 }
 const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
+  plotAreaM2: z.number().min(30).max(1000000).optional(),
+  plotWidthM: z.number().min(4).max(1000).optional(),
+  plotLengthM: z.number().min(4).max(1000).optional(),
+  balcony: z.enum(["none", "front", "terrace", "roof"]).optional(),
   sketches: z.array(z.object({ points:z.array(sketchPoint).min(3).max(32), lines:z.array(z.object({start:sketchPoint,end:sketchPoint}).strict()).max(30), furnitureLines:z.array(z.object({start:sketchPoint,end:sketchPoint}).strict()).max(200).optional(), mepLines:z.array(z.object({start:sketchPoint,end:sketchPoint}).strict()).max(200).optional(), labels:z.array(z.object({point:sketchPoint,name:z.string().trim().min(1).max(60),use:z.enum(["bedroom","living","kitchen","dining","study","bathroom","corridor","garage"])}).strict()).max(30).optional(), locks:z.array(z.object({index:z.number().int().min(0).max(31),interior:z.boolean(),lengthMm:z.number().min(300).max(80000)}).strict()).max(62).optional(), wallTypes:z.array(z.object({index:z.number().int().min(0).max(31),interior:z.boolean(),type:z.enum(["exterior","partition","fire","curtain"])}).strict()).max(62).optional(), openings:z.array(z.object({point:sketchPoint,kind:z.enum(["door","doubleDoor","window"]),widthMm:z.number().min(300).max(5000)}).strict()).max(100).optional(), gardens:z.array(z.array(sketchPoint).min(3).max(32)).max(8).optional() }).strict()).min(1).max(8).optional(),
   furnished: z.boolean().optional(), underfloorHeating: z.boolean().optional(),
   piping: z.enum(["none", "underfloor", "ceiling"]).optional(), ducts: z.enum(["none", "ceiling"]).optional(),

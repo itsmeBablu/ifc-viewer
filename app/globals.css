@@ -5538,3 +5538,30 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
   margin-bottom: 2px;
 }
 
+/* Residential assistant uses a bright, readable surface regardless of viewer theme. */
+.ai-chat-panel .ai-building-presets {
+  background: #fff;
+  color: #1e293b;
+  --text-strong: #0f172a;
+  --text-muted: #64748b;
+  --panel-divider: #e2e8f0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+}
+.ai-building-presets .ai-wizard-nav { background: #f8fafc; border-color: #e2e8f0; overflow-x: auto; }
+.ai-building-presets .ai-wizard-tab { color: #64748b; }
+.ai-building-presets .ai-wizard-tab.is-active { background: #fef3c7; color: #92400e; }
+.ai-building-presets .ai-wizard-step [class*="bg-slate-"] { background: #f8fafc; }
+.ai-building-presets .ai-wizard-step [class*="text-amber-"] { color: #92400e; }
+.ai-building-presets .ai-wizard-step [class*="text-emerald-"] { color: #047857; }
+.ai-building-presets .ai-wizard-step [class*="text-sky-"] { color: #0369a1; }
+.ai-building-presets input, .ai-building-presets select { background: #fff; color: #0f172a; border: 1px solid #cbd5e1; }
+.ai-building-presets .ai-footprint-canvas { background: #fff; color: #334155; min-height: 220px; }
+.ai-building-presets .ai-area-summary { background: #f8fafc; }
+.ai-design-recommendation { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 10px; color: #1e3a8a; font-size: 12px; line-height: 1.6; white-space: pre-line; }
+.ai-model-dropdown-menu[data-theme="light"] { background: #fff; color: #0f172a; --text-muted: #64748b; border-color: #cbd5e1; box-shadow: 0 16px 40px #0f172a26; }
+.ai-model-dropdown-menu[data-theme="light"] button { color: #0f172a; }
+.ai-model-dropdown-menu[data-theme="light"] button[aria-selected="true"] { background: #fef3c7; }
+.ai-model-dropdown-menu[data-theme="light"] button:hover { background: #f1f5f9; }
+

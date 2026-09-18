@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AI_MODELS, AI_MODES, modelDetails, type AiModelId, type AiMode } from "@/lib/ai/models";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { LuCheck, LuChevronDown, LuSparkles, LuZap } from "react-icons/lu";
@@ -16,21 +17,42 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuBox, setMenuBox] = useState({ left: 8, top: 8, width: 275, height: 380 });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.stopPropagation();
         setDropdownOpen(false);
       }
     }
     if (dropdownOpen) {
+      const position = () => {
+        const rect = dropdownRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const width = Math.min(300, window.innerWidth - 16);
+        const availableAbove = rect.top - 16, availableBelow = window.innerHeight - rect.bottom - 16;
+        const above = availableAbove >= availableBelow;
+        const height = Math.min(380, Math.max(120, above ? availableAbove : availableBelow));
+        setMenuBox({ left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), top: Math.max(8, above ? rect.top - height - 8 : rect.bottom + 8), width, height });
+      };
+      position();
+      window.addEventListener("resize", position);
+      window.addEventListener("scroll", position, true);
       document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("resize", position);
+        window.removeEventListener("scroll", position, true);
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleKeyDown);
+      };
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -94,8 +116,11 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
           <LuChevronDown className={`size-3 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`} />
         </button>
 
-        {dropdownOpen && (
+        {dropdownOpen && createPortal(
           <div
+            ref={menuRef}
+            data-theme="light"
+            style={{ position: "fixed", left: menuBox.left, top: menuBox.top, right: "auto", bottom: "auto", width: menuBox.width, maxHeight: menuBox.height, zIndex: 30000 }}
             role="listbox"
             aria-label="Select AI Model"
             className="ai-model-dropdown-menu animate-in fade-in zoom-in-95 duration-150"
@@ -155,11 +180,10 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
                 );
               })}
             </div>
-          </div>
+          </div>, document.body
         )}
       </div>
     </div>
   );
 }
-
 

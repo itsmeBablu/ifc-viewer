@@ -8,6 +8,14 @@ import { creationPlaybook } from "./playbooks";
 import { GeminiError } from "./providerError";
 import { MODELING_DEFAULT_GUIDE } from "./modeling";
 import { DRAWING_GUIDE } from "./drawing";
+import { z } from "zod";
+import { allocateBuilding } from "./modeling/footprint";
+
+const layoutDesignSchema = z.object({
+  layoutSeed: z.number().int().min(0).max(1000000),
+  layoutStyle: z.enum(["linear", "courtyard", "corner", "split", "central"]),
+  reasoning: z.string().trim().min(1).max(3000),
+}).strict();
 
 const MODE_INSTRUCTIONS: Record<AiMode, string> = {
   build: "BUILD mode: propose actionable geometry when the brief is sufficient. Keep explanations simple, clear, and easy to read with short bullet points for dimensions and spatial layout, plus a direct next step. Answer design questions with answer_question. Use ask_clarification only for essential missing information.",
@@ -37,7 +45,9 @@ export async function generateCommand(input: CommandRequest) {
   const settings = modelDetails(model);
   const mode = input.mode ?? "build";
   const playbook = creationPlaybook(input);
-  const tools = toolsForCreation(mode, playbook.kinds);
+  const layoutRequest = input.intent === "layout";
+  if (layoutRequest && (!input.residential || mode !== "build" || input.attachments.length)) throw new Error("Choose a residential brief in Build before generating a layout.");
+  const tools = layoutRequest ? [{ name: "propose_residential_design", description: "Choose a new residential concept arrangement. Preserve all supplied dimensions, shape, bedroom count, outdoor features and room areas. Code generates and checks geometry. Choose a different integer layoutSeed from the previous seed for another arrangement. Explain suitability, circulation, daylight and tradeoffs; mention that irregular wings are open shared space. No claims of code compliance.", parametersJsonSchema: z.toJSONSchema(layoutDesignSchema, { target: "draft-7" }) }] : toolsForCreation(mode, playbook.kinds);
   const request = {
       systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT} ${MODE_INSTRUCTIONS[mode]} Discipline: ${input.discipline ?? "arch"}. Explicit prompt and project dimensions win. Preserve architecture in MEP unless explicitly asked. Use defaults for routine sizes and disclose assumptions. ${input.attachments.length ? DRAWING_GUIDE : ""} Creation guide: ${JSON.stringify(playbook.guide)}. Return only fields supported by the supplied tools.` }] },
       contents: [
@@ -48,7 +58,7 @@ export async function generateCommand(input: CommandRequest) {
       tools: [{ functionDeclarations: tools }],
       // Constrained decoding rejects our mixed recipe/action union on the live API.
       // AUTO accepts the documented JSON-schema declarations; local validation stays strict.
-      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+      toolConfig: { functionCallingConfig: { mode: layoutRequest ? "ANY" : "AUTO" } },
       generationConfig: { temperature: 0.2, maxOutputTokens: settings.maxOutputTokens, thinkingConfig: { thinkingLevel: settings.thinkingLevel } },
   };
   const signal = AbortSignal.timeout(240000);
@@ -92,6 +102,15 @@ export async function generateCommand(input: CommandRequest) {
   let result;
   try {
     envelope = await response.json();
+    if (layoutRequest) {
+      const candidate = envelope.candidates?.[0];
+      const calls = candidate?.content?.parts?.filter((part: { thought?: boolean; functionCall?: unknown }) => !part.thought && part.functionCall) ?? [];
+      if (candidate?.finishReason !== "STOP" || calls.length !== 1 || calls[0].functionCall.name !== "propose_residential_design") throw new SyntaxError("Invalid layout design");
+      const design = layoutDesignSchema.parse(calls[0].functionCall.args);
+      const parameters = { ...input.residential!, layoutSeed: design.layoutSeed, layoutStyle: design.layoutStyle };
+      if (!parameters.sketches && !parameters.apartmentFloors) allocateBuilding(parameters, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+      return { kind: "layout" as const, parameters, message: design.reasoning, model, mode };
+    }
     result = parseModelReply(envelope);
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof Error && error.name.includes("Zod")) {

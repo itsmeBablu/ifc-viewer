@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   } catch {
     limit = { success: true, remaining: 1500, reset: Date.now() + 24 * 3600 * 1000, total: 1500 };
   }
-  try { return reply(defaultModelingPlan(input) ?? await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
+  try { return reply(input.intent === "layout" ? await generateCommand({ ...input, model: input.model === "ollama-local" ? "gemini-3.1-flash-lite" : input.model }) : defaultModelingPlan(input) ?? await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
     const message = error instanceof Error && error.name === "TimeoutError"

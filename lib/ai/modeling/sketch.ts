@@ -13,6 +13,32 @@ const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
 const pointSegmentDistance=(p:SketchPoint,a:SketchPoint,b:SketchPoint)=>{const dx=b.xMm-a.xMm,dy=b.yMm-a.yMm,t=Math.max(0,Math.min(1,((p.xMm-a.xMm)*dx+(p.yMm-a.yMm)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.xMm-(a.xMm+t*dx),p.yMm-(a.yMm+t*dy));};
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
+/** Trim drafting overshoots at every crossing, including concave courtyard edges. */
+export function clipSketchLines(s: FloorSketch): FloorSketch {
+  if (s.points.length < 3) return s;
+  const boundary = sketchSegments({ ...s, lines: [] });
+  const lines = s.lines.flatMap(line => {
+    const cuts = [...new Set([0, 1, ...boundary.flatMap(edge => {
+      const hit = intersection(line, edge);
+      return hit ? [Math.max(0, Math.min(1, hit.t))] : [];
+    })])].sort((a, b) => a - b);
+    const at = (t: number) => ({ xMm: line.start.xMm + (line.end.xMm - line.start.xMm) * t, yMm: line.start.yMm + (line.end.yMm - line.start.yMm) * t });
+    return cuts.slice(1).flatMap((end, i) => {
+      const start = cuts[i], mid = at((start + end) / 2);
+      if (!insidePolygon(mid, s.points) || boundary.some(edge => pointSegmentDistance(mid, edge.start, edge.end) < .01)) return [];
+      const a = at(start), b = at(end);
+      return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm) >= 300 ? [{ start: a, end: b }] : [];
+    });
+  });
+  // Remap metadata only for segments retained without splitting or trimming.
+  const mapIndex = (index: number) => lines.findIndex(l => l.start.xMm === s.lines[index]?.start.xMm && l.start.yMm === s.lines[index]?.start.yMm && l.end.xMm === s.lines[index]?.end.xMm && l.end.yMm === s.lines[index]?.end.yMm);
+  const remap = <T extends { interior: boolean; index: number }>(items: T[] | undefined) => items?.flatMap(item => {
+    if (!item.interior) return [item];
+    const index = mapIndex(item.index);
+    return index < 0 ? [] : [{ ...item, index }];
+  });
+  return { ...s, lines, locks: remap(s.locks), wallTypes: remap(s.wallTypes) };
+}
 /** Joins hand-drawn endpoints into a shared CAD vertex, tolerating small pointer drift. */
 export function normalizeSketchJunctions(s:FloorSketch, toleranceMm = 350): FloorSketch {
   const vertices: SketchPoint[] = [];
@@ -46,7 +72,7 @@ export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
 export function validateSketches(sketches:FloorSketch[]){
   if(!sketches.length||sketches.length>8)throw new Error("Choose one to eight floors.");
   for(const [floor,rawS] of sketches.entries()){
-    const s = ensureSketchBoundary(rawS);
+    const s = clipSketchLines(ensureSketchBoundary(rawS));
     if (s.points.length >= 3) validateBoundary(s.points);
     for(const garden of s.gardens??[])validateBoundary(garden);
     const rooms=sketchRooms(s);
@@ -96,7 +122,7 @@ export function sketchRooms(s:FloorSketch):SketchPoint[][]{
 }
 
 export function sketchActions(input:ResidentialParameters,id:string,groundId:string,baseElevation:number,height:number,thickness:number,x=0):AiAction[]{
-  const sketches=(input.sketches??[]).map(s=>normalizeSketchJunctions(ensureSketchBoundary(s)));validateSketches(sketches);
+  const sketches=(input.sketches??[]).map(s=>clipSketchLines(normalizeSketchJunctions(ensureSketchBoundary(s))));validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
     if(s.lines.length||s.labels?.length)return null;

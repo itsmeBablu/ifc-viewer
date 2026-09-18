@@ -345,6 +345,7 @@ function AssistantPanel({
       }
     }
     function onKeyDown(e: KeyboardEvent) {
+      if ((e.target as HTMLElement)?.closest?.(".ai-sketch-overlay, .ai-model-dropdown-menu")) return;
       if (e.key === "Escape") {
         if (userMenuOpen) {
           setUserMenuOpen(false);

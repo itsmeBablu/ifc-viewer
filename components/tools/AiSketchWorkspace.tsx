@@ -10,7 +10,8 @@ import {
 import type { FloorSketch, ResidentialParameters, RoomUse, SketchPoint } from "@/lib/ai/modeling/allocation";
 import { FOOTPRINTS, insidePolygon, inscribedRectangle, polygonArea } from "@/lib/ai/modeling/footprint";
 import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine } from "@/lib/ai/modeling/sketchEditing";
-import { sketchRooms, normalizeSketchJunctions } from "@/lib/ai/modeling/sketch";
+import { sketchRooms, normalizeSketchJunctions, clipSketchLines } from "@/lib/ai/modeling/sketch";
+import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
@@ -81,10 +82,10 @@ export default function AiSketchWorkspace({
 
   // Determine total sketch floors: use the max of sketches.length and levels.length
   const totalFloors = Math.max(parameters.sketches?.length ?? 1, 1);
-  const sketches = parameters.sketches ?? Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed);
+  const sketches = parameters.sketches ?? (() => { try { const defaults = useLayoutDrawingStore.getState(); return residentialSketches(parameters, defaults.draftWallHeightMm, defaults.draftWallThicknessMm); } catch { return Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed); } })();
 
   const [floor, setFloor] = useState(0),
-        [tool, setTool] = useState<Tool>("wall"),
+        [tool, setTool] = useState<Tool>(parameters.footprint === "drawn" && !parameters.sketches ? "rectangle" : "select"),
         [below, setBelow] = useState(true),
         [anchors, setAnchors] = useState<SketchPoint[]>([]),
         [selected, setSelected] = useState<Pick | null>(null),
@@ -94,7 +95,7 @@ export default function AiSketchWorkspace({
         [wallType, setWallType] = useState<"exterior"|"partition"|"fire"|"curtain">("partition"),
         [error, setError] = useState(""),
         [pickLayer, setPickLayer] = useState<Pick["source"]>("current"),
-        [projectVisible, setProjectVisible] = useState(true),
+        [projectVisible, setProjectVisible] = useState(false),
         [projectLevel, setProjectLevel] = useState(activeLevel ?? levels[0]?.id ?? ""),
         [zoom, setZoom] = useState(1),
         [pan, setPan] = useState({ x: 0, y: 0 }),
@@ -144,7 +145,7 @@ export default function AiSketchWorkspace({
     setPast(v => [...v.slice(-29), sketches]);
     setFuture([]);
     setError("");
-    onChange({ ...parameters, variant, sketches: next });
+    onChange({ ...parameters, variant, sketches: next, totalAreaM2: next.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0) });
   };
   const replace = (s: FloorSketch) => change(sketches.map((old, i) => i === floor ? s : old));
   const resetSelection = () => { setSelected(null); setAnchors([]); setGardenAnchors([]); setRoomPoint(null); };
@@ -942,7 +943,7 @@ export default function AiSketchWorkspace({
             <button type="button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={disabled || !future.length} onClick={doRedo}>
               <FiCornerUpRight/> <span>Redo</span>
             </button>
-            <button ref={closeRef} type="button" className="btn-v-yellow" onClick={onClose}>
+            <button ref={closeRef} type="button" className="btn-v-yellow" onClick={() => { change(sketches.map(clipSketchLines)); onClose(); }}>
               <FiCheck/> Done
             </button>
           </div>
