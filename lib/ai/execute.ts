@@ -134,7 +134,7 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
       case "equipment": {
         const preset = COMPONENT_CATALOG.find(p => p.id === action.familyId);
         if (!preset) throw new Error("Unsupported furniture or equipment family.");
-        value = { ...next.mepEquipment.find(row => row.id === id), ...common, levelId: resolve(action.levelId), familyId: preset.id, name: preset.name, category: preset.category, widthMm: action.widthMm ?? preset.widthMm, depthMm: action.depthMm ?? preset.depthMm, heightMm: action.heightMm ?? preset.heightMm, ...(action.color ? { color: action.color } : {}), xMm: action.xMm, yMm: action.yMm, elevationMm: action.elevationMm, rotationDeg: action.rotationDeg };
+        value = { ...next.mepEquipment.find(row => row.id === id), ...common, levelId: resolve(action.levelId), ...(action.connectedHostId ? { connectedHostId: resolve(action.connectedHostId) } : {}), familyId: preset.id, name: preset.name, category: preset.category, widthMm: action.widthMm ?? preset.widthMm, depthMm: action.depthMm ?? preset.depthMm, heightMm: action.heightMm ?? preset.heightMm, ...(action.color ? { color: action.color } : {}), xMm: action.xMm, yMm: action.yMm, elevationMm: action.elevationMm, rotationDeg: action.rotationDeg };
         next.mepEquipment = upsert(next.mepEquipment, value); break;
       }
       case "duct": {

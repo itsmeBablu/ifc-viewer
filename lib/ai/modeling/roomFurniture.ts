@@ -7,7 +7,7 @@ export function furnitureBounds(familyId:string,rotation=0){
   const depth=evaluated?Math.max(evaluated.depthMm,...evaluated.parts.map(p=>Math.abs(p.yMm)*2+(Math.abs(p.rotationDeg??0)%180===90?p.widthMm:p.depthMm))):preset.depthMm;
   return {w:rotation%180?depth:width,d:rotation%180?width:depth};
 }
-export function arrangeRoom(type:import("./allocation").RoomUse,zone:FurnitureRect,reserved:FurnitureRect[],add:(family:string,x:number,y:number,rotation:number)=>void,bathFixture?: "shower" | "bathtub"){
+export function arrangeRoom(type:import("./allocation").RoomUse,zone:FurnitureRect,reserved:FurnitureRect[],add:(family:string,x:number,y:number,rotation:number)=>void){
   const occupied=[...reserved];
   const put=(family:string,x:number,y:number,rotation=0,gap=100)=>{
     const size=furnitureBounds(family,rotation),r={x:x-size.w/2,y:y-size.d/2,...size};
@@ -34,10 +34,8 @@ export function arrangeRoom(type:import("./allocation").RoomUse,zone:FurnitureRe
   }else if(type==="study"){
     put("desk",cx,zone.y+400);put("office-chair",cx,zone.y+1200,180);
   }else if(type==="bathroom"){
-    const fixture = bathFixture === "shower" ? "bath-shower" : "bath-tub";
-    const size = furnitureBounds(fixture);
-    if (!put(fixture,zone.x+size.w/2+50,rear-size.d/2-50) && fixture === "bath-tub") put("bath-shower",zone.x+500,rear-500);
-    put("bath-toilet",zone.x+zone.w-300,rear-500);
+    put("bath-tub",zone.x+500,rear-500);
+    put("bath-toilet",zone.x+zone.w-300,rear-400,180);
     put("bath-vanity",zone.x+zone.w-350,zone.y+1500,90);
   }else if(type==="garage"){
     put("extras-car-compact",cx,zone.y+zone.d/2);

@@ -37,6 +37,41 @@ export function alignKitchenPlacement(item: Partial<LayoutMepEquipment> & { xMm:
   return best;
 }
 
+/** Align toilet and bathroom sanitary equipment with connections facing the wall face, like real installations. */
+export function alignSanitaryPlacement(
+  item: Partial<LayoutMepEquipment> & { xMm: number; yMm: number; levelId: string; category?: string },
+  walls: LayoutWall[],
+  toleranceMm = 500
+) {
+  const isToilet = item.category === "toilet" || item.familyId === "bath-toilet" || item.familyId?.includes("toilet") || item.familyId === "wc";
+  const isVanity = item.familyId === "bath-vanity" || item.category === "sink";
+  if (!isToilet && !isVanity) return null;
+
+  const width = item.widthMm ?? (isToilet ? 380 : 600);
+  const depth = item.depthMm ?? (isToilet ? 700 : 500);
+
+  let best: { xMm: number; yMm: number; rotationDeg: number; wallId: string; distance: number } | null = null;
+  for (const wall of walls) {
+    if (wall.levelId !== item.levelId || wall.curved) continue;
+    const dx = wall.endXmm - wall.startXmm, dz = wall.endYmm - wall.startYmm, length = Math.hypot(dx, dz);
+    if (length < width * 0.8) continue;
+    const tx = dx / length, tz = dz / length;
+    const signed = (item.xMm - wall.startXmm) * -tz + (item.yMm - wall.startYmm) * tx;
+    const side = Math.sign(signed) || 1, nx = -tz * side, nz = tx * side;
+    const distance = Math.abs(Math.abs(signed) - wall.thicknessMm / 2 - depth / 2);
+    if (distance > toleranceMm || (best && distance >= best.distance)) continue;
+
+    const along = Math.max(width / 2, Math.min(length - width / 2, (item.xMm - wall.startXmm) * tx + (item.yMm - wall.startYmm) * tz));
+    const targetDist = wall.thicknessMm / 2 + depth / 2 + 15; // 15mm clearance to finished wall face
+    const xMm = wall.startXmm + along * tx + nx * targetDist;
+    const yMm = wall.startYmm + along * tz + nz * targetDist;
+    const rotationDeg = Math.round(((Math.atan2(nz, nx) * 180 / Math.PI - 90) % 360 + 360) % 360);
+
+    best = { xMm, yMm, rotationDeg, wallId: wall.id, distance };
+  }
+  return best;
+}
+
 export function componentBaseLevel(levels: LayoutLevel[], isPlan: boolean, currentLevelId: string | null, explicitLevelId: string | null) {
   if (explicitLevelId) {
     const explicit = levels.find((l) => l.id === explicitLevelId);

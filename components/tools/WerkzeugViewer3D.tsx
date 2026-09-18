@@ -7,7 +7,7 @@ import { applyViewVisibility, applyRenderPresentation, isObjectVisibleInView } f
 import { useViewDisplayStore, viewDisplayKey } from "@/store/useViewDisplayStore";
 import type { LayoutRoom } from "@/lib/layoutDrawing";
 
-import { alignKitchenPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
+import { alignKitchenPlacement, alignSanitaryPlacement, componentBaseLevel, snapComponentFootprint, projectedMoveDistance } from "@/lib/componentPlacement";
 import { componentPreset } from "@/lib/componentCatalog";
 import { mepEndpoints, type MepKind } from "@/lib/mepConnections";
 import { snapElevatedEndpoints, findGlobalSnap } from "@/lib/globalSnapping";
@@ -4785,8 +4785,10 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
       let plan = { xMm: toMm(validPoint.x), yMm: toMm(validPoint.z) }, label = "Free placement";
       const draftFurniture = normalizeParametricFurniture({ familyId: layout.draftComponentId, widthMm: layout.draftComponentWidthMm, depthMm: layout.draftComponentDepthMm, moduleWidthMm: layout.draftComponentModuleMm });
       const kitchen = !bypass ? alignKitchenPlacement({ ...plan, familyId: layout.draftComponentId, levelId: level.id, widthMm: draftFurniture.widthMm, depthMm: draftFurniture.depthMm, elevationMm: layout.draftEquipmentElevationMm }, layout.walls, layout.mepEquipment) : null;
+      const sanitary = (!kitchen && !bypass) ? alignSanitaryPlacement({ ...plan, familyId: layout.draftComponentId, category: layout.draftEquipmentCategory, levelId: level.id, widthMm: draftFurniture.widthMm, depthMm: draftFurniture.depthMm }, layout.walls) : null;
       if (kitchen) { plan = { xMm: kitchen.xMm, yMm: kitchen.yMm }; label = "Kitchen back face / adjacent unit"; }
-      if (!kitchen && !bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
+      else if (sanitary) { plan = { xMm: sanitary.xMm, yMm: sanitary.yMm }; label = "Wall face (Connections aligned to wall)"; }
+      if (!kitchen && !sanitary && !bypass && (layout.planSnapModes.nearest || layout.planSnapModes.endpoint || layout.planSnapModes.insertion)) {
         const rect = canvas.getBoundingClientRect();
         const snap = snapComponentFootprint(plan, layout.draftComponentWidthMm, layout.draftComponentDepthMm, layout.draftEquipmentRotationDeg,
           layout.walls, layout.mepEquipment, level.id, (candidate) => projectedMoveDistance(validPoint, new THREE.Vector3(fromMm(candidate.xMm), validPoint.y, fromMm(candidate.yMm)), camera, rect.width / (markup.quadView ? 2 : 1), rect.height / (markup.quadView ? 2 : 1)));
@@ -4796,7 +4798,7 @@ const rangeLevel = isPlanTop ? useLayoutDrawingStore.getState().levels.find(l =>
         const snapped = applyGridSnap(new THREE.Vector3(fromMm(plan.xMm), validPoint.y, fromMm(plan.yMm)), markup.gridSize, ["x", "z"]);
         plan = { xMm: toMm(snapped.x), yMm: toMm(snapped.z) }; label = "Grid";
       }
-      return { plan, level, label, rotationDeg: kitchen?.rotationDeg ?? layout.draftEquipmentRotationDeg, kitchenWallId: kitchen?.kitchenWallId };
+      return { plan, level, label, rotationDeg: kitchen?.rotationDeg ?? sanitary?.rotationDeg ?? layout.draftEquipmentRotationDeg, kitchenWallId: kitchen?.kitchenWallId };
     };
     componentPointRef.current = componentPoint;
 

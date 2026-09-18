@@ -6,14 +6,11 @@ import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { sketchRooms } from "@/lib/ai/modeling/sketch";
 import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
 import AiSketchWorkspace from "./AiSketchWorkspace";
-import type { AiModelId } from "@/lib/ai/models";
 
-export default function AiFootprintCanvas({ parameters, onChange, disabled, building, heightMm, thicknessMm, availableShapes, model, preferences, onPreferences, onRefresh }: {
+export default function AiFootprintCanvas({ parameters, onChange, disabled, building, heightMm, thicknessMm }: {
   parameters: ResidentialParameters; onChange: (p: ResidentialParameters) => void; disabled: boolean;
   building?: ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding> | null;
   heightMm: number; thicknessMm: number;
-  availableShapes?: Array<"rectangle" | "l" | "u" | "drawn">;
-  model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [floor, setFloor] = useState(0);
@@ -39,11 +36,11 @@ export default function AiFootprintCanvas({ parameters, onChange, disabled, buil
   };
   return <div className="ai-footprint-chooser">
     <button type="button" className="ai-expand-sketch" disabled={disabled} onClick={open}><FiMaximize2 /> Expand 2D workspace</button>
-    {expanded && <AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled} model={model} preferences={preferences} onPreferences={onPreferences} onRefresh={onRefresh} />}
+    {expanded && <AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled} />}
     <div className="ai-suggestion-row" role="group" aria-label="Building outline">
-      {(["rectangle", "l", "u", "drawn"] as const).map(s => <button key={s} type="button" disabled={disabled || !!availableShapes && !availableShapes.includes(s)} className={availableShapes && !availableShapes.includes(s) ? "ai-choice-unavailable" : ""} title={availableShapes && !availableShapes.includes(s) ? "Try fewer bedrooms or a smaller garden to make room for this outline." : undefined} aria-pressed={shape === s}
+      {(["rectangle", "l", "u", "drawn"] as const).map(s => <button key={s} type="button" disabled={disabled} aria-pressed={shape === s}
         onClick={() => {
-          onChange({ ...parameters, footprint: s, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined, footprintPoints: s === "drawn" ? [] : undefined });
+          onChange({ ...parameters, footprint: s, sketches: undefined, totalAreaM2: undefined, ...(s === "drawn" ? { footprintPoints: [], widthM: undefined, lengthM: undefined } : {}) });
           if (s === "drawn") setExpanded(true);
         }}>{s === "rectangle" ? "Rectangle" : s === "drawn" ? "Draw outline" : s.toUpperCase() + " shape"}</button>)}
     </div>

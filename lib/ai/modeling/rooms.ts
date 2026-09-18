@@ -12,7 +12,7 @@ export function bathroomZones(p: ResidentialParameters, x: number, y: number, wi
   const count = Math.max(1, p.bathroomCount ?? (p.variant === "duplex" ? 2 : 1));
   const floors = p.variant === "duplex" ? 2 : 1;
   const baths = Math.max(1, upper ? Math.floor(count / floors) : Math.ceil(count / floors));
-  const weights = [...Array<number>(baths).fill(p.bathroomAreaM2 ?? 8), ...(p.guestBathroom ? [3] : [])];
+  const weights = [...Array<number>(baths).fill(p.bathroomAreaM2 ?? 8), ...(p.guestBathroom ? [p.guestBathroomShower ? 5 : 3] : [])];
   const total = weights.reduce((sum, value) => sum + value, 0);
   const clearDepth = depth - (weights.length - 1) * 150;
   let start = y;
@@ -22,4 +22,14 @@ export function bathroomZones(p: ResidentialParameters, x: number, y: number, wi
     start += d + 150;
     return zone;
   });
+}
+
+export function bedroomHasEnsuite(p: ResidentialParameters, index: number) {
+  return p.bedroomTypes?.[index] === "master" || p.bedroomEnsuites?.[index] === true || p.ensuiteBathrooms === true;
+}
+
+export function ensuiteZone(start: number, width: number, bedroomEnd: number) {
+  const w = Math.min(1800, Math.max(1400, width * .38));
+  const d = Math.min(2200, Math.max(1800, bedroomEnd - 500));
+  return { x: start + width - w, y: Math.max(300, bedroomEnd - d), w, d };
 }

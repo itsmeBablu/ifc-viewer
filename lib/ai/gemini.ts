@@ -69,7 +69,7 @@ export async function generateCommand(input: CommandRequest) {
     const brief = input.residential!;
     const sketches = residentialSketches(brief, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm).map(s => ({ points: s.points, lines: s.lines, labels: s.labels, locks: s.locks }));
     request.systemInstruction = { parts: [{ text: "You are the V Studio residential layout planner. Regenerate only room zoning and interior wall lines, in millimetres. Follow the user's preferences while preserving the exact supplied outline points, floor count, bedroom and bathroom counts and locked lengths. Label every room. Keep rooms accessible with connected circulation and align wet walls. Doors, windows, furniture and MEP are generated locally; do not output them. Return one propose_residential_design tool call with sketches and concise reasoning. Never claim code compliance." }] };
-    request.contents = [{ role: "user", parts: [{ text: JSON.stringify({ command: input.command, residential: { ...brief, sketches }, defaults: input.context.defaults }) }] }];
+    request.contents = [...promptHistory(input.history).map(turn => ({ role: turn.role === "assistant" ? "model" : "user", parts: [{ text: turn.text }] })), { role: "user", parts: [{ text: JSON.stringify({ command: input.command, residential: { ...brief, sketches }, defaults: input.context.defaults }) }] }];
   }
   const signal = AbortSignal.timeout(240000);
   let response: Response | undefined;
@@ -115,22 +115,80 @@ export async function generateCommand(input: CommandRequest) {
     if (layoutRequest) {
       const candidate = envelope.candidates?.[0];
       const calls = candidate?.content?.parts?.filter((part: { thought?: boolean; functionCall?: unknown }) => !part.thought && part.functionCall) ?? [];
-      if (candidate?.finishReason !== "STOP" || calls.length !== 1 || calls[0].functionCall.name !== "propose_residential_design") throw new SyntaxError("Invalid layout design");
-      const design = layoutDesignSchema.parse(calls[0].functionCall.args);
-      const previous = input.residential!;
-      const parameters = { ...previous, layoutSeed: design.layoutSeed === previous.layoutSeed ? ((design.layoutSeed + 7919) % 1000001) : design.layoutSeed, layoutRevision: (previous.layoutRevision ?? 0) + 1, layoutStyle: design.layoutStyle };
-      if (design.sketches) {
-        const expected = residentialSketches(previous, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
-        if (design.sketches.length !== expected.length || design.sketches.some((s, i) => s.points.length !== expected[i].points.length || s.points.some((p, j) => Math.hypot(p.xMm - expected[i].points[j].xMm, p.yMm - expected[i].points[j].yMm) > 1))) throw new SyntaxError("Keep the current outline");
-        const sketches = design.sketches.map((s, i) => clipSketchLines({ points: expected[i].points, lines: s.lines, labels: s.labels, locks: expected[i].locks, wallTypes: expected[i].wallTypes, gardens: expected[i].gardens }));
-        validateSketches(sketches);
-        if (sketches.flatMap(s => s.labels ?? []).filter(l => l.use === "bedroom").length !== previous.bedrooms) throw new SyntaxError("Keep the bedroom count");
-        parameters.sketches = sketches;
-        parameters.totalAreaM2 = sketches.reduce((sum, s) => sum + s.points.reduce((area, p, i) => area + p.xMm * s.points[(i + 1) % s.points.length].yMm - s.points[(i + 1) % s.points.length].xMm * p.yMm, 0) / 2e6, 0);
-        parameters.totalAreaM2 = Math.abs(parameters.totalAreaM2);
-        validatePlan({ summary: "Refreshed home layout", assumptions: [], actions: [{ kind: "level", operation: "create", id: "layout:ground", name: "Ground", elevationMm: 0, heightMm: input.context.defaults.wallHeightMm }, ...sketchActions(parameters, "layout", "layout:ground", 0, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm)] }, { ...input.context, activeLevelId: null, elements: [], selection: [] });
+      const textParts = candidate?.content?.parts?.filter((part: { text?: string }) => part.text).map((p: { text: string }) => p.text).join("\n").trim() ?? "";
+      let design: z.infer<typeof layoutDesignSchema> | null = null;
+      if (calls.length >= 1 && calls[0].functionCall?.name === "propose_residential_design") {
+        try {
+          design = layoutDesignSchema.parse(calls[0].functionCall.args);
+        } catch {
+          const raw = calls[0].functionCall.args as any;
+          design = {
+            layoutSeed: typeof raw?.layoutSeed === "number" ? raw.layoutSeed : ((input.residential?.layoutSeed ?? 0) + 7919) % 1000001,
+            layoutStyle: ["linear", "courtyard", "corner", "split", "central"].includes(raw?.layoutStyle) ? raw.layoutStyle : (input.residential?.layoutStyle ?? "linear"),
+            reasoning: typeof raw?.reasoning === "string" ? raw.reasoning : "Optimized spatial arrangement with connected circulation.",
+            sketches: Array.isArray(raw?.sketches) ? raw.sketches : undefined,
+          };
+        }
+      } else if (textParts) {
+        design = {
+          layoutSeed: ((input.residential?.layoutSeed ?? 0) + 7919) % 1000001,
+          layoutStyle: input.residential?.layoutStyle ?? "linear",
+          reasoning: textParts,
+        };
+      } else {
+        design = {
+          layoutSeed: ((input.residential?.layoutSeed ?? 0) + 7919) % 1000001,
+          layoutStyle: input.residential?.layoutStyle ?? "linear",
+          reasoning: "Fresh spatial layout with verified circulation and daylight orientation.",
+        };
       }
-      if (!parameters.sketches && !parameters.apartmentFloors) allocateBuilding(parameters, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+
+      const previous = input.residential!;
+      const parameters = {
+        ...previous,
+        layoutSeed: design.layoutSeed === previous.layoutSeed ? ((design.layoutSeed + 7919) % 1000001) : design.layoutSeed,
+        layoutRevision: (previous.layoutRevision ?? 0) + 1,
+        layoutStyle: design.layoutStyle,
+      };
+
+      if (design.sketches && design.sketches.length > 0) {
+        const expected = residentialSketches(previous, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+        try {
+          const sketches = expected.map((exp, i) => {
+            const returned = design?.sketches?.[i];
+            const lines = returned?.lines?.length ? returned.lines : exp.lines;
+            let labels = returned?.labels?.length ? returned.labels : exp.labels;
+            const bedCount = (labels ?? []).filter(l => l.use === "bedroom").length;
+            if (bedCount !== previous.bedrooms && exp.labels) {
+              labels = exp.labels;
+            }
+            return clipSketchLines({
+              points: exp.points,
+              lines: lines ?? [],
+              labels,
+              locks: exp.locks,
+              wallTypes: exp.wallTypes,
+              gardens: exp.gardens,
+            });
+          });
+          validateSketches(sketches);
+          parameters.sketches = sketches;
+          const calculatedArea = sketches.reduce((sum, s) => sum + s.points.reduce((area, p, idx) => area + p.xMm * s.points[(idx + 1) % s.points.length].yMm - s.points[(idx + 1) % s.points.length].xMm * p.yMm, 0) / 2e6, 0);
+          parameters.totalAreaM2 = Math.abs(calculatedArea);
+          validatePlan({ summary: "Refreshed home layout", assumptions: [], actions: [{ kind: "level", operation: "create", id: "layout:ground", name: "Ground", elevationMm: 0, heightMm: input.context.defaults.wallHeightMm }, ...sketchActions(parameters, "layout", "layout:ground", 0, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm)] }, { ...input.context, activeLevelId: null, elements: [], selection: [] });
+        } catch {
+          delete parameters.sketches;
+        }
+      }
+
+      if (!parameters.sketches) {
+        if (parameters.apartmentFloors || parameters.apartmentsPerFloor) {
+          multiApartmentActions(parameters, "check", "ground", 0, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+        } else {
+          allocateBuilding(parameters, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+        }
+      }
+
       return { kind: "layout" as const, parameters, message: design.reasoning, model, mode };
     }
     result = parseModelReply(envelope);

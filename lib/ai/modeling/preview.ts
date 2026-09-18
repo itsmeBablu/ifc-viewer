@@ -36,12 +36,24 @@ export function residentialSketches(parameters: ResidentialParameters, heightMm 
     const rearBedrooms = parameters.footprint !== "l" && parameters.footprint !== "u" && [1, 3].includes((parameters.layoutRevision ?? 0) % 4);
     const ordered = [...rooms].sort((x, y) => (rearBedrooms ? -1 : 1) * (Math.min(...x.map(p => p.yMm)) - Math.min(...y.map(p => p.yMm))) || Math.min(...x.map(p => p.xMm)) - Math.min(...y.map(p => p.xMm)));
     const beds = a.floors === 1 ? parameters.bedrooms : floor ? Math.ceil(parameters.bedrooms / 2) : Math.floor(parameters.bedrooms / 2);
-    sketch.labels = ordered.map((room, i) => {
+    let bedroomIndex = floor ? Math.floor(parameters.bedrooms / 2) : 0;
+    let bedroomCount = 0;
+    sketch.labels = ordered.map(room => {
       const rect = inscribedRectangle(room);
       const bathroom = actions.some(a => a.kind === "equipment" && a.levelId === levelId && /^bath-/.test(a.familyId) && insidePolygon({ xMm: a.xMm, yMm: a.yMm }, room));
-      const use: RoomUse = bathroom ? "bathroom" : i < beds ? "bedroom" : rect.depthMm <= 1600 ? "corridor" : rect.widthMm <= 3500 && rect.depthMm <= 4500 ? "bathroom" : "living";
-      return { point: { xMm: rect.xMm + rect.widthMm / 2, yMm: rect.yMm + rect.depthMm / 2 }, name: use === "bedroom" ? `Bedroom ${i + 1}` : use === "living" ? "Living / kitchen" : use === "bathroom" ? "Bathroom" : "Hall", use };
+      const use: RoomUse = bathroom ? "bathroom" : bedroomCount < beds && rect.depthMm > 1600 ? "bedroom" : rect.depthMm <= 1600 ? "corridor" : rect.widthMm <= 3500 && rect.depthMm <= 4500 ? "bathroom" : "living";
+      const index = bedroomIndex;
+      if (use === "bedroom") { bedroomIndex++; bedroomCount++; }
+      const bedroomName = parameters.bedroomTypes?.[index] === "master" ? "Master bedroom" : parameters.bedroomTypes?.[index] === "kids" ? "Kids room" : `Bedroom ${index + 1}`;
+      return { point: { xMm: rect.xMm + rect.widthMm / 2, yMm: rect.yMm + rect.depthMm / 2 }, name: use === "bedroom" ? bedroomName : use === "living" ? "Living / kitchen" : use === "bathroom" ? "Bathroom" : "Hall", use };
     });
     return sketch;
   });
+}
+
+/** Build exactly the lines displayed in Home, without requiring an Expand/Done round trip. */
+export function homeBuildParameters(p: ResidentialParameters, heightMm = 3000, thicknessMm = 200): ResidentialParameters {
+  const sketches = residentialSketches(p, heightMm, thicknessMm);
+  const totalAreaM2 = sketches.reduce((sum, s) => sum + Math.abs(s.points.reduce((area, point, i) => area + point.xMm * s.points[(i + 1) % s.points.length].yMm - s.points[(i + 1) % s.points.length].xMm * point.yMm, 0)) / 2e6, 0);
+  return { ...p, sketches, totalAreaM2 };
 }

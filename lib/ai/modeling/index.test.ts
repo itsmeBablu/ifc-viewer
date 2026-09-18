@@ -86,3 +86,32 @@ it.each([1, 2, 3, 4, 5, 6])("keeps %i-bedroom duplex footprints aligned and the 
   }
   expect(plan.actions.length).toBeLessThanOrEqual(150);
 });
+
+it("compiles multi-floor apartments with common stairs and lift option", () => {
+  const resultWithAll = defaultModelingPlan({
+    ...input,
+    command: "apartments multi floor appartemtns with common stairs and lift",
+  })!;
+  expect(resultWithAll.kind).toBe("plan");
+  expect(resultWithAll.plan.summary).toContain("Multi-storey apartment building");
+  expect(resultWithAll.plan.actions.filter(a => a.kind === "equipment" && a.familyId === "extras-lift").length).toBeGreaterThan(0);
+  expect(resultWithAll.plan.actions.filter(a => a.kind === "floor" && a.id.includes("stair-landing")).length).toBeGreaterThan(0);
+
+  // Without lift
+  const resultNoLift = defaultModelingPlan({
+    ...input,
+    command: "3 floors with 2 apartments per floor and no lift",
+  })!;
+  expect(resultNoLift.plan.actions.filter(a => a.kind === "equipment" && a.familyId === "extras-lift")).toHaveLength(0);
+  expect(resultNoLift.plan.actions.filter(a => a.kind === "floor" && a.id.includes("stair-landing")).length).toBeGreaterThan(0);
+
+  // With MEP and curtain facade
+  const resultMepFacade = defaultModelingPlan({
+    ...input,
+    command: "3 floors with 2 apartments per floor with underfloor heating, piping, ducts, and curtain facade",
+  })!;
+  expect(resultMepFacade.plan.actions.filter(a => a.kind === "wall" && a.wallType === "curtain").length).toBeGreaterThan(0);
+  expect(resultMepFacade.plan.actions.filter(a => a.kind === "pipe").length).toBeGreaterThan(0);
+  expect(resultMepFacade.plan.actions.filter(a => a.kind === "duct").length).toBeGreaterThan(0);
+});
+
