@@ -34,7 +34,7 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
     const bathX=flipped?a.widthMm-t/2-a.bathroomWidthMm-75:t/2;
     for(const bath of bathroomZones(input,bathX,serviceY,a.bathroomWidthMm,a.bathroomDepthMm,upper)) {
       const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:Math.min(950,bath.d/3)}];
-      if(bath.guest){add("bath-toilet",bath.x+bath.w-350,bath.y+bath.d-350);add("bath-vanity",bath.x+350,bath.y+bath.d/2,90);if(input.guestBathroomShower)add("bath-shower",bath.x+500,bath.y+bath.d-550);}
+      if(bath.guest){add("bath-toilet",bath.x+bath.w-350,bath.y+bath.d-380,180);add("bath-vanity",bath.x+350,bath.y+bath.d/2,90);if(input.guestBathroomShower)add("bath-shower",bath.x+500,bath.y+bath.d-550);}
       else arrangeRoom("bathroom",bath,occupied,add);
     }
     const zone={x:flipped?t/2:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
@@ -64,7 +64,7 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
       const y=serviceY+400+j*100;
       actions.push({kind:"pipe",operation:"create",id:`${id}:water:${j}`,levelId,startXmm:xMm+bathX,startYmm:yMm+y,endXmm:xMm+kitchenX,endYmm:yMm+y,diameterMm:22,elevationOffsetMm:z,slopePercent:0,systemType});
     }
-    if(input.furnished===false){add("mep-sink",kitchenX,serviceY+600);add("mep-toilet",bathX,serviceY+a.bathroomDepthMm-500);}
+    if(input.furnished===false){add("mep-sink",kitchenX,serviceY+600);add("mep-toilet",bathX,serviceY+a.bathroomDepthMm-380,180);}
   }
   if(input.underfloorHeating&&!upper)add("mep-heat_pump",t/2+a.bathroomWidthMm+800,serviceY+400);
   return actions;

@@ -5,18 +5,18 @@ import { createPortal } from "react-dom";
 import { 
   FiMaximize2, FiMousePointer, FiSquare, FiCircle, FiType, FiLock, FiUnlock, 
   FiLayers, FiGrid, FiTrash2, FiCornerUpLeft, FiCornerUpRight, FiMove, FiPlus, 
-  FiZoomIn, FiZoomOut, FiCheck, FiEdit2, FiEdit3, FiRotateCw, FiX
+  FiZoomIn, FiZoomOut, FiCheck, FiEdit2, FiEdit3, FiRotateCw, FiX, FiScissors
 } from "react-icons/fi";
 import type { FloorSketch, ResidentialParameters, RoomUse, SketchPoint } from "@/lib/ai/modeling/allocation";
 import { FOOTPRINTS, insidePolygon, inscribedRectangle, polygonArea } from "@/lib/ai/modeling/footprint";
-import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine } from "@/lib/ai/modeling/sketchEditing";
+import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine, moveSketchLine, trimSketchLine } from "@/lib/ai/modeling/sketchEditing";
 import { sketchRooms, normalizeSketchJunctions, clipSketchLines } from "@/lib/ai/modeling/sketch";
 import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
 
-type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
+type Tool = "select" | "move" | "trim" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
 const colors: Record<RoomUse, string> = {
@@ -25,27 +25,31 @@ const colors: Record<RoomUse, string> = {
 };
 const tools: { id: Tool; name: string; icon: React.ReactNode }[] = [
   { id: "select", name: "Select", icon: <FiMousePointer/> },
+  { id: "move", name: "Move", icon: <FiMove className="text-sky-400"/> },
+  { id: "trim", name: "Trim", icon: <FiScissors className="text-amber-400"/> },
   { id: "wall", name: "Wall / Line", icon: <FiEdit3/> },
   { id: "freehand", name: "Freehand", icon: <FiEdit2/> },
   { id: "arc", name: "Arc", icon: <span aria-hidden="true" className="ai-arc-icon"/> },
   { id: "rectangle", name: "Rectangle", icon: <FiSquare/> },
   { id: "circle", name: "Circle", icon: <FiCircle/> },
-  { id: "door", name: "Double door", icon: <span aria-hidden="true">↔</span> },
+  { id: "door", name: "Door", icon: <span aria-hidden="true">↔</span> },
   { id: "window", name: "Window", icon: <span aria-hidden="true">▥</span> },
   { id: "garden", name: "Garden", icon: <span aria-hidden="true">&#127793;</span> },
-  { id: "room", name: "Room name", icon: <FiType/> },
+  { id: "room", name: "Room Tag", icon: <FiType/> },
   { id: "pan", name: "Pan", icon: <FiMove/> }
 ];
 const help: Record<Tool, string> = {
-  select: "Click any line to select it. Then edit its length or angle in the sidebar, or click the lock icon on the line.",
-  wall: "Click to place start, move cursor, click to place end. Draw continuous walls by chaining clicks. Press Escape to finish a chain.",
-  freehand: "Hold and drag to sketch walls freely — like a pencil. Release to commit.",
+  select: "Click any wall to select. Drag its endpoints or body to move, or adjust length/angle.",
+  move: "Click and drag any wall or partition to move it across the floor with snap.",
+  trim: "Click any wall segment to trim it at the nearest intersection with other walls.",
+  wall: "Click to place start, move cursor, click to place end. Press Escape to finish a chain.",
+  freehand: "Hold and drag to sketch walls freely. Release to commit.",
   arc: "Click start → click end → move cursor to bend the live arc, then click to place.",
   rectangle: "Click two opposite corners to draw a rectangular outline.",
   circle: "Click the centre, then click to set the radius.",
-  door: "Click a wall to place a double entrance door. The nearest wall is used.",
+  door: "Click a wall to place an entrance door.",
   window: "Click a wall to place a standard window.",
-  garden: "Click corner by corner to define a garden boundary. Double-click the last point to close the polygon.",
+  garden: "Click corner by corner to define a garden boundary. Double-click to close.",
   room: "Click inside a fully enclosed room area to add a name and use tag.",
   pan: "Drag to pan the view. Scroll wheel or +/− to zoom, or click Fit to reset."
 };
@@ -108,10 +112,30 @@ export default function AiSketchWorkspace({
         [past, setPast] = useState<FloorSketch[][]>([]),
         [future, setFuture] = useState<FloorSketch[][]>([]);
   const [endpointDrag, setEndpointDrag] = useState<{ index: number; interior: boolean; endpoint: "start" | "end" } | null>(null);
+  const [lineDrag, setLineDrag] = useState<{ index: number; interior: boolean; startPoint: SketchPoint; origStart: SketchPoint; origEnd: SketchPoint } | null>(null);
 
-  // Inline length edit state (for selected line foreignObject input)
+  // Inline length edit state
   const [inlineLen, setInlineLen] = useState("");
   const inlineLenRef = useRef<HTMLInputElement | null>(null);
+
+  // Responsive widescreen canvas measurement
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [aspect, setAspect] = useState(1.4);
+
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setAspect(width / height);
+        }
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // AutoCAD live drafting & paint states
   const [cursorPoint, setCursorPoint] = useState<SketchPoint | null>(null);
@@ -135,10 +159,13 @@ export default function AiSketchWorkspace({
   const allPoints = [...sketches.flatMap(s => [...s.points, ...s.lines.flatMap(l => [l.start, l.end]), ...(s.gardens ?? []).flat()]), ...projectPoints];
   const minX = Math.min(0, ...allPoints.map(p => p.xMm)) - 1000,
         minY = Math.min(0, ...allPoints.map(p => p.yMm)) - 1000;
-  const extent = Math.max(16000, Math.max(0, ...allPoints.map(p => p.xMm)) - minX, Math.max(0, ...allPoints.map(p => p.yMm)) - minY) + 1500,
-        span = extent / zoom;
-  const viewX = minX + (extent - span) / 2 + pan.x,
-        viewY = minY + (extent - span) / 2 + pan.y;
+  const extent = Math.max(16000, Math.max(0, ...allPoints.map(p => p.xMm)) - minX, Math.max(0, ...allPoints.map(p => p.yMm)) - minY) + 1500;
+  const spanY = extent / zoom;
+  const spanX = spanY * Math.max(0.6, Math.min(2.8, aspect));
+  const span = Math.max(spanX, spanY);
+  const viewX = minX + (extent - spanX) / 2 + pan.x,
+        viewY = minY + (extent - spanY) / 2 + pan.y;
+
 
   const change = (next: FloorSketch[], variant = parameters.variant) => {
     next = next.map(s => normalizeSketchJunctions(s));
@@ -270,6 +297,19 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerMoveCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (lineDrag) {
+      const raw = getCanvasPoint(event);
+      if (!raw) return;
+      const dx = Math.round((raw.xMm - lineDrag.startPoint.xMm) / 250) * 250;
+      const dy = Math.round((raw.yMm - lineDrag.startPoint.yMm) / 250) * 250;
+      if (dx !== 0 || dy !== 0) {
+        try {
+          const next = moveSketchLine(current, lineDrag.index, lineDrag.interior, dx, dy);
+          onChange({ ...parameters, sketches: sketches.map((s, i) => i === floor ? next : s) });
+        } catch {}
+      }
+      return;
+    }
     if (endpointDrag) {
       const raw = getCanvasPoint(event);
       if (!raw) return;
@@ -449,6 +489,7 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerUpCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (lineDrag) { setPast(v => [...v.slice(-29), sketches]); setFuture([]); setLineDrag(null); return; }
     if (endpointDrag) { setPast(v => [...v.slice(-29), sketches]); setFuture([]); setEndpointDrag(null); return; }
     // Commit garden vertex drag
     if (gardenDrag) {
@@ -589,17 +630,17 @@ export default function AiSketchWorkspace({
     setPickLayer("current");
   };
 
-  // Render a line segment with inline lock icon and inline length input
+  // Render a line segment with inline lock icon
   const segment = (a: SketchPoint, b: SketchPoint, index: number, interior: boolean, source: Pick["source"], curvedPath?: string) => {
     const key = `${source}:${interior}:${index}`,
           active = selected?.source === source && selected.index === index && selected.interior === interior,
           highlight = hover === key,
           color = active ? "#16a34a" : highlight ? "#facc15" : source === "below" ? "#f59e0b" : source === "project" ? "#94a3b8" : interior ? "#a78bfa" : "#38bdf8",
-          canPick = tool === "select" && pickLayer === source;
+          canPick = (tool === "select" || tool === "move" || tool === "trim") && (pickLayer === source || tool === "trim");
     const isLocked = source === "current" && current.locks?.some(l => l.index === index && l.interior === interior);
     const attrs = {
       stroke: color,
-      strokeWidth: span * (source === "below" ? .005 : .003),
+      strokeWidth: span * (source === "below" ? .005 : active ? .005 : .003),
       strokeDasharray: source === "below" ? `${span * .012} ${span * .008}` : undefined,
       fill: "none",
       strokeLinecap: "butt" as const,
@@ -640,13 +681,11 @@ export default function AiSketchWorkspace({
               opacity={0.88}
             />
             {isLocked ? (
-              /* Locked icon */
               <g fill="none" stroke={isLocked ? "#854d0e" : "#94a3b8"} strokeWidth={span * .0025} strokeLinecap="round">
                 <rect x={-lockIconSize * .28} y={-lockIconSize * .08} width={lockIconSize * .56} height={lockIconSize * .42} rx={lockIconSize * .06} fill={isLocked ? "#854d0e" : "#475569"} stroke="none" opacity={0.8}/>
                 <path d={`M${-lockIconSize * .18} ${-lockIconSize * .08} v${-lockIconSize * .22} a${lockIconSize * .18} ${lockIconSize * .18} 0 0 1 ${lockIconSize * .36} 0 v${lockIconSize * .22}`}/>
               </g>
             ) : (
-              /* Unlocked icon */
               <g fill="none" stroke="#94a3b8" strokeWidth={span * .0025} strokeLinecap="round">
                 <rect x={-lockIconSize * .28} y={-lockIconSize * .08} width={lockIconSize * .56} height={lockIconSize * .42} rx={lockIconSize * .06} fill="#475569" stroke="none" opacity={0.6}/>
                 <path d={`M${-lockIconSize * .18} ${-lockIconSize * .08} v${-lockIconSize * .22} a${lockIconSize * .18} ${lockIconSize * .18} 0 0 1 ${lockIconSize * .36} 0`}/>
@@ -655,35 +694,7 @@ export default function AiSketchWorkspace({
           </g>
         )}
 
-        {/* Inline length input via foreignObject when line is selected */}
-        {active && source === "current" && !isLocked && (
-          <foreignObject
-            x={midX - span * .07}
-            y={midY + span * .005}
-            width={span * .14}
-            height={span * .05}
-            className="ai-sketch-inline-input-fo"
-          >
-            <input
-              type="number"
-              step="0.1"
-              min="0.3"
-              max="80"
-              value={inlineLen}
-              aria-label="Edit line length in metres"
-              className="ai-sketch-inline-input"
-              onChange={e => { setInlineLen(e.target.value); setLength(e.target.value); }}
-              onKeyDown={e => {
-                if (e.key === "Enter") { e.preventDefault(); void applyLength(inlineLen); }
-                else if (e.key === "Escape") { e.preventDefault(); setSelected(null); }
-                e.stopPropagation();
-              }}
-              onClick={e => e.stopPropagation()}
-              ref={inlineLenRef}
-            />
-          </foreignObject>
-        )}
-
+        {/* Selected endpoint grab handles */}
         {active && source === "current" && !isLocked && !curvedPath && (
           <>
             <circle cx={a.xMm} cy={a.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); setEndpointDrag({ index, interior, endpoint: "start" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
@@ -691,10 +702,75 @@ export default function AiSketchWorkspace({
           </>
         )}
 
+        {/* Interactive hit area for select, move, and trim */}
         {canPick && (curvedPath ? (
-          <path d={curvedPath} fill="none" stroke="transparent" strokeWidth={span * .018} onMouseEnter={() => setHover(key)} onMouseLeave={() => setHover(null)} onClick={e => { e.stopPropagation(); chooseLine(index, interior, source); }} />
+          <path
+            d={curvedPath}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={span * .022}
+            style={{ cursor: tool === "trim" ? "crosshair" : tool === "move" ? "grab" : "pointer" }}
+            onMouseEnter={() => setHover(key)}
+            onMouseLeave={() => setHover(null)}
+            onPointerDown={e => {
+              if (source === "current" && (tool === "move" || (tool === "select" && active))) {
+                e.stopPropagation();
+                const raw = getCanvasPoint(e);
+                if (raw) {
+                  setLineDrag({ index, interior, startPoint: raw, origStart: a, origEnd: b });
+                  (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId);
+                }
+              }
+            }}
+            onClick={e => {
+              e.stopPropagation();
+              if (tool === "trim" && source === "current") {
+                const raw = getCanvasPoint(e);
+                if (raw) {
+                  const next = trimSketchLine(current, index, interior, raw);
+                  replace(next);
+                  resetSelection();
+                }
+                return;
+              }
+              chooseLine(index, interior, source);
+            }}
+          />
         ) : (
-          <line x1={a.xMm} y1={a.yMm} x2={b.xMm} y2={b.yMm} stroke="transparent" strokeWidth={span * .018} onMouseEnter={() => setHover(key)} onMouseLeave={() => setHover(null)} onClick={e => { e.stopPropagation(); chooseLine(index, interior, source); }} />
+          <line
+            x1={a.xMm}
+            y1={a.yMm}
+            x2={b.xMm}
+            y2={b.yMm}
+            stroke="transparent"
+            strokeWidth={span * .022}
+            style={{ cursor: tool === "trim" ? "crosshair" : tool === "move" ? "grab" : "pointer" }}
+            onMouseEnter={() => setHover(key)}
+            onMouseLeave={() => setHover(null)}
+            onPointerDown={e => {
+              if (source === "current" && (tool === "move" || (tool === "select" && active))) {
+                e.stopPropagation();
+                const raw = getCanvasPoint(e);
+                if (raw) {
+                  setLineDrag({ index, interior, startPoint: raw, origStart: a, origEnd: b });
+                  (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId);
+                }
+              }
+            }}
+            onClick={e => {
+              e.stopPropagation();
+              if (tool === "trim" && source === "current") {
+                const raw = getCanvasPoint(e);
+                if (raw) {
+                  const next = trimSketchLine(current, index, interior, raw);
+                  replace(next);
+                  resetSelection();
+                }
+                return;
+              }
+              chooseLine(index, interior, source);
+            }}
+          />
         ))}
       </g>
     );

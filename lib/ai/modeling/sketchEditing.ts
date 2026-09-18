@@ -98,3 +98,108 @@ export function snapSketchEndpoint(sketch: FloorSketch, raw: SketchPoint, exclud
   const points = [...sketch.points, ...sketch.lines.flatMap(line => [line.start, line.end])];
   return points.filter(p => Math.hypot(p.xMm - exclude.xMm, p.yMm - exclude.yMm) > 1).sort((a, b) => Math.hypot(a.xMm - raw.xMm, a.yMm - raw.yMm) - Math.hypot(b.xMm - raw.xMm, b.yMm - raw.yMm)).find(p => Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) <= toleranceMm) ?? raw;
 }
+
+export function lineIntersection(
+  p1: SketchPoint, p2: SketchPoint,
+  p3: SketchPoint, p4: SketchPoint
+): SketchPoint | null {
+  const x1 = p1.xMm, y1 = p1.yMm;
+  const x2 = p2.xMm, y2 = p2.yMm;
+  const x3 = p3.xMm, y3 = p3.yMm;
+  const x4 = p4.xMm, y4 = p4.yMm;
+
+  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+  if (Math.abs(denom) < 1e-6) return null;
+
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+
+  if (ua >= 0.005 && ua <= 0.995 && ub >= -0.01 && ub <= 1.01) {
+    return {
+      xMm: Math.round(x1 + ua * (x2 - x1)),
+      yMm: Math.round(y1 + ua * (y2 - y1)),
+    };
+  }
+  return null;
+}
+
+export function trimSketchLine(
+  sketch: FloorSketch,
+  index: number,
+  interior: boolean,
+  clickPoint: SketchPoint
+): FloorSketch {
+  const target = interior
+    ? sketch.lines[index]
+    : { start: sketch.points[index], end: sketch.points[(index + 1) % sketch.points.length] };
+  if (!target) return sketch;
+
+  // Collect all other segments in the sketch
+  const others: Array<{ start: SketchPoint; end: SketchPoint }> = [];
+  sketch.lines.forEach((l, i) => {
+    if (!interior || i !== index) others.push(l);
+  });
+  sketch.points.forEach((p, i) => {
+    if (interior || i !== index) {
+      others.push({ start: p, end: sketch.points[(i + 1) % sketch.points.length] });
+    }
+  });
+
+  // Find all intersections with target line
+  const intersections: SketchPoint[] = [];
+  for (const seg of others) {
+    const isect = lineIntersection(target.start, target.end, seg.start, seg.end);
+    if (isect) {
+      if (!intersections.some(existing => Math.hypot(existing.xMm - isect.xMm, existing.yMm - isect.yMm) < 20)) {
+        intersections.push(isect);
+      }
+    }
+  }
+
+  if (interior) {
+    if (intersections.length === 0) {
+      // No intersection: trim removes this interior segment completely
+      return {
+        ...sketch,
+        lines: sketch.lines.filter((_, i) => i !== index),
+        locks: sketch.locks?.filter(l => !l.interior || l.index !== index).map(l => l.interior && l.index > index ? { ...l, index: l.index - 1 } : l),
+      };
+    }
+
+    // Sort intersections along the line from start to end
+    const lineVec = { x: target.end.xMm - target.start.xMm, y: target.end.yMm - target.start.yMm };
+    const lineLenSq = lineVec.x * lineVec.x + lineVec.y * lineVec.y;
+    const sorted = [...intersections].sort((a, b) => {
+      const ta = ((a.xMm - target.start.xMm) * lineVec.x + (a.yMm - target.start.yMm) * lineVec.y) / lineLenSq;
+      const tb = ((b.xMm - target.start.xMm) * lineVec.x + (b.yMm - target.start.yMm) * lineVec.y) / lineLenSq;
+      return ta - tb;
+    });
+
+    // Divide the line into sub-segments: [start, s0], [s0, s1], ..., [sn, end]
+    const allPts = [target.start, ...sorted, target.end];
+    const subsegs: Array<{ start: SketchPoint; end: SketchPoint; distToClick: number }> = [];
+    for (let i = 0; i < allPts.length - 1; i++) {
+      const mid = {
+        xMm: (allPts[i].xMm + allPts[i + 1].xMm) / 2,
+        yMm: (allPts[i].yMm + allPts[i + 1].yMm) / 2,
+      };
+      const dist = Math.hypot(mid.xMm - clickPoint.xMm, mid.yMm - clickPoint.yMm);
+      subsegs.push({ start: allPts[i], end: allPts[i + 1], distToClick: dist });
+    }
+
+    // Find the subsegment closest to the clicked point to trim/discard
+    let minIdx = 0;
+    for (let i = 1; i < subsegs.length; i++) {
+      if (subsegs[i].distToClick < subsegs[minIdx].distToClick) minIdx = i;
+    }
+
+    // Remaining subsegments survive
+    const kept = subsegs.filter((_, i) => i !== minIdx).map(s => ({ start: s.start, end: s.end }));
+    const newLines = [...sketch.lines.slice(0, index), ...kept, ...sketch.lines.slice(index + 1)];
+    return { ...sketch, lines: newLines };
+  }
+
+  // If outside perimeter line has intersections, split it or trim excess
+  return sketch;
+}
+

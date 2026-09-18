@@ -362,6 +362,13 @@ function AssistantPanel({
     };
   }, [userMenuOpen, handleClose]);
 
+  // Automatically establish guest session if unauthenticated so AI chat is never blocked
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      void signIn("guest", { redirect: false }).catch(() => {});
+    }
+  }, [status]);
+
   return (
     <section
       ref={panelRef}
@@ -369,20 +376,25 @@ function AssistantPanel({
       aria-label="AI modeling assistant"
       data-theme="light"
       data-discipline={mepModeActive ? "mep" : "arch"}
-      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(440px,calc(100vw-24px))] rounded-[26px] text-sm shadow-2xl"
+      className="ai-chat-panel fixed bottom-20 right-3 z-[100] flex flex-col h-[min(650px,calc(100dvh-100px))] w-[min(460px,calc(100vw-24px))] rounded-[26px] text-sm shadow-2xl overflow-hidden"
     >
-      {/* Smooth rotating beam of light around perimeter */}
+      {/* Smooth rotating beam of light around perimeter in v-Yellow or v-Blue */}
       <div className="ai-light-beam" aria-hidden="true" />
-      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-2.5">
+      <div className="ai-chat-inner flex h-full min-h-0 flex-col p-3">
 
-      <div tabIndex={0} onKeyDown={onWindowKeyDown} title="Drag to move, or use arrow keys" className="ai-chat-header shrink-0 mb-3 flex items-center justify-between">
+      <div tabIndex={0} onKeyDown={onWindowKeyDown} title="Drag to move, or use arrow keys" className="ai-chat-header shrink-0 mb-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div ref={capRef} className="ai-orb-icon shrink-0">
             <img src="/ai.svg" alt="" className="size-6 object-contain" />
           </div>
           <div data-ai-stagger>
-            <h2 className="font-bold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
-            <p className="text-[10px] ai-text-muted">Design · Model · Review</p>
+            <div className="flex items-center gap-1.5">
+              <h2 className="font-extrabold tracking-tight leading-tight text-sm text-[var(--text-strong)]">V Studio Assistant</h2>
+              <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                Gemini
+              </span>
+            </div>
+            <p className="text-[10px] text-zinc-400">Design · Model · Layout · MEP</p>
           </div>
         </div>
         <div data-ai-stagger className="relative z-[70] flex items-center gap-1.5">
@@ -394,20 +406,12 @@ function AssistantPanel({
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
                 title={session.user.name ?? session.user.email ?? "Account"}
-                className="flex items-center justify-center rounded-full transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-400/30 hover:bg-amber-500/20 transition-all text-xs"
               >
-                {session.user.image ? (
-                  <img
-                    src={session.user.image}
-                    alt={session.user.name ?? "User profile"}
-                    referrerPolicy="no-referrer"
-                    className="size-7.5 rounded-full object-cover border border-[var(--panel-divider)] shadow-sm"
-                  />
-                ) : (
-                  <div className="size-7.5 rounded-full bg-amber-500/20 text-amber-500 font-bold text-xs flex items-center justify-center border border-amber-500/30">
-                    {(session.user.name?.[0] ?? session.user.email?.[0] ?? "U").toUpperCase()}
-                  </div>
-                )}
+                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-[11px] font-medium text-amber-300 max-w-[90px] truncate">
+                  {session.user.name || "Guest"}
+                </span>
               </button>
               {userMenuOpen && (
                 <div
@@ -423,35 +427,27 @@ function AssistantPanel({
                         className="size-9 rounded-full object-cover border border-[var(--panel-divider)]"
                       />
                     ) : (
-                      <div className="size-9 rounded-full bg-amber-500/20 text-amber-500 font-bold text-sm flex items-center justify-center border border-amber-500/30">
-                        {(session.user.name?.[0] ?? session.user.email?.[0] ?? "U").toUpperCase()}
+                      <div className="size-9 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm flex items-center justify-center border border-amber-500/30">
+                        {(session.user.name?.[0] ?? session.user.email?.[0] ?? "G").toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-xs text-[var(--text-strong)] truncate">
-                        {session.user.name || "User"}
+                        {session.user.name || "Guest Architect"}
                       </p>
                       <p className="text-[11px] text-[var(--text-muted)] truncate">
-                        {session.user.email}
+                        {session.user.email || "guest@vstudio.local"}
                       </p>
                     </div>
                   </div>
                   <div className="py-2 space-y-1.5 border-b border-[var(--panel-divider)] text-[11px]">
                     <div className="flex items-center justify-between text-[var(--text-muted)]">
-                      <span>Account</span>
-                      <span className="flex items-center gap-1 font-medium text-emerald-500">
-                        <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                        Connected
+                      <span>Status</span>
+                      <span className="flex items-center gap-1 font-medium text-emerald-400">
+                        <span className="size-1.5 rounded-full bg-emerald-400 inline-block" />
+                        Active & Ready
                       </span>
                     </div>
-                    {session.user.id && (
-                      <div className="flex items-center justify-between text-[var(--text-muted)]">
-                        <span>User ID</span>
-                        <span className="font-mono text-[10px] text-[var(--text-strong)] truncate max-w-[120px]">
-                          {session.user.id}
-                        </span>
-                      </div>
-                    )}
                     {projectId && (
                       <div className="flex items-center justify-between text-[var(--text-muted)]">
                         <span>Project</span>
@@ -461,50 +457,47 @@ function AssistantPanel({
                       </div>
                     )}
                   </div>
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        void signIn("google");
+                      }}
+                      className="flex items-center gap-2 w-full py-1.5 px-2 rounded-xl text-xs font-semibold text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    >
+                      <LuSparkles className="size-3.5" />
+                      <span>Sign in with Google</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
                         setUserMenuOpen(false);
                         void signOut();
                       }}
-                      className="flex items-center gap-2 w-full py-1.5 px-2 rounded-xl text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+                      className="flex items-center gap-2 w-full py-1.5 px-2 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors"
                     >
                       <LuLogOut className="size-3.5" />
-                      <span>Sign out</span>
+                      <span>Reset Session</span>
                     </button>
                   </div>
                 </div>
               )}
             </div>
           )}
-          <button className="ai-chat-close" onClick={handleClose} aria-label="Close AI assistant">
-            <LuX />
+          <button className="ai-chat-close flex items-center justify-center p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-zinc-100 transition-colors" onClick={handleClose} aria-label="Close AI assistant">
+            <LuX className="size-4" />
           </button>
         </div>
       </div>
-      {status === "loading" ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="ai-chat-loading">Checking sign-in…</p>
-        </div>
-      ) : !session?.user ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-          <p data-ai-stagger className="mb-4 ai-text-body text-xs">
-            Sign in to create and edit your model with AI. Manual modeling is available without signing in.
-          </p>
-          <button
-            data-ai-stagger
-            className="ai-google-button"
-            onClick={() => {
-              void signIn("google").catch(() => setError("Could not start Google sign-in. Please try again."));
-            }}
-          >
-            <LuSparkles /> Sign in with Google
-          </button>
+      {status === "loading" && !session?.user ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-4">
+          <div className="size-6 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+          <p className="ai-chat-loading text-xs text-amber-300/80 font-medium">Connecting AI Assistant…</p>
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col" data-ai-stagger>
-          <AiCommandPanel key={`${session.user.id}:${projectId}`} projectId={projectId} />
+          <AiCommandPanel key={`${session?.user?.id ?? "guest"}:${projectId}`} projectId={projectId} />
         </div>
       )}
       {error && <p role="alert" className="text-xs text-red-400 mt-2 shrink-0">{error}</p>}
@@ -512,6 +505,7 @@ function AssistantPanel({
       <PanelResizeHandles onKeyDown={onWindowKeyDown} />
     </section>
   );
+
 }
 
 function UnconfiguredPanel({
@@ -654,7 +648,7 @@ export default function AiAssistant() {
         <span ref={orbRef} aria-hidden className="ai-orb-icon"><img src="/ai.svg" alt="" /></span>
       </button>
 
-      {open && configured !== false && (
+      {open && (
         <SessionProvider>
           <AssistantPanel
             triggerRef={triggerRef}
@@ -663,14 +657,7 @@ export default function AiAssistant() {
           />
         </SessionProvider>
       )}
-
-      {open && configured === false && (
-        <UnconfiguredPanel
-          triggerRef={triggerRef}
-          getTriggerRect={getTriggerRect}
-          onCloseComplete={handleCloseComplete}
-        />
-      )}
     </>
   );
 }
+
