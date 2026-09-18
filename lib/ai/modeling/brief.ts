@@ -7,8 +7,28 @@ const bedroom = "(?:bedrooms?|bed rooms?|beds?)";
 
 /** Anchored grammar: never silently discard footprint, furniture or other constraints. */
 export function defaultResidentialBrief(command: string) {
+  const hasLift = /\bno (?:lift|elevator)\b/i.test(command) ? false : /\b(?:lift|elevator)\b/i.test(command) ? true : undefined;
+  const hasStairs = /\b(?:no|without) stairs\b/i.test(command) ? false : /\b(?:stairs?|staircase|common stairs)\b/i.test(command) ? true : undefined;
+  const hasHeating = /\b(?:underfloor heating|floor heating|heating)\b/i.test(command) ? true : undefined;
+  const hasPiping = /\b(?:piping|plumbing|water pipes?)\b/i.test(command) ? ("underfloor" as const) : undefined;
+  const hasDucts = /\b(?:ducts?|ventilation|ac\b|hvac)\b/i.test(command) ? ("ceiling" as const) : undefined;
+  const hasElectrical = /\b(?:electrical|lighting|sockets?)\b/i.test(command) ? true : undefined;
+  const hasCurtainFacade = /\b(?:curtain(?: wall)?(?: facade)?|glass facade|fassade|curtain facade)\b/i.test(command) ? true : undefined;
+  const hasSeparateKitchen = /\b(?:separate kitchen|closed kitchen)\b/i.test(command) ? true : /\bopen kitchen\b/i.test(command) ? false : undefined;
+  const hasEnsuite = /\b(?:ensuite|en-suite)\b/i.test(command) ? true : undefined;
+  const hasGuestBath = /\b(?:guest (?:wc|bathroom|toilet))\b/i.test(command) ? true : undefined;
+
   let text = command.toLowerCase().trim()
     .replace(/\b(?:appartement|appartment|apartemtnt|apartement|appartamento)\b/g, "apartment")
+    .replace(/\b(?:with\s+)?(?:common\s+)?(?:stairs?|staircase)\b/gi, "")
+    .replace(/\b(?:and\s+)?(?:with\s+)?(?:a\s+)?(?:lift|elevator)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:underfloor heating|floor heating|heating)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:piping|plumbing|water pipes?)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:ducts?|ventilation|ac|hvac)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:electrical|lighting|sockets?)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:curtain(?: wall)?(?: facade)?|glass facade|fassade|curtain facade)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:separate kitchen|closed kitchen|open kitchen)\b/gi, "")
+    .replace(/\b(?:with\s+)?(?:ensuite|en-suite|guest (?:wc|bathroom|toilet))\b/gi, "")
     .replace(/[.!]+$/, "").replace(/\s+/g, " ")
     .replace(/^(?:please )?(?:(?:create|build|make|model|generate|add)(?: me)? |i want (?:you to (?:create|build|make) )?)/, "")
     .replace(/^(?:a|an) /, "")
@@ -32,8 +52,38 @@ export function defaultResidentialBrief(command: string) {
   const cultureStyle = /vastu/i.test(command) ? "vastu" as const : /german|mansard|satteldach|gable roof/i.test(command) ? "german" as const : undefined;
   const roofStyle = /mansard/i.test(command) ? "mansard" as const : /gable|satteldach/i.test(command) ? "german-gable" as const : /hip roof/i.test(command) ? "german-hip" as const : undefined;
   text = text.replace(/\b(?:vastu|german|mansard|satteldach|gable roof|hip roof)\b/gi, "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
-  const block = text.match(/^(?:multi[- ]storey|multistorey|multi floor|apartment block|apartment building)?\s*(\d+)\s* floors?\s*(?:with\s*)?(\d+)\s*(?:apartments?|homes?|units?)\s*(?:per floor)?\s*(?:and\s*)?(\d+)\s*[- ]*bed(?:room|rooms?)?\s*apartments?$/);
-  if(block){const b=Number(block[3]);if(Number.isInteger(b)&&b>=1&&b<=3)return {...areas,variant:"apartment",bedrooms:b,bedroomsPerApartment:b as 1|2|3,apartmentFloors:Number(block[1]),apartmentsPerFloor:Number(block[2])} as ResidentialParameters;}
+
+  const isMultiApartment = /\b(?:multi[- ](?:floor|storey)|multistorey|apartment block|apartment building|apartments? multi floor)\b/i.test(command) || /\b\d+\s*floors?\b/i.test(command);
+  if (isMultiApartment) {
+    const floorMatch = command.match(/(\d+)\s*floors?/i);
+    const unitMatch = command.match(/(\d+)\s*(?:apartments?|homes?|units?)(?:\s*per\s*floor)?/i);
+    const bedMatch = command.match(/(\d+)\s*[- ]*bed(?:room|rooms?)?/i);
+    const floors = floorMatch ? Math.min(12, Math.max(1, Number(floorMatch[1]))) : 3;
+    const units = unitMatch ? Math.min(10, Math.max(2, Number(unitMatch[1]))) : 2;
+    const beds = (bedMatch ? Math.min(3, Math.max(1, Number(bedMatch[1]))) : 2) as 1 | 2 | 3;
+    return {
+      ...areas,
+      variant: "apartment" as const,
+      bedrooms: beds,
+      bedroomsPerApartment: beds,
+      apartmentFloors: floors,
+      apartmentsPerFloor: units,
+      ...(hasLift !== undefined ? { lift: hasLift } : { lift: true }),
+      ...(hasStairs !== undefined ? { commonStairs: hasStairs } : { commonStairs: true }),
+      ...(hasHeating !== undefined ? { underfloorHeating: hasHeating } : {}),
+      ...(hasPiping !== undefined ? { piping: hasPiping } : {}),
+      ...(hasDucts !== undefined ? { ducts: hasDucts } : {}),
+      ...(hasElectrical !== undefined ? { electrical: hasElectrical } : {}),
+      ...(hasCurtainFacade !== undefined ? { curtainFacade: hasCurtainFacade } : {}),
+      ...(hasSeparateKitchen !== undefined ? { separateKitchen: hasSeparateKitchen } : {}),
+      ...(hasEnsuite !== undefined ? { ensuiteBathrooms: hasEnsuite } : {}),
+      ...(hasGuestBath !== undefined ? { guestBathroom: hasGuestBath } : {}),
+      ...(layoutStyle ? { layoutStyle } : {}),
+      ...(cultureStyle ? { cultureStyle } : {}),
+      ...(roofStyle ? { roofStyle } : {}),
+    } as ResidentialParameters;
+  }
+
   const prefix = text.match(new RegExp(`^${count}[- ]*${bedroom} (apartment|flat|villa|duplex(?: house)?|house|bungalow)$`));
   const suffix = text.match(new RegExp(`^(apartment|flat|villa|duplex(?: house)?|house|bungalow)(?: with)? ${count}[- ]*${bedroom}$`));
   const bare = text.match(/^(apartment|flat|villa|duplex(?: house)?|house|bungalow)$/);
@@ -43,7 +93,24 @@ export function defaultResidentialBrief(command: string) {
   const value = prefix?.[1] ?? suffix?.[2];
   const bedrooms = value ? numbers[value] ?? Number(value) : variant === "apartment" ? 2 : variant === "duplex" ? 5 : 3;
   const footprint = layoutStyle === "courtyard" || layoutStyle === "central" ? "u" : layoutStyle === "corner" ? "l" : undefined;
-  return { variant, bedrooms, ...areas, ...(layoutStyle ? { layoutStyle, ...(footprint ? { footprint } : {}) } : {}), ...(cultureStyle ? { cultureStyle } : {}), ...(roofStyle ? { roofStyle } : {}) } as ResidentialParameters;
+  return {
+    variant,
+    bedrooms,
+    ...areas,
+    ...(layoutStyle ? { layoutStyle, ...(footprint ? { footprint } : {}) } : {}),
+    ...(cultureStyle ? { cultureStyle } : {}),
+    ...(roofStyle ? { roofStyle } : {}),
+    ...(hasLift !== undefined ? { lift: hasLift } : {}),
+    ...(hasStairs !== undefined ? { commonStairs: hasStairs } : {}),
+    ...(hasHeating !== undefined ? { underfloorHeating: hasHeating } : {}),
+    ...(hasPiping !== undefined ? { piping: hasPiping } : {}),
+    ...(hasDucts !== undefined ? { ducts: hasDucts } : {}),
+    ...(hasElectrical !== undefined ? { electrical: hasElectrical } : {}),
+    ...(hasCurtainFacade !== undefined ? { curtainFacade: hasCurtainFacade } : {}),
+    ...(hasSeparateKitchen !== undefined ? { separateKitchen: hasSeparateKitchen } : {}),
+    ...(hasEnsuite !== undefined ? { ensuiteBathrooms: hasEnsuite } : {}),
+    ...(hasGuestBath !== undefined ? { guestBathroom: hasGuestBath } : {}),
+  } as ResidentialParameters;
 }
 const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
@@ -64,6 +131,8 @@ export const residentialOptions = {
   windowHeightMm: z.number().min(600).max(2000).optional(),
   bathFixture: z.enum(["shower", "bathtub"]).optional(),
   electrical: z.boolean().optional(),
+  commonStairs: z.boolean().optional(),
+  lift: z.boolean().optional(),
   plotAreaM2: z.number().min(30).max(1000000).optional(),
   plotWidthM: z.number().min(4).max(1000).optional(),
   plotLengthM: z.number().min(4).max(1000).optional(),

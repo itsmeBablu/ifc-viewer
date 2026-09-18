@@ -6,14 +6,11 @@ import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { sketchRooms } from "@/lib/ai/modeling/sketch";
 import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
 import AiSketchWorkspace from "./AiSketchWorkspace";
-import type { AiModelId } from "@/lib/ai/models";
 
-export default function AiFootprintCanvas({ parameters, onChange, disabled, building, heightMm, thicknessMm, availableShapes, model, preferences, onPreferences, onRefresh, chat }: {
+export default function AiFootprintCanvas({ parameters, onChange, disabled, building, heightMm, thicknessMm }: {
   parameters: ResidentialParameters; onChange: (p: ResidentialParameters) => void; disabled: boolean;
   building?: ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding> | null;
   heightMm: number; thicknessMm: number;
-  availableShapes?: Array<"rectangle" | "l" | "u" | "drawn">;
-  chat?: Array<{role: "user" | "assistant"; text: string}>; model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [floor, setFloor] = useState(0);
@@ -27,7 +24,7 @@ export default function AiFootprintCanvas({ parameters, onChange, disabled, buil
   const raw = shape === "drawn" ? parameters.footprintPoints ?? [] : FOOTPRINTS[shape];
   const points = sketch?.points ?? raw.map(p => ({ xMm: p.x * 14000, yMm: p.y * 14000 }));
   const minX = Math.min(0, ...points.map(p => p.xMm)), minY = Math.min(0, ...points.map(p => p.yMm));
-  const width = Math.max(1000, (parameters.plotWidthM ?? 0) * 1000, ...points.map(p => p.xMm - minX)), depth = Math.max(1000, (parameters.plotLengthM ?? 0) * 1000, ...points.map(p => p.yMm - minY));
+  const width = Math.max(1000, ...points.map(p => p.xMm - minX)), depth = Math.max(1000, ...points.map(p => p.yMm - minY));
   const span = Math.max(width, depth);
   const x = (n: number) => 10 + (n - minX) / span * 100;
   const y = (n: number) => 10 + (n - minY) / span * 100;
@@ -39,18 +36,17 @@ export default function AiFootprintCanvas({ parameters, onChange, disabled, buil
   };
   return <div className="ai-footprint-chooser">
     <button type="button" className="ai-expand-sketch" disabled={disabled} onClick={open}><FiMaximize2 /> Expand 2D workspace</button>
-    {expanded && <AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled} model={model} preferences={preferences} onPreferences={onPreferences} onRefresh={onRefresh} chat={chat} />}
+    {expanded && <AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled} />}
     <div className="ai-suggestion-row" role="group" aria-label="Building outline">
-      {(["rectangle", "l", "u", "drawn"] as const).map(s => <button key={s} type="button" disabled={disabled || !!availableShapes && !availableShapes.includes(s)} className={availableShapes && !availableShapes.includes(s) ? "ai-choice-unavailable" : ""} title={availableShapes && !availableShapes.includes(s) ? "Try fewer bedrooms or a smaller garden to make room for this outline." : undefined} aria-pressed={shape === s}
+      {(["rectangle", "l", "u", "drawn"] as const).map(s => <button key={s} type="button" disabled={disabled} aria-pressed={shape === s}
         onClick={() => {
-          onChange({ ...parameters, footprint: s, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined, footprintPoints: s === "drawn" ? [] : undefined });
+          onChange({ ...parameters, footprint: s, sketches: undefined, totalAreaM2: undefined, ...(s === "drawn" ? { footprintPoints: [], widthM: undefined, lengthM: undefined } : {}) });
           if (s === "drawn") setExpanded(true);
         }}>{s === "rectangle" ? "Rectangle" : s === "drawn" ? "Draw outline" : s.toUpperCase() + " shape"}</button>)}
     </div>
     {sketches.length > 1 && <div className="ai-suggestion-row" aria-label="Preview floor">{sketches.map((_, i) => <button key={i} type="button" aria-pressed={floor === i} onClick={() => setFloor(i)}>{i === 0 ? "Ground floor" : "Floor " + i}</button>)}</div>}
     <svg className="ai-footprint-canvas" viewBox="0 0 120 120" role="img" aria-label={shape.toUpperCase() + " residential floor plan"}>
       <defs><clipPath id={clipId}><polygon points={poly(points)} /></clipPath></defs>
-      {parameters.plotWidthM && parameters.plotLengthM && <rect x={x(-thicknessMm)} y={y(-thicknessMm)} width={parameters.plotWidthM * 1000 / span * 100} height={parameters.plotLengthM * 1000 / span * 100} fill="none" stroke="#94a3b8" strokeWidth=".6" strokeDasharray="2 1"><title>Rectangular plot · {parameters.plotWidthM} × {parameters.plotLengthM} m</title></rect>}
       <polygon points={poly(points)} fill="#eff6ff" stroke="#334155" strokeWidth="1.4" />
       <g clipPath={"url(#" + clipId + ")"}>
         {rooms.map((room, i) => <polygon key={i} points={poly(room)} fill={["#dbeafe", "#fef3c7", "#dcfce7", "#f3e8ff"][i % 4]} stroke="#64748b" strokeWidth=".3" />)}

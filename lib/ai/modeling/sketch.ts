@@ -205,7 +205,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
           const reserved:FurnitureRect[]=doors.filter(p=>insidePolygon(p,room)).map(p=>({x:p.xMm-650,y:p.yMm-1000,w:1300,d:2000}));
           if(stairRect)reserved.push(stairRect);
           const type=roomLabel(room)?.use??(i===livingIndex?"living":beds&&polygonArea(room)>=11e6?(beds--,"bedroom"):"bathroom");
-          arrangeRoom(type,zone,reserved,(familyId,px,py,rotationDeg)=>actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture:${index++}`,levelId,familyId,xMm:x+px,yMm:py,rotationDeg,elevationMm:0}),input.bathFixture);
+          arrangeRoom(type,zone,reserved,(familyId,px,py,rotationDeg)=>actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture:${index++}`,levelId,familyId,xMm:x+px,yMm:py,rotationDeg,elevationMm:0}));
         });
         if(beds&&!s.labels?.length)throw new Error(`Floor ${floor}: draw enough enclosed rooms of at least 11 m² for ${bedrooms} bedrooms plus living space, or remove inside lines for an automatic layout.`);
       }

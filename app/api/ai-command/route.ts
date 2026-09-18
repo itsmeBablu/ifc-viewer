@@ -36,12 +36,18 @@ export async function POST(request: Request) {
   if (!session?.user?.id) return reply({ error: "Sign in with Google to use AI commands." }, 401);
   const origin = request.headers.get("origin");
   const expectedOrigin = new URL(process.env.AUTH_URL ?? request.url).origin;
-  if (!origin || origin !== expectedOrigin) return reply({ error: "Request origin is not allowed." }, 403);
+  const requestOrigin = new URL(request.url).origin;
+  const isAllowedOrigin = origin && (
+    origin === expectedOrigin ||
+    origin === requestOrigin ||
+    (process.env.NODE_ENV === "development" && (origin.includes("localhost") || origin.includes("127.0.0.1")))
+  );
+  if (!isAllowedOrigin) return reply({ error: "Request origin is not allowed." }, 403);
   if (!request.headers.get("content-type")?.startsWith("application/json")) return reply({ error: "Send a JSON command." }, 415);
   let input;
   try {
     input = commandRequestSchema.parse(await readBody(request));
-  } catch { return reply({ error: "Please complete your requirements and try again. For a home, start with an area or both length and width." }, 400); }
+  } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
   let limit: Awaited<ReturnType<typeof limitAiUser>>;
   try {
     limit = await limitAiUser(session.user.id);

@@ -17,7 +17,7 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
       if(i<actualBedrooms && bedroomHasEnsuite(input,i)) {
         const bath=ensuiteZone(start,bayWidths[i],a.bedroomEndMm);
         occupied.push(bath);
-        arrangeRoom("bathroom",bath,[{x:bath.x+bath.w/2-450,y:bath.y,w:900,d:700}],add,"shower");
+        arrangeRoom("bathroom",bath,[{x:bath.x+bath.w/2-450,y:bath.y,w:900,d:700}],add);
       }
       arrangeRoom(i<actualBedrooms?"bedroom":"study",room,occupied,add);
     }
@@ -35,7 +35,7 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
     for(const bath of bathroomZones(input,bathX,serviceY,a.bathroomWidthMm,a.bathroomDepthMm,upper)) {
       const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:Math.min(950,bath.d/3)}];
       if(bath.guest){add("bath-toilet",bath.x+bath.w-350,bath.y+bath.d-350);add("bath-vanity",bath.x+350,bath.y+bath.d/2,90);if(input.guestBathroomShower)add("bath-shower",bath.x+500,bath.y+bath.d-550);}
-      else arrangeRoom("bathroom",bath,occupied,add,input.bathFixture);
+      else arrangeRoom("bathroom",bath,occupied,add);
     }
     const zone={x:flipped?t/2:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
     const used:Rect[]=[{x:a.widthMm-t/2-1550,y:serviceY,w:1100,d:1000}];

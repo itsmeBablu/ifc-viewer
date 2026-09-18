@@ -18,8 +18,6 @@ import AiMessageContent from "./AiMessageContent";
 import AiBuildingPresets from "./AiBuildingPresets";
 import AiDrawingAttachments from "./AiDrawingAttachments";
 import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
-import { defaultModelingPlan } from "@/lib/ai/modeling";
-import { homeReplacementActions } from "@/lib/ai/modeling/project";
 import type { DrawingReference } from "@/lib/ai/drawing";
 import { LuArrowUp, LuCirclePlus, LuSparkles, LuUndo2, LuZap } from "react-icons/lu";
 
@@ -44,7 +42,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   const projectId = propProjectId ?? storeProjectId ?? "default";
   const [model, setModel] = useState<AiModelId>(() => { const saved = savedPreference("ai-assistant-model"); return isAiModelId(saved) ? saved : DEFAULT_AI_MODEL; });
   const [mode, setMode] = useState<AiMode>(() => { const saved = savedPreference("ai-assistant-mode"); return isAiMode(saved) ? saved : "build"; });
-  const [home, setHome] = useState(true);
   const selectedCount = useLayoutDrawingStore(s => s.selectedElements.length);
   const levelCount = useLayoutDrawingStore(s => s.levels.length);
   const modelInventory = useLayoutDrawingStore(s => `${s.walls.length} walls · ${s.doors.length} doors · ${s.windows.length} windows · ${s.slabs.length} floors/roofs · ${s.mepEquipment.length} furniture/equipment · ${s.pipes.length} pipes · ${s.ducts.length} ducts · ${s.cableTrays.length} trays · ${s.columns.length} columns · ${s.beams.length} beams`);
@@ -240,7 +237,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     catch (e) { setError(e instanceof Error ? e.message : "Could not read that PDF page."); }
     finally { setReading(false); }
   }
-  async function submit(event?: React.FormEvent, template?: {command:string;parameters:ResidentialParameters;replaceProject?:boolean}) {
+  async function submit(event?: React.FormEvent, template?: {command:string;parameters:ResidentialParameters}) {
     event?.preventDefault();
     if (busyRef.current || reading || !historyLoaded || !(template?.command??text).trim()) return;
     useToolMarkupStore.getState().setQuadView(false);
@@ -256,18 +253,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     try {
       const context = currentAiContext();
       const fingerprint = aiFingerprint();
-      if (template) {
-        const compilationContext = template.replaceProject ? { ...context, selection: [], elements: context.elements.filter(e => e.kind === "level") } : context;
-        const compiled = defaultModelingPlan({ command: submittedText, model, mode: "build", residential: template.parameters, context: compilationContext, attachments: [], history: [] });
-        if (!compiled) throw new Error("Please choose a home concept before building.");
-        const plan = validatePlan({ ...compiled.plan, actions: [...(template.replaceProject ? homeReplacementActions(context) : []), ...compiled.plan.actions] }, context);
-        setThinkingLabel("Building your home in 3D");
-        await applyAiPlan(plan, fingerprint, true);
-        setAppliedFingerprint(aiFingerprint());
-        pushHistory({ role: "assistant", text: `Home saved in 3D. Reopen Home to adjust your rooms and details.`, model, mode: "build" });
-        setStatus("Home saved in 3D. Reopen Home to edit it; Undo restores the previous model.");
-        return;
-      }
       const commandWithSketch = sketchSummary
         ? `${submittedText}\n\n[2D Sketch context]\n${sketchSummary}`
         : submittedText;
@@ -315,7 +300,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
           : e instanceof Error && !e.name.includes("Zod") ? e.message : "AI could not produce a usable response. Try a smaller request.";
       pushHistory({ role: "assistant", text: message, model, mode });
       setFailedCommand(submittedText);
-      if (home) setError(message);
       if (submittedAttachments.length) setIncludeAttachments(true);
       setStatus("");
     }
@@ -336,7 +320,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
   }
   return (
       <div className="ai-command-panel flex flex-col flex-1 min-h-0 h-full overflow-hidden" onDragOver={e => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!busyRef.current && historyLoaded) void attach(Array.from(e.dataTransfer.files)); } }}>
-      <AiModelControls model={home && model === "ollama-local" ? DEFAULT_AI_MODEL : model} mode={mode} home={home} onHome={() => { setHome(true); setMode("build"); setPending(null); }} disabled={busy} onModel={setModel} onMode={next => { setHome(false); setMode(next); setResidential(undefined); setText(""); setPending(null); setStatus(""); }} />
       <div
         ref={historyRef}
         className="ai-chat-history flex-1 min-h-0 overflow-y-auto pr-1 space-y-3"
@@ -345,7 +328,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
         aria-relevant="additions"
         aria-label="Conversation"
       >
-        {!home && history.length === 0 && (
+        {history.length === 0 && (
           <div className="ai-welcome-copy pt-1 pb-2">
             <span className="ai-sparkle-mark"><LuSparkles /></span>
             <div>
@@ -355,8 +338,8 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             </div>
           </div>
         )}
-        <div hidden={!home}><AiBuildingPresets key={`${projectId}:${conversationKey}`} disabled={busy || reading || !historyLoaded} model={model === "ollama-local" ? DEFAULT_AI_MODEL : model} heightMm={wallHeightMm} thicknessMm={wallThicknessMm} onChoose={(command, parameters) => { if (home) { setText(command); setResidential(parameters); } }} projectId={projectId} onCreate={(command,parameters,replaceProject)=>void submit(undefined,{command,parameters,replaceProject})} /></div>
-        {!home && history.map((turn, i) => (
+        {mode === "build" && !attachments.length && <AiBuildingPresets key={`${projectId}:${conversationKey}`} disabled={busy || reading || !historyLoaded} model={model} heightMm={wallHeightMm} thicknessMm={wallThicknessMm} onChoose={(command, parameters) => { setText(command); setResidential(parameters); }} onCreate={(command,parameters)=>void submit(undefined,{command,parameters})} />}
+        {history.map((turn, i) => (
           <div
             key={i}
             className={`ai-message-row flex flex-col ${turn.role === "user" ? "items-end" : "items-start"}`}
@@ -385,7 +368,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             </div>
           </div>
         ))}
-        {!home && failedCommand && (
+        {failedCommand && (
           <button type="button" className="ai-text-button" disabled={busy} onClick={() => { setText(failedCommand); setFailedCommand(null); inputRef.current?.focus(); }}>
             Edit and resend last message
           </button>
@@ -409,7 +392,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
             <div className="flex gap-3"><button className="ai-apply-button" disabled={busy || (pending.plan.actions.some(a => a.kind === "delete") && !deleteApproved)} onClick={() => void apply()}>Apply {pending.plan.actions.length} actions</button><button className="ai-text-button" disabled={busy} onClick={() => { setPending(null); setStatus("Preview discarded. No changes applied."); }}>Discard</button></div>
           </div>
         )}
-        {!home && history.length === 0 && mode !== "build" && (
+        {history.length === 0 && mode !== "build" && (
           <div className="ai-suggestion-row pt-1">
             {(mode === "review" ? ["Review circulation and opening placement", "Check the selected elements"] : ["How do I turn a floor plan into 3D?", "Explain levels, walls and openings"]).map(suggestion => (
               <button key={suggestion} type="button" disabled={busy || !historyLoaded} onClick={() => { setText(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
@@ -423,7 +406,7 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
         )}
       </div>
 
-      <div hidden={home} className="ai-command-bottom shrink-0 pt-2 space-y-2">
+      <div className="ai-command-bottom shrink-0 pt-2 space-y-2">
         <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp" multiple className="sr-only" aria-label="Attach plans or images" disabled={busy || reading} onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) void attach(files); }} />
         {attachments.length > 0 && (
           <div className="ai-attachments">
@@ -504,6 +487,13 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
 
 
         <form onSubmit={submit} className="ai-composer">
+          <AiModelControls
+            model={model}
+            mode={mode}
+            disabled={busy}
+            onModel={setModel}
+            onMode={next => { setMode(next); setPending(null); setStatus(""); }}
+          />
           <label htmlFor="ai-command" className="sr-only">Your command or clarification</label>
           <textarea
             ref={inputRef}
