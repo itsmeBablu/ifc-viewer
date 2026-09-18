@@ -9,13 +9,15 @@ import {
 } from "react-icons/fi";
 import type { FloorSketch, ResidentialParameters, RoomUse, SketchPoint } from "@/lib/ai/modeling/allocation";
 import { FOOTPRINTS, insidePolygon, inscribedRectangle, polygonArea } from "@/lib/ai/modeling/footprint";
-import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine } from "@/lib/ai/modeling/sketchEditing";
-import { sketchRooms, normalizeSketchJunctions } from "@/lib/ai/modeling/sketch";
+import { resizeSketchLine, circularOutline, arcSegments, lineAngleDeg, rotateSketchLine, moveSketchLine, moveSketchEndpoint, snapSketchEndpoint } from "@/lib/ai/modeling/sketchEditing";
+import { sketchRooms, normalizeSketchJunctions, clipSketchLines, ensureSketchBoundary } from "@/lib/ai/modeling/sketch";
+import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
+import { modelDetails, type AiModelId } from "@/lib/ai/models";
 
-type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
+type Tool = "select" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "room" | "garden" | "pan";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
 const uses: RoomUse[] = ["bedroom", "living", "kitchen", "dining", "study", "bathroom", "corridor", "garage"];
 const colors: Record<RoomUse, string> = {
@@ -29,33 +31,30 @@ const tools: { id: Tool; name: string; icon: React.ReactNode }[] = [
   { id: "arc", name: "Arc", icon: <span aria-hidden="true" className="ai-arc-icon"/> },
   { id: "rectangle", name: "Rectangle", icon: <FiSquare/> },
   { id: "circle", name: "Circle", icon: <FiCircle/> },
-  { id: "door", name: "Double door", icon: <span aria-hidden="true">↔</span> },
-  { id: "window", name: "Window", icon: <span aria-hidden="true">▥</span> },
   { id: "garden", name: "Garden", icon: <span aria-hidden="true">&#127793;</span> },
   { id: "room", name: "Room name", icon: <FiType/> },
   { id: "pan", name: "Pan", icon: <FiMove/> }
 ];
 const help: Record<Tool, string> = {
-  select: "Click any line to select it. Then edit its length or angle in the sidebar, or click the lock icon on the line.",
+  select: "Drag a line to move it, or drag either endpoint to reshape it. Connected endpoints follow. Select a line to edit its length or lock it.",
   wall: "Click to place start, move cursor, click to place end. Draw continuous walls by chaining clicks. Press Escape to finish a chain.",
   freehand: "Hold and drag to sketch walls freely — like a pencil. Release to commit.",
   arc: "Click start → click end → move cursor to bend the live arc, then click to place.",
   rectangle: "Click two opposite corners to draw a rectangular outline.",
   circle: "Click the centre, then click to set the radius.",
-  door: "Click a wall to place a double entrance door. The nearest wall is used.",
-  window: "Click a wall to place a standard window.",
   garden: "Click corner by corner to define a garden boundary. Double-click the last point to close the polygon.",
   room: "Click inside a fully enclosed room area to add a name and use tag.",
   pan: "Drag to pan the view. Scroll wheel or +/− to zoom, or click Fit to reset."
 };
 
 export default function AiSketchWorkspace({
-  parameters, onChange, onClose, disabled, building
+  parameters, onChange, onClose, disabled, building, model, preferences, onPreferences, onRefresh
 }: {
   parameters: ResidentialParameters; 
   onChange: (p: ResidentialParameters) => void; 
   onClose: () => void; 
-  disabled: boolean; 
+  disabled: boolean;
+  model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
   building?: ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding> | null;
 }) {
   const levels = useLayoutDrawingStore(s => s.levels),
@@ -81,10 +80,15 @@ export default function AiSketchWorkspace({
 
   // Determine total sketch floors: use the max of sketches.length and levels.length
   const totalFloors = Math.max(parameters.sketches?.length ?? 1, 1);
-  const sketches = parameters.sketches ?? Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed);
+  const [liveSketches, setLiveSketches] = useState<FloorSketch[] | null>(null);
+  const savedSketches = parameters.sketches ?? (() => { try { const defaults = useLayoutDrawingStore.getState(); return residentialSketches(parameters, defaults.draftWallHeightMm, defaults.draftWallThicknessMm); } catch { return Array.from({ length: parameters.variant === "duplex" ? 2 : 1 }, () => seed); } })();
+  const sketches = liveSketches ?? savedSketches;
+  const dragOriginRef = useRef<FloorSketch[] | null>(null);
+  const lineDragRef = useRef<{ index: number; interior: boolean; point: SketchPoint } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const [floor, setFloor] = useState(0),
-        [tool, setTool] = useState<Tool>("wall"),
+        [tool, setTool] = useState<Tool>(parameters.footprint === "drawn" && !parameters.sketches ? "rectangle" : "select"),
         [below, setBelow] = useState(true),
         [anchors, setAnchors] = useState<SketchPoint[]>([]),
         [selected, setSelected] = useState<Pick | null>(null),
@@ -94,7 +98,7 @@ export default function AiSketchWorkspace({
         [wallType, setWallType] = useState<"exterior"|"partition"|"fire"|"curtain">("partition"),
         [error, setError] = useState(""),
         [pickLayer, setPickLayer] = useState<Pick["source"]>("current"),
-        [projectVisible, setProjectVisible] = useState(true),
+        [projectVisible, setProjectVisible] = useState(walls.length > 0),
         [projectLevel, setProjectLevel] = useState(activeLevel ?? levels[0]?.id ?? ""),
         [zoom, setZoom] = useState(1),
         [pan, setPan] = useState({ x: 0, y: 0 }),
@@ -129,6 +133,7 @@ export default function AiSketchWorkspace({
 
   const current = sketches[Math.min(floor, sketches.length - 1)],
         previous = floor > 0 ? sketches[floor - 1] : null;
+  const currentRooms = sketchRooms(current);
   const projectWalls = walls.filter(w => w.levelId === projectLevel);
   const projectPoints = projectVisible ? projectWalls.flatMap(w => [{ xMm: w.startXmm, yMm: w.startYmm }, { xMm: w.endXmm, yMm: w.endYmm }]) : [];
   const allPoints = [...sketches.flatMap(s => [...s.points, ...s.lines.flatMap(l => [l.start, l.end]), ...(s.gardens ?? []).flat()]), ...projectPoints];
@@ -140,11 +145,11 @@ export default function AiSketchWorkspace({
         viewY = minY + (extent - span) / 2 + pan.y;
 
   const change = (next: FloorSketch[], variant = parameters.variant) => {
-    next = next.map(s => normalizeSketchJunctions(s));
+    next = next.map(s => s.locks?.length ? s : normalizeSketchJunctions(s, 20));
     setPast(v => [...v.slice(-29), sketches]);
     setFuture([]);
     setError("");
-    onChange({ ...parameters, variant, sketches: next });
+    onChange({ ...parameters, variant, sketches: next, totalAreaM2: next.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0) });
   };
   const replace = (s: FloorSketch) => change(sketches.map((old, i) => i === floor ? s : old));
   const resetSelection = () => { setSelected(null); setAnchors([]); setGardenAnchors([]); setRoomPoint(null); };
@@ -174,11 +179,8 @@ export default function AiSketchWorkspace({
     closeRef.current?.focus();
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // Escape never closes the workspace — it only cancels current action
-        if (gardenAnchors.length) { setGardenAnchors([]); return; }
-        if (anchors.length) { setAnchors([]); setCursorPoint(null); return; }
-        if (selected) { resetSelection(); return; }
-        // Escape cancels the current CAD action; keep the workspace open.
+        e.preventDefault(); e.stopPropagation();
+        onClose();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
@@ -189,9 +191,9 @@ export default function AiSketchWorkspace({
         doRedo();
       }
     };
-    document.addEventListener("keydown", handler);
+    document.addEventListener("keydown", handler, true);
     return () => {
-      document.removeEventListener("keydown", handler);
+      document.removeEventListener("keydown", handler, true);
       previousActive?.focus();
     };
   }, [onClose, past, future, sketches, anchors, gardenAnchors, selected, disabled]);
@@ -261,6 +263,8 @@ export default function AiSketchWorkspace({
     if (snap && snap.xMm >= 0 && snap.yMm >= 0 && snap.xMm <= 80000 && snap.yMm <= 80000) {
       return { point: snap, snap };
     }
+    const wallSnap = snapSketchEndpoint(current, raw, { xMm: -100000, yMm: -100000 }, Math.min(180, span * .012));
+    if (Math.hypot(wallSnap.xMm - raw.xMm, wallSnap.yMm - raw.yMm) > .01) return { point: wallSnap, snap: wallSnap };
     if (withOrtho && orthogonal && anchors.length && (tool === "wall" || tool === "arc")) {
       const a = anchors[anchors.length - 1];
       pt = Math.abs(pt.xMm - a.xMm) > Math.abs(pt.yMm - a.yMm) ? { ...pt, yMm: a.yMm } : { ...pt, xMm: a.xMm };
@@ -269,19 +273,27 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerMoveCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (lineDragRef.current && dragOriginRef.current) {
+      const raw = getCanvasPoint(event);
+      if (!raw) return;
+      const gesture = lineDragRef.current, origin = dragOriginRef.current;
+      const dx = raw.xMm - gesture.point.xMm, dy = raw.yMm - gesture.point.yMm;
+      if (Math.hypot(dx, dy) > 30) suppressClickRef.current = true;
+      try {
+        const next = moveSketchLine(origin[floor], gesture.index, gesture.interior, dx, dy);
+        setLiveSketches(origin.map((s, i) => i === floor ? next : s));
+      } catch { /* Stop at the workspace bounds or a connected locked length. */ }
+      return;
+    }
     if (endpointDrag) {
       const raw = getCanvasPoint(event);
       if (!raw) return;
-      const { point, snap } = resolvePoint(raw, false);
-      const line = lineFor({ ...endpointDrag, source: "current" });
-      if (line) {
-        const nextLine = { ...line, [endpointDrag.endpoint]: point };
-        const next = endpointDrag.interior
-          ? { ...current, lines: current.lines.map((v, i) => i === endpointDrag.index ? nextLine : v) }
-          : { ...current, points: current.points.map((v, i) => i === endpointDrag.index ? point : v) };
-        onChange({ ...parameters, sketches: sketches.map((s, i) => i === floor ? next : s) });
-      }
-      setSnapPoint(snap);
+      const origin = dragOriginRef.current ?? sketches;
+      try {
+        const next = moveSketchEndpoint(origin[floor], endpointDrag.index, endpointDrag.interior, endpointDrag.endpoint, snapSketchEndpoint(origin[floor], raw, endpointDrag.interior ? origin[floor].lines[endpointDrag.index][endpointDrag.endpoint] : origin[floor].points[(endpointDrag.index + (endpointDrag.endpoint === "end" ? 1 : 0)) % origin[floor].points.length], Math.min(200, span * .012)));
+        setLiveSketches(origin.map((s, i) => i === floor ? next : s));
+      } catch { /* Keep connected locks intact during the gesture. */ }
+      suppressClickRef.current = true;
       return;
     }
     // Handle garden vertex drag
@@ -327,18 +339,13 @@ export default function AiSketchWorkspace({
   };
 
   const click = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (suppressClickRef.current) { suppressClickRef.current = false; return; }
     if (disabled || tool === "select" || tool === "pan" || tool === "freehand") return;
     const raw = getCanvasPoint(event);
     if (!raw) return;
     const { point } = resolvePoint(raw, true);
 
     try {
-      if (tool === "door" || tool === "window") {
-        const edges = current.points.map((start, i) => ({start, end: current.points[(i + 1) % current.points.length]}));
-        const nearest = edges.map((edge, i) => { const dx=edge.end.xMm-edge.start.xMm,dy=edge.end.yMm-edge.start.yMm,t=Math.max(0,Math.min(1,((point.xMm-edge.start.xMm)*dx+(point.yMm-edge.start.yMm)*dy)/(dx*dx+dy*dy||1))),p={xMm:edge.start.xMm+t*dx,yMm:edge.start.yMm+t*dy};return {i,p,d:Math.hypot(p.xMm-point.xMm,p.yMm-point.yMm)};}).sort((a,b)=>a.d-b.d)[0];
-        if(!nearest||nearest.d>Math.max(700,span*.04))throw new Error("Click near an outside wall to place the opening.");
-        replace({...current,openings:[...(current.openings??[]),{point:nearest.p,kind:tool==="door"?"doubleDoor":"window",widthMm:tool==="door"?1800:1200}]});setError("");return;
-      }
       if (tool === "room") {
         const room = sketchRooms(current).find(r => insidePolygon(point, r));
         if (!room) throw new Error("Click inside an enclosed room.");
@@ -409,7 +416,7 @@ export default function AiSketchWorkspace({
           { start: { xMm: x2, yMm: y2 }, end: { xMm: x1, yMm: y2 } },
           { start: { xMm: x1, yMm: y2 }, end: { xMm: x1, yMm: y1 } }
         ];
-        replace({ ...current, lines: [...current.lines, ...rectLines] });
+        replace(current.points.length < 3 ? { ...current, points: rectLines.map(l => l.start) } : { ...current, lines: [...current.lines, ...rectLines] });
         setAnchors([]);
         return;
       }
@@ -448,7 +455,16 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerUpCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (endpointDrag) { setPast(v => [...v.slice(-29), sketches]); setFuture([]); setEndpointDrag(null); return; }
+    if (lineDragRef.current || endpointDrag) {
+      const origin = dragOriginRef.current ?? savedSketches;
+      if (liveSketches) {
+        setPast(v => [...v.slice(-29), origin]); setFuture([]);
+        onChange({ ...parameters, sketches: liveSketches, totalAreaM2: liveSketches.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0) });
+      }
+      setLiveSketches(null); setEndpointDrag(null); lineDragRef.current = null; dragOriginRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      return;
+    }
     // Commit garden vertex drag
     if (gardenDrag) {
       setGardenDrag(null);
@@ -588,14 +604,41 @@ export default function AiSketchWorkspace({
     setPickLayer("current");
   };
 
+  const beginLineDrag = (event: React.PointerEvent<SVGLineElement>, index: number, interior: boolean, source: Pick["source"]) => {
+    event.stopPropagation();
+    if (disabled || tool !== "select" || event.button !== 0) return;
+    const wasSelected = selected?.source === source && selected.index === index && selected.interior === interior;
+    chooseLine(index, interior, source);
+    if (source !== "current") return;
+    const svg = event.currentTarget.closest("svg");
+    if (!svg) return;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const transformed = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    const raw = { xMm: transformed.x, yMm: transformed.y };
+    if (!raw) return;
+    dragOriginRef.current = sketches;
+    const line = lineFor({ index, interior, source });
+    const isLocked = current.locks?.some(l => l.index === index && l.interior === interior);
+    if (wasSelected && line && !isLocked && Math.min(Math.hypot(raw.xMm - line.start.xMm, raw.yMm - line.start.yMm), Math.hypot(raw.xMm - line.end.xMm, raw.yMm - line.end.yMm)) < span * .014) {
+      setEndpointDrag({ index, interior, endpoint: Math.hypot(raw.xMm - line.start.xMm, raw.yMm - line.start.yMm) < Math.hypot(raw.xMm - line.end.xMm, raw.yMm - line.end.yMm) ? "start" : "end" });
+    } else lineDragRef.current = { index, interior, point: raw };
+    svg.setPointerCapture(event.pointerId);
+  };
+  const pickLineClick = (event: React.MouseEvent, index: number, interior: boolean, source: Pick["source"]) => {
+    event.stopPropagation();
+    if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+    chooseLine(index, interior, source);
+  };
   // Render a line segment with inline lock icon and inline length input
   const segment = (a: SketchPoint, b: SketchPoint, index: number, interior: boolean, source: Pick["source"], curvedPath?: string) => {
     const key = `${source}:${interior}:${index}`,
           active = selected?.source === source && selected.index === index && selected.interior === interior,
           highlight = hover === key,
-          color = active ? "#16a34a" : highlight ? "#facc15" : source === "below" ? "#f59e0b" : source === "project" ? "#94a3b8" : interior ? "#a78bfa" : "#38bdf8",
+          lineLocked = source === "current" && current.locks?.some(l => l.index === index && l.interior === interior),
+          color = lineLocked ? "#f59e0b" : active ? "#16a34a" : highlight ? "#facc15" : source === "below" ? "#f59e0b" : source === "project" ? "#94a3b8" : interior ? "#a78bfa" : "#38bdf8",
           canPick = tool === "select" && pickLayer === source;
-    const isLocked = source === "current" && current.locks?.some(l => l.index === index && l.interior === interior);
+    const isLocked = lineLocked;
     const attrs = {
       stroke: color,
       strokeWidth: span * (source === "below" ? .005 : .003),
@@ -618,13 +661,17 @@ export default function AiSketchWorkspace({
 
         {/* Length + angle + lock indicator label */}
         <text x={midX} y={midY - span * .009} pointerEvents="none" fontSize={span * .012} textAnchor="middle" fill={color} opacity={0.85}>
-          {(lineLen / 1000).toFixed(1)} m · {angle}°{isLocked ? " 🔒" : ""}
+          {(lineLen / 1000).toFixed(1)} m · {angle}°
         </text>
 
         {/* Inline lock toggle icon — only visible for current-layer lines */}
-        {source === "current" && !disabled && (
+        {source === "current" && !disabled && (active || isLocked) && (
           <g
             className="ai-sketch-inline-lock"
+            role="button"
+            tabIndex={0}
+            aria-label={isLocked ? "Unlock selected line" : "Lock selected line"}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggleLineLock(index, interior); } }}
             transform={`translate(${midX + span * .045} ${lockIconY})`}
             onClick={e => { e.stopPropagation(); toggleLineLock(index, interior); }}
             style={{ cursor: "pointer" }}
@@ -685,15 +732,15 @@ export default function AiSketchWorkspace({
 
         {active && source === "current" && !isLocked && !curvedPath && (
           <>
-            <circle cx={a.xMm} cy={a.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); setEndpointDrag({ index, interior, endpoint: "start" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
-            <circle cx={b.xMm} cy={b.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); setEndpointDrag({ index, interior, endpoint: "end" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
+            <circle cx={a.xMm} cy={a.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); dragOriginRef.current = sketches; setEndpointDrag({ index, interior, endpoint: "start" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
+            <circle cx={b.xMm} cy={b.yMm} r={span * .009} fill="#facc15" stroke="#854d0e" strokeWidth={span * .0015} style={{ cursor: "grab" }} onPointerDown={e => { e.stopPropagation(); dragOriginRef.current = sketches; setEndpointDrag({ index, interior, endpoint: "end" }); (e.currentTarget.closest("svg") as SVGSVGElement | null)?.setPointerCapture?.(e.pointerId); }} />
           </>
         )}
 
         {canPick && (curvedPath ? (
           <path d={curvedPath} fill="none" stroke="transparent" strokeWidth={span * .018} onMouseEnter={() => setHover(key)} onMouseLeave={() => setHover(null)} onClick={e => { e.stopPropagation(); chooseLine(index, interior, source); }} />
         ) : (
-          <line x1={a.xMm} y1={a.yMm} x2={b.xMm} y2={b.yMm} stroke="transparent" strokeWidth={span * .018} onMouseEnter={() => setHover(key)} onMouseLeave={() => setHover(null)} onClick={e => { e.stopPropagation(); chooseLine(index, interior, source); }} />
+          <line x1={a.xMm} y1={a.yMm} x2={b.xMm} y2={b.yMm} stroke="transparent" strokeWidth={span * .018} style={{ cursor: source === "current" ? "grab" : "pointer" }} onPointerDown={e => beginLineDrag(e, index, interior, source)} onMouseEnter={() => setHover(key)} onMouseLeave={() => setHover(null)} onClick={e => pickLineClick(e, index, interior, source)} />
         ))}
       </g>
     );
@@ -703,7 +750,7 @@ export default function AiSketchWorkspace({
     <g className={src === "below" ? "ai-sketch-below" : "ai-sketch-current"}>
       {s.points.length >= 3 && <polygon points={s.points.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill={src === "below" ? "#f59e0b12" : "#38bdf80c"} stroke="none" pointerEvents="none" />}
       {src === "current" && s.labels?.map((label, i) => {
-        const room = sketchRooms(s).find(r => insidePolygon(label.point, r));
+        const room = currentRooms.find(r => insidePolygon(label.point, r));
         return (
           <g key={`room${i}`} pointerEvents="none">
             {room && <polygon points={room.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill={`${colors[label.use]}25`} />}
@@ -920,7 +967,7 @@ export default function AiSketchWorkspace({
       <section role="dialog" aria-modal="true" aria-label="House drawing workspace" className="ai-sketch-workspace" onKeyDown={e => {
         if (e.key !== "Escape") e.stopPropagation();
         if (e.key === "Tab") {
-          const targets = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled),select:not(:disabled),input:not(:disabled)")],
+          const targets = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled)")],
                 first = targets[0], last = targets[targets.length - 1];
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -942,11 +989,13 @@ export default function AiSketchWorkspace({
             <button type="button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={disabled || !future.length} onClick={doRedo}>
               <FiCornerUpRight/> <span>Redo</span>
             </button>
-            <button ref={closeRef} type="button" className="btn-v-yellow" onClick={onClose}>
+            <button ref={closeRef} type="button" className="btn-v-yellow" onClick={() => { change(sketches.map(s => clipSketchLines(ensureSketchBoundary(s)))); onClose(); }}>
               <FiCheck/> Done
             </button>
           </div>
         </header>
+
+        {onRefresh && <div className="ai-sketch-ai-controls"><label><span>{model ? modelDetails(model).label : "Gemini"} · Layout preferences</span><textarea aria-label="Drawing AI preferences" rows={1} maxLength={1500} value={preferences ?? ""} disabled={disabled} onChange={e => onPreferences?.(e.target.value)} placeholder="Arrange rooms inside this outline…" /></label><button type="button" className="btn-v-yellow" disabled={disabled} onClick={onRefresh}>{disabled ? "Planning…" : "Refresh with AI"}</button><small>Only outline, room labels and wall lines are used to plan your layout.</small></div>}
 
         {/* Toolbar */}
         <div className="ai-sketch-toolbar">
@@ -1006,7 +1055,7 @@ export default function AiSketchWorkspace({
               onPointerMove={onPointerMoveCanvas}
               onPointerUp={onPointerUpCanvas}
               onWheel={e => { e.preventDefault(); setZoom(v => Math.max(.5, Math.min(4, v * (e.deltaY < 0 ? 1.1 : .9)))); }}
-              onPointerCancel={() => { drag.current = null; setIsFreehandDragging(false); setFreehandStroke([]); setGardenDrag(null); }}
+              onPointerCancel={() => { drag.current = null; setIsFreehandDragging(false); setFreehandStroke([]); setGardenDrag(null); lineDragRef.current = null; dragOriginRef.current = null; setLiveSketches(null); setEndpointDrag(null); }}
               aria-label="Editable 2D floor drawing"
               role="img"
             >

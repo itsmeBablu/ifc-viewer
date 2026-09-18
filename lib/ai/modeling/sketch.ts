@@ -6,6 +6,7 @@ import { furnishFloor,outdoorActions,gardenActions } from "./furnishing";
 import { arrangeRoom,type FurnitureRect } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import { validateBoundary } from "../validate";
+import { homeDetails } from "./details";
 
 type Segment={start:SketchPoint;end:SketchPoint};
 const cross=(a:SketchPoint,b:SketchPoint)=>a.xMm*b.yMm-a.yMm*b.xMm;
@@ -13,6 +14,32 @@ const minus=(a:SketchPoint,b:SketchPoint)=>({xMm:a.xMm-b.xMm,yMm:a.yMm-b.yMm});
 const pointSegmentDistance=(p:SketchPoint,a:SketchPoint,b:SketchPoint)=>{const dx=b.xMm-a.xMm,dy=b.yMm-a.yMm,t=Math.max(0,Math.min(1,((p.xMm-a.xMm)*dx+(p.yMm-a.yMm)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.xMm-(a.xMm+t*dx),p.yMm-(a.yMm+t*dy));};
 function intersection(a:Segment,b:Segment){const r=minus(a.end,a.start),s=minus(b.end,b.start),den=cross(r,s);if(Math.abs(den)<.001)return null;const t=cross(minus(b.start,a.start),s)/den,u=cross(minus(b.start,a.start),r)/den;return t>=-.00001&&t<=1.00001&&u>=-.00001&&u<=1.00001?{t,u,point:{xMm:a.start.xMm+t*r.xMm,yMm:a.start.yMm+t*r.yMm}}:null;}
 export function sketchSegments(s:FloorSketch):Segment[]{return [...s.points.map((start,i)=>({start,end:s.points[(i+1)%s.points.length]})),...s.lines];}
+/** Trim drafting overshoots at every crossing, including concave courtyard edges. */
+export function clipSketchLines(s: FloorSketch): FloorSketch {
+  if (s.points.length < 3) return s;
+  const boundary = sketchSegments({ ...s, lines: [] });
+  const lines = s.lines.flatMap(line => {
+    const cuts = [...new Set([0, 1, ...boundary.flatMap(edge => {
+      const hit = intersection(line, edge);
+      return hit ? [Math.max(0, Math.min(1, hit.t))] : [];
+    })])].sort((a, b) => a - b);
+    const at = (t: number) => ({ xMm: line.start.xMm + (line.end.xMm - line.start.xMm) * t, yMm: line.start.yMm + (line.end.yMm - line.start.yMm) * t });
+    return cuts.slice(1).flatMap((end, i) => {
+      const start = cuts[i], mid = at((start + end) / 2);
+      if (!insidePolygon(mid, s.points) || boundary.some(edge => pointSegmentDistance(mid, edge.start, edge.end) < .01)) return [];
+      const a = at(start), b = at(end);
+      return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm) >= 300 ? [{ start: a, end: b }] : [];
+    });
+  });
+  // Remap metadata only for segments retained without splitting or trimming.
+  const mapIndex = (index: number) => lines.findIndex(l => l.start.xMm === s.lines[index]?.start.xMm && l.start.yMm === s.lines[index]?.start.yMm && l.end.xMm === s.lines[index]?.end.xMm && l.end.yMm === s.lines[index]?.end.yMm);
+  const remap = <T extends { interior: boolean; index: number }>(items: T[] | undefined) => items?.flatMap(item => {
+    if (!item.interior) return [item];
+    const index = mapIndex(item.index);
+    return index < 0 ? [] : [{ ...item, index }];
+  });
+  return { ...s, lines, locks: remap(s.locks), wallTypes: remap(s.wallTypes) };
+}
 /** Joins hand-drawn endpoints into a shared CAD vertex, tolerating small pointer drift. */
 export function normalizeSketchJunctions(s:FloorSketch, toleranceMm = 350): FloorSketch {
   const vertices: SketchPoint[] = [];
@@ -46,7 +73,7 @@ export function ensureSketchBoundary(s:FloorSketch):FloorSketch {
 export function validateSketches(sketches:FloorSketch[]){
   if(!sketches.length||sketches.length>8)throw new Error("Choose one to eight floors.");
   for(const [floor,rawS] of sketches.entries()){
-    const s = ensureSketchBoundary(rawS);
+    const s = clipSketchLines(ensureSketchBoundary(rawS));
     if (s.points.length >= 3) validateBoundary(s.points);
     for(const garden of s.gardens??[])validateBoundary(garden);
     const rooms=sketchRooms(s);
@@ -96,7 +123,7 @@ export function sketchRooms(s:FloorSketch):SketchPoint[][]{
 }
 
 export function sketchActions(input:ResidentialParameters,id:string,groundId:string,baseElevation:number,height:number,thickness:number,x=0):AiAction[]{
-  const sketches=(input.sketches??[]).map(s=>normalizeSketchJunctions(ensureSketchBoundary(s)));validateSketches(sketches);
+  const sketches=(input.sketches??[]).map(s=>clipSketchLines(normalizeSketchJunctions(ensureSketchBoundary(s))));validateSketches(sketches);
   const actions:AiAction[]=[],stairs=conceptStair(height),floors=sketches.length;
   const automatic=sketches.map(s=>{
     if(s.lines.length||s.labels?.length)return null;
@@ -131,7 +158,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
       layout=applyFootprint(layout,s.points,x,0,thickness,height,levelId,prefix);actions.push(...layout.filter(a=>a.kind!=="floor"));
     }else{
       const edges=sketchSegments(s);
-      edges.forEach((l,i)=>{const interior=i>=s.points.length,logicalIndex=interior?i-s.points.length:i,type=s.wallTypes?.find(w=>w.index===logicalIndex&&w.interior===interior)?.type;actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:interior?150:thickness,heightMm:height,...(type?{wallType:type}:{})});});
+      edges.forEach((l,i)=>{const interior=i>=s.points.length,logicalIndex=interior?i-s.points.length:i,type=s.wallTypes?.find(w=>w.index===logicalIndex&&w.interior===interior)?.type??(interior?"partition":"exterior");actions.push({kind:"wall",operation:"create",id:`${prefix}:wall:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,thicknessMm:interior?150:thickness,heightMm:height,...(type?{wallType:type}:{})});});
       (s.furnitureLines??[]).forEach((l,i)=>{const dx=l.end.xMm-l.start.xMm,dy=l.end.yMm-l.start.yMm,len=Math.hypot(dx,dy);actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture-sketch:${i}`,levelId,familyId:"furniture-line-marker",xMm:x+(l.start.xMm+l.end.xMm)/2,yMm:(l.start.yMm+l.end.yMm)/2,rotationDeg:Math.atan2(dy,dx)*180/Math.PI,elevationMm:0,widthMm:Math.max(100,len),depthMm:100,heightMm:50});});
       (s.mepLines??[]).forEach((l,i)=>actions.push({kind:"pipe",operation:"create",id:`${prefix}:mep-sketch:${i}`,levelId,startXmm:x+l.start.xMm,startYmm:l.start.yMm,endXmm:x+l.end.xMm,endYmm:l.end.yMm,diameterMm:28,elevationOffsetMm:-120,slopePercent:0,systemType:"hydronic_supply"}));
       (s.openings??[]).forEach((opening,i)=>{const edge=s.points.map((start,j)=>({start,end:s.points[(j+1)%s.points.length]})).map((edge,j)=>{const dx=edge.end.xMm-edge.start.xMm,dy=edge.end.yMm-edge.start.yMm,len=Math.hypot(dx,dy),t=Math.max(0,Math.min(1,((opening.point.xMm-edge.start.xMm)*dx+(opening.point.yMm-edge.start.yMm)*dy)/(len*len||1))),p={xMm:edge.start.xMm+t*dx,yMm:edge.start.yMm+t*dy};return {j,t,len,d:Math.hypot(p.xMm-opening.point.xMm,p.yMm-opening.point.yMm)};}).sort((a,b)=>a.d-b.d)[0];if(!edge)return;const wallId=`${prefix}:wall:${edge.j}`,positionMm=edge.t*edge.len;if(opening.kind==="window")actions.push({kind:"window",operation:"create",id:`${prefix}:sketch-window:${i}`,wallId,positionMm,widthMm:opening.widthMm,heightMm:1200,sillHeightMm:900,operationType:"casement"});else actions.push({kind:"door",operation:"create",id:`${prefix}:sketch-door:${i}`,wallId,positionMm,widthMm:opening.widthMm,heightMm:2200,hinge:"start",swing:1,style:opening.kind==="doubleDoor"?"double":"wood"});});
@@ -165,7 +192,7 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
           const reserved:FurnitureRect[]=doors.filter(p=>insidePolygon(p,room)).map(p=>({x:p.xMm-650,y:p.yMm-1000,w:1300,d:2000}));
           if(stairRect)reserved.push(stairRect);
           const type=roomLabel(room)?.use??(i===livingIndex?"living":beds&&polygonArea(room)>=11e6?(beds--,"bedroom"):"bathroom");
-          arrangeRoom(type,zone,reserved,(familyId,px,py,rotationDeg)=>actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture:${index++}`,levelId,familyId,xMm:x+px,yMm:py,rotationDeg,elevationMm:0}));
+          arrangeRoom(type,zone,reserved,(familyId,px,py,rotationDeg)=>actions.push({kind:"equipment",operation:"create",id:`${prefix}:furniture:${index++}`,levelId,familyId,xMm:x+px,yMm:py,rotationDeg,elevationMm:0}),input.bathFixture);
         });
         if(beds&&!s.labels?.length)throw new Error(`Floor ${floor}: draw enough enclosed rooms of at least 11 m² for ${bedrooms} bedrooms plus living space, or remove inside lines for an automatic layout.`);
       }
@@ -182,7 +209,9 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
     const boundary=offsetPolygon(s.points,thickness).map(p=>({...p,xMm:p.xMm+x}));
     const pieces=floor&&stairRect?polygonAroundOpening(boundary,{...stairRect,x:stairRect.x+x}):[boundary];
     pieces.forEach((boundary,i)=>actions.push({kind:"floor",operation:"create",id:`${prefix}:slab:${i}`,levelId,boundary,thicknessMm:200,elevationOffsetMm:0,roofPreset:"flat",pitchDeg:0}));
-    if(floor===floors-1&&input.variant!=="apartment")actions.push({kind:"roof",operation:"create",id:`${id}:roof`,levelId,boundary,thicknessMm:200,elevationOffsetMm:height,roofPreset:"flat",pitchDeg:0});
+    const rectangular = s.points.length === 4 && s.points.every((p,i) => Math.abs(p.xMm-s.points[(i+1)%4].xMm)<1 || Math.abs(p.yMm-s.points[(i+1)%4].yMm)<1);
+    const roofPreset = !rectangular || !input.roofStyle || input.roofStyle === "modern-flat" ? "flat" : input.roofStyle === "german-gable" ? "gable" : input.roofStyle === "german-hip" ? "hip" : "shed";
+    if(floor===floors-1&&(input.variant!=="apartment"||input.roofStyle))actions.push({kind:"roof",operation:"create",id:`${id}:roof`,levelId,boundary,thicknessMm:200,elevationOffsetMm:height,roofPreset,pitchDeg:roofPreset === "flat" ? 0 : roofPreset === "gable" ? 35 : 25});
     if(floor===floors-1&&input.variant!=="apartment")actions.push({kind:"equipment",operation:"create",id:`${prefix}:roof-window`,levelId,familyId:"extras-roof-window",xMm:x+(Math.min(...s.points.map(p=>p.xMm))+Math.max(...s.points.map(p=>p.xMm)))/2,yMm:(Math.min(...s.points.map(p=>p.yMm))+Math.max(...s.points.map(p=>p.yMm)))/2,rotationDeg:0,elevationMm:height+150,widthMm:1000,depthMm:1200,heightMm:120});
     if(floor<floors-1&&stairRect){
       const push=(sx:number,sy:number,w:number,d:number,top:number,j:string)=>actions.push({kind:"floor",operation:"create",id:`${prefix}:stair:${j}`,levelId,thicknessMm:top,elevationOffsetMm:top,roofPreset:"flat",pitchDeg:0,boundary:[{xMm:x+sx,yMm:sy},{xMm:x+sx+w,yMm:sy},{xMm:x+sx+w,yMm:sy+d},{xMm:x+sx,yMm:sy+d}]});
@@ -192,6 +221,6 @@ export function sketchActions(input:ResidentialParameters,id:string,groundId:str
   }
   const ground=sketches[0].points;
   for(const [i,polygon]of(sketches[0].gardens??[]).entries()){const b=inscribedRectangle(polygon);actions.push(...gardenActions(`${id}:drawn-garden:${i}`,groundId,x+b.xMm,b.yMm,b.widthMm,b.depthMm));}
-  if(input.variant!=="apartment")actions.push(...outdoorActions({...input,garage:input.garage??"enclosed",gardenAreaM2:sketches[0].gardens?.length?0:input.gardenAreaM2??40},id,groundId,x,0,Math.max(...ground.map(p=>p.xMm)),Math.max(...ground.map(p=>p.yMm)),height));
-  return actions;
+  if(input.variant!=="apartment" || (input.garage && input.garage!=="none") || input.gardenAreaM2)actions.push(...outdoorActions({...input,garage:input.garage??(input.variant==="apartment"?"none":"enclosed"),gardenAreaM2:sketches[0].gardens?.length?0:input.gardenAreaM2??(input.variant==="apartment"?0:40)},id,groundId,x,0,Math.max(...ground.map(p=>p.xMm)),Math.max(...ground.map(p=>p.yMm)),height));
+  return homeDetails(actions, input);
 }

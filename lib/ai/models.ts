@@ -13,7 +13,7 @@ export const isAiModelId = (value: unknown): value is AiModelId => AI_MODELS.som
 export const modelDetails = (id: AiModelId) => AI_MODELS.find(model => model.id === id)!;
 
 export const AI_MODES = [
-  { id: "build", label: "Build", description: "Draw directly in 3D with workspace input locked while AI works." },
+  { id: "build", label: "Build", description: "Plan residential layouts and create editable buildings in 3D." },
   { id: "review", label: "Review", description: "Assess layout, dimensions and selected elements. No model changes." },
   { id: "guide", label: "Guide", description: "Get modeling advice and step-by-step workflow help. No model changes." },
 ] as const;

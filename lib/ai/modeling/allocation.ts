@@ -1,9 +1,10 @@
 export type ResidentialVariant = "apartment" | "villa" | "duplex";
+export type HomeDetails = { bathroomCount?: number; guestBathroom?: boolean; bedroomAreasM2?: number[]; curtainFacade?: boolean; layoutRevision?: number; doorStyle?: "wood" | "metal" | "glass" | "sliding"; doorHeightMm?: number; doubleEntranceDoor?: boolean; windowStyle?: "casement" | "fixed" | "sliding" | "single-hung" | "double-hung"; windowHeightMm?: number; bathFixture?: "shower" | "bathtub"; electrical?: boolean };
 export type SketchPoint = { xMm: number; yMm: number };
 export type RoomUse = "bedroom" | "living" | "kitchen" | "dining" | "study" | "bathroom" | "corridor" | "garage";
 export type SketchSegment = { start: SketchPoint; end: SketchPoint };
 export type FloorSketch = { points: SketchPoint[]; lines: SketchSegment[]; furnitureLines?: SketchSegment[]; mepLines?: SketchSegment[]; labels?: { point:SketchPoint; name:string; use:RoomUse }[]; locks?: { index:number; interior:boolean; lengthMm:number }[]; wallTypes?: { index:number; interior:boolean; type:"exterior"|"partition"|"fire"|"curtain" }[]; openings?: { point:SketchPoint; kind:"door"|"doubleDoor"|"window"; widthMm:number }[]; gardens?: SketchPoint[][] };
-export type ResidentialParameters = { variant: ResidentialVariant; bedrooms: number; bedroomDistribution?: (1|2|3)[]; layoutSeed?: number; plotAreaM2?: number; plotWidthM?: number; plotLengthM?: number; balcony?: "none" | "front" | "terrace" | "roof"; cultureStyle?: "standard" | "vastu" | "german"; roofStyle?: "german-gable" | "german-hip" | "mansard" | "modern-flat"; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; apartmentFloors?: number; apartmentsPerFloor?: number; bedroomsPerApartment?: 1|2|3; layoutStyle?: "linear" | "courtyard" | "corner" | "split" | "central"; separateKitchen?: boolean; ensuiteBathrooms?: boolean; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
+export type ResidentialParameters = HomeDetails & { variant: ResidentialVariant; bedrooms: number; bedroomDistribution?: (1|2|3)[]; layoutSeed?: number; plotAreaM2?: number; plotWidthM?: number; plotLengthM?: number; balcony?: "none" | "front" | "terrace" | "roof"; cultureStyle?: "standard" | "vastu" | "german"; roofStyle?: "german-gable" | "german-hip" | "mansard" | "modern-flat"; bedroomAreaM2?: number; totalAreaM2?: number; livingAreaM2?: number; kitchenAreaM2?: number; bathroomAreaM2?: number; apartmentFloors?: number; apartmentsPerFloor?: number; bedroomsPerApartment?: 1|2|3; layoutStyle?: "linear" | "courtyard" | "corner" | "split" | "central"; separateKitchen?: boolean; ensuiteBathrooms?: boolean; furnished?: boolean; underfloorHeating?: boolean; piping?: "none" | "underfloor" | "ceiling"; ducts?: "none" | "ceiling"; garage?: "none" | "open" | "enclosed"; garageWidthM?: number; garageDepthM?: number; gardenAreaM2?: number; footprint?: "rectangle" | "l" | "u" | "drawn"; widthM?: number; lengthM?: number; footprintPoints?: { x: number; y: number }[]; sketches?: FloorSketch[] };
 export const RESIDENTIAL_PRESETS = [
   { label: "Multi-storey apartments", variant: "apartment", bedrooms: 2, apartmentFloors: 4, apartmentsPerFloor: 4, bedroomsPerApartment: 2, layoutStyle: "central", cultureStyle: "standard" },
   { label: "India Vastu 3BHK", variant: "apartment", bedrooms: 3, layoutStyle: "central", cultureStyle: "vastu", separateKitchen: true, ensuiteBathrooms: true },
@@ -83,7 +84,7 @@ export function conceptStair(heightMm: number) {
 /** Gross internal area includes partitions and stair voids, excludes perimeter walls. */
 export function allocateResidential(input: ResidentialParameters, wallHeightMm = 3000, thicknessMm = 200, fixedInternalWidthMm?: number) {
   const { variant, bedrooms } = input;
-  const bedroomAreaM2 = input.bedroomAreaM2 ?? 20;
+  const bedroomAreaM2 = input.bedroomAreasM2?.length ? input.bedroomAreasM2.reduce((sum, area) => sum + area, 0) / input.bedroomAreasM2.length : input.bedroomAreaM2 ?? 20;
   for (const [name, area, minimum] of [["living", input.livingAreaM2, 10], ["kitchen", input.kitchenAreaM2, 6], ["bathroom", input.bathroomAreaM2, 4]] as const) {
     if (area !== undefined && (!Number.isFinite(area) || area < minimum || area > 300)) throw new Error(`${name} area must be ${minimum}–300 m².`);
   }
@@ -95,7 +96,7 @@ export function allocateResidential(input: ResidentialParameters, wallHeightMm =
   const stair = conceptStair(wallHeightMm);
   const serviceMinimumMm = variant === "duplex" ? stair.runMm + stair.landingMm + 1800 : 2400;
   const stairFootprintM2 = variant === "duplex" ? stair.widthMm * (stair.runMm + stair.landingMm) / 1e6 : 0;
-  const bathroomTargetM2 = input.bathroomAreaM2 ?? 8;
+  const bathroomTargetM2 = (input.bathroomAreaM2 ?? 8) * Math.max(1, Math.ceil((input.bathroomCount ?? floors) / floors)) + (input.guestBathroom ? 3 : 0);
   const mainSharedMinimumM2 = (input.livingAreaM2 ?? (variant === "villa" ? 24 : 20)) + (input.kitchenAreaM2 ?? 8);
   const serviceBudget = (width: number, depth: number) => {
     let bathroomWidthMm = Math.max(1800, bathroomTargetM2 * 1e6 / depth);

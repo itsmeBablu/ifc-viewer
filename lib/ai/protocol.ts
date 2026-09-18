@@ -10,6 +10,7 @@ export const commandRequestSchema = z.object({
   command: z.string().trim().min(1).max(4000),
   model: z.enum(AI_MODEL_IDS).optional(),
   mode: z.enum(["build", "review", "guide"]).optional(),
+  intent: z.literal("layout").optional(),
   residential: residentialParametersSchema.optional().describe("Explicit new-building template parameters; independent of conversation history."),
   drawingReference: drawingReferenceSchema.optional(),
   context: contextSchema,

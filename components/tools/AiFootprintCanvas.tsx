@@ -1,283 +1,63 @@
 "use client";
-import { FOOTPRINTS } from "@/lib/ai/modeling/footprint";
-import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { FiMaximize2 } from "react-icons/fi";
+import { FOOTPRINTS, polygonArea } from "@/lib/ai/modeling/footprint";
+import { residentialSketches } from "@/lib/ai/modeling/preview";
+import { sketchRooms } from "@/lib/ai/modeling/sketch";
+import type { ResidentialParameters } from "@/lib/ai/modeling/allocation";
 import AiSketchWorkspace from "./AiSketchWorkspace";
-import { generateSubdividedLayout } from "@/lib/ai/modeling/subdivision";
+import type { AiModelId } from "@/lib/ai/models";
 
-type Point = { x: number; y: number };
-
-export default function AiFootprintCanvas({
-  parameters,
-  onChange,
-  disabled,
-  building,
-}: {
-  parameters: ResidentialParameters;
-  onChange: (p: ResidentialParameters) => void;
-  disabled: boolean;
+export default function AiFootprintCanvas({ parameters, onChange, disabled, building, heightMm, thicknessMm, availableShapes, model, preferences, onPreferences, onRefresh }: {
+  parameters: ResidentialParameters; onChange: (p: ResidentialParameters) => void; disabled: boolean;
   building?: ReturnType<typeof import("@/lib/ai/modeling/footprint").allocateBuilding> | null;
+  heightMm: number; thicknessMm: number;
+  availableShapes?: Array<"rectangle" | "l" | "u" | "drawn">;
+  model?: AiModelId; preferences?: string; onPreferences?: (text: string) => void; onRefresh?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [floor, setFloor] = useState(0);
+  const clipId = useId();
   const closeWorkspace = useCallback(() => setExpanded(false), []);
-  const sketch = parameters.sketches?.[0];
-  const shape = sketch
-    ? "drawn"
-    : parameters.footprint ?? "rectangle";
-  const points = sketch?.points.length
-    ? sketch.points.map((p) => ({
-        x: p.xMm / Math.max(...sketch.points.map((p) => p.xMm), 1),
-        y: p.yMm / Math.max(...sketch.points.map((p) => p.yMm), 1),
-      }))
-    : shape === "drawn"
-    ? parameters.footprintPoints ?? []
-    : FOOTPRINTS[shape];
-
-  const spanX = Math.max(0.01, Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x)));
-  const spanY = Math.max(0.01, Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y)));
-
-  const add = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (shape !== "drawn" || sketch || disabled || points.length >= 16) return;
-    const b = e.currentTarget.getBoundingClientRect();
-    const point = {
-      x: Math.round(Math.max(0, Math.min(1, ((e.clientX - b.left) / b.width * 120 - 10) / 100)) * 20) / 20,
-      y: Math.round(Math.max(0, Math.min(1, ((e.clientY - b.top) / b.height * 120 - 10) / 100)) * 20) / 20,
-    };
-    if (points.some((p) => p.x === point.x && p.y === point.y)) return;
-    onChange({ ...parameters, footprintPoints: [...points, point] });
+  const sketches = useMemo(() => {
+    try { return residentialSketches(parameters, heightMm, thicknessMm); } catch { return []; }
+  }, [parameters, heightMm, thicknessMm]);
+  const sketch = sketches[Math.min(floor, Math.max(0, sketches.length - 1))];
+  const shape = parameters.footprint ?? "rectangle";
+  const raw = shape === "drawn" ? parameters.footprintPoints ?? [] : FOOTPRINTS[shape];
+  const points = sketch?.points ?? raw.map(p => ({ xMm: p.x * 14000, yMm: p.y * 14000 }));
+  const minX = Math.min(0, ...points.map(p => p.xMm)), minY = Math.min(0, ...points.map(p => p.yMm));
+  const width = Math.max(1000, ...points.map(p => p.xMm - minX)), depth = Math.max(1000, ...points.map(p => p.yMm - minY));
+  const span = Math.max(width, depth);
+  const x = (n: number) => 10 + (n - minX) / span * 100;
+  const y = (n: number) => 10 + (n - minY) / span * 100;
+  const poly = (pts: typeof points) => pts.map(p => x(p.xMm) + "," + y(p.yMm)).join(" ");
+  const rooms = sketch ? sketchRooms(sketch) : [];
+  const open = () => {
+    if (!parameters.sketches && sketches.length) onChange({ ...parameters, apartmentFloors: undefined, apartmentsPerFloor: undefined, bedroomsPerApartment: undefined, sketches, totalAreaM2: sketches.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0) });
+    setExpanded(true);
   };
-
-  const svgPoints = (p: Point[]) => p.map((pt) => `${10 + pt.x * 100},${10 + pt.y * 100}`).join(" ");
-  const allocation = building?.allocation;
-  const w = building?.polygon
-    ? Math.max(...building.polygon.map((p) => p.xMm))
-    : allocation?.internalWidthMm ?? (parameters.widthM ? parameters.widthM * 1000 : 12000);
-  const d = building?.polygon
-    ? Math.max(...building.polygon.map((p) => p.yMm))
-    : allocation?.internalDepthMm ?? (parameters.lengthM ? parameters.lengthM * 1000 : 10000);
-
-  const subLayout = useMemo(() => {
-    if (shape === "drawn" && !building?.polygon) return null;
-    try {
-      return generateSubdividedLayout(w, d, parameters);
-    } catch {
-      return null;
-    }
-  }, [w, d, parameters, shape, building]);
-
-  return (
-    <div className="ai-footprint-chooser">
-      <button
-        type="button"
-        className="ai-expand-sketch"
-        disabled={disabled}
-        onClick={() => setExpanded(true)}
-        aria-label="Expand drawing workspace"
-        title="Expand drawing workspace"
-      >
-        <FiMaximize2 /> Expand 2D Workspace
-      </button>
-      {expanded && (
-        <AiSketchWorkspace
-          parameters={parameters}
-          building={building}
-          onChange={onChange}
-          onClose={closeWorkspace}
-          disabled={disabled}
-        />
-      )}
-      <div className="ai-suggestion-row">
-        {(["rectangle", "l", "u", "drawn"] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            disabled={disabled}
-            aria-pressed={shape === s}
-            onClick={() => onChange({ ...parameters, footprint: s, sketches: undefined })}
-          >
-            {s === "rectangle" ? "Rectangle" : s === "l" ? "L shape" : s === "u" ? "U shape" : "Draw outline"}
-          </button>
-        ))}
-      </div>
-      <svg
-        className="ai-footprint-canvas"
-        viewBox="0 0 120 120"
-        role="img"
-        aria-label={shape === "drawn" ? "Draw building footprint by clicking corners" : "Building footprint layout preview"}
-        onClick={add}
-      >
-        <defs>
-          <pattern id="ai-footprint-grid" width="5" height="5" patternUnits="userSpaceOnUse">
-            <path d="M5 0H0V5" fill="none" stroke="currentColor" strokeWidth=".15" opacity=".25" />
-          </pattern>
-        </defs>
-        <rect x="10" y="10" width="100" height="100" fill="url(#ai-footprint-grid)" />
-        {points.length >= 3 ? (
-          <polygon points={svgPoints(points)} fill="#60a5fa18" stroke="#60a5fa" strokeWidth="1.2" />
-        ) : (
-          <polyline points={svgPoints(points)} fill="none" stroke="#60a5fa" strokeWidth="1.2" />
-        )}
-
-        {/* Dynamic Subdivided Layout Rooms */}
-        {subLayout && shape !== "drawn" && (
-          <g>
-            {subLayout.rooms.map((rm) => {
-              const rx = 10 + (rm.xMm / w) * 100;
-              const ry = 10 + (rm.yMm / d) * 100;
-              const rw = (rm.widthMm / w) * 100;
-              const rd = (rm.depthMm / d) * 100;
-              const isLiving = rm.use === "living";
-              const isKitchen = rm.use === "kitchen";
-              const isBath = rm.use === "bathroom";
-              const fill = isLiving
-                ? "#f59e0b40"
-                : isKitchen
-                ? "#10b98140"
-                : isBath
-                ? "#c084fc44"
-                : "#60a5fa44";
-              const stroke = isLiving
-                ? "#f59e0b"
-                : isKitchen
-                ? "#10b981"
-                : isBath
-                ? "#a855f7"
-                : "#3b82f6";
-              return (
-                <g key={rm.id}>
-                  <rect
-                    x={rx}
-                    y={ry}
-                    width={rw}
-                    height={rd}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth="0.4"
-                    rx="0.5"
-                  />
-                  {rw > 12 && rd > 10 && (
-                    <text
-                      x={rx + rw / 2}
-                      y={ry + rd / 2 - 1}
-                      textAnchor="middle"
-                      fontSize="3.2"
-                      fontWeight="600"
-                      fill="currentColor"
-                    >
-                      {rm.name.length > 14 ? rm.name.slice(0, 12) + "…" : rm.name}
-                    </text>
-                  )}
-                  {rw > 12 && rd > 10 && (
-                    <text
-                      x={rx + rw / 2}
-                      y={ry + rd / 2 + 2.8}
-                      textAnchor="middle"
-                      fontSize="2.4"
-                      opacity="0.8"
-                      fill="currentColor"
-                    >
-                      {rm.areaM2} m²
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-
-            {/* Interior wall divisions */}
-            {subLayout.interiorWalls.map((wall, i) => (
-              <line
-                key={`iw-${i}`}
-                x1={10 + (wall.startX / w) * 100}
-                y1={10 + (wall.startY / d) * 100}
-                x2={10 + (wall.endX / w) * 100}
-                y2={10 + (wall.endY / d) * 100}
-                stroke="currentColor"
-                strokeWidth="0.8"
-                opacity="0.9"
-              />
-            ))}
-
-            {/* Main Entrance Double Door Indicator */}
-            {subLayout.entryDoor && (
-              <g>
-                <circle
-                  cx={10 + (subLayout.entryDoor.positionMm / w) * 100}
-                  cy={10}
-                  r="1.8"
-                  fill="#f59e0b"
-                />
-                <text
-                  x={10 + (subLayout.entryDoor.positionMm / w) * 100}
-                  y={7.5}
-                  fontSize="2.6"
-                  textAnchor="middle"
-                  fill="#f59e0b"
-                  fontWeight="bold"
-                >
-                  ENTRY 🚪
-                </text>
-              </g>
-            )}
-          </g>
-        )}
-
-        {/* Fallback preview for legacy or drawn outlines */}
-        {allocation && (!subLayout || shape === "drawn") && (
-          <g>
-            <text x={60} y={60} textAnchor="middle" fontSize="4" fill="currentColor">
-              Custom Drawn Floor
-            </text>
-          </g>
-        )}
-
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle cx={10 + p.x * 100} cy={10 + p.y * 100} r="1.6" fill="#2563eb" />
-            {parameters.widthM && parameters.lengthM && points.length >= 3 && (
-              <text
-                x={10 + (p.x + points[(i + 1) % points.length].x) * 50}
-                y={9 + (p.y + points[(i + 1) % points.length].y) * 50}
-                fontSize="3.5"
-                textAnchor="middle"
-                fill="currentColor"
-              >
-                {Math.hypot(
-                  ((p.x - points[(i + 1) % points.length].x) / spanX) * parameters.widthM,
-                  ((p.y - points[(i + 1) % points.length].y) / spanY) * parameters.lengthM
-                ).toFixed(1)}{" "}
-                m
-              </text>
-            )}
-          </g>
-        ))}
-      </svg>
-      {sketch && (
-        <p className="ai-text-muted">Custom floor drawing. Expand the workspace to edit lines, dimensions or floors.</p>
-      )}
-      {shape === "drawn" && !sketch && (
-        <>
-          <p className="ai-text-muted">
-            Click corners in order (up to 16). The last edge closes automatically. Set the overall width and length below.
-          </p>
-          <div className="ai-suggestion-row">
-            <button
-              type="button"
-              disabled={disabled || !points.length}
-              onClick={() => onChange({ ...parameters, footprintPoints: points.slice(0, -1) })}
-            >
-              Undo corner
-            </button>
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange({ ...parameters, footprintPoints: [] })}
-            >
-              Clear outline
-            </button>
-          </div>
-        </>
-      )}
+  return <div className="ai-footprint-chooser">
+    <button type="button" className="ai-expand-sketch" disabled={disabled} onClick={open}><FiMaximize2 /> Expand 2D workspace</button>
+    {expanded && <AiSketchWorkspace parameters={parameters} building={building} onChange={onChange} onClose={closeWorkspace} disabled={disabled} model={model} preferences={preferences} onPreferences={onPreferences} onRefresh={onRefresh} />}
+    <div className="ai-suggestion-row" role="group" aria-label="Building outline">
+      {(["rectangle", "l", "u", "drawn"] as const).map(s => <button key={s} type="button" disabled={disabled || !!availableShapes && !availableShapes.includes(s)} className={availableShapes && !availableShapes.includes(s) ? "ai-choice-unavailable" : ""} title={availableShapes && !availableShapes.includes(s) ? "Try fewer bedrooms or a smaller garden to make room for this outline." : undefined} aria-pressed={shape === s}
+        onClick={() => {
+          onChange({ ...parameters, footprint: s, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined, footprintPoints: s === "drawn" ? [] : undefined });
+          if (s === "drawn") setExpanded(true);
+        }}>{s === "rectangle" ? "Rectangle" : s === "drawn" ? "Draw outline" : s.toUpperCase() + " shape"}</button>)}
     </div>
-  );
+    {sketches.length > 1 && <div className="ai-suggestion-row" aria-label="Preview floor">{sketches.map((_, i) => <button key={i} type="button" aria-pressed={floor === i} onClick={() => setFloor(i)}>{i === 0 ? "Ground floor" : "Floor " + i}</button>)}</div>}
+    <svg className="ai-footprint-canvas" viewBox="0 0 120 120" role="img" aria-label={shape.toUpperCase() + " residential floor plan"}>
+      <defs><clipPath id={clipId}><polygon points={poly(points)} /></clipPath></defs>
+      <polygon points={poly(points)} fill="#eff6ff" stroke="#334155" strokeWidth="1.4" />
+      <g clipPath={"url(#" + clipId + ")"}>
+        {rooms.map((room, i) => <polygon key={i} points={poly(room)} fill={["#dbeafe", "#fef3c7", "#dcfce7", "#f3e8ff"][i % 4]} stroke="#64748b" strokeWidth=".3" />)}
+        {sketch?.lines.map((line, i) => <line key={i} x1={x(line.start.xMm)} y1={y(line.start.yMm)} x2={x(line.end.xMm)} y2={y(line.end.yMm)} stroke="#334155" strokeWidth=".8" />)}
+        {sketch?.labels?.map((label, i) => <text key={i} x={x(label.point.xMm)} y={y(label.point.yMm)} textAnchor="middle" fontSize="2.6" fill="#1e293b">{label.name}</text>)}
+      </g>
+      {points.map((p, i) => <circle key={i} cx={x(p.xMm)} cy={y(p.yMm)} r="1" fill="#2563eb" />)}
+    </svg>
+    <p className="ai-text-muted">{parameters.sketches ? "Your drawing is saved here. Reopen to move walls, add partitions or rename rooms." : "Choose an outline, then open the workspace to adjust the displayed rooms."}</p>
+  </div>;
 }

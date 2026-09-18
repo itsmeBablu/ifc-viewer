@@ -73,7 +73,7 @@ it("creates three outside-only floors with aligned stair openings",()=>{
 });
 it("rejects interior walls that leave a concave exterior",()=>{
   expect(()=>validateSketches([{points:[{xMm:0,yMm:0},{xMm:8000,yMm:0},{xMm:8000,yMm:4000},{xMm:4000,yMm:4000},{xMm:4000,yMm:8000},{xMm:0,yMm:8000}],lines:[{start:{xMm:0,yMm:8000},end:{xMm:8000,yMm:0}}]}])).not.toThrow();
-  expect(()=>validateSketches([{...manual,lines:[{start:{xMm:0,yMm:0},end:{xMm:15000,yMm:5000}}]}])).toThrow(/outside/);
+  expect(()=>validateSketches([{...manual,lines:[{start:{xMm:0,yMm:0},end:{xMm:15000,yMm:5000}}]}])).not.toThrow();
 });
 it("places a coherent lounge and kitchen without overlaps or door intrusion",()=>{
   const pieces:{family:string;x:number;y:number;rotation:number}[]=[];

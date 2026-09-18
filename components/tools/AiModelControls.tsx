@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AI_MODELS, AI_MODES, modelDetails, type AiModelId, type AiMode } from "@/lib/ai/models";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { LuCheck, LuChevronDown, LuSparkles, LuZap } from "react-icons/lu";
@@ -6,31 +7,54 @@ import { LuCheck, LuChevronDown, LuSparkles, LuZap } from "react-icons/lu";
 type Props = {
   model: AiModelId;
   mode: AiMode;
+  home: boolean;
+  onHome: () => void;
   disabled: boolean;
   onModel: (model: AiModelId) => void;
   onMode: (mode: AiMode) => void;
 };
 
-export default function AiModelControls({ model, mode, disabled, onModel, onMode }: Props) {
+export default function AiModelControls({ model, mode, home, onHome, disabled, onModel, onMode }: Props) {
   const selectedModel = modelDetails(model);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuBox, setMenuBox] = useState({ left: 8, top: 8, width: 275, height: 380 });
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.stopPropagation();
         setDropdownOpen(false);
       }
     }
     if (dropdownOpen) {
+      const position = () => {
+        const rect = dropdownRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const width = Math.min(300, window.innerWidth - 16);
+        const availableAbove = rect.top - 16, availableBelow = window.innerHeight - rect.bottom - 16;
+        const above = availableAbove >= availableBelow;
+        const height = Math.min(380, Math.max(120, above ? availableAbove : availableBelow));
+        setMenuBox({ left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), top: Math.max(8, above ? rect.top - height - 8 : rect.bottom + 8), width, height });
+      };
+      position();
+      window.addEventListener("resize", position);
+      window.addEventListener("scroll", position, true);
       document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("resize", position);
+        window.removeEventListener("scroll", position, true);
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleKeyDown);
+      };
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -42,8 +66,9 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
     <div className="ai-composer-controls relative flex items-center justify-between gap-1.5 border-b px-2.5 py-1.5 transition-colors rounded-t-[17px]">
       {/* Mode pills: Build, Review, Guide in v-Yellow/v-Blue palette */}
       <div className="ai-mode-pills-container flex items-center gap-0.5 rounded-lg p-0.5 transition-colors" role="group" aria-label="Assistant mode">
+        <button type="button" disabled={disabled} aria-pressed={home} onClick={onHome} className={`rounded-md px-2 py-1 text-[11px] font-bold ${home ? "bg-[#facc15] text-[#09090b]" : "ai-mode-pill-inactive"}`}>Home</button>
         {AI_MODES.map(option => {
-          const isActive = mode === option.id;
+          const isActive = !home && mode === option.id;
           return (
             <button
               type="button"
@@ -94,8 +119,11 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
           <LuChevronDown className={`size-3 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`} />
         </button>
 
-        {dropdownOpen && (
+        {dropdownOpen && createPortal(
           <div
+            ref={menuRef}
+            data-theme="light"
+            style={{ position: "fixed", left: menuBox.left, top: menuBox.top, right: "auto", bottom: "auto", width: menuBox.width, maxHeight: menuBox.height, zIndex: 30000 }}
             role="listbox"
             aria-label="Select AI Model"
             className="ai-model-dropdown-menu animate-in fade-in zoom-in-95 duration-150"
@@ -105,7 +133,7 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
               <span>AI Intelligence Models</span>
             </div>
             <div className="space-y-1">
-              {AI_MODELS.map(option => {
+              {AI_MODELS.filter(option => !home || option.id !== "ollama-local").map(option => {
                 const isSelected = option.id === model;
                 return (
                   <button
@@ -155,11 +183,9 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
                 );
               })}
             </div>
-          </div>
+          </div>, document.body
         )}
       </div>
     </div>
   );
 }
-
-

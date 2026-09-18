@@ -1,5 +1,57 @@
 import type { FloorSketch, SketchPoint } from "./allocation";
 
+function checkSketchLocks(before: FloorSketch, next: FloorSketch) {
+  for (const lock of before.locks ?? []) {
+    const a = lock.interior ? next.lines[lock.index]?.start : next.points[lock.index];
+    const b = lock.interior ? next.lines[lock.index]?.end : next.points[(lock.index + 1) % next.points.length];
+    if (!a || !b || Math.abs(Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm) - lock.lengthMm) > 1) throw new Error("Unlock the connected line to change its length.");
+  }
+  if ([...next.points, ...next.lines.flatMap(l => [l.start, l.end])].some(p => p.xMm < 0 || p.yMm < 0 || p.xMm > 80000 || p.yMm > 80000)) throw new Error("Keep the line inside the drawing workspace.");
+  return next;
+}
+
+export function moveSketchLine(s: FloorSketch, index: number, interior: boolean, dxMm: number, dyMm: number): FloorSketch {
+  const a = interior ? s.lines[index]?.start : s.points[index], b = interior ? s.lines[index]?.end : s.points[(index + 1) % s.points.length];
+  if (!a || !b) throw new Error("Select a line to move.");
+  const dx = b.xMm - a.xMm, dy = b.yMm - a.yMm, length2 = dx * dx + dy * dy;
+  const move = (p: SketchPoint) => {
+    const t = ((p.xMm - a.xMm) * dx + (p.yMm - a.yMm) * dy) / (length2 || 1);
+    const onLine = t >= -.00001 && t <= 1.00001 && Math.hypot(p.xMm - a.xMm - t * dx, p.yMm - a.yMm - t * dy) < 1;
+    return onLine ? { xMm: p.xMm + dxMm, yMm: p.yMm + dyMm } : p;
+  };
+  return checkSketchLocks(s, { ...s, points: s.points.map(move), lines: s.lines.map(l => ({ start: move(l.start), end: move(l.end) })) });
+}
+
+export function moveSketchEndpoint(s: FloorSketch, index: number, interior: boolean, endpoint: "start" | "end", point: SketchPoint): FloorSketch {
+  const old = interior ? s.lines[index]?.[endpoint] : s.points[(index + (endpoint === "end" ? 1 : 0)) % s.points.length];
+  if (!old) throw new Error("Choose a line endpoint.");
+  const move = (p: SketchPoint) => Math.hypot(p.xMm - old.xMm, p.yMm - old.yMm) < 1 ? point : p;
+  return checkSketchLocks(s, { ...s, points: s.points.map(move), lines: s.lines.map(l => ({ start: move(l.start), end: move(l.end) })) });
+}
+
+/** Snap dragged endpoints to nearby endpoints or onto an existing wall, including T junctions. */
+export function snapSketchEndpoint(s: FloorSketch, raw: SketchPoint, exclude: SketchPoint, toleranceMm: number): SketchPoint {
+  const edges = [...s.points.map((start, i) => ({ start, end: s.points[(i + 1) % s.points.length] })), ...s.lines];
+  const candidates = edges.flatMap(l => [l.start, l.end]).filter(p => Math.hypot(p.xMm - exclude.xMm, p.yMm - exclude.yMm) > 1);
+  for (const l of edges) {
+    if (Math.hypot(l.start.xMm - exclude.xMm, l.start.yMm - exclude.yMm) < 1 || Math.hypot(l.end.xMm - exclude.xMm, l.end.yMm - exclude.yMm) < 1) continue;
+    const dx = l.end.xMm - l.start.xMm, dy = l.end.yMm - l.start.yMm;
+    const t = Math.max(0, Math.min(1, ((raw.xMm - l.start.xMm) * dx + (raw.yMm - l.start.yMm) * dy) / (dx * dx + dy * dy || 1)));
+    candidates.push({ xMm: l.start.xMm + t * dx, yMm: l.start.yMm + t * dy });
+  }
+  return candidates.filter(p => Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) <= toleranceMm).sort((a, b) => Math.hypot(a.xMm - raw.xMm, a.yMm - raw.yMm) - Math.hypot(b.xMm - raw.xMm, b.yMm - raw.yMm))[0] ?? raw;
+}
+
+export function refreshSketchLayout(s: FloorSketch, revision: number): FloorSketch {
+  for (let i = 0; i < s.lines.length; i++) {
+    const l = s.lines[i], horizontal = Math.abs(l.end.xMm - l.start.xMm) > Math.abs(l.end.yMm - l.start.yMm);
+    try {
+      return moveSketchLine(s, i, true, horizontal ? 0 : (revision % 2 ? 150 : -150), horizontal ? (revision % 2 ? 150 : -150) : 0);
+    } catch { /* Try another partition when connected lengths are locked. */ }
+  }
+  return s;
+}
+
 export function resizeSketchLine(sketch:FloorSketch,index:number,interior:boolean,lengthMm:number):FloorSketch {
   if(!Number.isFinite(lengthMm)||lengthMm<300||lengthMm>80000)throw new Error("Line length must be 0.3–80 m.");
   const a=interior?sketch.lines[index]?.start:sketch.points[index],b=interior?sketch.lines[index]?.end:sketch.points[(index+1)%sketch.points.length];

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   let input;
   try {
     input = commandRequestSchema.parse(await readBody(request));
-  } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
+  } catch { return reply({ error: "Please complete your requirements and try again. For a home, start with an area or both length and width." }, 400); }
   let limit: Awaited<ReturnType<typeof limitAiUser>>;
   try {
     limit = await limitAiUser(session.user.id);
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   } catch {
     limit = { success: true, remaining: 1500, reset: Date.now() + 24 * 3600 * 1000, total: 1500 };
   }
-  try { return reply(defaultModelingPlan(input) ?? await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
+  try { return reply(input.intent === "layout" ? await generateCommand({ ...input, model: input.model === "ollama-local" ? "gemini-3.1-flash-lite" : input.model }) : defaultModelingPlan(input) ?? await (input.model === "ollama-local" ? generateOllamaCommand(input) : generateCommand(input)), 200, { "X-AI-Remaining": String(limit.remaining), "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) }); }
   catch (error) {
     // Never return raw provider payloads, credentials or stack traces.
     const message = error instanceof Error && error.name === "TimeoutError"

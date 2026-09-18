@@ -4,7 +4,11 @@ import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { clearWerkzeugHistory, undoWerkzeug, redoWerkzeug } from "@/lib/werkzeugHistory";
 import { idbApplyAiChanges, idbListWalls } from "@/lib/layoutDrawingDb";
-import { aiFingerprint, applyAiPlan, prepareAiChanges } from "./execute";
+import { aiFingerprint, applyAiPlan, prepareAiChanges, currentAiContext } from "./execute";
+import { homeReplacementActions, projectHomeSketches } from "./modeling/project";
+import { residentialSketches } from "./modeling/preview";
+import { suggestHomes } from "./modeling/home";
+import { defaultModelingPlan } from "./modeling";
 import { expandModelPlan } from "./recipes";
 import { sketchActions } from "./modeling/sketch";
 import type { AiPlan } from "./schema";
@@ -19,6 +23,20 @@ beforeEach(() => {
   clearWerkzeugHistory();
 });
 describe("AI batch persistence", () => {
+  it("reopens and replaces a built home with dependent openings removed before walls", async () => {
+    const parameters = suggestHomes({ areaM2: 120 })[0].parameters;
+    const sketches = residentialSketches(parameters);
+    await applyAiPlan({ summary: "Home", assumptions: [], actions: sketchActions({ ...parameters, sketches }, "home", "l", 0, 3000, 200) }, aiFingerprint(), true);
+    const context = currentAiContext();
+    const actual = projectHomeSketches(context);
+    const compiled = defaultModelingPlan({ command: "Build", residential: { ...parameters, sketches: actual, totalAreaM2: undefined }, context: { ...context, elements: context.elements.filter(e => e.kind === "level"), selection: [] }, mode: "build", attachments: [], history: [] });
+    expect(compiled).not.toBeNull();
+    const previousCount = useLayoutDrawingStore.getState().walls.length;
+    await applyAiPlan({ ...compiled!.plan, actions: [...homeReplacementActions(context), ...compiled!.plan.actions] }, aiFingerprint(), true);
+    expect(useLayoutDrawingStore.getState().walls.length).toBeLessThan(previousCount * 2);
+    await undoWerkzeug();
+    expect(useLayoutDrawingStore.getState().walls).toHaveLength(previousCount);
+  });
   it("applies custom floor drawings and undoes their furniture and stair geometry together",async()=>{
     const points=[{xMm:0,yMm:0},{xMm:14000,yMm:0},{xMm:14000,yMm:14000},{xMm:0,yMm:14000}];
     const actions=sketchActions({variant:"duplex",bedrooms:5,sketches:[{points,lines:[]},{points,lines:[]},{points,lines:[]}],garage:"none",gardenAreaM2:0},"sketch","l",0,3000,200);
