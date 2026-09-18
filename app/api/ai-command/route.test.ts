@@ -37,10 +37,10 @@ describe("AI command authorization", () => {
     expect(generateCommand).not.toHaveBeenCalled();
     expect(limitAiUser).toHaveBeenCalledWith("google-123");
   });
-  it("rejects anonymous requests before calling Gemini", async () => {
-    expect((await POST(request())).status).toBe(401);
-    expect(generateCommand).not.toHaveBeenCalled();
-    expect(limitAiUser).not.toHaveBeenCalled();
+  it("allows Guest Architect requests without Google authentication", async () => {
+    vi.mocked(generateCommand).mockResolvedValue({ kind: "advice", message: "Guest response", model: "gemini-3.1-flash-lite", mode: "build" });
+    expect((await POST(request())).status).toBe(200);
+    expect(limitAiUser).toHaveBeenCalledWith("guest-architect");
   });
   it("rejects cross-origin and malformed requests", async () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);

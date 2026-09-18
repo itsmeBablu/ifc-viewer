@@ -32,8 +32,10 @@ async function readBody(request: Request): Promise<unknown> {
 
 export async function POST(request: Request) {
   let session;
-  try { session = await auth(); } catch { return reply({ error: "Google sign-in is not configured." }, 503); }
-  if (!session?.user?.id) return reply({ error: "Sign in with Google to use AI commands." }, 401);
+  try { session = await auth(); } catch { session = null; }
+  // V Studio is usable as Guest Architect. Google identity is optional and only
+  // changes the quota bucket/account label when a user chooses to sign in.
+  const userId = session?.user?.id ?? "guest-architect";
   const origin = request.headers.get("origin");
   const expectedOrigin = new URL(process.env.AUTH_URL ?? request.url).origin;
   const requestOrigin = new URL(request.url).origin;
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
   } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
   let limit: Awaited<ReturnType<typeof limitAiUser>>;
   try {
-    limit = await limitAiUser(session.user.id);
+    limit = await limitAiUser(userId);
     if (!limit.success) {
       const retryAfter = Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
       return reply({ error: `AI request limit reached. Try again in about ${Math.ceil(retryAfter / 60)} minute(s).`, retryAfter }, 429, { "Retry-After": String(retryAfter), "X-AI-Remaining": "0", "X-AI-Reset": String(limit.reset), "X-AI-Total": String(limit.total) });

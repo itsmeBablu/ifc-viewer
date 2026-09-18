@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getSession } from "next-auth/react";
 import { aiFingerprint, applyAiPlan, currentAiContext } from "@/lib/ai/execute";
 import { describeAction, validatePlan } from "@/lib/ai/validate";
 import { undoWerkzeug } from "@/lib/werkzeugHistory";
@@ -309,7 +308,6 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
     if (!pending || busyRef.current) return;
     busyRef.current = true; setBusy(true); setError(""); setStatus("Validating and saving the approved actions…");
     try {
-      if (!(await getSession())?.user?.id) throw new Error("Your session expired. Sign in again before applying AI changes.");
       await applyAiPlan(pending.plan, pending.fingerprint);
       setAppliedFingerprint(aiFingerprint());
       setStatus(`Applied ${pending.plan.actions.length} actions. You can undo the complete batch.`);
@@ -328,12 +326,10 @@ export default function AiCommandPanel({ projectId: propProjectId }: { projectId
         aria-relevant="additions"
         aria-label="Conversation"
       >
-        {history.length === 0 && (
+        {history.length === 0 && mode !== "build" && (
           <div className="ai-welcome-copy pt-1 pb-2">
             <span className="ai-sparkle-mark"><LuSparkles /></span>
             <div>
-              <p className="text-sm font-semibold">Your design workspace</p>
-              <p className="text-xs ai-text-muted">Describe a brief, review your layout, or ask how to model it.</p>
               <p className="text-xs ai-text-muted">Existing model · {levelCount} levels · {modelInventory}</p>
             </div>
           </div>

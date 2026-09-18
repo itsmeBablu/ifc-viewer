@@ -329,6 +329,7 @@ function AssistantPanel({
 }) {
   const { data: sessionData, status } = useSession();
   const session = sessionData as { user?: { id?: string; name?: string | null; email?: string | null; image?: string | null } } | null;
+  const displayUser = session?.user ?? { id: "guest-architect", name: "Guest Architect", email: "guest@vstudio.local", image: null };
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
@@ -399,19 +400,19 @@ function AssistantPanel({
           </div>
         </div>
         <div data-ai-stagger className="relative z-[70] flex items-center gap-1.5">
-          {session?.user && (
+          {status !== "loading" && (
             <div className="relative" ref={userMenuRef}>
               <button
                 type="button"
                 onClick={() => setUserMenuOpen(prev => !prev)}
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
-                title={session.user.name ?? session.user.email ?? "Account"}
+                title={displayUser.name ?? displayUser.email ?? "Guest Architect"}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-400/30 hover:bg-amber-500/20 transition-all text-xs"
               >
                 <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span className="text-[11px] font-medium text-amber-300 max-w-[90px] truncate">
-                  {session.user.name || "Guest"}
+                  {displayUser.name || "Guest Architect"}
                 </span>
               </button>
               {userMenuOpen && (
@@ -420,24 +421,24 @@ function AssistantPanel({
                   className="ai-account-menu absolute right-0 top-full mt-2 z-[150] w-64 rounded-2xl border border-[var(--panel-divider)] bg-[var(--surface-card)] p-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150"
                 >
                   <div className="flex items-center gap-2.5 pb-2.5 border-b border-[var(--panel-divider)]">
-                    {session.user.image ? (
+                    {displayUser.image ? (
                       <img
-                        src={session.user.image}
-                        alt={session.user.name ?? "User"}
+                        src={displayUser.image}
+                        alt={displayUser.name ?? "Guest Architect"}
                         referrerPolicy="no-referrer"
                         className="size-9 rounded-full object-cover border border-[var(--panel-divider)]"
                       />
                     ) : (
                       <div className="size-9 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm flex items-center justify-center border border-amber-500/30">
-                        {(session.user.name?.[0] ?? session.user.email?.[0] ?? "G").toUpperCase()}
+                        {(displayUser.name?.[0] ?? displayUser.email?.[0] ?? "G").toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-xs text-[var(--text-strong)] truncate">
-                        {session.user.name || "Guest Architect"}
+                        {displayUser.name || "Guest Architect"}
                       </p>
                       <p className="text-[11px] text-[var(--text-muted)] truncate">
-                        {session.user.email || "guest@vstudio.local"}
+                        {displayUser.email || "guest@vstudio.local"}
                       </p>
                     </div>
                   </div>

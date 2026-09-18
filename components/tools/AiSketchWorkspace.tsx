@@ -15,6 +15,7 @@ import { residentialSketches } from "@/lib/ai/modeling/preview";
 import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
 import { useToolMarkupStore } from "@/store/useToolMarkupStore";
 import { componentPreset } from "@/lib/componentCatalog";
+import { useAppStore } from "@/store/useAppStore";
 
 type Tool = "select" | "move" | "trim" | "wall" | "freehand" | "arc" | "rectangle" | "circle" | "door" | "window" | "room" | "garden" | "pan";
 type Pick = { index: number; interior: boolean; source: "current" | "below" | "project" };
@@ -74,6 +75,7 @@ export default function AiSketchWorkspace({
         windows = useLayoutDrawingStore(s => s.windows),
         roomsInProject = useLayoutDrawingStore(s => s.layoutRooms);
   const activeLevel = useToolMarkupStore(s => s.markupFloorId);
+  const colorTheme = useAppStore(s => s.colorTheme);
 
   const source = parameters.footprint === "drawn" ? parameters.footprintPoints ?? [] : FOOTPRINTS[parameters.footprint ?? "rectangle"];
   const seed: FloorSketch = {
@@ -105,6 +107,7 @@ export default function AiSketchWorkspace({
         [pan, setPan] = useState({ x: 0, y: 0 }),
         [grid, setGrid] = useState(true),
         [orthogonal, setOrthogonal] = useState(true),
+        [showRoomText, setShowRoomText] = useState(false),
         [roomPoint, setRoomPoint] = useState<SketchPoint | null>(null),
         [roomName, setRoomName] = useState(""),
         [roomUse, setRoomUse] = useState<RoomUse>("bedroom"),
@@ -275,21 +278,33 @@ export default function AiSketchWorkspace({
   };
 
   const resolvePoint = (raw: SketchPoint, withOrtho = true): { point: SketchPoint; snap: SketchPoint | null } => {
-    let pt = {
+    let pt: SketchPoint = {
       xMm: Math.max(0, Math.min(80000, Math.round(raw.xMm / 250) * 250)),
       yMm: Math.max(0, Math.min(80000, Math.round(raw.yMm / 250) * 250))
     };
+    if (withOrtho && orthogonal && anchors.length && (tool === "wall" || tool === "arc")) {
+      const a = anchors[anchors.length - 1];
+      pt = Math.abs(pt.xMm - a.xMm) > Math.abs(pt.yMm - a.yMm) ? { ...pt, yMm: a.yMm } : { ...pt, xMm: a.xMm };
+    }
+    const segments = [
+      ...current.points.map((start, i) => ({ start, end: current.points[(i + 1) % current.points.length] })),
+      ...current.lines,
+      ...(below && previous ? [...previous.points.map((start, i) => ({ start, end: previous.points[(i + 1) % previous.points.length] })), ...previous.lines] : []),
+      ...walls.filter(w => projectVisible && w.levelId === projectLevel).map(w => ({ start: { xMm: w.startXmm, yMm: w.startYmm }, end: { xMm: w.endXmm, yMm: w.endYmm } }))
+    ];
     const candidates = [
       ...current.points,
       ...current.lines.flatMap(l => [l.start, l.end]),
       ...(below && previous ? [...previous.points, ...previous.lines.flatMap(l => [l.start, l.end])] : []),
       ...projectPoints
     ];
-    const snap = candidates.reduce<SketchPoint | null>((best, p) =>
-      Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) < span * 0.02 && (!best || Math.hypot(p.xMm - raw.xMm, p.yMm - raw.yMm) < Math.hypot(best.xMm - raw.xMm, best.yMm - raw.yMm))
-        ? p : best,
-      null
-    );
+    for (const segment of segments) {
+      const dx = segment.end.xMm - segment.start.xMm, dy = segment.end.yMm - segment.start.yMm;
+      const t = Math.max(0, Math.min(1, ((pt.xMm - segment.start.xMm) * dx + (pt.yMm - segment.start.yMm) * dy) / (dx * dx + dy * dy || 1)));
+      candidates.push({ xMm: Math.round((segment.start.xMm + t * dx) / 250) * 250, yMm: Math.round((segment.start.yMm + t * dy) / 250) * 250 });
+    }
+    const tolerance = Math.max(350, Math.min(900, span * .018));
+    const snap = candidates.reduce<SketchPoint | null>((best, p) => Math.hypot(p.xMm - pt.xMm, p.yMm - pt.yMm) <= tolerance && (!best || Math.hypot(p.xMm - pt.xMm, p.yMm - pt.yMm) < Math.hypot(best.xMm - pt.xMm, best.yMm - pt.yMm)) ? p : best, null);
     if (snap && snap.xMm >= 0 && snap.yMm >= 0 && snap.xMm <= 80000 && snap.yMm <= 80000) {
       return { point: snap, snap };
     }
@@ -304,8 +319,11 @@ export default function AiSketchWorkspace({
     if (lineDrag) {
       const raw = getCanvasPoint(event);
       if (!raw) return;
-      const dx = Math.round((raw.xMm - lineDrag.startPoint.xMm) / 250) * 250;
-      const dy = Math.round((raw.yMm - lineDrag.startPoint.yMm) / 250) * 250;
+      const rawDx = Math.round((raw.xMm - lineDrag.startPoint.xMm) / 250) * 250;
+      const rawDy = Math.round((raw.yMm - lineDrag.startPoint.yMm) / 250) * 250;
+      const snapped = resolvePoint({ xMm: lineDrag.origStart.xMm + rawDx, yMm: lineDrag.origStart.yMm + rawDy }, false).point;
+      const dx = Math.round((snapped.xMm - lineDrag.origStart.xMm) / 250) * 250;
+      const dy = Math.round((snapped.yMm - lineDrag.origStart.yMm) / 250) * 250;
       if (dx !== 0 || dy !== 0) {
         try {
           const next = moveSketchLine(current, lineDrag.index, lineDrag.interior, dx, dy);
@@ -323,7 +341,7 @@ export default function AiSketchWorkspace({
         const nextLine = { ...line, [endpointDrag.endpoint]: point };
         const next = endpointDrag.interior
           ? { ...current, lines: current.lines.map((v, i) => i === endpointDrag.index ? nextLine : v) }
-          : { ...current, points: current.points.map((v, i) => i === endpointDrag.index ? point : v) };
+          : { ...current, points: current.points.map((v, i) => i === (endpointDrag.index + (endpointDrag.endpoint === "end" ? 1 : 0)) % current.points.length ? point : v) };
         onChange({ ...parameters, sketches: sketches.map((s, i) => i === floor ? next : s) });
       }
       setSnapPoint(snap);
@@ -477,7 +495,8 @@ export default function AiSketchWorkspace({
   };
 
   const onPointerDownCanvas = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (tool === "pan") {
+    if (tool === "pan" || event.button === 2 || event.button === 1) {
+      event.preventDefault();
       drag.current = { x: event.clientX, y: event.clientY, pan };
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -786,10 +805,12 @@ export default function AiSketchWorkspace({
       {src === "current" && s.labels?.map((label, i) => {
         const room = sketchRooms(s).find(r => insidePolygon(label.point, r));
         return (
-          <g key={`room${i}`} pointerEvents="none">
-            {room && <polygon points={room.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill={`${colors[label.use]}25`} />}
+          <g key={`room${i}`}>
+            {room && <polygon points={room.map(p => `${p.xMm},${p.yMm}`).join(" ")} fill={`${colors[label.use]}25`} pointerEvents="none" />}
+            {showRoomText && <g role="button" tabIndex={0} aria-label={`Edit ${label.name} room`} style={{ cursor: "pointer" }} onClick={e => { e.stopPropagation(); setRoomPoint(label.point); setRoomName(label.name); setRoomUse(label.use); setTool("room"); setSelected(null); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setRoomPoint(label.point); setRoomName(label.name); setRoomUse(label.use); setTool("room"); setSelected(null); } }}>
             <text x={label.point.xMm} y={label.point.yMm} fontSize={span * .02} textAnchor="middle" fill="currentColor" fontWeight="600">{label.name}</text>
             {room && <text x={label.point.xMm} y={label.point.yMm + span * .025} fontSize={span * .014} fill="currentColor" textAnchor="middle">{(polygonArea(room) / 1e6).toFixed(1)} m² · {label.use}</text>}
+            </g>}
           </g>
         );
       })}
@@ -863,7 +884,7 @@ export default function AiSketchWorkspace({
         const w = projectWalls.find(w => w.id === o.wallId)!, len = Math.hypot(w.endXmm - w.startXmm, w.endYmm - w.startYmm), t = o.positionMm / len;
         return <circle key={o.id} cx={w.startXmm + (w.endXmm - w.startXmm) * t} cy={w.startYmm + (w.endYmm - w.startYmm) * t} r={span * .005} fill={"sillHeightMm" in o ? "#38bdf8" : "#fb923c"} pointerEvents="none" />;
       })}
-      {roomsInProject?.filter(r => r.levelId === projectLevel).map(r => <text key={r.id} x={r.tagPosMm.xMm} y={r.tagPosMm.yMm} fontSize={span * .016} textAnchor="middle" fill="#94a3b8" pointerEvents="none">{r.name}</text>)}
+      {showRoomText && roomsInProject?.filter(r => r.levelId === projectLevel).map(r => <text key={r.id} x={r.tagPosMm.xMm} y={r.tagPosMm.yMm} fontSize={span * .016} textAnchor="middle" fill="#94a3b8" pointerEvents="none">{r.name}</text>)}
     </g>
   );
 
@@ -997,7 +1018,7 @@ export default function AiSketchWorkspace({
   })();
 
   return createPortal(
-    <div className="ai-sketch-overlay">
+    <div className="ai-sketch-overlay" data-theme={colorTheme}>
       <section role="dialog" aria-modal="true" aria-label="House drawing workspace" className="ai-sketch-workspace" onKeyDown={e => {
         if (e.key !== "Escape") e.stopPropagation();
         if (e.key === "Tab") {
@@ -1087,6 +1108,7 @@ export default function AiSketchWorkspace({
               onPointerMove={onPointerMoveCanvas}
               onPointerUp={onPointerUpCanvas}
               onWheel={e => { e.preventDefault(); setZoom(v => Math.max(.5, Math.min(4, v * (e.deltaY < 0 ? 1.1 : .9)))); }}
+              onContextMenu={e => e.preventDefault()}
               onPointerCancel={() => { drag.current = null; setIsFreehandDragging(false); setFreehandStroke([]); setGardenDrag(null); }}
               aria-label="Editable 2D floor drawing"
               role="img"
@@ -1167,6 +1189,7 @@ export default function AiSketchWorkspace({
               </div>
               <p className="ai-sketch-help-text">{help[tool]}</p>
               <div className="ai-sketch-checks">
+                <label><input aria-label="Show room labels" type="checkbox" checked={showRoomText} onChange={e => setShowRoomText(e.target.checked)} /> Show room text</label>
                 <label><input type="checkbox" checked={orthogonal} onChange={e => setOrthogonal(e.target.checked)} /> Ortho (90°)</label>
                 <label><input type="checkbox" checked={grid} onChange={e => setGrid(e.target.checked)} /><FiGrid/> Grid</label>
               </div>
