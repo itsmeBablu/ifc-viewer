@@ -327,7 +327,8 @@ function AssistantPanel({
   getTriggerRect: () => DOMRect | null;
   onCloseComplete: () => void;
 }) {
-  const { data: session, status } = useSession();
+  const { data: sessionData, status } = useSession();
+  const session = sessionData as { user?: { id?: string; name?: string | null; email?: string | null; image?: string | null } } | null;
   const [error, setError] = useState("");
   const projectId = useLayoutDrawingStore(s => s.projectId);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);

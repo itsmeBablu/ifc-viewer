@@ -256,8 +256,12 @@ export default function AiSketchWorkspace({
     setRoomPoint(null);
   };
 
-  const getCanvasPoint = (event: React.MouseEvent<SVGSVGElement> | React.PointerEvent<SVGSVGElement>): SketchPoint | null => {
-    const matrix = event.currentTarget.getScreenCTM();
+  const getCanvasPoint = (event: React.MouseEvent<Element> | React.PointerEvent<Element>): SketchPoint | null => {
+    const svg = (event.currentTarget instanceof SVGSVGElement
+      ? event.currentTarget
+      : event.currentTarget.closest("svg")) as SVGSVGElement | null;
+    if (!svg) return null;
+    const matrix = svg.getScreenCTM();
     if (!matrix) return null;
     const pt = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
     return { xMm: pt.x, yMm: pt.y };
