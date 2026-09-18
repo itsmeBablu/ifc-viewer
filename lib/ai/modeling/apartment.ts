@@ -3,7 +3,9 @@ import type { AiAction } from "../schema";
 import { allocateResidential } from "./allocation";
 import { residentialOptions } from "./brief";
 import { allocateBuilding, applyFootprint } from "./footprint";
-import { furnishFloor } from "./furnishing";
+import { furnishFloor, outdoorActions } from "./furnishing";
+import { homeDetails, varyHomeLayout } from "./details";
+import { bedroomBayWidths, bathroomZones } from "./rooms";
 
 const apartmentRecipeSchema = z.object({
   kind: z.literal("apartment_layout"), id: z.string().min(1).max(100), levelId: z.string().min(1),
@@ -29,9 +31,7 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   const { bays, widthMm: w, depthMm: d, bedroomEndMm: bedroomEnd, corridorEndMm: corridorEnd, bathroomWidthMm } = allocation;
   // Seeded subdivision: vary bay proportions while preserving the overall footprint.
   const seed = item.layoutSeed ?? 0;
-  const factors = Array.from({ length: bays }, (_, i) => 0.82 + (((seed * 17 + i * 31) % 37) / 100));
-  const factorTotal = factors.reduce((sum, value) => sum + value, 0);
-  const bayWidths = factors.map(value => roomW * bays * value / factorTotal);
+  const bayWidths = bedroomBayWidths({ ...item, variant: "apartment" }, bays, roomW);
   let wallIndex = 0, openingIndex = 0;
   const wall = (x1: number, y1: number, x2: number, y2: number, thickness = p) => {
     const id = `${item.id}:wall:${wallIndex++}`;
@@ -85,6 +85,14 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   }
   if (allocation.bathroomEnclosed) wall(bathLeft, bathroomEnd, bathRight, bathroomEnd);
   door(living, bathLeft + bathroomWidthMm / 2);
+  const baths = bathroomZones({ ...item, variant: "apartment" }, bathLeft, corridorEnd + p / 2, bathroomWidthMm, allocation.bathroomDepthMm);
+  for (let i = 1; i < baths.length; i++) {
+    wall(bathLeft, baths[i].y - p / 2, bathRight, baths[i].y - p / 2);
+    // The inner-side wall remains accessible to all bathrooms without crossing another room.
+    const accessX = flipSide ? bathLeft : bathRight;
+    const access = actions.find(a => a.kind === "wall" && Math.abs(a.startXmm - item.xMm - accessX) < 1 && a.startYmm === item.yMm + corridorEnd);
+    if (access?.kind === "wall") door(access.id, baths[i].y - corridorEnd + baths[i].d / 2, "wood", Math.min(800, baths[i].d - 100));
+  }
   door(living, flipSide ? (t / 2 + 1000) : (w - t / 2 - 1000));
   // Double door at main entry by default (1600mm wide)
   if (options.entrance !== false) door(entry, d - (bedroomEnd + corridorEnd) / 2, "double", 1600);
@@ -103,5 +111,15 @@ export function apartmentActions(item: z.infer<typeof apartmentSchema>, options:
   [[balconyLeft, balconyY, balconyLeft + balconyWidth, balconyY], [balconyLeft, balconyY, balconyLeft, facadeY], [balconyLeft + balconyWidth, balconyY, balconyLeft + balconyWidth, facadeY]].forEach(([x1,y1,x2,y2], i) => actions.push({ kind: "wall", operation: "create", id: `${item.id}:balcony:rail:${i}`, levelId: item.levelId, startXmm: x1, startYmm: y1, endXmm: x2, endYmm: y2, thicknessMm: 80, heightMm: railHeight, wallType: "curtain" }));
   }
   actions.push(...furnishFloor({ ...item, variant: "apartment" },allocation,item.id,item.levelId,item.xMm,item.yMm,t,item.heightMm,item.bedrooms));
-  return building?.polygon ? applyFootprint(actions,building.polygon,original.xMm,original.yMm,t,item.heightMm,item.levelId,item.id) : actions;
+  if (item.roofStyle) {
+    const slab = actions.find(a => a.kind === "floor" && a.id === `${item.id}:floor`);
+    if (slab?.kind === "floor") {
+      const roofPreset = item.roofStyle === "modern-flat" || building?.polygon && building.polygon.length !== 4 ? "flat" : item.roofStyle === "german-gable" ? "gable" : item.roofStyle === "german-hip" ? "hip" : "shed";
+      actions.push({ ...slab, kind: "roof", id: `${item.id}:roof`, elevationOffsetMm: item.heightMm, roofPreset, pitchDeg: roofPreset === "flat" ? 0 : roofPreset === "gable" ? 35 : 25 });
+    }
+  }
+  const compiled = building?.polygon ? applyFootprint(actions,building.polygon,original.xMm,original.yMm,t,item.heightMm,item.levelId,item.id) : actions;
+  if (!options.allocation && (item.garage && item.garage !== "none" || item.gardenAreaM2)) compiled.push(...outdoorActions({ ...item, variant: "apartment" }, item.id, item.levelId, original.xMm, original.yMm, building?.polygon ? Math.max(...building.polygon.map(p => p.xMm)) : w, building?.polygon ? Math.max(...building.polygon.map(p => p.yMm)) : d, item.heightMm));
+  const parameters = { ...item, variant: "apartment" as const };
+  return options.allocation ? compiled : homeDetails(varyHomeLayout(compiled, parameters), parameters);
 }

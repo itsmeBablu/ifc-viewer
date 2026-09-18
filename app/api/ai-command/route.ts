@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   let input;
   try {
     input = commandRequestSchema.parse(await readBody(request));
-  } catch { return reply({ error: "Invalid or oversized command. Check the text and project context." }, 400); }
+  } catch { return reply({ error: "Please complete your requirements and try again. For a home, start with an area or both length and width." }, 400); }
   let limit: Awaited<ReturnType<typeof limitAiUser>>;
   try {
     limit = await limitAiUser(session.user.id);

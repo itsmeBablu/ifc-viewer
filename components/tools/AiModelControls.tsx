@@ -7,12 +7,14 @@ import { LuCheck, LuChevronDown, LuSparkles, LuZap } from "react-icons/lu";
 type Props = {
   model: AiModelId;
   mode: AiMode;
+  home: boolean;
+  onHome: () => void;
   disabled: boolean;
   onModel: (model: AiModelId) => void;
   onMode: (mode: AiMode) => void;
 };
 
-export default function AiModelControls({ model, mode, disabled, onModel, onMode }: Props) {
+export default function AiModelControls({ model, mode, home, onHome, disabled, onModel, onMode }: Props) {
   const selectedModel = modelDetails(model);
   const mepModeActive = useLayoutDrawingStore(s => s.mepModeActive);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -64,8 +66,9 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
     <div className="ai-composer-controls relative flex items-center justify-between gap-1.5 border-b px-2.5 py-1.5 transition-colors rounded-t-[17px]">
       {/* Mode pills: Build, Review, Guide in v-Yellow/v-Blue palette */}
       <div className="ai-mode-pills-container flex items-center gap-0.5 rounded-lg p-0.5 transition-colors" role="group" aria-label="Assistant mode">
+        <button type="button" disabled={disabled} aria-pressed={home} onClick={onHome} className={`rounded-md px-2 py-1 text-[11px] font-bold ${home ? "bg-[#facc15] text-[#09090b]" : "ai-mode-pill-inactive"}`}>Home</button>
         {AI_MODES.map(option => {
-          const isActive = mode === option.id;
+          const isActive = !home && mode === option.id;
           return (
             <button
               type="button"
@@ -130,7 +133,7 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
               <span>AI Intelligence Models</span>
             </div>
             <div className="space-y-1">
-              {AI_MODELS.map(option => {
+              {AI_MODELS.filter(option => !home || option.id !== "ollama-local").map(option => {
                 const isSelected = option.id === model;
                 return (
                   <button
@@ -186,4 +189,3 @@ export default function AiModelControls({ model, mode, disabled, onModel, onMode
     </div>
   );
 }
-

@@ -1,703 +1,251 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LuCheck, LuChevronLeft, LuChevronRight, LuRefreshCw, LuSparkles } from "react-icons/lu";
 import { currentAiContext } from "@/lib/ai/execute";
 import { DEFAULT_AI_MODEL, type AiModelId } from "@/lib/ai/models";
 import { residentialParametersSchema } from "@/lib/ai/modeling/brief";
-import {
-  residentialCommand,
-  suggestResidentialTypes,
-  type ResidentialParameters,
-  type TypologySuggestion,
-} from "@/lib/ai/modeling/allocation";
-import { allocateBuilding, polygonArea } from "@/lib/ai/modeling/footprint";
-import { allocateResidential } from "@/lib/ai/modeling/allocation";
-import { multiApartmentActions } from "@/lib/ai/modeling/multiApartment";
-import AiFootprintCanvas from "./AiFootprintCanvas";
+import { residentialCommand, type ResidentialParameters } from "@/lib/ai/modeling/allocation";
+import { homeSiteFit, suggestHomes, type HomeSite } from "@/lib/ai/modeling/home";
+import { residentialSketches } from "@/lib/ai/modeling/preview";
+import { polygonArea } from "@/lib/ai/modeling/footprint";
 import { validateSketches } from "@/lib/ai/modeling/sketch";
-import {
-  LuRefreshCw,
-  LuSparkles,
-  LuCheck,
-  LuChevronRight,
-  LuChevronLeft,
-  LuHouse,
-  LuTreePine,
-  LuMaximize2,
-  LuPalette,
-} from "react-icons/lu";
+import { useLayoutDrawingStore } from "@/store/useLayoutDrawingStore";
+import { projectHomeSketches, homeReplacementActions } from "@/lib/ai/modeling/project";
+import { defaultModelingPlan } from "@/lib/ai/modeling";
+import { validatePlan } from "@/lib/ai/validate";
+import { refreshSketchLayout } from "@/lib/ai/modeling/sketchEditing";
+import AiFootprintCanvas from "./AiFootprintCanvas";
 
-export default function AiBuildingPresets({
-  disabled,
-  model,
-  heightMm,
-  thicknessMm,
-  onChoose,
-  onCreate,
-}: {
-  disabled: boolean;
-  model: AiModelId;
-  heightMm: number;
-  thicknessMm: number;
+const steps = ["Plot", "Typology", "Outdoor", "Style", "Layout & 3D"];
+const styles = [
+  { id: "compact", name: "Compact modern", description: "Simple footprint with a flat roof.", footprint: "rectangle", layoutStyle: "linear", cultureStyle: "standard", roofStyle: "modern-flat" },
+  { id: "german", name: "Gable-roof home", description: "Compact rooms with a pitched roof.", footprint: "rectangle", layoutStyle: "linear", cultureStyle: "german", roofStyle: "german-gable" },
+  { id: "hip", name: "Hip-roof home", description: "A roof with slopes on all four sides.", footprint: "rectangle", layoutStyle: "linear", cultureStyle: "standard", roofStyle: "german-hip" },
+  { id: "mansard", name: "Mansard-inspired home", description: "A sloping roof and compact service core.", footprint: "rectangle", layoutStyle: "linear", cultureStyle: "german", roofStyle: "mansard" },
+  { id: "corner", name: "L-shaped home", description: "Two wings around an outdoor corner.", footprint: "l", layoutStyle: "corner", cultureStyle: "standard", roofStyle: "modern-flat" },
+  { id: "courtyard", name: "U-shaped courtyard", description: "Shared wings around an open patio.", footprint: "u", layoutStyle: "courtyard", cultureStyle: "standard", roofStyle: "modern-flat" },
+] as const;
+
+export default function AiBuildingPresets({ disabled, model, heightMm, thicknessMm, projectId, onChoose, onCreate }: {
+  disabled: boolean; model: AiModelId; heightMm: number; thicknessMm: number;
   onChoose: (command: string, p: ResidentialParameters) => void;
-  onCreate: (command: string, p: ResidentialParameters) => void;
+  projectId: string;
+  onCreate: (command: string, p: ResidentialParameters, replaceProject: boolean) => void;
 }) {
-  // Wizard steps: 1 = Plot, 2 = Typology, 3 = Outdoor, 4 = Style, 5 = Result
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-  const [plotArea, setPlotArea] = useState<number>(180);
-  const [plotWidth, setPlotWidth] = useState<number | undefined>(undefined);
-  const [plotLength, setPlotLength] = useState<number | undefined>(undefined);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [designMessage, setDesignMessage] = useState("");
-  const [generationError, setGenerationError] = useState("");
+  const [step, setStep] = useState(1);
+  const [inputMode, setInputMode] = useState<"area" | "dimensions">("area");
+  const [area, setArea] = useState("");
+  const [width, setWidth] = useState("");
+  const [length, setLength] = useState("");
+  const [p, setP] = useState<ResidentialParameters | null>(null);
+  const [selectedConcept, setSelectedConcept] = useState("");
+  const [styleId, setStyleId] = useState("compact");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [preferences, setPreferences] = useState("");
+  const [replaceProject, setReplaceProject] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [buildReady, setBuildReady] = useState(false);
+  const [validatedBuildKey, setValidatedBuildKey] = useState("");
+  const [buildHint, setBuildHint] = useState("");
+  const wallCount = useLayoutDrawingStore(s => s.walls.length);
+  const buildKey = JSON.stringify([p, model, replaceProject, wallCount]);
+  const checking = step === 5 && !!p && validatedBuildKey !== buildKey;
   const requestRef = useRef<AbortController | null>(null);
+  const generationRef = useRef(false);
   useEffect(() => () => requestRef.current?.abort(), []);
-  const [manualOverrideOpen, setManualOverrideOpen] = useState(false);
-
-  const [p, setP] = useState<ResidentialParameters>({
-    variant: "villa",
-    bedrooms: 3,
-    bedroomAreaM2: 18,
-    furnished: true,
-    layoutStyle: "linear",
-    cultureStyle: "standard",
-    roofStyle: "modern-flat",
-    separateKitchen: true,
-    ensuiteBathrooms: true,
-    garage: "enclosed",
-    garageWidthM: 3.5,
-    garageDepthM: 6,
-    gardenAreaM2: 50,
-    layoutSeed: 12345,
-    plotAreaM2: 180,
-  });
-
-  const suggestions = useMemo(() => suggestResidentialTypes(plotArea).map(s => {
-    if (s.apartmentFloors) {
-      const unit = allocateResidential({ variant: "apartment", bedrooms: s.bedrooms, bedroomAreaM2: 18 }, heightMm, thicknessMm);
-      return { ...s, label: "Small apartment building", reason: "3 floors, 2 homes per floor; compare family homes with a rental building.", apartmentsPerFloor: 2, estimatedAreaM2: Math.ceil(unit.totalAreaM2 * 6) };
-    }
-    const shape = s.layoutStyle === "courtyard" ? "u" : s.layoutStyle === "corner" ? "l" : "rectangle";
-    const building = allocateBuilding({ variant: s.variant, bedrooms: s.bedrooms, bedroomAreaM2: plotArea < 140 ? 11 : 18, footprint: shape }, heightMm, thicknessMm);
-    return { ...s, estimatedAreaM2: Math.ceil(building.allocation.totalAreaM2 + building.extraAreaM2) };
-  }), [plotArea, heightMm, thicknessMm]);
-
-  const validate = (next: ResidentialParameters) => {
-    if (
-      next.apartmentFloors !== undefined ||
-      next.apartmentsPerFloor !== undefined ||
-      next.bedroomsPerApartment !== undefined
-    ) {
-      const actions = multiApartmentActions(next, "check", "ground", 0, heightMm, thicknessMm);
-      if (actions.length > 399) throw new Error("This building needs more than one AI batch. Start with fewer floors or homes per floor.");
-      return null;
-    }
-    if (next.sketches) {
-      validateSketches(next.sketches);
-      const area = next.sketches.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0);
-      if (next.totalAreaM2 !== undefined && Math.abs(area - next.totalAreaM2) > 0.1) {
-        throw new Error(`Drawn floors give ${area.toFixed(1)} m². Update the total or adjust the lines.`);
-      }
-      return null;
-    }
-    return allocateBuilding(next, heightMm, thicknessMm);
-  };
-
-  let result: ReturnType<typeof allocateBuilding> | null = null;
-  let error = "";
-  try {
-    result = validate(p);
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Check room sizes.";
-  }
-
-  const update = (next: ResidentialParameters) => {
-    setGenerationError("");
-    setP(next);
+  useEffect(() => {
+    const timer = setTimeout(() => {
     try {
-      validate(next);
-      onChoose(residentialCommand(next), next);
-    } catch {
-      onChoose("", next);
+      const saved = JSON.parse(localStorage.getItem(`vstudio:home:${projectId}`) ?? "null");
+      if (saved) {
+        setArea(saved.area ?? ""); setWidth(saved.width ?? ""); setLength(saved.length ?? "");
+        setInputMode(saved.inputMode === "dimensions" ? "dimensions" : "area");
+        setP(saved.parameters ?? null); setPreferences(saved.preferences ?? "");
+        setStyleId(saved.styleId ?? "compact"); setSelectedConcept(saved.selectedConcept ?? "");
+        setStep(saved.parameters ? Math.min(5, saved.step ?? 2) : 1); setReplaceProject(!!saved.replaceProject);
+      }
+    } catch { /* Start with the plot when a browser draft cannot be restored. */ }
+    setDraftLoaded(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [projectId]);
+  useEffect(() => {
+    if (!draftLoaded) return;
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(`vstudio:home:${projectId}`, JSON.stringify({ area, width, length, inputMode, parameters: p, preferences, styleId, selectedConcept, step, replaceProject })); }
+      catch { setFeedback("This browser could not save your Home draft. Your project model can still be saved normally."); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [draftLoaded, projectId, area, width, length, inputMode, p, preferences, styleId, selectedConcept, step, replaceProject]);
+  useEffect(() => {
+    if (!p || step !== 5) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      setBuildReady(false); setBuildHint("");
+      try {
+        const context = currentAiContext();
+        const compilationContext = replaceProject ? { ...context, selection: [], elements: context.elements.filter(e => e.kind === "level") } : context;
+        const result = defaultModelingPlan({ command: residentialCommand(p), residential: residentialParametersSchema.parse(p), model, mode: "build", context: compilationContext, attachments: [], history: [] });
+        if (!result) throw new Error("Choose a home concept first.");
+        validatePlan({ ...result.plan, actions: [...(replaceProject ? homeReplacementActions(context) : []), ...result.plan.actions] }, context);
+        if (active) setBuildReady(true);
+      } catch { if (active) setBuildHint("Try automatic room sizes or reopen the drawing to adjust walls. Your draft is saved while you make changes."); }
+      finally { if (active) setValidatedBuildKey(buildKey); }
+    }, 100);
+    return () => { active = false; clearTimeout(timer); };
+  }, [p, step, model, replaceProject, wallCount, buildKey]);
+  const site: HomeSite = useMemo(() => inputMode === "area" ? { areaM2: Number(area) } : { areaM2: Number(width) * Number(length), widthM: Number(width), lengthM: Number(length) }, [inputMode, area, width, length]);
+  const siteReady = site.areaM2 >= 30 && site.areaM2 <= 10000 && (inputMode === "area" || Number(width) >= 4 && Number(length) >= 4);
+  const suggestions = useMemo(() => siteReady ? suggestHomes(site, heightMm, thicknessMm) : [], [siteReady, site, heightMm, thicknessMm]);
+  const availableShapes = useMemo(() => (["rectangle", "l", "u", "drawn"] as const).filter(footprint => {
+    if (footprint === "drawn" || !p) return true;
+    try { return homeSiteFit({ ...p, footprint, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined }, site, heightMm, thicknessMm).fits; }
+    catch { return false; }
+  }), [p, site, heightMm, thicknessMm]);
+  const blocked = disabled || loading;
+  const check = (next: ResidentialParameters) => {
+    if (next.sketches?.length) {
+      validateSketches(next.sketches);
+      const ground = next.sketches[0].points;
+      const width = Math.max(...ground.map(p => p.xMm)) - Math.min(...ground.map(p => p.xMm)) + thicknessMm * 2;
+      const length = Math.max(...ground.map(p => p.yMm)) - Math.min(...ground.map(p => p.yMm)) + thicknessMm * 2;
+      const footprint = width * length / 1e6;
+      const parking = next.garage && next.garage !== "none" ? (next.garageWidthM ?? 3.5) * (next.garageDepthM ?? 6) : 0;
+      const occupiedWidth = width + (parking ? 800 + (next.garageWidthM ?? 3.5) * 1000 : 0);
+      const occupiedLength = Math.max(length, parking ? (next.garageDepthM ?? 6) * 1000 : 0) + (next.gardenAreaM2 ? 1000 + next.gardenAreaM2 * 1e6 / width : 0);
+      return { fits: footprint + parking + (next.gardenAreaM2 ?? 0) <= site.areaM2 + .1 && (!site.widthM || occupiedWidth <= site.widthM * 1000) && (!site.lengthM || occupiedLength <= site.lengthM * 1000), remainingAreaM2: site.areaM2 - footprint - parking - (next.gardenAreaM2 ?? 0), building: null, totalAreaM2: next.sketches.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0) };
     }
+    const fit = homeSiteFit(next, site, heightMm, thicknessMm);
+    return { ...fit, totalAreaM2: fit.building.allocation.totalAreaM2 + fit.building.extraAreaM2 };
   };
-
-  const handleShuffle = async () => {
-    if (isRefreshing || disabled) return;
-    setIsRefreshing(true);
-    setGenerationError("");
+  let fit: ReturnType<typeof check> | null = null;
+  let fitMessage = "";
+  if (p && siteReady) {
+    try {
+      fit = check(p);
+      if (!fit.fits) fitMessage = "These choices need more outdoor space. Reduce the garden or parking, or choose a smaller home.";
+    } catch { fitMessage = "These rooms need a little more space. Choose a smaller home or use automatic room dimensions."; }
+  }
+  const canFit = (next: ResidentialParameters) => { try { return check(next).fits; } catch { return false; } };
+  const update = (next: ResidentialParameters) => {
+    setP(next); setFeedback("");
+    onChoose(residentialCommand(next), next);
+  };
+  const resetSite = () => { setP(null); setSelectedConcept(""); setMessage(""); setFeedback(""); };
+  const choose = (id: string) => {
+    const suggestion = suggestions.find(s => s.id === id);
+    if (!suggestion) return;
+    setSelectedConcept(id); setStyleId("compact");
+    update({ ...suggestion.parameters, roofStyle: "modern-flat", cultureStyle: "standard", layoutStyle: "linear", doorStyle: "wood", doorHeightMm: 2100, doubleEntranceDoor: false, windowStyle: "casement", windowHeightMm: 1200 });
+  };
+  const signature = (next: ResidentialParameters) => JSON.stringify(residentialSketches(next, heightMm, thicknessMm).map(s => ({ points: s.points, lines: s.lines })));
+  const generate = async () => {
+    if (!p || blocked || generationRef.current || !fit?.fits) return;
+    generationRef.current = true;
+    setLoading(true); setMessage(""); setFeedback("");
+    await new Promise(resolve => setTimeout(resolve, 40));
+    const previous = p;
+    let before = "";
+    let base = { ...p, sketches: p.sketches?.map(s => refreshSketchLayout(s, (p.layoutRevision ?? 0) + 1)), layoutRevision: (p.layoutRevision ?? 0) + 1, layoutSeed: ((p.layoutSeed ?? 0) + 7919) % 1000001 };
+    try {
+      before = signature(previous);
+      for (let attempt = 0; signature(base) === before && attempt < 8; attempt++) base = { ...base, layoutSeed: ((base.layoutSeed ?? 0) + 1) % 1000001 };
+      if (!canFit(base)) { setFeedback("Keep this drawing, or choose automatic dimensions to try another arrangement."); generationRef.current = false; setLoading(false); return; }
+    } catch { setFeedback("Keep this drawing, or choose a smaller home to try another arrangement."); generationRef.current = false; setLoading(false); return; }
+    update(base); setStep(5); setLoading(true); setMessage("");
     const controller = new AbortController(); requestRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 240000);
     try {
-      const parameters = residentialParametersSchema.parse({ ...p, sketches: undefined });
       const response = await fetch("/api/ai-command", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-        body: JSON.stringify({ intent: "layout", mode: "build", model: model === "ollama-local" ? DEFAULT_AI_MODEL : model, residential: parameters, command: "Suggest a fresh residential layout for these requirements. Explain the best room arrangement and useful alternatives, preserving the selected outline and dimensions.", context: currentAiContext(), attachments: [], history: [] }) });
+        body: JSON.stringify({ intent: "layout", mode: "build", model: model === "ollama-local" ? DEFAULT_AI_MODEL : model, residential: residentialParametersSchema.parse(previous), command: `Regenerate only this home's layout inside the current plot. Keep its outline, bedroom and bathroom counts, room areas, openings, fittings and MEP. User preferences: ${preferences.trim() || "Suggest a practical alternative with simple circulation."}`, context: { ...currentAiContext(), elements: [], selection: [] }, attachments: [], history: [] }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Layout generation failed. Please try again.");
-      if (result.kind !== "layout") throw new Error("Gemini did not return a layout. Please try again.");
-      const next = residentialParametersSchema.parse(result.parameters);
-      validate(next);
-      update(next); setDesignMessage(result.message); setStep(5);
-    } catch (e) { setGenerationError(controller.signal.aborted ? "Layout generation was cancelled or timed out. Your current drawing is preserved." : e instanceof Error && !e.name.includes("Zod") ? e.message : "Choose a complete outline and valid dimensions before generating."); }
-    finally { clearTimeout(timeout); requestRef.current = null; setIsRefreshing(false); }
+      if (!response.ok || result.kind !== "layout") throw new Error("Gemini could not suggest this layout right now.");
+      let next = residentialParametersSchema.parse({ ...result.parameters, layoutRevision: base.layoutRevision });
+      if (!canFit(next) || signature(next) === before) next = base;
+      update(next); setMessage(typeof result.message === "string" ? result.message : "Your new room arrangement is ready.");
+    } catch { setFeedback(controller.signal.aborted ? "The new arrangement is ready. Gemini suggestions were cancelled." : "The layout has changed. Gemini suggestions are unavailable right now; you can edit or build this arrangement."); }
+    finally { clearTimeout(timeout); requestRef.current = null; generationRef.current = false; setLoading(false); }
   };
+  const readyFor = (target: number) => target === 1 || siteReady && (target === 2 || !!p && !!fit?.fits);
+  const nextButton = (target: number, label: string) => <button type="button" className="ai-create-layout" disabled={blocked || !readyFor(target)} onClick={() => setStep(target)}>{label} <LuChevronRight /></button>;
+  const backButton = (target: number) => <button type="button" className="ai-secondary-button" disabled={blocked} onClick={() => setStep(target)}><LuChevronLeft /> Back</button>;
 
-  const selectTypology = (sug: TypologySuggestion) => {
-    const next: ResidentialParameters = {
-      ...p,
-      variant: sug.variant,
-      bedrooms: sug.bedrooms,
-      bedroomAreaM2: plotArea < 140 ? 11 : 18,
-      footprint: sug.layoutStyle === "courtyard" ? "u" : sug.layoutStyle === "corner" ? "l" : "rectangle",
-      sketches: undefined,
-      layoutStyle: sug.layoutStyle ?? p.layoutStyle,
-      apartmentFloors: sug.apartmentFloors,
-      apartmentsPerFloor: sug.apartmentsPerFloor,
-      bedroomsPerApartment: sug.bedroomsPerApartment,
-      totalAreaM2: sug.estimatedAreaM2,
-      layoutSeed: ((p.layoutSeed ?? 0) + 7919) % 1000001,
-    };
-    update(next);
-  };
-
-  const allocation = result?.allocation;
-
-  return (
-    <section className="ai-building-presets" aria-label="Smart building generator wizard">
-      {/* Step Indicators */}
-      <nav className="ai-wizard-nav" aria-label="Wizard Steps">
-        {[
-          { num: 1, label: "Plot", icon: <LuMaximize2 className="h-3 w-3" /> },
-          { num: 2, label: "Typology", icon: <LuHouse className="h-3 w-3" /> },
-          { num: 3, label: "Outdoor", icon: <LuTreePine className="h-3 w-3" /> },
-          { num: 4, label: "Style", icon: <LuPalette className="h-3 w-3" /> },
-          { num: 5, label: "Layout & 3D", icon: <LuSparkles className="h-3 w-3" /> },
-        ].map((s) => (
-          <button
-            key={s.num}
-            type="button"
-            className={`ai-wizard-tab ${step === s.num ? "is-active" : step > s.num ? "is-complete" : ""}`}
-            onClick={() => setStep(s.num as 1 | 2 | 3 | 4 | 5)}
-            disabled={disabled || isRefreshing}
-          >
-            <span className="ai-wizard-tab-num">{step > s.num ? <LuCheck /> : s.icon}</span>
-            <span className="ai-wizard-tab-label">{s.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      {/* STEP 1: Plot & Site Area */}
-      {step === 1 && (
-        <div className="ai-wizard-step animate-in fade-in duration-200">
-          <div className="ai-wizard-step-header">
-            <h4 className="text-sm font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-              <LuMaximize2 className="text-amber-400" /> 1. Enter Plot / Site Area
-            </h4>
-            <p className="text-xs text-[var(--text-muted)]">
-              Enter your site area to compare home concepts. Building footprint, garden and parking must fit within the available space.
-            </p>
-          </div>
-
-          <div className="ai-area-fields mt-3">
-            <label className="w-full">
-              <span>Plot / Site Area (m²)</span>
-              <input
-                aria-label="Plot area"
-                type="number"
-                min={30}
-                max={10000}
-                step={5}
-                value={plotArea || ""}
-                placeholder="e.g. 180"
-                onChange={(e) => {
-                  const val = Number(e.target.value) || 0;
-                  setPlotArea(val);
-                  update({ ...p, plotAreaM2: val });
-                }}
-              />
-            </label>
-          </div>
-
-          {/* Quick preset chips */}
-          <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            <span className="text-[11px] text-[var(--text-muted)]">Quick presets:</span>
-            {[
-              { label: "80 m² (Compact)", area: 80 },
-              { label: "160 m² (Suburban)", area: 160 },
-              { label: "280 m² (Villa)", area: 280 },
-              { label: "500 m² (Estate)", area: 500 },
-              { label: "1000 m² (Apartments)", area: 1000 },
-            ].map((chip) => (
-              <button
-                key={chip.area}
-                type="button"
-                className={`text-[11px] px-2 py-0.5 rounded-full border border-[var(--panel-divider)] hover:border-amber-400 transition-colors ${
-                  plotArea === chip.area ? "bg-amber-500/20 text-amber-300 font-semibold border-amber-400" : ""
-                }`}
-                onClick={() => {
-                  setPlotArea(chip.area);
-                  update({ ...p, plotAreaM2: chip.area });
-                }}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Optional Site Dimensions */}
-          <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--panel-divider)]">
-            <label className="text-xs">
-              <span className="text-[var(--text-muted)]">Site Width (optional · m)</span>
-              <input
-                type="number"
-                min={4}
-                max={100}
-                step={0.5}
-                value={plotWidth || ""}
-                placeholder="Auto"
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : undefined;
-                  setPlotWidth(val);
-                  update({ ...p, plotWidthM: val });
-                }}
-              />
-            </label>
-            <label className="text-xs">
-              <span className="text-[var(--text-muted)]">Site Length (optional · m)</span>
-              <input
-                type="number"
-                min={4}
-                max={100}
-                step={0.5}
-                value={plotLength || ""}
-                placeholder="Auto"
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : undefined;
-                  setPlotLength(val);
-                  update({ ...p, plotLengthM: val });
-                }}
-              />
-            </label>
-          </div>
-
-          <div className="ai-wizard-step-footer mt-4 flex justify-end">
-            <button
-              type="button"
-              className="ai-create-layout flex items-center gap-1 text-xs"
-              onClick={() => setStep(2)}
-              disabled={plotArea < 30}
-            >
-              Continue to Typologies <LuChevronRight />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: Realistic Typology Suggestions */}
-      {step === 2 && (
-        <div className="ai-wizard-step animate-in fade-in duration-200">
-          <div className="ai-wizard-step-header">
-            <h4 className="text-sm font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-              <LuHouse className="text-amber-400" /> 2. Realistic Typology for {plotArea} m² Site
-            </h4>
-            <p className="text-xs text-[var(--text-muted)]">
-              Compare concept homes for your site. Areas below use room sizes that the layout generator can build.
-            </p>
-          </div>
-
-          <div className="ai-typology-cards mt-3 flex flex-col gap-2">
-            {suggestions.map((sug, i) => {
-              const isSelected =
-                p.variant === sug.variant &&
-                p.bedrooms === sug.bedrooms &&
-                (sug.apartmentFloors === undefined || p.apartmentFloors === sug.apartmentFloors);
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className={`ai-typology-card text-left p-2.5 rounded-xl border transition-all ${
-                    isSelected
-                      ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                      : "border-[var(--panel-divider)] hover:border-slate-400/50 bg-slate-800/30"
-                  }`}
-                  onClick={() => selectTypology(sug)}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs text-[var(--text-strong)] flex items-center gap-1.5">
-                      {sug.label}
-                      {isSelected && <LuCheck className="text-amber-400 h-3.5 w-3.5" />}
-                    </span>
-                    <span className="text-[11px] font-mono text-amber-400/90">
-                      ~{sug.estimatedAreaM2} m²
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">{sug.reason}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Manual override expander */}
-          <div className="mt-3 pt-2 border-t border-[var(--panel-divider)]">
-            <button
-              type="button"
-              className="text-[11px] text-amber-400/90 underline hover:text-amber-300 transition-colors"
-              onClick={() => setManualOverrideOpen(!manualOverrideOpen)}
-            >
-              {manualOverrideOpen ? "Hide custom room override" : "Custom override (bedrooms, area, multi-storey) ▾"}
-            </button>
-            {manualOverrideOpen && (
-              <div className="ai-area-fields mt-2 p-2 bg-slate-900/40 rounded-lg border border-[var(--panel-divider)]">
-                <label>
-                  <span>Building Type</span>
-                  <select
-                    value={p.variant}
-                    onChange={(e) => update({ ...p, variant: e.target.value as any })}
-                  >
-                    <option value="villa">Single-storey Villa</option>
-                    <option value="duplex">Two-storey Duplex</option>
-                    <option value="apartment">Apartment</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Bedrooms</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={6}
-                    value={p.bedrooms}
-                    onChange={(e) => update({ ...p, bedrooms: Number(e.target.value) || 1 })}
-                  />
-                </label>
-                <label>
-                  <span>Total Target Area (m²)</span>
-                  <input
-                    type="number"
-                    min={30}
-                    max={2000}
-                    value={p.totalAreaM2 || ""}
-                    placeholder="Auto"
-                    onChange={(e) =>
-                      update({ ...p, totalAreaM2: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-
-          <div className="ai-wizard-step-footer mt-4 flex items-center justify-between">
-            <button
-              type="button"
-              className="ai-secondary-button flex items-center gap-1 text-xs"
-              onClick={() => setStep(1)}
-            >
-              <LuChevronLeft /> Back
-            </button>
-            <button
-              type="button"
-              className="ai-create-layout flex items-center gap-1 text-xs"
-              onClick={() => setStep(3)}
-            >
-              Outdoor Features <LuChevronRight />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: Outdoor Features */}
-      {step === 3 && (
-        <div className="ai-wizard-step animate-in fade-in duration-200">
-          <div className="ai-wizard-step-header">
-            <h4 className="text-sm font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-              <LuTreePine className="text-emerald-400" /> 3. Outdoor Features
-            </h4>
-            <p className="text-xs text-[var(--text-muted)]">
-              Choose parking, private garden area, and terrace/balcony features:
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 mt-3">
-            {/* Garage */}
-            <div className="p-2.5 rounded-xl border border-[var(--panel-divider)] bg-slate-800/30">
-              <label className="text-xs font-semibold text-[var(--text-strong)] block mb-1.5">
-                Garage / Parking
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  { id: "none", label: "No Garage" },
-                  { id: "open", label: "Open Carport (1 Car)" },
-                  { id: "enclosed", label: "Enclosed Garage (1 Car)" },
-                ].map((g) => (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className={`text-xs p-2 rounded-lg border text-left transition-colors ${
-                      p.garage === g.id
-                        ? "border-amber-400 bg-amber-500/15 text-amber-300 font-medium"
-                        : "border-[var(--panel-divider)] hover:border-slate-400/40"
-                    }`}
-                    onClick={() => update({ ...p, garage: g.id as any })}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Garden */}
-            <div className="p-2.5 rounded-xl border border-[var(--panel-divider)] bg-slate-800/30">
-              <label className="text-xs font-semibold text-[var(--text-strong)] block mb-1.5">
-                Private Garden Area
-              </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: "None", area: 0 },
-                  { label: "30 m²", area: 30 },
-                  { label: "60 m²", area: 60 },
-                  { label: "100 m²", area: 100 },
-                ].map((g) => (
-                  <button
-                    key={g.area}
-                    type="button"
-                    className={`text-xs p-1.5 rounded-lg border text-center transition-colors ${
-                      p.gardenAreaM2 === g.area
-                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-300 font-medium"
-                        : "border-[var(--panel-divider)] hover:border-slate-400/40"
-                    }`}
-                    onClick={() => update({ ...p, gardenAreaM2: g.area })}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Balcony / Terrace */}
-            <div className="p-2.5 rounded-xl border border-[var(--panel-divider)] bg-slate-800/30">
-              <label className="text-xs font-semibold text-[var(--text-strong)] block mb-1.5">
-                Balcony & Terraces
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { id: "none", label: "No Balcony" },
-                  { id: "front", label: "Front Balcony" },
-                  { id: "terrace", label: "Garden Terrace" },
-                ].map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    className={`text-xs p-1.5 rounded-lg border text-center transition-colors ${
-                      p.balcony === b.id || (!p.balcony && b.id === "front")
-                        ? "border-sky-400 bg-sky-500/15 text-sky-300 font-medium"
-                        : "border-[var(--panel-divider)] hover:border-slate-400/40"
-                    }`}
-                    onClick={() => update({ ...p, balcony: b.id as any })}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="ai-wizard-step-footer mt-4 flex items-center justify-between">
-            <button
-              type="button"
-              className="ai-secondary-button flex items-center gap-1 text-xs"
-              onClick={() => setStep(2)}
-            >
-              <LuChevronLeft /> Back
-            </button>
-            <button
-              type="button"
-              className="ai-create-layout flex items-center gap-1 text-xs"
-              onClick={() => setStep(4)}
-            >
-              Architectural Style <LuChevronRight />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: Architectural Style */}
-      {step === 4 && (
-        <div className="ai-wizard-step animate-in fade-in duration-200">
-          <div className="ai-wizard-step-header">
-            <h4 className="text-sm font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-              <LuPalette className="text-violet-400" /> 4. Architectural Style & Envelope
-            </h4>
-            <p className="text-xs text-[var(--text-muted)]">
-              Choose a design language respecting regional zoning, daylighting, and roof forms:
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            {[
-              {
-                id: "german",
-                title: "German Passivhaus",
-                desc: "Rational thermal envelope, compact service core & gable/hip roof",
-                layoutStyle: "linear",
-                cultureStyle: "german",
-                roofStyle: "german-gable",
-              },
-              {
-                id: "italian",
-                title: "Italian / Mediterranean",
-                desc: "Patio courtyard, open-air loggia & terracotta roof finishes",
-                layoutStyle: "courtyard",
-                cultureStyle: "standard",
-                roofStyle: "german-hip",
-              },
-              {
-                id: "luxury",
-                title: "Modern Luxury Villa",
-                desc: "Glazed curtain walls, private master suite & open living pavilion",
-                layoutStyle: "split",
-                cultureStyle: "standard",
-                roofStyle: "modern-flat",
-              },
-              {
-                id: "courtyard",
-                title: "Courtyard Villa",
-                desc: "U-shaped plan wrapping a private landscaped atrium",
-                layoutStyle: "courtyard",
-                cultureStyle: "standard",
-                roofStyle: "modern-flat",
-              },
-            ].map((style) => {
-              const isSelected = p.layoutStyle === style.layoutStyle && p.roofStyle === style.roofStyle && p.cultureStyle === style.cultureStyle;
-              return (
-                <button
-                  key={style.id}
-                  type="button"
-                  className={`text-left p-2.5 rounded-xl border transition-all ${
-                    isSelected
-                      ? "border-amber-400 bg-amber-500/15 text-amber-300 shadow-sm"
-                      : "border-[var(--panel-divider)] hover:border-slate-400/40 bg-slate-800/30"
-                  }`}
-                  onClick={() => {
-                    update({
-                      ...p,
-                      layoutStyle: style.layoutStyle as any,
-                      cultureStyle: style.cultureStyle as any,
-                      roofStyle: style.roofStyle as any,
-                      footprint: style.layoutStyle === "courtyard" ? "u" : "rectangle", sketches: undefined, totalAreaM2: undefined,
-                    });
-                  }}
-                >
-                  <span className="font-semibold text-xs block mb-1">{style.title}</span>
-                  <span className="text-[11px] text-[var(--text-muted)] block leading-snug">
-                    {style.desc}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="ai-wizard-step-footer mt-4 flex items-center justify-between">
-            <button
-              type="button"
-              className="ai-secondary-button flex items-center gap-1 text-xs"
-              onClick={() => setStep(3)}
-            >
-              <LuChevronLeft /> Back
-            </button>
-            <button
-              type="button"
-              className="ai-create-layout flex items-center gap-1 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
-              disabled={disabled || isRefreshing || !!error}
-              onClick={() => { setStep(5); void handleShuffle(); }}
-            >
-              Generate Layout Plan <LuSparkles />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: Layout Result & Generation */}
-      {step === 5 && (
-        <div className="ai-wizard-step animate-in fade-in duration-200">
-          <div className="ai-wizard-step-header flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-[var(--text-strong)] flex items-center gap-1.5">
-                <LuSparkles className="text-amber-400" /> 5. Generated Floor Plan Layout
-              </h4>
-              <p className="text-xs text-[var(--text-muted)]">
-                {p.bedrooms} Bedrooms · {p.variant} · {allocation ? `${Math.round(allocation.totalAreaM2)} m² total` : ""}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="text-[11px] text-amber-400/90 underline"
-              onClick={() => setStep(1)}
-            >
-              Adjust inputs ↩
-            </button>
-          </div>
-
-          {/* Interactive 2D Layout Canvas */}
-          <div className="mt-3 relative">
-            <AiFootprintCanvas parameters={p} onChange={update} disabled={disabled || isRefreshing} building={result} heightMm={heightMm} thicknessMm={thicknessMm} />
-          </div>
-
-          {/* Room Area Summary */}
-          {allocation && (
-            <div className="ai-area-summary mt-3 p-2.5 bg-slate-900/60 rounded-xl border border-[var(--panel-divider)]">
-              <strong className="text-xs text-[var(--text-strong)] block mb-1">
-                {Number((allocation.totalAreaM2 + (result?.extraAreaM2 ?? 0)).toFixed(1))} m² Total Internal Area · {allocation.floors} Floor{allocation.floors > 1 ? "s" : ""}
-              </strong>
-              <div className="grid grid-cols-4 gap-1 text-[11px] text-[var(--text-muted)]">
-                <div>🛏️ Beds: {Number(allocation.bedroomTotalM2.toFixed(1))} m²</div>
-                <div>🛋️ Living: {Number(allocation.livingTotalM2.toFixed(1))} m²</div>
-                <div>🍳 Kitchen: {Number(allocation.kitchenTotalM2.toFixed(1))} m²</div>
-                <div>🚿 Baths: {Number(allocation.bathroomTotalM2.toFixed(1))} m²</div>
-              </div>
-            </div>
-          )}
-
-          <details className="ai-layout-requirements mt-3">
-            <summary>Adjust rooms and building dimensions</summary>
-            <div className="ai-area-fields mt-2">
-              {([['Bedroom area', 'bedroomAreaM2', 11], ['Living area', 'livingAreaM2', 10], ['Kitchen area', 'kitchenAreaM2', 6], ['Bathroom area', 'bathroomAreaM2', 4], ['Building width (m)', 'widthM', 4], ['Building length (m)', 'lengthM', 4]] as const).map(([label, key, min]) => <label key={key}><span>{label}{key.endsWith('M2') ? ' (m²)' : ''}</span><input type="number" min={min} step={0.5} disabled={disabled || isRefreshing} value={p[key] ?? ''} placeholder="Automatic" onChange={e => update({ ...p, [key]: e.target.value ? Number(e.target.value) : undefined, sketches: undefined })} /></label>)}
-            </div>
-            <div className="ai-suggestion-row mt-2">
-              <label><input type="checkbox" checked={p.furnished !== false} disabled={disabled || isRefreshing} onChange={e => update({ ...p, furnished: e.target.checked })} /> Furnished</label>
-              <label><input type="checkbox" checked={p.separateKitchen !== false} disabled={disabled || isRefreshing} onChange={e => update({ ...p, separateKitchen: e.target.checked, sketches: undefined })} /> Separate kitchen</label>
-            </div>
-          </details>
-          {result && (result.allocation.totalAreaM2 + result.extraAreaM2) / result.allocation.floors + (p.gardenAreaM2 ?? 0) + (p.garage === 'none' ? 0 : (p.garageWidthM ?? 3.5) * (p.garageDepthM ?? 6)) > plotArea && <p className="ai-design-recommendation">This concept plus garden and parking exceeds your site area. Try a compact rectangle, fewer bedrooms, or a duplex with a smaller footprint.</p>}
-          {error && <><p role="alert" className="ai-error mt-2">{error}</p><button type="button" className="ai-secondary-button" disabled={disabled || isRefreshing} onClick={() => update({ ...p, totalAreaM2: undefined, widthM: undefined, lengthM: undefined })}>Suggest dimensions that fit these rooms</button></>}
-          {designMessage && <p className="ai-design-recommendation">{designMessage}</p>}
-          {isRefreshing && <div className="ai-thinking" role="status" aria-live="polite"><LuSparkles className="animate-pulse" /><span>Gemini is planning your rooms and checking the outline…</span><button type="button" onClick={() => requestRef.current?.abort()}>Cancel</button></div>}
-
-          {/* ACTION BUTTONS: Refresh vs Create vs Back */}
-          <div className="ai-layout-actions mt-4 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              className="ai-secondary-button flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-              disabled={disabled || isRefreshing || !!error}
-              onClick={handleShuffle}
-              title="Generate a different valid room layout for these exact same inputs"
-            >
-              <LuRefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin text-amber-400" : ""}`} />
-              <span>{isRefreshing ? "Regenerating…" : "Refresh / Shuffle Layout"}</span>
-            </button>
-
-            <button
-              type="button"
-              className="ai-create-layout flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl shadow-md transition-all active:scale-95"
-              disabled={disabled || isRefreshing || !!error || (p.bedroomAreaM2 ?? 20) < 11}
-              onClick={() => onCreate(residentialCommand(p), p)}
-            >
-              <LuSparkles className="h-3.5 w-3.5" />
-              <span>Create this layout in 3D</span>
-            </button>
-          </div>
-        </div>
-      )}
-      {generationError && <p role="alert" className="ai-error">{generationError}</p>}
-    </section>
-  );
+  return <section className="ai-building-presets" aria-label="Home planning flow">
+    <nav className="ai-wizard-nav" aria-label="Home planning steps">{steps.map((name, i) => <button key={name} type="button" className={"ai-wizard-tab " + (step === i + 1 ? "is-active" : "")} disabled={blocked || !readyFor(i + 1)} onClick={() => setStep(i + 1)}><span className="ai-wizard-tab-num">{i + 1}</span><span>{name}</span></button>)}</nav>
+    {step === 1 && <div className="ai-wizard-step">
+      {wallCount > 0 && <div className="ai-home-project-options"><strong>Your project already has a building</strong><div className="ai-suggestion-row"><button type="button" disabled={blocked} onClick={() => {
+        try {
+          const sketches = projectHomeSketches(currentAiContext());
+          if (!sketches.length) return;
+          const ground = sketches[0].points;
+          const plotAreaM2 = p?.plotAreaM2 ?? Math.ceil((Math.max(...ground.map(p => p.xMm)) + thicknessMm * 2) * (Math.max(...ground.map(p => p.yMm)) + thicknessMm * 2) / 1e6 * 1.2);
+          setInputMode("area"); setArea(String(plotAreaM2)); setReplaceProject(true);
+          update({ ...p, variant: p?.variant ?? (sketches.length > 1 ? "duplex" : "villa"), bedrooms: p?.bedrooms ?? 2, plotAreaM2, sketches, totalAreaM2: sketches.reduce((sum, s) => sum + polygonArea(s.points) / 1e6, 0), garage: "none", gardenAreaM2: 0 }); setStep(5);
+        } catch { setFeedback("Show the existing project in the drawing workspace to adjust its walls directly."); }
+      }}>Remodel existing</button><button type="button" disabled={blocked} onClick={() => { resetSite(); setReplaceProject(true); }}>New home · replace on Build</button></div><small>{replaceProject ? "Build will replace this project's model. Undo can restore it." : "The current building stays until you choose to remodel or replace it."}</small></div>}
+      <h4>Start with your plot</h4><p className="ai-text-muted">Enter its area, or its length and width. We will show only suitable home concepts.</p>
+      <div className="ai-suggestion-row" role="group" aria-label="Plot measurement method">{(["area", "dimensions"] as const).map(method => <button key={method} type="button" aria-pressed={inputMode === method} disabled={blocked} onClick={() => { setInputMode(method); resetSite(); }}>{method === "area" ? "Area (m²)" : "Length × width"}</button>)}</div>
+      <div className="ai-area-fields">
+        {inputMode === "area" ? <label><span>Plot area (m²)</span><input aria-label="Plot area" type="number" min={30} max={10000} value={area} placeholder="120" disabled={blocked} onChange={e => { setArea(e.target.value); resetSite(); }} /></label> : <>
+          <label><span>Length (m)</span><input aria-label="Plot length" type="number" min={4} step={.1} value={length} placeholder="12" disabled={blocked} onChange={e => { setLength(e.target.value); resetSite(); }} /></label>
+          <label><span>Width (m)</span><input aria-label="Plot width" type="number" min={4} step={.1} value={width} placeholder="10" disabled={blocked} onChange={e => { setWidth(e.target.value); resetSite(); }} /></label>
+        </>}
+      </div>
+      {siteReady && <p className="ai-status-line">{site.areaM2.toFixed(1)} m² plot · {suggestions.length} suitable concepts</p>}
+      <div className="ai-layout-actions">{nextButton(2, "See suitable homes")}</div>
+    </div>}
+    {step === 2 && <div className="ai-wizard-step">
+      <h4>Homes for your {site.areaM2.toFixed(0)} m² plot</h4><p className="ai-text-muted">Compare bedroom count, footprint and remaining outdoor space.</p>
+      <div className="ai-typology-cards">{suggestions.map(s => <button key={s.id} type="button" disabled={blocked} aria-pressed={selectedConcept === s.id} className={"ai-typology-card " + (selectedConcept === s.id ? "is-selected" : "")} onClick={() => choose(s.id)}><strong>{s.label} {selectedConcept === s.id && <LuCheck />}</strong><span>{s.totalAreaM2.toFixed(0)} m² across {s.parameters.variant === "duplex" ? "two floors" : "one floor"}</span><small>{s.reason}</small></button>)}</div>
+      {p && <div className="ai-suggestion-row" aria-label="Bedroom count">{Array.from({ length: suggestions.find(s => s.id === selectedConcept)?.parameters.bedrooms ?? p.bedrooms }, (_, i) => i + 1).map(bedrooms => <button key={bedrooms} type="button" disabled={blocked} aria-pressed={p.bedrooms === bedrooms} onClick={() => update({ ...p, bedrooms, bedroomAreasM2: undefined, sketches: undefined, widthM: undefined, lengthM: undefined, totalAreaM2: undefined })}>{bedrooms} bedroom{bedrooms > 1 ? "s" : ""}</button>)}</div>}
+      {!suggestions.length && <p className="ai-design-recommendation">This plot is too narrow for these home concepts. Check its measurements or start with area only to explore a compact home.</p>}
+      <div className="ai-layout-actions">{backButton(1)}{nextButton(3, "Next: Outdoor")}</div>
+    </div>}
+    {step === 3 && p && <div className="ai-wizard-step">
+      <h4>Outdoor features that fit</h4><p className="ai-text-muted">Choices account for the building and available plot space.</p>
+      <strong>Parking</strong><div className="ai-suggestion-row">{(["none", "open", "enclosed"] as const).map(garage => { const fits = canFit({ ...p, garage }); return <button key={garage} type="button" disabled={blocked || !fits} className={!fits ? "ai-choice-unavailable" : ""} title={!fits ? "Needs more outdoor area or width. Try fewer bedrooms or no garden." : undefined} aria-pressed={p.garage === garage} onClick={() => update({ ...p, garage })}>{garage === "none" ? "No parking" : garage === "open" ? "Carport" : "Enclosed garage"}</button>; })}</div>
+      <strong>Garden</strong><div className="ai-suggestion-row">{[0, 10, 20, 40, 60, 100].map(gardenAreaM2 => { const fits = canFit({ ...p, gardenAreaM2 }); return <button key={gardenAreaM2} type="button" disabled={blocked || !fits} className={!fits ? "ai-choice-unavailable" : ""} title={!fits ? "Try a smaller garden, fewer bedrooms or no parking." : undefined} aria-pressed={p.gardenAreaM2 === gardenAreaM2} onClick={() => update({ ...p, gardenAreaM2 })}>{gardenAreaM2 ? gardenAreaM2 + " m²" : "No garden"}</button>; })}</div>
+      <p className="ai-design-recommendation">Red choices need more space. Go back to choose fewer bedrooms, reduce your garden, or leave out parking. With length and width, parking also needs space beside the house.</p>
+      <p className="ai-status-line">{Math.max(0, fit?.remainingAreaM2 ?? 0).toFixed(0)} m² remaining for access and other outdoor uses</p>
+      <div className="ai-layout-actions">{backButton(2)}{nextButton(4, "Next: Style")}</div>
+    </div>}
+    {step === 4 && p && <div className="ai-wizard-step">
+      <h4>Style, openings and home systems</h4><p className="ai-text-muted">Door and window openings are placed automatically when you build.</p>
+      <div className="ai-home-style-cards">{styles.filter(style => canFit({ ...p, footprint: style.footprint, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined })).map(style => <button key={style.id} type="button" disabled={blocked} aria-pressed={styleId === style.id} onClick={() => { setStyleId(style.id); const next = { ...p, footprint: style.footprint, layoutStyle: style.layoutStyle, cultureStyle: style.cultureStyle, roofStyle: style.roofStyle, sketches: undefined, totalAreaM2: undefined, widthM: undefined, lengthM: undefined }; update(next); }}><strong>{style.name}</strong><small>{style.description}</small></button>)}</div>
+      <details open className="ai-layout-requirements"><summary>Doors, windows and bathrooms</summary><div className="ai-area-fields">
+        <label><span>Bathrooms in the home</span><select aria-label="Home bathroom count" value={p.bathroomCount ?? (p.variant === "duplex" ? 2 : 1)} disabled={blocked} onChange={e => update({ ...p, bathroomCount: Number(e.target.value), totalAreaM2: undefined, sketches: undefined })}>{[1, 2, 3, 4].map(count => <option key={count} value={count} disabled={count < (p.variant === "duplex" ? 2 : 1) || !canFit({ ...p, bathroomCount: count, totalAreaM2: undefined, sketches: undefined })}>{count}</option>)}</select></label>
+        <label className="ai-home-toggle"><input aria-label="Guest bathroom" type="checkbox" checked={!!p.guestBathroom} disabled={blocked || !p.guestBathroom && !canFit({ ...p, guestBathroom: true, totalAreaM2: undefined, sketches: undefined })} onChange={e => update({ ...p, guestBathroom: e.target.checked, totalAreaM2: undefined, sketches: undefined })} /> Guest WC</label>
+        <label><span>Door style</span><select aria-label="Home door style" value={p.doorStyle ?? "wood"} disabled={blocked} onChange={e => update({ ...p, doorStyle: e.target.value as ResidentialParameters["doorStyle"] })}>{["wood", "metal", "glass", "sliding"].map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+        <label><span>Door height (m)</span><input aria-label="Home door height" type="number" min={1.9} max={Math.min(2.6, (heightMm - 100) / 1000)} step={.1} value={(p.doorHeightMm ?? 2100) / 1000} disabled={blocked} onChange={e => update({ ...p, doorHeightMm: Number(e.target.value) * 1000 })} /></label>
+        <label><span>Entrance</span><select aria-label="Home entrance door" value={p.doubleEntranceDoor ? "double" : "single"} disabled={blocked} onChange={e => update({ ...p, doubleEntranceDoor: e.target.value === "double" })}><option value="single">Single door</option><option value="double">Double doors where wall space permits</option></select></label>
+        <label><span>Windows</span><select aria-label="Home window style" value={p.windowStyle ?? "casement"} disabled={blocked} onChange={e => update({ ...p, windowStyle: e.target.value as ResidentialParameters["windowStyle"] })}>{["casement", "sliding", "fixed", "single-hung", "double-hung"].map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+        <label><span>Window height (m)</span><input aria-label="Home window height" type="number" min={.6} max={Math.min(2, (heightMm - 1000) / 1000)} step={.1} value={(p.windowHeightMm ?? 1200) / 1000} disabled={blocked} onChange={e => update({ ...p, windowHeightMm: Number(e.target.value) * 1000 })} /></label>
+        <label><span>Bathroom fitting</span><select aria-label="Home bathroom fitting" value={p.bathFixture ?? "shower"} disabled={blocked} onChange={e => update({ ...p, bathFixture: e.target.value as ResidentialParameters["bathFixture"] })}><option value="shower">Shower</option><option value="bathtub">Bathtub; shower in smaller rooms</option></select></label>
+      </div></details>
+      <details className="ai-layout-requirements"><summary>Rooms and facade</summary><div className="ai-home-checks"><label><input type="checkbox" checked={!!p.curtainFacade} disabled={blocked} onChange={e => update({ ...p, curtainFacade: e.target.checked })} /> Glazed curtain wall on the rear facade</label><label><input type="checkbox" checked={!!p.separateKitchen} disabled={blocked} onChange={e => update({ ...p, separateKitchen: e.target.checked, sketches: undefined })} /> Separate kitchen</label></div><div className="ai-area-fields">{Array.from({ length: p.bedrooms }, (_, i) => <label key={i}><span>Bedroom {i + 1} area (m²)</span><input aria-label={`Bedroom ${i + 1} area`} type="number" min={7.5} max={100} step={.5} value={p.bedroomAreasM2?.[i] ?? p.bedroomAreaM2 ?? 20} disabled={blocked} onChange={e => { const areas = Array.from({ length: p.bedrooms }, (_, j) => j === i ? Number(e.target.value) : p.bedroomAreasM2?.[j] ?? p.bedroomAreaM2 ?? 20); update({ ...p, bedroomAreasM2: areas, bedroomAreaM2: areas.reduce((sum, a) => sum + a, 0) / areas.length, sketches: undefined, totalAreaM2: undefined }); }} /></label>)}</div></details>
+      <details className="ai-layout-requirements"><summary>MEP and furnishing</summary><div className="ai-home-checks">
+        <label><input type="checkbox" checked={p.furnished !== false} disabled={blocked} onChange={e => update({ ...p, furnished: e.target.checked })} /> Furniture and bathroom fittings</label>
+        <label><input type="checkbox" checked={!!p.underfloorHeating} disabled={blocked} onChange={e => update({ ...p, underfloorHeating: e.target.checked })} /> Underfloor heating</label>
+        <label><input type="checkbox" checked={p.piping === "underfloor"} disabled={blocked} onChange={e => update({ ...p, piping: e.target.checked ? "underfloor" : "none" })} /> Hot and cold water routes</label>
+        <label><input type="checkbox" checked={p.ducts === "ceiling"} disabled={blocked} onChange={e => update({ ...p, ducts: e.target.checked ? "ceiling" : "none" })} /> Ceiling ventilation</label>
+        <label><input type="checkbox" checked={!!p.electrical} disabled={blocked} onChange={e => update({ ...p, electrical: e.target.checked })} /> Ceiling lights and sockets</label>
+      </div><p className="ai-text-muted">Concept equipment and routes are editable in the building model.</p></details>
+      <div className="ai-layout-actions">{backButton(3)}<button type="button" className="ai-create-layout" disabled={blocked || !fit?.fits} onClick={() => { setStep(5); void generate(); }}>Plan my layout <LuSparkles /></button></div>
+    </div>}
+    {step === 5 && p && <div className="ai-wizard-step">
+      <h4>Your layout and building</h4><p className="ai-text-muted">{p.bedrooms} bedrooms · {fit?.totalAreaM2.toFixed(0) ?? "—"} m² total · {p.variant === "duplex" ? "two floors" : "one floor"}</p>
+      <label className="ai-home-preferences"><span>Layout preferences</span><textarea aria-label="Layout preferences" rows={2} maxLength={1500} value={preferences} disabled={blocked} placeholder="Kitchen facing the garden, a larger main bedroom, guest WC near the entrance…" onChange={e => setPreferences(e.target.value)} /></label>
+      <AiFootprintCanvas parameters={p} onChange={update} disabled={blocked} building={fit?.building} heightMm={heightMm} thicknessMm={thicknessMm} model={model} preferences={preferences} onPreferences={setPreferences} onRefresh={() => void generate()} availableShapes={availableShapes} />
+      <p className="ai-text-muted">Drag walls or their endpoints in the 2D workspace. Partitions can stay open; doors and windows are automatic.</p>
+      <div className="ai-layout-actions">{backButton(4)}<button type="button" className="ai-secondary-button" disabled={blocked || !fit?.fits} onClick={() => void generate()}><LuRefreshCw /> Refresh with AI</button><button type="button" className="ai-create-layout" disabled={blocked || !fit?.fits || !buildReady || checking} onClick={() => { setReplaceProject(true); onCreate(residentialCommand(p), p, replaceProject); }}>Build <LuSparkles /></button></div>
+      {checking && <p role="status" className="ai-status-line">Checking your drawing and preparing the building…</p>}
+      {buildHint && <div role="status" className="ai-design-recommendation">{buildHint}<button type="button" className="ai-secondary-button" disabled={blocked} onClick={() => update({ ...p, sketches: undefined, footprint: "rectangle", footprintPoints: undefined, widthM: undefined, lengthM: undefined, totalAreaM2: undefined, bedroomAreasM2: undefined })}>Use automatic rooms</button></div>}
+      {message && <p className="ai-design-recommendation">{message}</p>}
+    </div>}
+    {loading && <div className="ai-thinking" role="status"><LuSparkles className="animate-pulse" /><span>Planning a fresh room arrangement…</span><button type="button" onClick={() => requestRef.current?.abort()}>Cancel</button></div>}
+    {(feedback || fitMessage) && <p className="ai-design-recommendation" role="status">{feedback || fitMessage}</p>}
+  </section>;
 }

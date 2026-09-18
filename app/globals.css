@@ -5530,6 +5530,34 @@ body.mep-mode-active .ai-send-button:hover:not(:disabled),
   transform: translateY(-1px);
 }
 
+.ai-typology-cards, .ai-home-style-cards { display: grid; gap: 8px; margin: 12px 0; }
+.ai-typology-cards .ai-typology-card, .ai-home-style-cards button {
+  display: grid; gap: 5px; text-align: left; padding: 12px;
+  border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; color: #334155;
+}
+.ai-typology-cards strong, .ai-home-style-cards strong { display: flex; justify-content: space-between; color: #0f172a; font-size: 13px; }
+.ai-typology-cards span, .ai-typology-cards small, .ai-home-style-cards small { font-size: 11px; line-height: 1.5; }
+.ai-typology-cards [aria-pressed="true"], .ai-home-style-cards [aria-pressed="true"] { border-color: #d97706; background: #fffbeb; }
+.ai-home-checks { display: grid; gap: 9px; padding: 10px 0; font-size: 12px; }
+.ai-home-checks label { display: flex; align-items: center; gap: 8px; }
+.ai-chat-panel [hidden] { display: none !important; }
+.ai-chat-panel .ai-composer-controls { flex-wrap: wrap; }
+.ai-building-presets .ai-layout-actions button, .ai-building-presets .ai-suggestion-row button { white-space: nowrap; }
+.ai-building-presets .ai-choice-unavailable:disabled { border: 1px solid #fca5a5; color: #b91c1c; background: #fff1f2; opacity: 1; }
+.ai-home-preferences, .ai-sketch-ai-controls label { display: grid; gap: 5px; font-size: 12px; }
+.ai-home-preferences textarea, .ai-sketch-ai-controls textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a; padding: 8px; resize: vertical; }
+.ai-sketch-ai-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; background: #fffbeb; color: #334155; }
+.ai-sketch-ai-controls label { flex: 1; min-width: 180px; }
+.ai-sketch-ai-controls small { font-size: 11px; }
+.ai-home-project-options { padding: 10px; border: 1px solid #cbd5e1; border-radius: 12px; background: #f8fafc; margin-bottom: 12px; }
+.ai-area-fields .ai-home-toggle { display: flex; align-items: center; gap: 8px; }
+.ai-area-fields .ai-home-toggle input { width: auto; }
+.ai-building-presets .ai-layout-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ai-building-presets .ai-layout-actions .ai-create-layout { width: auto; flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ai-building-presets .ai-secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; font-size: 12px; }
+.ai-building-presets .ai-layout-actions svg { width: 14px; height: 14px; flex-shrink: 0; }
+.ai-building-presets .ai-suggestion-row [aria-pressed="true"] { border-color: #d97706; background: #fef3c7; color: #92400e; }
+
 .ai-wizard-step {
   padding: 4px 0;
 }

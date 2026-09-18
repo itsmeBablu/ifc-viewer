@@ -1,7 +1,7 @@
 import type { FloorSketch, ResidentialParameters, RoomUse } from "./allocation";
 import { apartmentActions, apartmentSchema } from "./apartment";
 import { houseActions, houseSchema } from "./house";
-import { allocateBuilding, inscribedRectangle } from "./footprint";
+import { allocateBuilding, inscribedRectangle, insidePolygon } from "./footprint";
 import { clipSketchLines, sketchRooms } from "./sketch";
 import { multiApartmentActions } from "./multiApartment";
 
@@ -33,11 +33,13 @@ export function residentialSketches(parameters: ResidentialParameters, heightMm 
     const walls = actions.filter(action => action.kind === "wall" && action.levelId === levelId && !action.id.includes("garage") && !action.id.includes("balcony") && !action.id.includes(":outline:") && !/:wall:[0-3]$/.test(action.id));
     const sketch = clipSketchLines({ points: points.map(p => ({ ...p })), lines: walls.flatMap(action => action.kind === "wall" ? [{ start: { xMm: action.startXmm, yMm: action.startYmm }, end: { xMm: action.endXmm, yMm: action.endYmm } }] : []) });
     const rooms = sketchRooms(sketch);
-    const ordered = [...rooms].sort((x, y) => Math.min(...x.map(p => p.yMm)) - Math.min(...y.map(p => p.yMm)) || Math.min(...x.map(p => p.xMm)) - Math.min(...y.map(p => p.xMm)));
+    const rearBedrooms = parameters.footprint !== "l" && parameters.footprint !== "u" && [1, 3].includes((parameters.layoutRevision ?? 0) % 4);
+    const ordered = [...rooms].sort((x, y) => (rearBedrooms ? -1 : 1) * (Math.min(...x.map(p => p.yMm)) - Math.min(...y.map(p => p.yMm))) || Math.min(...x.map(p => p.xMm)) - Math.min(...y.map(p => p.xMm)));
     const beds = a.floors === 1 ? parameters.bedrooms : floor ? Math.ceil(parameters.bedrooms / 2) : Math.floor(parameters.bedrooms / 2);
     sketch.labels = ordered.map((room, i) => {
       const rect = inscribedRectangle(room);
-      const use: RoomUse = i < beds ? "bedroom" : rect.depthMm <= 1600 ? "corridor" : rect.widthMm <= 3500 && rect.depthMm <= 4500 ? "bathroom" : "living";
+      const bathroom = actions.some(a => a.kind === "equipment" && a.levelId === levelId && /^bath-/.test(a.familyId) && insidePolygon({ xMm: a.xMm, yMm: a.yMm }, room));
+      const use: RoomUse = bathroom ? "bathroom" : i < beds ? "bedroom" : rect.depthMm <= 1600 ? "corridor" : rect.widthMm <= 3500 && rect.depthMm <= 4500 ? "bathroom" : "living";
       return { point: { xMm: rect.xMm + rect.widthMm / 2, yMm: rect.yMm + rect.depthMm / 2 }, name: use === "bedroom" ? `Bedroom ${i + 1}` : use === "living" ? "Living / kitchen" : use === "bathroom" ? "Bathroom" : "Hall", use };
     });
     return sketch;

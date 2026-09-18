@@ -3,6 +3,7 @@ import { apartmentSchema, apartmentActions } from "./apartment";
 import type { AiAction } from "../schema";
 import { allocateBuilding, applyFootprint,offsetPolygon,polygonAroundOpening } from "./footprint";
 import { furnishFloor, outdoorActions } from "./furnishing";
+import { homeDetails, varyHomeLayout } from "./details";
 
 export const houseSchema = apartmentSchema.extend({
   kind: z.literal("house_layout"), variant: z.enum(["villa", "duplex"]).default("villa"),
@@ -31,8 +32,8 @@ export function houseActions(item: z.infer<typeof houseSchema>): AiAction[] {
     const prefix = `${item.id}:${floor ? "first" : "ground"}`;
     // All bays keep identical footprints; unused bedroom bays are optional studies.
     const bedrooms=floor?item.bedrooms-groundBedrooms:groundBedrooms;
-    let layout = apartmentActions(apartmentSchema.parse({ kind: "apartment_layout", id: prefix, levelId, bedrooms: Math.max(1,bedrooms), bedroomAreaM2: item.bedroomAreaM2, xMm: item.xMm, yMm: item.yMm, heightMm: item.heightMm, thicknessMm: item.thicknessMm, furnished: false, balcony: item.balcony, layoutSeed: item.layoutSeed !== undefined ? (item.layoutSeed + floor * 101) : undefined, separateKitchen: item.separateKitchen, ensuiteBathrooms: item.ensuiteBathrooms }), { allocation, entrance: !floor });
-    layout.push(...furnishFloor(item,allocation,prefix,levelId,item.xMm,item.yMm,item.thicknessMm,item.heightMm,bedrooms,Boolean(floor)));
+    let layout = apartmentActions(apartmentSchema.parse({ kind: "apartment_layout", id: prefix, levelId, bedrooms: Math.max(1,bedrooms), bedroomAreaM2: item.bedroomAreaM2, xMm: item.xMm, yMm: item.yMm, heightMm: item.heightMm, thicknessMm: item.thicknessMm, furnished: false, balcony: item.balcony, layoutSeed: item.layoutSeed !== undefined ? (item.layoutSeed + floor * 101) : undefined, separateKitchen: item.separateKitchen, ensuiteBathrooms: item.ensuiteBathrooms, bathroomCount: Math.max(1, floor ? Math.max(1, Math.floor((item.bathroomCount ?? floors) / floors)) : Math.ceil((item.bathroomCount ?? floors) / floors)), guestBathroom: item.guestBathroom && !floor, bedroomAreasM2: item.bedroomAreasM2?.slice(floor ? groundBedrooms : 0, floor ? item.bedrooms : groundBedrooms) }), { allocation, entrance: !floor });
+    layout.push(...furnishFloor({ ...item, layoutSeed: item.layoutSeed !== undefined ? item.layoutSeed + floor * 101 : undefined, guestBathroom: item.guestBathroom && !floor, bedroomAreasM2: item.bedroomAreasM2?.slice(floor ? groundBedrooms : 0, floor ? item.bedrooms : groundBedrooms) },allocation,prefix,levelId,item.xMm,item.yMm,item.thicknessMm,item.heightMm,bedrooms,Boolean(floor)));
     const slab = layout.find((a): a is Extract<AiAction, { kind: "floor" }> => a.kind === "floor")!;
     if(building.polygon)layout=applyFootprint(layout,building.polygon,original.xMm,original.yMm,item.thicknessMm,item.heightMm,levelId,prefix);
     actions.push(...layout.filter(a => a.kind !== "floor" || !floor));
@@ -62,5 +63,5 @@ export function houseActions(item: z.infer<typeof houseSchema>): AiAction[] {
     for (let i = 0; i < stair.flightSteps - 1; i++) step(stairX+1350, stairY+stair.runMm-(i+1)*stair.treadMm, 1200, stair.treadMm, (stair.flightSteps+i+1)*stair.riserMm);
   }
   actions.push(...outdoorActions(item,item.id,item.levelId,original.xMm,original.yMm,building.polygon?Math.max(...building.polygon.map(p=>p.xMm)):allocation.widthMm,building.polygon?Math.max(...building.polygon.map(p=>p.yMm)):allocation.depthMm,item.heightMm));
-  return actions;
+  return homeDetails(varyHomeLayout(actions, item), item);
 }

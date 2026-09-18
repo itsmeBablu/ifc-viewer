@@ -47,6 +47,18 @@ export function defaultResidentialBrief(command: string) {
 }
 const sketchPoint = z.object({xMm:z.number().min(0).max(80000),yMm:z.number().min(0).max(80000)}).strict();
 export const residentialOptions = {
+  bathroomCount: z.number().int().min(1).max(4).optional(),
+  guestBathroom: z.boolean().optional(),
+  bedroomAreasM2: z.array(z.number().min(7.5).max(100)).min(1).max(6).optional(),
+  curtainFacade: z.boolean().optional(),
+  layoutRevision: z.number().int().min(0).max(1000000).optional(),
+  doorStyle: z.enum(["wood", "metal", "glass", "sliding"]).optional(),
+  doorHeightMm: z.number().min(1900).max(2600).optional(),
+  doubleEntranceDoor: z.boolean().optional(),
+  windowStyle: z.enum(["casement", "fixed", "sliding", "single-hung", "double-hung"]).optional(),
+  windowHeightMm: z.number().min(600).max(2000).optional(),
+  bathFixture: z.enum(["shower", "bathtub"]).optional(),
+  electrical: z.boolean().optional(),
   plotAreaM2: z.number().min(30).max(1000000).optional(),
   plotWidthM: z.number().min(4).max(1000).optional(),
   plotLengthM: z.number().min(4).max(1000).optional(),

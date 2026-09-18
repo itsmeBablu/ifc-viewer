@@ -104,7 +104,9 @@ export function prepareAiChanges(plan: AiPlan, state: State, makeId = () => `ai-
         next.levels = upsert(next.levels, value); break;
       }
       case "wall": {
-        value = { ...next.walls.find(row => row.id === id), ...common, levelId: resolve(action.levelId), startXmm: action.startXmm, startYmm: action.startYmm, endXmm: action.endXmm, endYmm: action.endYmm, thicknessMm: action.thicknessMm, heightMm: action.heightMm };
+        value = { ...next.walls.find(row => row.id === id), ...common, levelId: resolve(action.levelId), startXmm: action.startXmm, startYmm: action.startYmm, endXmm: action.endXmm, endYmm: action.endYmm, thicknessMm: action.thicknessMm, heightMm: action.heightMm,
+          ...(action.wallType ? { wallType: action.wallType } : {}),
+          ...(action.wallType === "curtain" ? { isCurtainWall: true, wallTypeId: "curtain-wall", curtainGrid: { verticalSpacingMm: 1500, horizontalSpacingMm: 1500, mullionWidthMm: 50, mullionDepthMm: 100, panelMaterial: "glass" } } : {}) };
         next.walls = upsert(next.walls, value); break;
       }
       case "door": {

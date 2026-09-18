@@ -10,11 +10,15 @@ import { MODELING_DEFAULT_GUIDE } from "./modeling";
 import { DRAWING_GUIDE } from "./drawing";
 import { z } from "zod";
 import { allocateBuilding } from "./modeling/footprint";
+import { residentialOptions } from "./modeling/brief";
+import { residentialSketches } from "./modeling/preview";
+import { clipSketchLines, validateSketches, sketchActions } from "./modeling/sketch";
 
 const layoutDesignSchema = z.object({
   layoutSeed: z.number().int().min(0).max(1000000),
   layoutStyle: z.enum(["linear", "courtyard", "corner", "split", "central"]),
   reasoning: z.string().trim().min(1).max(3000),
+  sketches: residentialOptions.sketches.optional().describe("Line-only plans in millimetres. Preserve every supplied floor's outline points exactly; change only interior lines and room labels. Include bedrooms, requested bathrooms, kitchen and living labels. Omit furniture, MEP, openings and gardens: code places these automatically."),
 }).strict();
 
 const MODE_INSTRUCTIONS: Record<AiMode, string> = {
@@ -47,7 +51,7 @@ export async function generateCommand(input: CommandRequest) {
   const playbook = creationPlaybook(input);
   const layoutRequest = input.intent === "layout";
   if (layoutRequest && (!input.residential || mode !== "build" || input.attachments.length)) throw new Error("Choose a residential brief in Build before generating a layout.");
-  const tools = layoutRequest ? [{ name: "propose_residential_design", description: "Choose a new residential concept arrangement. Preserve all supplied dimensions, shape, bedroom count, outdoor features and room areas. Code generates and checks geometry. Choose a different integer layoutSeed from the previous seed for another arrangement. Explain suitability, circulation, daylight and tradeoffs; mention that irregular wings are open shared space. No claims of code compliance.", parametersJsonSchema: z.toJSONSchema(layoutDesignSchema, { target: "draft-7" }) }] : toolsForCreation(mode, playbook.kinds);
+  const tools = layoutRequest ? [{ name: "propose_residential_design", description: "Choose a new residential concept arrangement. Preserve all supplied dimensions, shape, bedroom count, outdoor features and room areas. Return sketches for a bespoke arrangement responding to user preferences. Plan using only outline points, interior wall lines and room labels; do not emit doors, windows, furniture or MEP. Keep the exact supplied outline and locked line lengths, connect rooms with practical circulation. Code generates and checks geometry. Choose a different integer layoutSeed from the previous seed for another arrangement. Explain suitability, circulation, daylight and tradeoffs; mention that irregular wings are open shared space. No claims of code compliance.", parametersJsonSchema: z.toJSONSchema(layoutDesignSchema, { target: "draft-7" }) }] : toolsForCreation(mode, playbook.kinds);
   const request = {
       systemInstruction: { parts: [{ text: `${SYSTEM_PROMPT} ${MODE_INSTRUCTIONS[mode]} Discipline: ${input.discipline ?? "arch"}. Explicit prompt and project dimensions win. Preserve architecture in MEP unless explicitly asked. Use defaults for routine sizes and disclose assumptions. ${input.attachments.length ? DRAWING_GUIDE : ""} Creation guide: ${JSON.stringify(playbook.guide)}. Return only fields supported by the supplied tools.` }] },
       contents: [
@@ -61,6 +65,12 @@ export async function generateCommand(input: CommandRequest) {
       toolConfig: { functionCallingConfig: { mode: layoutRequest ? "ANY" : "AUTO" } },
       generationConfig: { temperature: 0.2, maxOutputTokens: settings.maxOutputTokens, thinkingConfig: { thinkingLevel: settings.thinkingLevel } },
   };
+  if (layoutRequest) {
+    const brief = input.residential!;
+    const sketches = residentialSketches(brief, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm).map(s => ({ points: s.points, lines: s.lines, labels: s.labels, locks: s.locks }));
+    request.systemInstruction = { parts: [{ text: "You are the V Studio residential layout planner. Regenerate only room zoning and interior wall lines, in millimetres. Follow the user's preferences while preserving the exact supplied outline points, floor count, bedroom and bathroom counts and locked lengths. Label every room. Keep rooms accessible with connected circulation and align wet walls. Doors, windows, furniture and MEP are generated locally; do not output them. Return one propose_residential_design tool call with sketches and concise reasoning. Never claim code compliance." }] };
+    request.contents = [{ role: "user", parts: [{ text: JSON.stringify({ command: input.command, residential: { ...brief, sketches }, defaults: input.context.defaults }) }] }];
+  }
   const signal = AbortSignal.timeout(240000);
   let response: Response | undefined;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -107,7 +117,19 @@ export async function generateCommand(input: CommandRequest) {
       const calls = candidate?.content?.parts?.filter((part: { thought?: boolean; functionCall?: unknown }) => !part.thought && part.functionCall) ?? [];
       if (candidate?.finishReason !== "STOP" || calls.length !== 1 || calls[0].functionCall.name !== "propose_residential_design") throw new SyntaxError("Invalid layout design");
       const design = layoutDesignSchema.parse(calls[0].functionCall.args);
-      const parameters = { ...input.residential!, layoutSeed: design.layoutSeed, layoutStyle: design.layoutStyle };
+      const previous = input.residential!;
+      const parameters = { ...previous, layoutSeed: design.layoutSeed === previous.layoutSeed ? ((design.layoutSeed + 7919) % 1000001) : design.layoutSeed, layoutRevision: (previous.layoutRevision ?? 0) + 1, layoutStyle: design.layoutStyle };
+      if (design.sketches) {
+        const expected = residentialSketches(previous, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
+        if (design.sketches.length !== expected.length || design.sketches.some((s, i) => s.points.length !== expected[i].points.length || s.points.some((p, j) => Math.hypot(p.xMm - expected[i].points[j].xMm, p.yMm - expected[i].points[j].yMm) > 1))) throw new SyntaxError("Keep the current outline");
+        const sketches = design.sketches.map((s, i) => clipSketchLines({ points: expected[i].points, lines: s.lines, labels: s.labels, locks: expected[i].locks, wallTypes: expected[i].wallTypes, gardens: expected[i].gardens }));
+        validateSketches(sketches);
+        if (sketches.flatMap(s => s.labels ?? []).filter(l => l.use === "bedroom").length !== previous.bedrooms) throw new SyntaxError("Keep the bedroom count");
+        parameters.sketches = sketches;
+        parameters.totalAreaM2 = sketches.reduce((sum, s) => sum + s.points.reduce((area, p, i) => area + p.xMm * s.points[(i + 1) % s.points.length].yMm - s.points[(i + 1) % s.points.length].xMm * p.yMm, 0) / 2e6, 0);
+        parameters.totalAreaM2 = Math.abs(parameters.totalAreaM2);
+        validatePlan({ summary: "Refreshed home layout", assumptions: [], actions: [{ kind: "level", operation: "create", id: "layout:ground", name: "Ground", elevationMm: 0, heightMm: input.context.defaults.wallHeightMm }, ...sketchActions(parameters, "layout", "layout:ground", 0, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm)] }, { ...input.context, activeLevelId: null, elements: [], selection: [] });
+      }
       if (!parameters.sketches && !parameters.apartmentFloors) allocateBuilding(parameters, input.context.defaults.wallHeightMm, input.context.defaults.wallThicknessMm);
       return { kind: "layout" as const, parameters, message: design.reasoning, model, mode };
     }

@@ -23,7 +23,7 @@ describe("AI command authorization", () => {
   });
   it("sends wizard layout requests to Gemini instead of bypassing design interpretation", async () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: "google-123" } } as never);
-    vi.mocked(generateCommand).mockResolvedValue({ kind: "layout", parameters: { variant: "villa", bedrooms: 3, footprint: "u", layoutSeed: 91234, layoutStyle: "courtyard" }, message: "Courtyard concept", model: "gemini-3.1-flash-lite", mode: "build" });
+    vi.mocked(generateCommand).mockResolvedValue({ kind: "layout", parameters: { variant: "villa", bedrooms: 3, footprint: "u", layoutSeed: 91234, layoutRevision: 1, layoutStyle: "courtyard" }, message: "Courtyard concept", model: "gemini-3.1-flash-lite", mode: "build" });
     const response = await POST(request({ ...body, intent: "layout", mode: "build", residential: { variant: "villa", bedrooms: 3, footprint: "u", plotAreaM2: 180, balcony: "none" } }));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ kind: "layout" });

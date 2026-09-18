@@ -1,15 +1,17 @@
 import { arrangeRoom } from "./roomFurniture";
 import type { AiAction } from "../schema";
 import type { ResidentialParameters, allocateResidential } from "./allocation";
+import { bedroomBayWidths, bathroomZones } from "./rooms";
 
 type Allocation = ReturnType<typeof allocateResidential>;
 type Rect = { x:number;y:number;w:number;d:number };
 export function furnishFloor(input:ResidentialParameters, a:Allocation, id:string,levelId:string,xMm:number,yMm:number,t:number,heightMm:number,actualBedrooms:number,upper=false,stairOverride?:Rect):AiAction[]{
   const actions:AiAction[]=[];let index=0;
   const add=(familyId:string,x:number,y:number,rotationDeg=0,elevationMm=0)=>actions.push({kind:"equipment",operation:"create",id:`${id}:component:${index++}`,levelId,familyId,xMm:xMm+x,yMm:yMm+y,rotationDeg,elevationMm});
+  const bayWidths = bedroomBayWidths(input, a.bays, a.roomWidthMm);
   for(let i=0;i<a.bays;i++){
-    const start=t/2+i*(a.roomWidthMm+150);
-    const room={x:start,y:t/2,w:a.roomWidthMm,d:a.roomDepthMm};
+    const start=t/2+bayWidths.slice(0,i).reduce((sum,w)=>sum+w+150,0);
+    const room={x:start,y:t/2,w:bayWidths[i],d:a.roomDepthMm};
     if(input.furnished!==false){
       const occupied:Rect[]=[{x:start+a.roomWidthMm/2-600,y:t/2+a.roomDepthMm-1000,w:1200,d:1000}];
       arrangeRoom(i<actualBedrooms?"bedroom":"study",room,occupied,add);
@@ -23,10 +25,14 @@ export function furnishFloor(input:ResidentialParameters, a:Allocation, id:strin
   }
   const serviceY=a.corridorEndMm+75;
   if(input.furnished!==false){
-    const bath={x:t/2,y:serviceY,w:a.bathroomWidthMm,d:a.bathroomDepthMm};
-    const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:950}];
-    arrangeRoom("bathroom",bath,occupied,add);
-    const zone={x:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
+    const flipped=(input.layoutSeed??0)%2===1;
+    const bathX=flipped?a.widthMm-t/2-a.bathroomWidthMm-75:t/2;
+    for(const bath of bathroomZones(input,bathX,serviceY,a.bathroomWidthMm,a.bathroomDepthMm,upper)) {
+      const occupied:Rect[]=[{x:bath.x+bath.w/2-550,y:bath.y,w:1100,d:Math.min(950,bath.d/3)}];
+      if(bath.guest){add("bath-toilet",bath.x+bath.w/2,bath.y+bath.d-350);add("bath-vanity",bath.x+400,bath.y+bath.d/2,90);}
+      else arrangeRoom("bathroom",bath,occupied,add,input.bathFixture);
+    }
+    const zone={x:flipped?t/2:t/2+a.bathroomWidthMm+150,y:serviceY,w:a.internalWidthMm-a.bathroomWidthMm-150,d:a.serviceDepthMm};
     const used:Rect[]=[{x:a.widthMm-t/2-1550,y:serviceY,w:1100,d:1000}];
     if(input.variant==="duplex")used.push(stairOverride??{x:t/2+a.bathroomWidthMm+300,y:serviceY+1200,w:a.stair.widthMm,d:a.stair.runMm+a.stair.landingMm});
     arrangeRoom("living",zone,used,add);

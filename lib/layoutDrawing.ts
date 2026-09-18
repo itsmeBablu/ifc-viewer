@@ -79,6 +79,8 @@ export type LayoutWall = {
   material?: string;
   // -- Layered Wall Assemblies -------------------------------------------
   wallTypeId?: string;
+  /** Residential assistant wall classification, retained when reopening a Home plan. */
+  wallType?: "exterior" | "partition" | "fire" | "curtain";
   layers?: WallLayer[];
   // -- Curtain Wall Grid & Mullions -------------------------------------
   isCurtainWall?: boolean;
